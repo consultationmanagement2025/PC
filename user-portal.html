@@ -2,665 +2,263 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Citizen Portal - Public Consultation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="theme-color" content="#dc2626">
+    <title>Public Consultation</title>
+
     <link rel="icon" type="image/png" href="images/logo.webp">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="styles.css">
+
+    <style>
+        * {
+            margin: 0; padding: 0; box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            color: #333;
+            background: #f3f4f6;
+        }
+
+        html {
+            scroll-behavior: smooth; /* enables slow scroll */
+        }
+
+        header {
+            background: #fff;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-section img {
+            width: 50px; height: 50px;
+            border-radius: 50%;
+            background: white;
+            padding: 2px;
+        }
+
+        nav a {
+            text-decoration: none;
+            color: #666;
+            padding: 4px 0;
+            margin: 0 15px;
+            border-bottom: 2px solid transparent;
+            font-weight: 500;
+        }
+
+        nav a:hover,
+        nav a.active {
+            color: #991b1b;
+            border-bottom-color: #991b1b;
+        }
+
+        .signin-btn, .signup-btn {
+            background: #991b1b;
+            color: white;
+            border: none;
+            padding: 0.55rem 1.4rem;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .signin-btn:hover, .signup-btn:hover {
+            background: #7f1d1d;
+        }
+
+        /* HERO STYLES */
+        .hero {
+            background: linear-gradient(135deg, #991b1b, #7f1d1d);
+            padding: 4rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+            gap: 3rem;
+        }
+
+        /* Fade-in transitions */
+        .fade-in {
+            opacity: 0;
+            animation: fadeIn 1.2s ease forwards;
+        }
+
+        .fade-in-delay {
+            opacity: 0;
+            animation: fadeIn 1.2s ease 0.4s forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Red-to-white glow behind image */
+        .hero-illustration {
+            position: relative;
+        }
+
+        .hero-illustration::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom right, #991b1b 10%, #ffffff 100%);
+            filter: blur(90px);
+            opacity: 0.7;
+            z-index: -1;
+        }
+
+        .illustration-img {
+            width: 100%;
+            max-width: 420px;
+            border-radius: 12px;
+            mix-blend-mode: screen;
+            filter: drop-shadow(0 10px 30px rgba(0,0,0,0.2));
+        }
+
+        @media (max-width: 768px) {
+            .hero {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
 </head>
-<body class="bg-gray-100 font-sans antialiased">
-    <div id="citizen-app" style="display:none;"></div>
-    <script src="app-features.js"></script>
-    <script>
-    // Ensure a user is logged in (login.html sets local/session storage)
-    (function(){
-        const stored = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
-        if (!stored) {
-            // Not logged in - redirect to shared login
-            window.location.href = 'login.html';
-            return;
-        }
-        try {
-            AppData.currentUser = JSON.parse(stored);
-        } catch (err) {
-            AppData.currentUser = { name: 'Citizen', role: 'Citizen' };
-        }
-    })();
 
-    // Sidebar navigation state
-    let currentSection = 'freedom-wall';
+<body>
 
-    // Avatar helper: returns inner HTML for an avatar area (either an <img> or an icon placeholder)
-    function avatarInnerHtml(src, id) {
-        const idAttr = id ? ` id="${id}"` : '';
-        if (src) {
-            return `<img${idAttr} src="${src}" class="w-full h-full object-cover">`;
-        }
-        return `<div${idAttr} class="w-full h-full flex items-center justify-center bg-gray-100 text-gray-600"><i class="bi bi-person text-2xl"></i></div>`;
-    }
+<!-- HEADER -->
+<header>
+    <div class="logo-section">
+        <img src="images/logo.webp" alt="Logo">
+        <div>
+            <h1 class="text-lg font-bold text-red-900 leading-tight">Public Consultation</h1>
+            <p class="text-xs text-gray-600">Valenzuela City Government</p>
+        </div>
+    </div>
 
-    function setAvatarById(id, src) {
-        const el = document.getElementById(id);
-        if (!el) return;
-        if (el.tagName === 'IMG') {
-            el.src = src || '';
-        } else {
-            // replace inner content with an <img> or icon
-            el.innerHTML = src ? `<img src="${src}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center bg-gray-100 text-gray-600"><i class="bi bi-person text-2xl"></i></div>`;
-        }
-    }
+    <nav>
+        <a href="#" class="active">HOME</a>
+        <a href="#about">ABOUT</a> <!-- smooth scroll -->
+    </nav>
 
-    function renderCitizenLayout() {
-        const userName = AppData.currentUser?.name || 'Citizen';
-        document.getElementById('citizen-app').style.display = '';
-        document.getElementById('citizen-app').innerHTML = `
-        <div class="flex h-screen overflow-hidden">
-            <!-- Sidebar -->
-            <aside class="w-64 bg-gradient-to-b from-red-800 to-red-900 text-white flex-shrink-0 flex flex-col h-screen">
-                <div class="p-6 border-b border-red-700">
-                    <div class="flex items-center space-x-3">
-                        <div class="bg-white rounded-full shadow-md flex items-center justify-center overflow-hidden" style="width: 60px; height: 60px;">
-                            <img src="images/logo.webp" alt="Valenzuela Logo" style="width: 100%; height: 100%;" class="object-contain">
-                        </div>
-                        <div>
-                            <h1 class="text-lg font-bold">PCMP</h1>
-                            <p class="text-xs text-red-200">Citizen Portal</p>
-                        </div>
-                    </div>
+    <div class="flex gap-3">
+        <a href="login.html"><button class="signin-btn">LOG-IN</button></a>
+        <button class="signup-btn">REGISTER</button>
+    </div>
+</header>
+
+<!-- HERO SECTION -->
+<section class="hero">
+    <div class="hero-content fade-in">
+        <h2 class="text-4xl font-bold mb-3">Tayo na, Valenzuela!</h2>
+        <p class="text-md mb-4">Shape the Future of Legislation Through Public Participation</p>
+
+        <p class="opacity-90 mb-6 leading-relaxed">
+            Digital na Konsultasyon tungo sa Mas Bukas na Pamamahala, kung saan ang<br>
+            Boses ng Valenzuelano ang Gabay ng Pamahalaan.
+        </p>
+
+        <div class="flex gap-3">
+
+            <button class="border border-white px-6 py-3 rounded font-semibold hover:bg-white hover:text-red-900">
+                REGISTER NOW
+            </button>
+        </div>
+    </div>
+
+    <div class="hero-illustration fade-in-delay">
+        <img src="images/public cons.JPG" class="illustration-img" alt="Consultation">
+    </div>
+</section>
+
+<!-- ABOUT SECTION -->
+<section id="about" class="py-20 px-8 bg-white">
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <h2 class="text-4xl font-bold text-red-900 mb-4">About the Public Consultation Portal</h2>
+            <p class="text-gray-600 text-lg max-w-3xl mx-auto">
+                Empowering Valenzuelanos to shape the future through meaningful participation in governance
+            </p>
+        </div>
+
+        <!-- Main Description Card -->
+        <div class="bg-gradient-to-r from-red-50 to-red-100 rounded-lg p-8 mb-12 border-l-4 border-red-900">
+            <p class="text-gray-800 leading-relaxed text-lg mb-4">
+                The Public Consultation Portal is the official digital platform of the Valenzuela City 
+                Government designed to gather citizen insights, preferences, and concerns on proposed 
+                ordinances, programs, and local policies.
+            </p>
+            <p class="text-gray-800 leading-relaxed text-lg">
+                It promotes transparency, inclusion, and data-driven governance by allowing every 
+                Valenzuelano to participate in shaping legislation anytime, anywhere.
+            </p>
+        </div>
+
+        <!-- Features Grid -->
+        <div class="mb-12">
+            <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center">Key Features</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                    <i class="bi bi-chat-left-dots text-3xl text-red-900 mb-3"></i>
+                    <h4 class="font-bold text-gray-900 mb-2">Review & Comment</h4>
+                    <p class="text-gray-700 text-sm">Review and comment on draft laws with detailed analysis and insights</p>
                 </div>
-                <nav class="flex-1 overflow-y-auto py-4">
-                    <div class="px-4 space-y-1">
-                        <a href="#" class="nav-item" data-section="freedom-wall" onclick="switchSection('freedom-wall', event)">
-                            <i class="bi bi-megaphone"></i> <span class="ml-2">Public Consultation</span>
-                        </a>
-                        <a href="#" class="nav-item" data-section="announcements" onclick="switchSection('announcements', event)">
-                            <i class="bi bi-bullhorn"></i> <span class="ml-2">Announcements</span>
-                        </a>
-                        <!-- Settings moved to profile menu (header/profile image) -->
-                    </div>
-                </nav>
-                <div class="p-4 border-t border-red-700">
-                    <div class="flex items-center space-x-3">
-                        <button onclick="openProfileSettings(event)" class="w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center border-0 p-0" title="Open profile menu">
-                            ${avatarInnerHtml(AppData.currentUser?.profilePicture, 'citizen-profile-pic')}
-                        </button>
-                        <div class="flex-1 min-w-0">
-                            <p class="text-sm font-semibold truncate">${userName}</p>
-                            <p class="text-xs text-red-200 truncate">Citizen</p>
-                        </div>
-                    </div>
+
+                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                    <i class="bi bi-graph-up text-3xl text-red-900 mb-3"></i>
+                    <h4 class="font-bold text-gray-900 mb-2">Participate in Surveys</h4>
+                    <p class="text-gray-700 text-sm">Take part in digital consultations and surveys shaping our city</p>
                 </div>
-            </aside>
-            <!-- Main Content -->
-            <div class="flex-1 flex flex-col overflow-hidden">
-                <nav class="bg-white shadow-md border-b border-gray-200 sticky top-0 z-40">
-                    <div class="px-4 flex items-center h-16 justify-between">
-                        <div>
-                            <h2 id="citizen-page-title" class="text-lg font-bold text-gray-800">Public Consultation</h2>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <button id="theme-toggle-user" onclick="toggleThemeUser()" class="p-2 rounded-md hover:bg-gray-100" title="Toggle theme">
-                                <i class="bi bi-brightness-high text-lg" id="theme-icon-user"></i>
-                            </button>
-                            <button id="notifications-btn-user" class="relative p-2 rounded-md hover:bg-gray-100" onclick="toggleNotificationsUser()" title="Notifications">
-                                <i class="bi bi-bell text-lg"></i>
-                                <span id="notif-badge-user" class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" style="display:none"></span>
-                            </button>
-                            <div class="relative">
-                                <button id="header-profile-btn" onclick="toggleProfileMenu(event)" class="w-9 h-9 rounded-full overflow-hidden bg-gray-100 p-0 border-0" title="Open profile menu">
-                                    ${avatarInnerHtml(AppData.currentUser?.profilePicture, 'header-profile-pic')}
-                                </button>
-                                <!-- Profile dropdown (hidden by default) -->
-                                <div id="profile-dropdown" class="hidden origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
-                                    <div class="px-4 py-3 border-b">
-                                        <div class="text-sm font-semibold text-gray-800">${AppData.currentUser?.email || ''}</div>
-                                        <div class="text-xs text-gray-500">${AppData.currentUser?.role || 'Citizen'}</div>
-                                    </div>
-                                    <div class="py-1">
-                                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" onclick="(function(e){e.preventDefault(); renderProfile(); closeProfileMenu();})(event)"><i class="bi bi-person me-2"></i> My Profile</a>
-                                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" onclick="(function(e){e.preventDefault(); openProfileSettings(); closeProfileMenu();})(event)"><i class="bi bi-gear me-2"></i> Settings</a>
-                                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" onclick="(function(e){e.preventDefault(); showHelp(); closeProfileMenu();})(event)"><i class="bi bi-question-circle me-2"></i> Help & Support</a>
-                                    </div>
-                                    <div class="border-t">
-                                        <a href="#" class="block px-4 py-2 text-sm text-red-600 hover:bg-gray-50" onclick="(function(e){e.preventDefault(); logoutCitizen(); closeProfileMenu();})(event)"><i class="bi bi-box-arrow-right me-2"></i> Logout</a>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </nav>
-                <main class="flex-1 overflow-y-auto bg-gray-100 p-4">
-                    <div id="citizen-content"></div>
-                </main>
+
+                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                    <i class="bi bi-file-earmark-check text-3xl text-red-900 mb-3"></i>
+                    <h4 class="font-bold text-gray-900 mb-2">Track Progress</h4>
+                    <p class="text-gray-700 text-sm">Track ordinance status and see how they develop over time</p>
+                </div>
+
+                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                    <i class="bi bi-shield-check text-3xl text-red-900 mb-3"></i>
+                    <h4 class="font-bold text-gray-900 mb-2">Verified Information</h4>
+                    <p class="text-gray-700 text-sm">Access verified and official city government information</p>
+                </div>
+
+                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                    <i class="bi bi-globe text-3xl text-red-900 mb-3"></i>
+                    <h4 class="font-bold text-gray-900 mb-2">Multilingual</h4>
+                    <p class="text-gray-700 text-sm">Supports multiple languages for inclusive participation</p>
+                </div>
             </div>
         </div>
-        `;
-        renderCitizenSection(currentSection);
-        highlightSidebar(currentSection);
-    }
 
-    // Sidebar navigation logic
-    window.switchSection = function(section, e) {
-        if (e) e.preventDefault();
-        currentSection = section;
-        renderCitizenSection(section);
-        highlightSidebar(section);
-    }
-    // Open settings using the profile image (sidebar) or via menu
-    window.openProfileSettings = function(e) {
-        if (e && e.preventDefault) e.preventDefault();
-        currentSection = 'settings';
-        renderCitizenSection('settings');
-        // update title and highlight (sidebar has no settings link so highlight will be empty)
-        const titleEl = document.getElementById('citizen-page-title');
-        if (titleEl) titleEl.textContent = 'Settings';
-        highlightSidebar(currentSection);
-        // scroll to top so settings form is visible
-        window.scrollTo(0,0);
-    }
+        <!-- Commitment Section -->
+        <div class="bg-gradient-to-r from-red-900 to-red-800 text-white rounded-lg p-8 text-center">
+            <h3 class="text-2xl font-bold mb-4">Our Commitment</h3>
+            <p class="text-lg leading-relaxed">
+                Guided by principles of transparency, accountability, and citizen empowerment, this 
+                platform strengthens collaboration between the government and its people through secure 
+                and modern digital participation.
+            </p>
+        </div>
+    </div>
+</section>
 
-    // Profile dropdown controls
-    window.toggleProfileMenu = function(e) {
-        if (e && e.stopPropagation) e.stopPropagation();
-        const dd = document.getElementById('profile-dropdown');
-        if (!dd) return;
-        dd.classList.toggle('hidden');
-    }
-    window.closeProfileMenu = function() {
-        const dd = document.getElementById('profile-dropdown');
-        if (!dd) return;
-        dd.classList.add('hidden');
-    }
-    // close dropdown when clicking outside
-    document.addEventListener('click', function(evt){
-        const dd = document.getElementById('profile-dropdown');
-        const btn = document.getElementById('header-profile-btn');
-        if (!dd || !btn) return;
-        const within = dd.contains(evt.target) || btn.contains(evt.target);
-        if (!within) dd.classList.add('hidden');
-    });
-
-    // Render a simple read-only profile view with photo upload
-    function renderProfile() {
-        currentSection = 'profile';
-        const container = document.getElementById('citizen-content');
-        const user = AppData.currentUser || {};
-        container.innerHTML = `
-            <div class="max-w-lg mx-auto bg-white rounded-xl shadow-md p-6">
-                <div class="flex items-center gap-4 mb-6">
-                    <div class="w-24 h-24 rounded-full overflow-hidden bg-gray-100">
-                        ${avatarInnerHtml(user.profilePicture, 'profile-pic-display')}
-                    </div>
-                    <div>
-                        <div class="text-lg font-semibold text-gray-800">${user.name || ''}</div>
-                        <div class="text-sm text-gray-500">${user.email || ''}</div>
-                        <div class="text-xs text-gray-500">${user.role || 'Citizen'}</div>
-                    </div>
-                </div>
-                <div class="border-t pt-4">
-                    <label class="block text-sm font-medium mb-2">Change Profile Photo</label>
-                    <input type="file" id="profile-pic-input" accept="image/*" class="mb-2">
-                    <p class="text-xs text-gray-500 mb-4">Recommended 200x200px. JPG/PNG.</p>
-                    <button class="btn-primary" onclick="saveProfilePhoto()">Save Photo</button>
-                    <div id="profile-msg" class="text-xs text-green-600 mt-2"></div>
-                </div>
-            </div>
-        `;
-        const titleEl = document.getElementById('citizen-page-title');
-        if (titleEl) titleEl.textContent = 'My Profile';
-        highlightSidebar(currentSection);
-
-        // File input handler
-        const picInput = document.getElementById('profile-pic-input');
-        picInput.addEventListener('change', function(ev) {
-            const f = ev.target.files && ev.target.files[0];
-            if (!f) return;
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                const data = evt.target.result;
-                setAvatarById('profile-pic-display', data);
-                AppData._pendingProfilePic = data;
-            };
-            reader.readAsDataURL(f);
-        });
-    }
-
-    window.saveProfilePhoto = function() {
-        if (AppData._pendingProfilePic) {
-            AppData.currentUser.profilePicture = AppData._pendingProfilePic;
-            delete AppData._pendingProfilePic;
-            // Persist profile changes to localStorage so they survive logout
-            try {
-                localStorage.setItem('currentUser', JSON.stringify(AppData.currentUser));
-                // remove any session copy to avoid confusion
-                sessionStorage.removeItem('currentUser');
-            } catch (e) {
-                console.warn('[profile] could not persist to localStorage', e);
-                // fallback to sessionStorage
-                sessionStorage.setItem('currentUser', JSON.stringify(AppData.currentUser));
-            }
-            setAvatarById('citizen-profile-pic', AppData.currentUser.profilePicture);
-            setAvatarById('header-profile-pic', AppData.currentUser.profilePicture);
-            document.getElementById('profile-msg').textContent = 'Profile photo saved (persistent).';
-        }
-    }
-
-    function showHelp() {
-        showNotification('Help & Support: For demo, contact your LGU administrator.', 'info');
-    }
-    function highlightSidebar(section) {
-        document.querySelectorAll('.nav-item').forEach(item => {
-            if (item.getAttribute('data-section') === section) {
-                item.classList.add('bg-red-700', 'text-white');
-            } else {
-                item.classList.remove('bg-red-700', 'text-white');
-            }
-        });
-        // Update page title
-        const titles = { 'freedom-wall': 'Public Consultation', 'announcements': 'Announcements', 'settings': 'Settings' };
-        document.getElementById('citizen-page-title').textContent = titles[section] || '';
-    }
-
-    function renderCitizenSection(section) {
-        if (section === 'freedom-wall') renderFreedomWall();
-        else if (section === 'announcements') renderAnnouncements();
-        else if (section === 'settings') renderSettings();
-    }
-
-    // Freedom Wall: Suggestion submission and list
-    function renderFreedomWall() {
-        const container = document.getElementById('citizen-content');
-        // Twitter-like feed layout: new post composer + feed
-
-        container.innerHTML = `
-            <div class="max-w-2xl mx-auto space-y-4">
-                <div class="bg-white rounded-xl shadow-md p-4">
-                    <div class="flex items-start gap-3">
-                        <div class="w-12 h-12 rounded-full overflow-hidden bg-gray-100">
-                            ${avatarInnerHtml(AppData.currentUser?.profilePicture)}
-                        </div>
-                        <div class="flex-1">
-                            <textarea id="suggestion-text" class="input-field w-full resize-none" rows="3" placeholder="Share your suggestion or update..."></textarea>
-                            <div class="flex items-center gap-2 mt-2">
-                                <input type="file" id="post-media-input" accept="image/*,video/*" class="block text-xs text-gray-500" style="max-width: 180px;">
-                                <span id="post-media-preview" class="ml-2"></span>
-                                <button id="post-btn" class="btn-primary ml-auto">Post</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div id="feed-list" class="space-y-3"></div>
-            </div>
-        `;
-
-        let postMediaData = null, postMediaType = null;
-        document.getElementById('post-media-input').addEventListener('change', function(ev) {
-            const f = ev.target.files && ev.target.files[0];
-            if (!f) { postMediaData = null; postMediaType = null; document.getElementById('post-media-preview').innerHTML = ''; return; }
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                postMediaData = evt.target.result;
-                postMediaType = f.type.startsWith('image') ? 'image' : (f.type.startsWith('video') ? 'video' : null);
-                if (postMediaType === 'image') {
-                    document.getElementById('post-media-preview').innerHTML = `<img src="${postMediaData}" class="w-16 h-16 object-cover rounded">`;
-                } else if (postMediaType === 'video') {
-                    document.getElementById('post-media-preview').innerHTML = `<video src="${postMediaData}" class="w-16 h-16 rounded" controls></video>`;
-                } else {
-                    document.getElementById('post-media-preview').innerHTML = '';
-                }
-            };
-            reader.readAsDataURL(f);
-        });
-
-        document.getElementById('post-btn').addEventListener('click', function() {
-            const text = document.getElementById('suggestion-text').value.trim();
-            if (!text && !postMediaData) return;
-            const entry = {
-                id: Date.now(),
-                author: AppData.currentUser?.name || 'Citizen',
-                authorEmail: AppData.currentUser?.email || '',
-                avatar: AppData.currentUser?.profilePicture || '',
-                text,
-                date: new Date().toISOString(),
-                media: postMediaData || null,
-                mediaType: postMediaType || null
-            };
-            let list = JSON.parse(localStorage.getItem('freedomWall') || '[]');
-            list.push(entry);
-            localStorage.setItem('freedomWall', JSON.stringify(list));
-            document.getElementById('suggestion-text').value = '';
-            document.getElementById('post-media-input').value = '';
-            document.getElementById('post-media-preview').innerHTML = '';
-            postMediaData = null; postMediaType = null;
-            // Log action for admin
-            logActivity('post', entry);
-            renderFeed();
-        });
-
-        renderFeed();
-    }
-
-    // Hearts storage helpers
-    function _getHearts() {
-        return JSON.parse(localStorage.getItem('freedomWallHearts') || '{}');
-    }
-    function _saveHearts(h) { localStorage.setItem('freedomWallHearts', JSON.stringify(h)); }
-
-    function toggleHeart(postId) {
-        const hearts = _getHearts();
-        const user = AppData.currentUser?.email || 'anon';
-        hearts[postId] = hearts[postId] || [];
-        const idx = hearts[postId].indexOf(user);
-        if (idx === -1) hearts[postId].push(user);
-        else hearts[postId].splice(idx,1);
-        _saveHearts(hearts);
-        // update UI
-        const btn = document.querySelector(`#post-${postId} .heart-btn`);
-        const cnt = document.querySelector(`#post-${postId} .heart-count`);
-        const has = hearts[postId].indexOf(user) !== -1;
-        if (btn) btn.innerHTML = has ? '<i class="bi bi-heart-fill text-red-600"></i>' : '<i class="bi bi-heart"></i>';
-        if (cnt) cnt.textContent = hearts[postId].length;
-    }
-
-    function renderFeed() {
-        const feed = JSON.parse(localStorage.getItem('freedomWall') || '[]').slice().reverse();
-        const hearts = _getHearts();
-        const container = document.getElementById('feed-list');
-        container.innerHTML = feed.map(post => {
-            const count = (hearts[post.id] || []).length;
-            const user = AppData.currentUser?.email || 'anon';
-            const has = (hearts[post.id] || []).indexOf(user) !== -1;
-            let mediaHtml = '';
-            if (post.media && post.mediaType === 'image') {
-                mediaHtml = `<div class='mt-3'><img src='${post.media}' class='max-w-xs max-h-60 rounded shadow'></div>`;
-            } else if (post.media && post.mediaType === 'video') {
-                mediaHtml = `<div class='mt-3'><video src='${post.media}' class='max-w-xs max-h-60 rounded shadow' controls></video></div>`;
-            }
-            return `
-                <div id="post-${post.id}" class="bg-white rounded-xl shadow p-4">
-                    <div class="flex items-start gap-3">
-                        <div class="w-12 h-12 rounded-full overflow-hidden bg-gray-100">
-                            ${avatarInnerHtml(post.avatar)}
-                        </div>
-                        <div class="flex-1">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <div class="font-semibold text-gray-800">${post.author}</div>
-                                    <div class="text-xs text-gray-500">${new Date(post.date).toLocaleString()}</div>
-                                </div>
-                                <div class="relative">
-                                    ${post.authorEmail === (AppData.currentUser?.email || '') ? `
-                                    <button onclick="openPostMenu(${post.id}, event)" class="p-1 rounded hover:bg-gray-100" title="Options"><i class="bi bi-three-dots-vertical"></i></button>
-                                    <div id="post-menu-${post.id}" class="hidden absolute right-0 mt-2 w-36 bg-white rounded shadow z-40">
-                                        <a href="#" class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-100" onclick="(function(e){e.preventDefault(); startEditPost(${post.id}); closeAllPostMenus();})(event)">Edit</a>
-                                        <a href="#" class="block px-3 py-2 text-sm text-red-600 hover:bg-gray-100" onclick="(function(e){e.preventDefault(); deletePost(${post.id}); closeAllPostMenus();})(event)">Delete</a>
-                                    </div>
-                                    ` : `<div class="text-sm text-gray-500">&nbsp;</div>`}
-                                </div>
-                            </div>
-                            <div class="mt-3 text-gray-700">${post.text}</div>
-                            ${mediaHtml}
-                            <div class="mt-3 flex items-center gap-4">
-                                <button class="heart-btn" onclick="toggleHeart(${post.id})">${has ? '<i class="bi bi-heart-fill text-red-600"></i>' : '<i class="bi bi-heart"></i>'}</button>
-                                <div class="heart-count text-sm text-gray-600">${count}</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('') || '<div class="text-gray-400 text-center py-8">No posts yet. Be the first to share.</div>';
-    }
-
-    // Post menu and edit/delete handlers
-    window.closeAllPostMenus = function() {
-        document.querySelectorAll('[id^="post-menu-"]').forEach(el => el.classList.add('hidden'));
-    }
-    window.openPostMenu = function(postId, e) {
-        if (e && e.stopPropagation) e.stopPropagation();
-        closeAllPostMenus();
-        const el = document.getElementById('post-menu-' + postId);
-        if (!el) return;
-        el.classList.toggle('hidden');
-    }
-    // close post menus when clicking outside
-    document.addEventListener('click', function(evt) {
-        const any = Array.from(document.querySelectorAll('[id^="post-menu-"]'));
-        if (!any.length) return;
-        const clickedInside = any.some(menu => menu.contains(evt.target));
-        const btns = Array.from(document.querySelectorAll('[onclick^="openPostMenu"]'));
-        const clickedBtn = btns.some(b => b.contains && b.contains(evt.target));
-        if (!clickedInside && !clickedBtn) closeAllPostMenus();
-    });
-
-    function startEditPost(postId) {
-        // replace post body with an editor
-        const postEl = document.getElementById('post-' + postId);
-        if (!postEl) return;
-        const posts = JSON.parse(localStorage.getItem('freedomWall') || '[]');
-        const p = posts.find(x => x.id == postId);
-        if (!p) return;
-        const editorHtml = `
-            <div class="bg-white rounded-xl shadow p-4">
-                <div class="flex items-start gap-3">
-                    <div class="w-12 h-12 rounded-full overflow-hidden bg-gray-100">${avatarInnerHtml(p.avatar)}</div>
-                    <div class="flex-1">
-                        <textarea id="edit-text-${postId}" class="input-field w-full resize-none" rows="4">${escapeHtml(p.text)}</textarea>
-                        <div class="mt-2 flex gap-2">
-                            <button class="btn-primary" onclick="saveEditPost(${postId})">Save</button>
-                            <button class="btn-secondary" onclick="cancelEditPost(${postId})">Cancel</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        postEl.outerHTML = `<div id="post-${postId}" class="">${editorHtml}</div>`;
-    }
-    function saveEditPost(postId) {
-        const ta = document.getElementById('edit-text-' + postId);
-        if (!ta) return;
-        const newText = ta.value.trim();
-        const posts = JSON.parse(localStorage.getItem('freedomWall') || '[]');
-        const idx = posts.findIndex(p => p.id == postId);
-        if (idx === -1) return;
-        const oldText = posts[idx].text;
-        posts[idx].text = newText;
-        localStorage.setItem('freedomWall', JSON.stringify(posts));
-        // Log edit action for admin
-        logActivity('edit', { ...posts[idx], oldText });
-        renderFeed();
-    }
-    function cancelEditPost(postId) {
-        renderFeed();
-    }
-    function deletePost(postId) {
-        let posts = JSON.parse(localStorage.getItem('freedomWall') || '[]');
-        const post = posts.find(p => p.id == postId);
-        posts = posts.filter(p => p.id != postId);
-        localStorage.setItem('freedomWall', JSON.stringify(posts));
-        // remove hearts for this post
-        const hearts = _getHearts();
-        if (hearts[postId]) { delete hearts[postId]; _saveHearts(hearts); }
-        // Log delete action for admin
-        if (post) logActivity('delete', post);
-        renderFeed();
-    }
-    // Log user actions for admin
-    function logActivity(type, data) {
-        let log = JSON.parse(localStorage.getItem('activityLog') || '[]');
-        let entry = {};
-        if (type === 'post') {
-            entry = {
-                type: 'post',
-                user: data.author,
-                email: data.authorEmail,
-                text: data.text,
-                date: data.date,
-                postId: data.id,
-                action: `Posted: "${data.text}"`,
-                timestamp: new Date().toISOString()
-            };
-        } else if (type === 'edit') {
-            entry = {
-                type: 'edit',
-                user: data.author,
-                email: data.authorEmail,
-                text: data.text,
-                oldText: data.oldText,
-                date: data.date,
-                postId: data.id,
-                action: `Edited post: "${data.oldText}" → "${data.text}"`,
-                timestamp: new Date().toISOString()
-            };
-        } else if (type === 'delete') {
-            entry = {
-                type: 'delete',
-                user: data.author,
-                email: data.authorEmail,
-                text: data.text,
-                date: data.date,
-                postId: data.id,
-                action: `Deleted post: "${data.text}"`,
-                timestamp: new Date().toISOString()
-            };
-        }
-        log.push(entry);
-        localStorage.setItem('activityLog', JSON.stringify(log));
-    }
-
-    // small helper to escape HTML inside textarea prefill
-    function escapeHtml(str) {
-        return (str+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    }
-    function renderSuggestionList() {
-        const list = JSON.parse(localStorage.getItem('freedomWall') || '[]').reverse();
-        const container = document.getElementById('suggestion-list');
-        container.innerHTML = list.length ? list.map(e => `<div class='border-b py-2'><b>${e.author}</b> <span class='text-xs text-gray-500'>${e.date}</span><br>${e.text}</div>`).join('') : '<div class="text-gray-400">No suggestions yet.</div>';
-    }
-
-    // Announcements: Show sample LGU announcements
-    function renderAnnouncements() {
-        const container = document.getElementById('citizen-content');
-        const announcements = [
-            { title: 'City Hall Holiday Schedule', date: '2025-12-10', content: 'City Hall will be closed on Dec 24-25 for Christmas.' },
-            { title: 'New Road Project', date: '2025-12-05', content: 'Construction on Main St. starts Dec 15. Expect delays.' },
-            { title: 'Vaccination Drive', date: '2025-12-01', content: 'Free flu vaccines at barangay centers all December.' }
-        ];
-        // Render each announcement as an emphasized card
-        container.innerHTML = `
-            <div class="space-y-4 max-w-2xl mx-auto">
-                ${announcements.map((a, i) => `
-                    <div class="bg-white rounded-lg shadow p-4 border-l-4 ${i % 3 === 0 ? 'border-blue-400' : i % 3 === 1 ? 'border-green-400' : 'border-yellow-400'}">
-                        <div class="flex items-start justify-between">
-                            <div>
-                                <h3 class="font-semibold text-gray-800">${a.title}</h3>
-                                <div class="text-xs text-gray-500">${a.date}</div>
-                            </div>
-                            <div class="text-sm text-gray-600">&nbsp;</div>
-                        </div>
-                        <p class="mt-3 text-gray-700">${a.content}</p>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-    }
-
-    // Settings: Change password, username, display name
-    function renderSettings() {
-        const container = document.getElementById('citizen-content');
-        const user = AppData.currentUser || {};
-        container.innerHTML = `<div class="bg-white rounded-xl shadow-md p-6 max-w-lg mx-auto">
-            <h2 class="text-xl font-bold mb-4 text-green-600">Settings</h2>
-            <form id="settings-form" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium">Display Name</label>
-                    <input type="text" id="display-name" class="input-field w-full" value="${user.name || ''}">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium">Email</label>
-                    <input type="email" id="email" class="input-field w-full" value="${user.email || ''}" disabled>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium">New Password</label>
-                    <input type="password" id="new-password" class="input-field w-full" placeholder="Change password">
-                </div>
-                <div class="flex justify-end">
-                    <button type="submit" class="btn-primary">Save Changes</button>
-                </div>
-            </form>
-            <div id="settings-msg" class="text-xs text-green-600 mt-2"></div>
-        </div>`;
-
-            // Profile pic upload moved to My Profile view
-
-        document.getElementById('settings-form').onsubmit = function(e) {
-            e.preventDefault();
-            const newName = document.getElementById('display-name').value.trim();
-            if (newName) {
-                AppData.currentUser.name = newName;
-            }
-            // Persist settings to localStorage so changes remain after logout
-            try {
-                localStorage.setItem('currentUser', JSON.stringify(AppData.currentUser));
-                sessionStorage.removeItem('currentUser');
-            } catch (err) {
-                console.warn('[settings] could not persist to localStorage', err);
-                sessionStorage.setItem('currentUser', JSON.stringify(AppData.currentUser));
-            }
-
-            document.getElementById('settings-msg').textContent = 'Changes saved.';
-            // apply immediately to sidebar pic and name
-            setAvatarById('citizen-profile-pic', AppData.currentUser.profilePicture);
-            // update displayed name
-            const nameEl = document.querySelector('.flex-1 p.text-sm') || null;
-            if (nameEl) nameEl.textContent = AppData.currentUser.name;
-            // update header/profile pic
-            setAvatarById('header-profile-pic', AppData.currentUser.profilePicture);
-        };
-    }
-
-    // Logout function for citizen portal
-    window.logoutCitizen = function() {
-        // Remove login markers but keep `currentUser` in localStorage so profile changes persist across logouts.
-        localStorage.removeItem('isLoggedIn');
-        sessionStorage.removeItem('isLoggedIn');
-        sessionStorage.removeItem('currentUser');
-        window.location.href = 'login.html?logout=success';
-    }
-    // Theme toggle for user portal
-    window.toggleThemeUser = function() {
-        const dark = document.documentElement.classList.toggle('dark');
-        localStorage.setItem('theme', dark ? 'dark' : 'light');
-        const icon = document.getElementById('theme-icon-user');
-        if (icon) icon.className = dark ? 'bi bi-moon-fill text-lg' : 'bi bi-brightness-high text-lg';
-    }
-
-    // Notifications badge
-    function updateNotifBadge() {
-        const badge = document.getElementById('notif-badge-user');
-        if (!badge) return;
-        const unread = (AppData.notifications || []).filter(n => !n.read).length;
-        badge.style.display = unread > 0 ? '' : 'none';
-    }
-    window.toggleNotificationsUser = function() {
-        // For demo: just mark all as read and show a toast
-        (AppData.notifications || []).forEach(n => n.read = true);
-        updateNotifBadge();
-        showNotification('All notifications marked read', 'info');
-    }
-    // Render layout now that AppData.currentUser is set
-    renderCitizenLayout();
-    // Update notification badge and header pic
-    updateNotifBadge();
-    setAvatarById('header-profile-pic', AppData.currentUser?.profilePicture);
-    // Initialize theme icon state
-    const themeIcon = document.getElementById('theme-icon-user');
-    if (themeIcon) {
-        const dark = localStorage.getItem('theme') === 'dark';
-        themeIcon.className = dark ? 'bi bi-moon-fill text-lg' : 'bi bi-brightness-high text-lg';
-        if (dark) document.documentElement.classList.add('dark');
-    }
-    </script>
 </body>
 </html>
