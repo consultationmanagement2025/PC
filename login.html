@@ -98,7 +98,7 @@
         
         <!-- Login Card -->
         <div class="bg-white rounded-xl md:rounded-2xl shadow-xl p-5 md:p-8 animate-fade-in-up animation-delay-300 transform hover:shadow-2xl transition-all duration-300">
-            <div class="mb-4 md:mb-6">
+            <div class="mb-4 md:mb-6 text-center">
                 <h2 class="text-xl md:text-2xl font-bold text-gray-800">Welcome Back</h2>
                 <p class="text-sm md:text-base text-gray-600 mt-1">Sign in to access your account</p>
             </div>
@@ -157,9 +157,9 @@
                                class="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-2 focus:ring-red-500 cursor-pointer">
                         <span class="ml-2 text-sm text-gray-700">Remember me</span>
                     </label>
-                    <a href="forgot-password.html" class="text-sm text-red-600 hover:text-red-700 font-medium transition-colors">
+                    <button type="button" onclick="openForgotPasswordModal()" class="text-sm text-red-600 hover:text-red-700 font-medium transition-colors">
                         Forgot password?
-                    </a>
+                    </button>
                 </div>
                 
                 <!-- Submit Button -->
@@ -171,15 +171,7 @@
                 </button>
             </form>
             
-            <!-- Quick Demo Login Buttons (for testing) -->
-            <div class="mt-4 flex gap-3">
-                <button type="button" class="w-1/2 bg-gray-100 border border-gray-300 text-gray-800 py-2 rounded-lg hover:bg-gray-200" onclick="quickLoginUser101()">
-                    Quick Login: user101
-                </button>
-                <button type="button" class="w-1/2 bg-gray-100 border border-gray-300 text-gray-800 py-2 rounded-lg hover:bg-gray-200" onclick="quickLoginUser102()">
-                    Quick Login: user102
-                </button>
-            </div>
+            <!-- Quick Demo Login removed in production -->
             <!-- Divider -->
             <div class="relative my-5 md:my-6">
                 <div class="absolute inset-0 flex items-center">
@@ -192,11 +184,11 @@
             
             <!-- Alternative Login Options -->
             <div class="grid grid-cols-2 gap-3">
-                <button type="button" class="flex items-center justify-center px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200">
+                <button type="button" onclick="handleMicrosoftLogin()" class="flex items-center justify-center px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200">
                     <i class="bi bi-microsoft text-lg mr-2 text-blue-600"></i>
                     <span class="text-sm font-medium text-gray-700">Microsoft</span>
                 </button>
-                <button type="button" class="flex items-center justify-center px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200">
+                <button type="button" onclick="handleGoogleLogin()" class="flex items-center justify-center px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200">
                     <i class="bi bi-google text-lg mr-2 text-red-500"></i>
                     <span class="text-sm font-medium text-gray-700">Google</span>
                 </button>
@@ -206,7 +198,9 @@
             <div class="mt-5 md:mt-6 text-center">
                 <p class="text-sm text-gray-600">
                     Don't have an account? 
-                    <a href="register.html" class="text-red-600 hover:text-red-700 font-semibold transition-colors">Create Account</a>
+                    <button type="button" onclick="openCreateAccountModal()" class="text-red-600 hover:text-red-700 font-semibold transition-colors">
+                        Create Account
+                    </button>
                 </p>
             </div>
         </div>
@@ -225,6 +219,119 @@
     </div>
     
     <script>
+        // Google OAuth client ID for your app (set this to your registered Web client ID)
+        // Example: window.GOOGLE_CLIENT_ID = '12345-abc.apps.googleusercontent.com';
+        // Read from `window` or `localStorage` so you can configure at runtime without editing the file.
+        window.GOOGLE_CLIENT_ID = window.GOOGLE_CLIENT_ID || localStorage.getItem('GOOGLE_CLIENT_ID') || '';
+
+        // PKCE helpers for Google OAuth (used when GOOGLE_CLIENT_ID is provided)
+        async function sha256(message) {
+            const msgUint8 = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+            return new Uint8Array(hashBuffer);
+        }
+
+        function base64UrlEncode(arrayBuffer) {
+            let str = '';
+            const bytes = new Uint8Array(arrayBuffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                str += String.fromCharCode(bytes[i]);
+            }
+            return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        async function pkceChallengeFromVerifier(verifier) {
+            const hashed = await sha256(verifier);
+            return base64UrlEncode(hashed);
+        }
+
+        function generateRandomString(length = 64) {
+            const array = new Uint8Array(length);
+            crypto.getRandomValues(array);
+            return Array.from(array).map(b => ('0' + (b & 0xff).toString(16)).slice(-2)).join('');
+        }
+
+        // Exchange authorization code for tokens (PKCE)
+        async function exchangeCodeForToken(code, codeVerifier, redirectUri, clientId) {
+            const tokenEndpoint = 'https://oauth2.googleapis.com/token';
+            const body = new URLSearchParams({
+                grant_type: 'authorization_code',
+                code: code,
+                client_id: clientId,
+                redirect_uri: redirectUri,
+                code_verifier: codeVerifier
+            });
+
+            const res = await fetch(tokenEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString()
+            });
+            if (!res.ok) throw new Error('Token exchange failed: ' + res.status + ' ' + res.statusText);
+            return res.json();
+        }
+
+        function parseJwt (token) {
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                return JSON.parse(jsonPayload);
+            } catch (e) { return null; }
+        }
+
+        // UI to configure Google Client ID in-browser for local testing
+        function openGoogleClientModal() {
+            const existing = localStorage.getItem('GOOGLE_CLIENT_ID') || '';
+            const modal = `
+                <div id="googleClientModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-lg w-full">
+                        <div class="bg-gradient-to-r from-red-600 to-red-700 px-6 py-3 flex items-center justify-between">
+                            <h3 class="text-white font-semibold">Configure Google Sign-in</h3>
+                            <button onclick="closeGoogleClientModal()" class="text-white text-xl">×</button>
+                        </div>
+                        <div class="p-6">
+                            <p class="text-sm text-gray-700 mb-3">Enter your Google OAuth Client ID (Web application). Example: <span class="font-mono">12345-abc.apps.googleusercontent.com</span></p>
+                            <input id="googleClientInput" type="text" value="${existing}" placeholder="Enter GOOGLE_CLIENT_ID" class="w-full px-3 py-2 border border-gray-300 rounded mb-3">
+                            <div class="flex gap-2">
+                                <button onclick="saveGoogleClientId()" class="bg-red-600 text-white px-4 py-2 rounded">Save & Continue</button>
+                                <button onclick="closeGoogleClientModal()" class="border border-gray-300 px-4 py-2 rounded">Cancel</button>
+                                <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="ml-auto text-sm text-blue-600 underline">Open Google Console</a>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-3">Make sure your OAuth consent and redirect URI (this page URL) are configured in Google Cloud Console.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modal);
+            document.getElementById('googleClientInput').focus();
+        }
+
+        function closeGoogleClientModal() {
+            const modal = document.getElementById('googleClientModal');
+            if (modal) modal.remove();
+        }
+
+        function saveGoogleClientId() {
+            const el = document.getElementById('googleClientInput');
+            if (!el) return;
+            const val = el.value.trim();
+            if (!val) { showAlert('Please enter a Google Client ID.', 'error'); return; }
+            if (!val.endsWith('.apps.googleusercontent.com')) {
+                showAlert('This does not look like a valid Google Client ID. It should end with .apps.googleusercontent.com', 'error');
+                return;
+            }
+            localStorage.setItem('GOOGLE_CLIENT_ID', val);
+            window.GOOGLE_CLIENT_ID = val;
+            showAlert('Google Client ID saved. Starting sign-in...', 'success');
+            closeGoogleClientModal();
+            // continue sign-in flow
+            setTimeout(() => handleGoogleLogin(), 300);
+        }
+
         // Toggle password visibility
         document.getElementById('toggle-password')?.addEventListener('click', function() {
             const passwordField = document.getElementById('password');
@@ -240,6 +347,33 @@
                 eyeIcon.classList.add('bi-eye');
             }
         });
+
+        // Receive OAuth result from popup
+        window.addEventListener('message', function(ev) {
+            try {
+                if (ev.origin !== window.location.origin) return;
+                const data = ev.data || {};
+                if (data.type === 'google_oauth' && data.user) {
+                    const user = data.user;
+                    // Ensure user stored in llrm_users
+                    try {
+                        const users = JSON.parse(localStorage.getItem('llrm_users') || '[]');
+                        if (!users.some(u => u.email === user.email)) {
+                            users.push(user);
+                            localStorage.setItem('llrm_users', JSON.stringify(users));
+                        }
+                    } catch (e) { console.warn('Error saving google user', e); }
+                    // Add audit log entry
+                    try {
+                        const logs = JSON.parse(localStorage.getItem('llrm_auditLogs') || '[]');
+                        logs.push({ id: 'audit_' + Date.now(), user: user.email, action: 'Google Sign-In', details: 'User signed in via Google popup', date: new Date().toISOString() });
+                        localStorage.setItem('llrm_auditLogs', JSON.stringify(logs));
+                    } catch (e) { console.warn('Error writing audit log', e); }
+                    // Persist session and redirect
+                    persistAndRedirect(user, 'user-portal.html');
+                }
+            } catch (e) { console.error('message handler error', e); }
+        }, false);
         
         // Show alert message
         function showAlert(message, type = 'error') {
@@ -322,37 +456,49 @@
             loginBtnIcon.classList.add('spinner');
             loginBtnIcon.innerHTML = '';
 
-            // Simulate login (Demo mode)
+            // Simulate login (check registered users first, then demo credentials)
             setTimeout(() => {
-                // Demo credentials check for admin and demo citizens
                 let userObj = null;
-                if (email === 'admin@lgu.gov.ph' && password === 'admin123') {
+
+                // Check registered users stored in localStorage
+                let storedUsers = [];
+                try { storedUsers = JSON.parse(localStorage.getItem('llrm_users') || '[]'); } catch (e) { storedUsers = []; }
+                const matched = storedUsers.find(u => u.email === email && u.password === password);
+                if (matched) {
+                    userObj = matched;
+                } else if (email === 'admin@lgu.gov.ph' && password === 'admin123') {
                     const existing = getExistingStoredUser(email);
                     userObj = existing || { email, name: 'Admin User', role: 'Administrator' };
-                    // persist and redirect to admin dashboard
-                    persistAndRedirect(userObj, 'system-template-full.html');
-
                 } else if (email === 'user101@lgu.gov.ph' && password === 'citizen2025') {
                     const existing = getExistingStoredUser(email);
                     userObj = existing || { email, name: 'Demo Citizen', role: 'Citizen' };
-                    persistAndRedirect(userObj, 'user-portal.html');
-
                 } else if (email === 'user102@lgu.gov.ph' && password === 'citizen2026') {
                     const existing = getExistingStoredUser(email);
                     userObj = existing || { email, name: 'Demo Citizen 2', role: 'Citizen' };
-                    persistAndRedirect(userObj, 'user-portal.html');
-
-                } else {
-                    // Reset button
-                    loginBtn.disabled = false;
-                    loginBtnText.textContent = 'Sign In';
-                    loginBtnIcon.classList.remove('spinner');
-                    loginBtnIcon.classList.add('bi-arrow-right');
-                    loginBtnIcon.innerHTML = '';
-                    showAlert('Invalid email or password. Try: admin@lgu.gov.ph / admin123 or user101@lgu.gov.ph / citizen2025', 'error');
-                    form.classList.add('animate-shake');
-                    setTimeout(() => form.classList.remove('animate-shake'), 500);
                 }
+
+                if (userObj) {
+                    // Decide redirect: only actual admins (or flagged isAdmin) go to admin dashboard.
+                    const role = (userObj.role || '').toLowerCase();
+                    const isAdmin = !!userObj.isAdmin;
+                    if (isAdmin || role.includes('admin') || email === 'admin@lgu.gov.ph') {
+                        persistAndRedirect(userObj, 'system-template-full.html');
+                    } else {
+                        // Citizens and other non-admin roles go to the citizen portal
+                        persistAndRedirect(userObj, 'user-portal.html');
+                    }
+                    return;
+                }
+
+                // Reset button and show error
+                loginBtn.disabled = false;
+                loginBtnText.textContent = 'Sign In';
+                loginBtnIcon.classList.remove('spinner');
+                loginBtnIcon.classList.add('bi-arrow-right');
+                loginBtnIcon.innerHTML = '';
+                showAlert('Invalid email or password. Try: admin@lgu.gov.ph / admin123 or user101@lgu.gov.ph / citizen2025', 'error');
+                form.classList.add('animate-shake');
+                setTimeout(() => form.classList.remove('animate-shake'), 500);
             }, 800);
         }
 
@@ -397,18 +543,243 @@
         }
 
         // Quick demo helpers
-        function quickLoginUser101() {
-            document.getElementById('email').value = 'user101@lgu.gov.ph';
-            document.getElementById('password').value = 'citizen2025';
-            document.getElementById('remember').checked = true;
-            handleLogin();
+
+        // Forgot Password Modal Functions
+        function openForgotPasswordModal() {
+            const modal = `
+                <div id="forgotPasswordModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-md w-full">
+                        <div class="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4 flex items-center justify-between">
+                            <h2 class="text-white text-lg font-bold">Reset Password</h2>
+                            <button onclick="closeForgotPasswordModal()" class="text-white hover:text-gray-200 text-xl">×</button>
+                        </div>
+                        <div class="p-6">
+                            <p class="text-gray-600 text-sm mb-4">Enter your email address and we'll send you a link to reset your password.</p>
+                            <input type="email" id="forgotEmail" placeholder="Enter your email" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 mb-4">
+                            <button onclick="sendPasswordReset()" class="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition-colors font-medium mb-3">Send Reset Link</button>
+                            <button onclick="closeForgotPasswordModal()" class="w-full border border-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-50 transition-colors font-medium">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modal);
         }
-        function quickLoginUser102() {
-            document.getElementById('email').value = 'user102@lgu.gov.ph';
-            document.getElementById('password').value = 'citizen2026';
-            document.getElementById('remember').checked = true;
-            handleLogin();
+
+        function closeForgotPasswordModal() {
+            const modal = document.getElementById('forgotPasswordModal');
+            if (modal) modal.remove();
         }
+
+        function sendPasswordReset() {
+            const email = document.getElementById('forgotEmail').value.trim();
+            if (!email || !email.includes('@')) {
+                showAlert('Please enter a valid email address.', 'error');
+                return;
+            }
+
+            // Check if email exists in user list (localStorage `llrm_users` or demo list)
+            let users = [];
+            try { users = JSON.parse(localStorage.getItem('llrm_users') || '[]'); } catch(e) { users = []; }
+            const demo = [
+                { email: 'admin@lgu.gov.ph' },
+                { email: 'user101@lgu.gov.ph' },
+                { email: 'user102@lgu.gov.ph' }
+            ];
+            const combined = users.concat(demo);
+            const userExists = combined.some(u => u.email === email);
+            if (!userExists) {
+                showAlert('No account found with this email. Please check and try again.', 'warning');
+                return;
+            }
+
+            // Simulate sending reset link
+            showAlert('A password reset link has been sent to ' + email + '. Check your email for instructions.', 'success');
+            closeForgotPasswordModal();
+        }
+
+        // Create Account Modal Functions
+        function openCreateAccountModal() {
+            const modal = `
+                <div id="createAccountModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-md w-full my-8">
+                        <div class="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4 flex items-center justify-between">
+                            <h2 class="text-white text-lg font-bold">Create Account</h2>
+                            <button onclick="closeCreateAccountModal()" class="text-white hover:text-gray-200 text-xl">×</button>
+                        </div>
+                        <div class="p-6">
+                            <form id="createAccountForm" onsubmit="handleCreateAccount(event)">
+                                <div class="mb-3">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                                    <input type="text" id="createName" placeholder="Enter your full name" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                    <input type="email" id="createEmail" placeholder="Enter your email" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Organization/Role</label>
+                                        <select id="createRole" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                            <option value="">Select your role</option>
+                                            <option value="citizen">Citizen</option>
+                                            <option value="admin">Admin</option>
+                                            <option value="organization">Organization</option>
+                                        </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                                    <div class="relative">
+                                        <input type="password" id="createPassword" placeholder="Minimum 8 characters" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                        <button type="button" onclick="toggleCreatePasswordVisibility()" class="absolute right-3 top-2.5 text-gray-500 hover:text-gray-700">
+                                            <i class="bi bi-eye text-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                                    <input type="password" id="createConfirmPassword" placeholder="Confirm your password" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="checkbox" id="agreeTerms" class="w-4 h-4 text-red-600 border-gray-300 rounded" required>
+                                        <span class="ml-2 text-sm text-gray-600">I agree to the <span class="text-red-600 font-medium">Terms and Conditions</span></span>
+                                    </label>
+                                </div>
+                                <button type="submit" class="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition-colors font-medium mb-2">Create Account</button>
+                                <button type="button" onclick="closeCreateAccountModal()" class="w-full border border-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-50 transition-colors font-medium">Cancel</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modal);
+        }
+
+        function closeCreateAccountModal() {
+            const modal = document.getElementById('createAccountModal');
+            if (modal) modal.remove();
+        }
+
+        function toggleCreatePasswordVisibility() {
+            const password = document.getElementById('createPassword');
+            if (password.type === 'password') {
+                password.type = 'text';
+            } else {
+                password.type = 'password';
+            }
+        }
+
+        function handleCreateAccount(event) {
+            event.preventDefault();
+
+            const name = document.getElementById('createName').value.trim();
+            const email = document.getElementById('createEmail').value.trim();
+            const role = document.getElementById('createRole').value;
+            const password = document.getElementById('createPassword').value;
+            const confirmPassword = document.getElementById('createConfirmPassword').value;
+
+            // Validation
+            if (!name || name.length < 3) {
+                showAlert('Please enter a valid name (at least 3 characters).', 'error');
+                return;
+            }
+            if (!email || !email.includes('@')) {
+                showAlert('Please enter a valid email address.', 'error');
+                return;
+            }
+            if (password.length < 8) {
+                showAlert('Password must be at least 8 characters long.', 'error');
+                return;
+            }
+            if (password !== confirmPassword) {
+                showAlert('Passwords do not match. Please try again.', 'error');
+                return;
+            }
+
+            // Check if email already exists
+            let users = [];
+            try { users = JSON.parse(localStorage.getItem('llrm_users') || '[]'); } catch(e) { users = []; }
+            if (users.some(u => u.email === email) || ['admin@lgu.gov.ph','user101@lgu.gov.ph','user102@lgu.gov.ph'].includes(email)) {
+                showAlert('An account with this email already exists. Please use a different email.', 'error');
+                return;
+            }
+
+            // Create new user object
+            const newUser = {
+                id: 'user' + Date.now(),
+                name: name,
+                email: email,
+                password: password,
+                role: role,
+                status: 'Active',
+                createdDate: new Date().toLocaleDateString(),
+                department: role === 'Citizen' ? 'General Public' : role,
+                contactNumber: '09XX-XXX-XXXX'
+            };
+
+            // Save user (in real app, would save to backend)
+            users.push(newUser);
+            localStorage.setItem('llrm_users', JSON.stringify(users));
+
+            // Success: persist user and redirect to appropriate dashboard
+            showAlert('Account created successfully! Redirecting...', 'success');
+            closeCreateAccountModal();
+            // Redirect: citizens should go to the user portal; other roles may go to admin
+            setTimeout(() => {
+                if ((newUser.role || '').toLowerCase() === 'citizen') {
+                    persistAndRedirect(newUser, 'user-portal.html');
+                } else {
+                    persistAndRedirect(newUser, 'system-template-full.html');
+                }
+            }, 700);
+        }
+
+        // OAuth Handler Functions
+        function handleGoogleLogin() {
+            // If a real GOOGLE_CLIENT_ID is configured, start PKCE + OAuth redirect flow.
+            if (window.GOOGLE_CLIENT_ID && window.GOOGLE_CLIENT_ID.length > 8) {
+                showAlert('Redirecting to Google sign-in...', 'info');
+                const clientId = window.GOOGLE_CLIENT_ID;
+                const redirectUri = window.location.origin + window.location.pathname;
+                const state = generateRandomString(16);
+                const codeVerifier = generateRandomString(64);
+                pkceChallengeFromVerifier(codeVerifier).then(codeChallenge => {
+                    // store verifier and state for callback
+                    localStorage.setItem('google_oauth_state', state);
+                    localStorage.setItem('google_oauth_code_verifier', codeVerifier);
+                    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+                    authUrl.searchParams.set('client_id', clientId);
+                    authUrl.searchParams.set('redirect_uri', redirectUri);
+                    authUrl.searchParams.set('response_type', 'code');
+                    authUrl.searchParams.set('scope', 'openid email profile');
+                    authUrl.searchParams.set('state', state);
+                    authUrl.searchParams.set('code_challenge', codeChallenge);
+                    authUrl.searchParams.set('code_challenge_method', 'S256');
+                    authUrl.searchParams.set('prompt', 'select_account');
+                    // Open OAuth flow in a popup so user can choose their Google account
+                    const popup = window.open(authUrl.toString(), 'google_oauth', 'width=520,height=700');
+                    if (popup) popup.focus();
+                }).catch(err => {
+                    console.error('PKCE error', err);
+                    showAlert('Unable to start Google sign-in (PKCE). See console for details.', 'error');
+                });
+                return;
+            }
+
+            // Fallback: allow user to configure a client id in-browser
+            openGoogleClientModal();
+        }
+
+        function handleMicrosoftLogin() {
+            showAlert('Microsoft Login: Redirecting to Microsoft authentication...', 'info');
+            // Simulate Microsoft OAuth flow (in production, would use Microsoft OAuth API)
+            setTimeout(() => {
+                showAlert('Simulating Microsoft authentication. Signing in demo user...', 'success');
+                const demoUser = { email: 'user102@lgu.gov.ph', name: 'Demo Citizen 2', role: 'Citizen' };
+                persistAndRedirect(demoUser, 'user-portal.html');
+            }, 1500);
+        }
+
+        // quickLoginUser helpers removed; demo OAuth now signs in demo users directly
         
         // Check for logout parameter
         const urlParams = new URLSearchParams(window.location.search);
@@ -416,8 +787,104 @@
             showAlert('You have been logged out successfully.', 'success');
         }
         
+        // If redirected back from Google OAuth with an authorization code, handle token exchange.
+        (async function handleOAuthCallback() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const code = params.get('code');
+                const state = params.get('state');
+                if (code) {
+                    const storedState = localStorage.getItem('google_oauth_state');
+                    const codeVerifier = localStorage.getItem('google_oauth_code_verifier');
+                    // remove stored values ASAP
+                    localStorage.removeItem('google_oauth_state');
+                    localStorage.removeItem('google_oauth_code_verifier');
+
+                    if (!storedState || !codeVerifier || storedState !== state) {
+                        console.warn('OAuth state mismatch or missing PKCE verifier');
+                        showAlert('Google sign-in failed (state mismatch).', 'error');
+                        return;
+                    }
+                    if (!window.GOOGLE_CLIENT_ID || window.GOOGLE_CLIENT_ID.length < 8) {
+                        showAlert('Google client ID not configured. Cannot complete sign-in.', 'error');
+                        return;
+                    }
+                    showAlert('Completing Google sign-in...', 'info');
+                    const redirectUri = window.location.origin + window.location.pathname;
+                    try {
+                        const tokenResp = await exchangeCodeForToken(code, codeVerifier, redirectUri, window.GOOGLE_CLIENT_ID);
+                        // tokenResp should contain id_token
+                        const idToken = tokenResp.id_token;
+                        const parsed = parseJwt(idToken) || {};
+                        const email = parsed.email || '';
+                        const name = parsed.name || parsed.email || 'Google User';
+                        // create user object with advanced defaults for the system
+                        const demoUser = {
+                            id: 'user' + Date.now(),
+                            email,
+                            name,
+                            role: 'Citizen',
+                            createdDate: new Date().toLocaleDateString(),
+                            createdVia: 'google',
+                            preferences: { notifications: true, subscribedConsultations: true },
+                            onboardingComplete: false,
+                            google_token: tokenResp
+                        };
+
+                        // Persist to users store if not exists
+                        try {
+                            const users = JSON.parse(localStorage.getItem('llrm_users') || '[]');
+                            if (!users.some(u => u.email === demoUser.email)) {
+                                users.push(demoUser);
+                                localStorage.setItem('llrm_users', JSON.stringify(users));
+                            }
+                        } catch (e) { console.warn('Error saving google user', e); }
+
+                        // Add an audit log for the signup/sign-in
+                        try {
+                            const logs = JSON.parse(localStorage.getItem('llrm_auditLogs') || '[]');
+                            logs.push({ id: 'audit_' + Date.now(), user: demoUser.email, action: 'Google Sign-In', details: 'User signed in/registered via Google', date: new Date().toISOString() });
+                            localStorage.setItem('llrm_auditLogs', JSON.stringify(logs));
+                        } catch (e) { console.warn('Error appending audit log', e); }
+
+                        // If this page is opened in a popup (oauth popup), send result to opener and close
+                        if (window.opener && window.opener !== window) {
+                            try {
+                                window.opener.postMessage({ type: 'google_oauth', user: demoUser }, window.location.origin);
+                            } catch (e) { console.warn('postMessage failed', e); }
+                            // Close popup
+                            window.close();
+                            return;
+                        }
+
+                        showAlert('Google sign-in successful. Redirecting...', 'success');
+                        // clean URL
+                        window.history.replaceState({}, document.title, redirectUri);
+                        persistAndRedirect(demoUser, 'user-portal.html');
+                    } catch (err) {
+                        console.error('Token exchange error', err);
+                        showAlert('Google token exchange failed. Check console for details.', 'error');
+                    }
+                }
+            } catch (e) {
+                console.error('OAuth callback handler error', e);
+            }
+        })();
+
         // Auto-focus email field
         document.getElementById('email').focus();
+
+        // If page was opened with ?create=1 or ?create=true, auto-open the Create Account modal
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const createParam = (params.get('create') || '').toLowerCase();
+            if (createParam === '1' || createParam === 'true') {
+                // Slight delay to ensure modal functions are defined and DOM ready
+                setTimeout(() => {
+                    if (typeof openCreateAccountModal === 'function') openCreateAccountModal();
+                }, 150);
+            }
+        } catch (e) { console.warn('URL param check failed', e); }
     </script>
 </body>
 </html>
