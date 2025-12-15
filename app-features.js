@@ -1506,11 +1506,7 @@ function renderAudit() {
                     <option value="approve">Approve</option>
                     <option value="update">Update</option>
                     <option value="delete">Delete</option>
-                    <option value="create">Create</option>
-                    <option value="security">Security</option>
-                    <option value="communication">Communication</option>
-                    <option value="login">Login</option>
-                    <option value="logout">Logout</option>
+                    <!-- Removed less-used action filters -->
                 </select>
                 <input type="text" id="filterUser" class="input-field" placeholder="Filter by user..." oninput="filterAuditLogs()">
                 <input type="date" id="filterDate" class="input-field" onchange="filterAuditLogs()">
