@@ -159,8 +159,8 @@
     </nav>
 
     <div class="flex gap-3">
-        <a href="login.html"><button class="signin-btn">LOG-IN</button></a>
-        <a href="login.html?create=1" class="signup-btn">REGISTER</a>
+        <a href="login.php"><button class="signin-btn">LOG-IN</button></a>
+        <a href="login.php?create=1" class="signup-btn">REGISTER</a>
     </div>
 </header>
 
@@ -177,7 +177,7 @@
 
         <div class="flex gap-3">
 
-            <a href="login.html?create=1" class="border border-white px-6 py-3 rounded font-semibold hover:bg-white hover:text-red-900 inline-block">
+            <a href="login.php?create=1" class="border border-white px-6 py-3 rounded font-semibold hover:bg-white hover:text-red-900 inline-block">
                 REGISTER NOW
             </a>
         </div>

@@ -27,7 +27,7 @@
         // In production, this would check actual session/token
         if (!localStorage.getItem('isLoggedIn') && !sessionStorage.getItem('isLoggedIn')) {
             // Redirect to login if not logged in
-            window.location.href = 'login.html';
+            window.location.href = 'login.php';
         }
         
         // Clear sidebar collapsed state for fresh start (can be removed after testing)
@@ -438,9 +438,11 @@
                         <textarea name="description" class="input-field" rows="3" placeholder="Enter document description"></textarea>
                     </div>
                     
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Tags (comma separated)</label>
-                        <input type="text" name="tags" class="input-field" placeholder="budget, finance, 2025">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Tags (comma separated)</label>
+                            <input type="text" name="tags" class="input-field" placeholder="budget, finance, 2025">
+                        </div>
                     </div>
                 </div>
                 <div class="flex justify-end space-x-3 mt-6">
@@ -549,7 +551,7 @@
                 sessionStorage.removeItem('currentUser');
                 
                 // Redirect to login page with logout success message
-                window.location.href = 'login.html?logout=success';
+                window.location.href = 'login.php?logout=success';
             }
             return false;
         }

@@ -370,7 +370,7 @@
                         localStorage.setItem('llrm_auditLogs', JSON.stringify(logs));
                     } catch (e) { console.warn('Error writing audit log', e); }
                     // Persist session and redirect
-                    persistAndRedirect(user, 'user-portal.html');
+                    persistAndRedirect(user, 'user-portal.php');
                 }
             } catch (e) { console.error('message handler error', e); }
         }, false);
@@ -482,10 +482,10 @@
                     const role = (userObj.role || '').toLowerCase();
                     const isAdmin = !!userObj.isAdmin;
                     if (isAdmin || role.includes('admin') || email === 'admin@lgu.gov.ph') {
-                        persistAndRedirect(userObj, 'system-template-full.html');
+                        persistAndRedirect(userObj, 'system-template-full.php');
                     } else {
                         // Citizens and other non-admin roles go to the citizen portal
-                        persistAndRedirect(userObj, 'user-portal.html');
+                        persistAndRedirect(userObj, 'user-portal.php');
                     }
                     return;
                 }
@@ -726,9 +726,9 @@
             // Redirect: citizens should go to the user portal; other roles may go to admin
             setTimeout(() => {
                 if ((newUser.role || '').toLowerCase() === 'citizen') {
-                    persistAndRedirect(newUser, 'user-portal.html');
+                    persistAndRedirect(newUser, 'user-portal.php');
                 } else {
-                    persistAndRedirect(newUser, 'system-template-full.html');
+                    persistAndRedirect(newUser, 'system-template-full.php');
                 }
             }, 700);
         }
@@ -775,7 +775,7 @@
             setTimeout(() => {
                 showAlert('Simulating Microsoft authentication. Signing in demo user...', 'success');
                 const demoUser = { email: 'user102@lgu.gov.ph', name: 'Demo Citizen 2', role: 'Citizen' };
-                persistAndRedirect(demoUser, 'user-portal.html');
+                persistAndRedirect(demoUser, 'user-portal.php');
             }, 1500);
         }
 
@@ -860,7 +860,7 @@
                         showAlert('Google sign-in successful. Redirecting...', 'success');
                         // clean URL
                         window.history.replaceState({}, document.title, redirectUri);
-                        persistAndRedirect(demoUser, 'user-portal.html');
+                        persistAndRedirect(demoUser, 'user-portal.php');
                     } catch (err) {
                         console.error('Token exchange error', err);
                         showAlert('Google token exchange failed. Check console for details.', 'error');

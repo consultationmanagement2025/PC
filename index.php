@@ -202,7 +202,7 @@
             Data will be lost on page refresh. For production use, integrate localStorage or a backend database.
         </div>
 
-        <a href="system-template-full.html" class="start-button">
+        <a href="system-template-full.php" class="start-button">
              Launch LLRM System
         </a>
 
