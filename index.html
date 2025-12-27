@@ -2,223 +2,264 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LLRM System - Quick Start Guide</title>
+    <meta name="viewport" content="width=device-width, initial-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="theme-color" content="#dc2626">
+    <title>Public Consultation</title>
+
+    <link rel="icon" type="image/png" href="images/logo.webp">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0; padding: 0; box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            color: #333;
+            background: #f3f4f6;
+        }
+
+        html {
+            scroll-behavior: smooth; /* enables slow scroll */
+        }
+
+        header {
+            background: #fff;
+            padding: 1rem 2rem;
             display: flex;
             align-items: center;
-            justify-content: center;
-            padding: 20px;
+            justify-content: space-between;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: sticky;
+            top: 0;
+            z-index: 50;
         }
-        .container {
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-section img {
+            width: 50px; height: 50px;
+            border-radius: 50%;
             background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            max-width: 800px;
-            width: 100%;
-            padding: 60px;
-            animation: fadeIn 0.5s ease-out;
+            padding: 2px;
         }
+
+        nav a {
+            text-decoration: none;
+            color: #666;
+            padding: 4px 0;
+            margin: 0 15px;
+            border-bottom: 2px solid transparent;
+            font-weight: 500;
+        }
+
+        nav a:hover,
+        nav a.active {
+            color: #991b1b;
+            border-bottom-color: #991b1b;
+        }
+
+        .signin-btn, .signup-btn {
+            background: #991b1b;
+            color: white;
+            border: none;
+            padding: 0.55rem 1.4rem;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .signin-btn:hover, .signup-btn:hover {
+            background: #7f1d1d;
+        }
+
+        /* HERO STYLES */
+        .hero {
+            background: linear-gradient(135deg, #991b1b, #7f1d1d);
+            padding: 4rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+            gap: 3rem;
+        }
+
+        /* Fade-in transitions */
+        .fade-in {
+            opacity: 0;
+            animation: fadeIn 1.2s ease forwards;
+        }
+
+        .fade-in-delay {
+            opacity: 0;
+            animation: fadeIn 1.2s ease 0.4s forwards;
+        }
+
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
+            from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .logo {
-            text-align: center;
-            margin-bottom: 40px;
+
+        /* Red-to-white glow behind image */
+        .hero-illustration {
+            position: relative;
         }
-        h1 {
-            color: #dc2626;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            text-align: center;
+
+        .hero-illustration::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom right, #991b1b 10%, #ffffff 100%);
+            filter: blur(90px);
+            opacity: 0.7;
+            z-index: -1;
         }
-        .subtitle {
-            text-align: center;
-            color: #6b7280;
-            font-size: 1.1em;
-            margin-bottom: 40px;
-        }
-        .feature-box {
-            background: #f9fafb;
-            border-left: 4px solid #dc2626;
-            padding: 20px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-        }
-        .feature-box h3 {
-            color: #1f2937;
-            margin-bottom: 10px;
-            font-size: 1.3em;
-        }
-        .feature-box p {
-            color: #4b5563;
-            line-height: 1.6;
-        }
-        .feature-list {
-            margin-top: 10px;
-            padding-left: 20px;
-        }
-        .feature-list li {
-            color: #4b5563;
-            margin-bottom: 8px;
-        }
-        .start-button {
-            display: block;
-            background: linear-gradient(to right, #dc2626, #b91c1c);
-            color: white;
-            text-align: center;
-            padding: 20px 40px;
+
+        .illustration-img {
+            width: 100%;
+            max-width: 420px;
             border-radius: 12px;
-            text-decoration: none;
-            font-size: 1.3em;
-            font-weight: bold;
-            margin: 40px auto 20px;
-            max-width: 400px;
-            box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
-            transition: all 0.3s ease;
+            mix-blend-mode: screen;
+            filter: drop-shadow(0 10px 30px rgba(0,0,0,0.2));
         }
-        .start-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(220, 38, 38, 0.5);
-        }
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin: 30px 0;
-        }
-        .info-card {
-            background: white;
-            border: 2px solid #e5e7eb;
-            border-radius: 10px;
-            padding: 20px;
-            text-align: center;
-        }
-        .info-card .number {
-            font-size: 2em;
-            color: #dc2626;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .info-card .label {
-            color: #6b7280;
-            font-size: 0.9em;
-        }
-        .badge {
-            display: inline-block;
-            background: #dc2626;
-            color: white;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.85em;
-            margin: 5px;
-        }
-        .warning {
-            background: #fef3c7;
-            border: 2px solid #f59e0b;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 20px 0;
-        }
-        .warning strong {
-            color: #b45309;
+
+        @media (max-width: 768px) {
+            .hero {
+                flex-direction: column;
+                text-align: center;
+            }
         }
     </style>
 </head>
+
 <body>
-    <div class="container">
-        <div class="logo">
-            <svg width="80" height="80" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="45" fill="#dc2626"/>
-                <path d="M30 45 L45 60 L70 35" stroke="white" stroke-width="8" fill="none" stroke-linecap="round"/>
-            </svg>
-        </div>
-        
-        <h1>Welcome to LLRM System</h1>
-        <p class="subtitle">Legislative Records Management System - Capstone Template</p>
-        
-        <div class="info-grid">
-            <div class="info-card">
-                <div class="number">7</div>
-                <div class="label">Modules</div>
-            </div>
-            <div class="info-card">
-                <div class="number">50+</div>
-                <div class="label">Features</div>
-            </div>
-            <div class="info-card">
-                <div class="number">100%</div>
-                <div class="label">HTML/CSS/JS</div>
-            </div>
-        </div>
 
-        <div class="feature-box">
-            <h3>What's Inside</h3>
-            <ul class="feature-list">
-                <li><strong>Dashboard</strong> - Statistics, charts, and quick actions</li>
-                <li><strong>Document Management</strong> - CRUD operations with filtering</li>
-                <li><strong>Advanced Search</strong> - Multi-field search with filters</li>
-                <li><strong>Analytics</strong> - Reports with Chart.js visualizations</li>
-                <li><strong>User Management</strong> - Complete user directory</li>
-                <li><strong>Audit Logs</strong> - Activity tracking and filtering</li>
-                <li><strong>Profile Page</strong> - With functional image upload!</li>
-            </ul>
-        </div>
-
-        <div class="feature-box">
-            <h3>Special Features</h3>
-            <p>
-                <span class="badge">Responsive Design</span>
-                <span class="badge">Smooth Animations</span>
-                <span class="badge">Red Theme</span>
-                <span class="badge">Chart.js Integration</span>
-                <span class="badge">Profile Picture Upload</span>
-                <span class="badge">Modal System</span>
-                <span class="badge">Notifications</span>
-                <span class="badge">No Backend Required</span>
-            </p>
-        </div>
-
-        <div class="feature-box">
-            <h3>Profile Picture Upload</h3>
-            <p><strong>NEW!</strong> Fully functional profile picture upload feature:</p>
-            <ul class="feature-list">
-                <li>Click camera icon on profile page to upload</li>
-                <li>Supports JPEG, PNG, GIF, WEBP (max 5MB)</li>
-                <li>Real-time preview and validation</li>
-                <li>Updates navbar, sidebar, and profile page</li>
-                <li>Automatic audit logging</li>
-            </ul>
-        </div>
-
-        <div class="warning">
-            <strong>Important:</strong> This is a demonstration template using in-memory storage. 
-            Data will be lost on page refresh. For production use, integrate localStorage or a backend database.
-        </div>
-
-        <a href="system-template-full.php" class="start-button">
-             Launch LLRM System
-        </a>
-
-        <div class="feature-box" style="text-align: center; background: #f3f4f6;">
-            <p style="margin-bottom: 10px;"><strong>Default Login Credentials:</strong></p>
-            <p style="color: #6b7280;">
-                <strong>Email:</strong> admin@lgu.gov.ph<br>
-                <strong>Role:</strong> Administrator<br>
-                <strong>Status:</strong> Active
-            </p>
-        </div>
-
-        <div style="text-align: center; margin-top: 30px; color: #9ca3af; font-size: 0.9em;">
-            <p>Developed for Valenzuela City LGU</p>
-            <p>Version 1.0.0 | December 2, 2025</p>
+<!-- HEADER -->
+<header>
+    <div class="logo-section">
+        <img src="images/logo.webp" alt="Logo">
+        <div>
+            <h1 class="text-lg font-bold text-red-900 leading-tight">Public Consultation</h1>
+            <p class="text-xs text-gray-600">Valenzuela City Government</p>
         </div>
     </div>
+
+    <nav>
+        <a href="#" class="active">HOME</a>
+        <a href="#about">ABOUT</a> <!-- smooth scroll -->
+    </nav>
+
+    <div class="flex gap-3">
+        <a href="login.php"><button class="signin-btn">LOG-IN</button></a>
+        <a href="login.php?create=1" class="signup-btn">REGISTER</a>
+    </div>
+</header>
+
+<!-- HERO SECTION -->
+<section class="hero">
+    <div class="hero-content fade-in">
+        <h2 class="text-4xl font-bold mb-3">Tayo na, Valenzuela!</h2>
+        <p class="text-md mb-4">Shape the Future of Legislation Through Public Participation</p>
+
+        <p class="opacity-90 mb-6 leading-relaxed">
+            Digital na Konsultasyon tungo sa Mas Bukas na Pamamahala, kung saan ang<br>
+            Boses ng Valenzuelano ang Gabay ng Pamahalaan.
+        </p>
+
+        <div class="flex gap-3">
+
+            <a href="login.php?create=1" class="border border-white px-6 py-3 rounded font-semibold hover:bg-white hover:text-red-900 inline-block">
+                REGISTER NOW
+            </a>
+        </div>
+    </div>
+
+    <div class="hero-illustration fade-in-delay">
+        <img src="images/public cons.JPG" class="illustration-img" alt="Consultation">
+    </div>
+</section>
+
+<!-- ABOUT SECTION -->
+<section id="about" class="py-20 px-8 bg-white">
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <h2 class="text-4xl font-bold text-red-900 mb-4">About the Public Consultation Portal</h2>
+            <p class="text-gray-600 text-lg max-w-3xl mx-auto">
+                Empowering Valenzuelanos to shape the future through meaningful participation in governance
+            </p>
+        </div>
+
+        <!-- Main diba Description Card -->
+        <div class="bg-gradient-to-r from-red-50 to-red-100 rounded-lg p-8 mb-12 border-l-4 border-red-900">
+            <p class="text-gray-800 leading-relaxed text-lg mb-4">
+                The Public Consultation Portal is the official digital platform of the Valenzuela City 
+                Government designed to gather citizen insights, preferences, and concerns on proposed 
+                ordinances, programs, and local policies.
+            </p>
+            <p class="text-gray-800 leading-relaxed text-lg">
+                It promotes transparency, inclusion, and data-driven governance by allowing every 
+                Valenzuelano to participate in shaping legislation anytime, anywhere.
+            </p>
+        </div>
+
+        <!-- Features Grid -->
+
+        <div class="mb-12">
+            <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center">Key Features</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                    <i class="bi bi-chat-left-dots text-3xl text-red-900 mb-3"></i>
+                    <h4 class="font-bold text-gray-900 mb-2">Review & Comment</h4>
+                    <p class="text-gray-700 text-sm">Review and comment on draft laws with detailed analysis and insights</p>
+                </div>
+
+                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                    <i class="bi bi-graph-up text-3xl text-red-900 mb-3"></i>
+                    <h4 class="font-bold text-gray-900 mb-2">Participate in Surveys</h4>
+                    <p class="text-gray-700 text-sm">Take part in digital consultations and surveys shaping our city</p>
+                </div>
+
+                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                    <i class="bi bi-file-earmark-check text-3xl text-red-900 mb-3"></i>
+                    <h4 class="font-bold text-gray-900 mb-2">Track Progress</h4>
+                    <p class="text-gray-700 text-sm">Track ordinance status and see how they develop over time</p>
+                </div>
+
+                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                    <i class="bi bi-shield-check text-3xl text-red-900 mb-3"></i>
+                    <h4 class="font-bold text-gray-900 mb-2">Verified Information</h4>
+                    <p class="text-gray-700 text-sm">Access verified and official city government information</p>
+                </div>
+
+                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                    <i class="bi bi-globe text-3xl text-red-900 mb-3"></i>
+                    <h4 class="font-bold text-gray-900 mb-2">Multilingual</h4>
+                    <p class="text-gray-700 text-sm">Supports multiple languages for inclusive participation</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Commitment Section  whpoooooxxcxoo-->
+        <div class="bg-gradient-to-r from-red-900 to-red-800 text-white rounded-lg p-8 text-center">
+            <h3 class="text-2xl font-bold mb-4">Our Commitment</h3>
+            <p class="text-lg leading-relaxed">
+                Guided by principles of transparency, accountability, and citizen empowerment, this 
+                platform strengthens collaboration between the government and its people through secure 
+                and modern digital participation.
+            </p>
+        </div>
+    </div>
+</section>
+
 </body>
 </html>

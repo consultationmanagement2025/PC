@@ -1,265 +1,1069 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=5.0, user-scalable=yes, viewport-fit=cover">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <meta name="theme-color" content="#dc2626">
-    <title>Public Consultation</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PCMP – Citizen Portal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; font-family: 'Inter', sans-serif; }
+    :root {
+      --red-700: #b91c1c;
+      --red-600: #dc2626;
+      --red-500: #ef4444;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --white: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+    }
 
-    <link rel="icon" type="image/png" href="images/logo.webp">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    body { margin: 0; background: var(--gray-100); color: var(--text); }
 
-    <style>
-        * {
-            margin: 0; padding: 0; box-sizing: border-box;
-        }
+    /* Layout: Sidebar + Main */
+    .wrapper { display: flex; min-height: 100vh; }
+    
+    .sidebar {
+      width: 280px;
+      background: linear-gradient(180deg, var(--red-700) 0%, var(--red-600) 100%);
+      color: var(--white);
+      padding: 24px 20px;
+      overflow-y: auto;
+      position: fixed;
+      height: 100vh;
+      left: 0;
+      top: 0;
+      z-index: 50;
+    }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-            color: #333;
-            background: #f3f4f6;
-        }
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 32px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
 
-        html {
-            scroll-behavior: smooth; /* enables slow scroll */
-        }
+    .sidebar-logo img {
+      width: 48px;
+      height: 48px;
+      background: white;
+      padding: 4px;
+      border-radius: 8px;
+      object-fit: contain;
+    }
 
-        header {
-            background: #fff;
-            padding: 1rem 2rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            position: sticky;
-            top: 0;
-            z-index: 50;
-        }
+    .sidebar-logo h2 { margin: 0; font-size: 18px; font-weight: 700; }
+    .sidebar-logo small { color: rgba(255, 255, 255, 0.8); font-size: 11px; }
 
-        .logo-section {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 8px; }
+    .sidebar-nav h4 { font-size: 11px; opacity: 0.7; margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      color: rgba(255, 255, 255, 0.9);
+      text-decoration: none;
+      border-radius: 8px;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .sidebar-nav a:hover { background: rgba(255, 255, 255, 0.15); transform: translateX(4px); }
+    .sidebar-nav a.active { background: rgba(255, 255, 255, 0.2); color: white; font-weight: 600; }
 
-        .logo-section img {
-            width: 50px; height: 50px;
-            border-radius: 50%;
-            background: white;
-            padding: 2px;
-        }
+    .main-content {
+      margin-left: 280px;
+      flex: 1;
+      padding: 24px;
+      background: var(--gray-100);
+    }
 
-        nav a {
-            text-decoration: none;
-            color: #666;
-            padding: 4px 0;
-            margin: 0 15px;
-            border-bottom: 2px solid transparent;
-            font-weight: 500;
-        }
+    /* Header */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 28px;
+      background: var(--white);
+      padding: 16px 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
 
-        nav a:hover,
-        nav a.active {
-            color: #991b1b;
-            border-bottom-color: #991b1b;
-        }
+    .top-bar h1 { margin: 0; font-size: 24px; font-weight: 700; color: var(--gray-800); }
 
-        .signin-btn, .signup-btn {
-            background: #991b1b;
-            color: white;
-            border: none;
-            padding: 0.55rem 1.4rem;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: 0.3s;
-        }
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
 
-        .signin-btn:hover, .signup-btn:hover {
-            background: #7f1d1d;
-        }
+    .user-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--red-700), var(--red-600));
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 20px;
+    }
 
-        /* HERO STYLES */
-        .hero {
-            background: linear-gradient(135deg, #991b1b, #7f1d1d);
-            padding: 4rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            color: white;
-            gap: 3rem;
-        }
+    .user-details { text-align: right; }
+    .user-details .name { font-size: 14px; font-weight: 600; color: var(--gray-800); }
+    .user-details .role { font-size: 12px; color: var(--muted); }
 
-        /* Fade-in transitions */
-        .fade-in {
-            opacity: 0;
-            animation: fadeIn 1.2s ease forwards;
-        }
+    /* Hero Banner */
+    .hero-banner {
+      background: linear-gradient(135deg, var(--red-700) 0%, var(--red-600) 100%);
+      color: white;
+      padding: 32px 28px;
+      border-radius: 14px;
+      margin-bottom: 28px;
+      box-shadow: 0 8px 20px rgba(185, 28, 28, 0.15);
+    }
 
-        .fade-in-delay {
-            opacity: 0;
-            animation: fadeIn 1.2s ease 0.4s forwards;
-        }
+    .hero-banner h1 { margin: 0 0 8px; font-size: 32px; font-weight: 700; }
+    .hero-banner p { margin: 0; opacity: 0.95; font-size: 16px; }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+    /* Grid: Stats & Quick Links */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
 
-        /* Red-to-white glow behind image */
-        .hero-illustration {
-            position: relative;
-        }
+    .stat-card {
+      background: var(--white);
+      padding: 20px;
+      border-radius: 12px;
+      border-top: 4px solid var(--red-600);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      text-align: center;
+    }
 
-        .hero-illustration::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(to bottom right, #991b1b 10%, #ffffff 100%);
-            filter: blur(90px);
-            opacity: 0.7;
-            z-index: -1;
-        }
+    .stat-card .number { font-size: 32px; font-weight: 700; color: var(--red-600); margin: 8px 0; }
+    .stat-card .label { font-size: 13px; color: var(--muted); }
 
-        .illustration-img {
-            width: 100%;
-            max-width: 420px;
-            border-radius: 12px;
-            mix-blend-mode: screen;
-            filter: drop-shadow(0 10px 30px rgba(0,0,0,0.2));
-        }
+    /* Quick Links */
+    .quick-links {
+      background: var(--white);
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
 
-        @media (max-width: 768px) {
-            .hero {
-                flex-direction: column;
-                text-align: center;
-            }
-        }
-    </style>
+    .quick-links h3 { margin: 0 0 16px; font-size: 16px; font-weight: 700; color: var(--gray-800); }
+
+    .links-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+    }
+
+    .link-btn {
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      padding: 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      color: var(--gray-800);
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .link-btn:hover {
+      background: var(--red-600);
+      color: white;
+      border-color: var(--red-600);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
+    }
+
+    .link-btn .icon { display: block; font-size: 24px; margin-bottom: 6px; }
+
+    /* Announcements Section */
+    .section {
+      margin-bottom: 28px;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .section h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--gray-800);
+    }
+
+    .section-divider {
+      height: 2px;
+      background: linear-gradient(90deg, var(--red-600) 0%, transparent 100%);
+      margin-bottom: 16px;
+    }
+
+    .feed {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .announcement-card {
+      background: var(--white);
+      padding: 20px;
+      border-radius: 12px;
+      border-left: 4px solid var(--red-600);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      transition: all 0.2s;
+    }
+
+    .announcement-card:hover {
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+      transform: translateY(-2px);
+    }
+
+    .announcement-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      margin-bottom: 12px;
+    }
+
+    .announcement-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--gray-800);
+      margin: 0 0 4px;
+    }
+
+    .announcement-meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .announcement-content {
+      margin: 12px 0;
+      line-height: 1.6;
+      color: var(--gray-700);
+    }
+
+    .announcement-actions {
+      display: flex;
+      gap: 18px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--gray-200);
+      flex-wrap: wrap;
+    }
+
+    .action-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .action-btn:hover { color: var(--red-600); }
+    .action-btn.liked, .action-btn.saved { color: var(--red-600); font-weight: 600; }
+
+    /* Comments Section */
+    .comments-section {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--gray-200);
+      display: none;
+    }
+
+    .comment-input {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .comment-input input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 13px;
+    }
+
+    .comment-input button {
+      padding: 8px 14px;
+      background: var(--red-600);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .comment-input button:hover { background: var(--red-700); }
+
+    .comment {
+      padding: 10px;
+      background: var(--gray-100);
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+
+    .comment-author { font-weight: 600; color: var(--gray-800); }
+    .comment-text { margin: 4px 0; color: var(--gray-700); }
+    .comment-time { font-size: 11px; color: var(--muted); }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+      background: var(--white);
+      border-radius: 12px;
+      font-size: 14px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .wrapper { flex-direction: column; }
+      .sidebar { width: 100%; height: auto; position: relative; }
+      .main-content { margin-left: 0; padding: 16px; }
+      .grid-2 { grid-template-columns: 1fr; }
+      .top-bar { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .hero-banner { padding: 20px; }
+      .hero-banner h1 { font-size: 24px; }
+    }
+
+    /* Suggestion Box Styles */
+    .suggestion-box {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      border: 2px dashed var(--red-600);
+      box-shadow: 0 2px 8px rgba(220, 38, 38, 0.1);
+      margin-bottom: 28px;
+    }
+
+    .suggestion-box h3 { margin: 0 0 12px; color: var(--gray-800); }
+
+    .suggestion-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .suggestion-form textarea {
+      padding: 12px;
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 14px;
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .suggestion-form button {
+      padding: 10px 16px;
+      background: var(--red-600);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .suggestion-form button:hover { background: var(--red-700); }
+
+    .suggestion-card {
+      background: white;
+      padding: 18px;
+      border-radius: 12px;
+      border-left: 4px solid var(--red-500);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      margin-bottom: 12px;
+      transition: all 0.2s;
+    }
+
+    .suggestion-card:hover {
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+      transform: translateY(-2px);
+    }
+
+    .suggestion-card .title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--gray-800);
+      margin: 0 0 6px;
+    }
+
+    .suggestion-card .meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .suggestion-card .content {
+      font-size: 14px;
+      color: var(--gray-700);
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+
+    .suggestion-stats {
+      display: flex;
+      gap: 16px;
+      font-size: 12px;
+      color: var(--muted);
+      padding-top: 10px;
+      border-top: 1px solid var(--gray-200);
+    }
+
+    .suggestion-stats span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+  </style>
 </head>
-
 <body>
 
-<!-- HEADER -->
-<header>
-    <div class="logo-section">
+  <div class="wrapper">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
         <img src="images/logo.webp" alt="Logo">
         <div>
-            <h1 class="text-lg font-bold text-red-900 leading-tight">Public Consultation</h1>
-            <p class="text-xs text-gray-600">Valenzuela City Government</p>
+          <h2>PCMP</h2>
+          <small>Citizen Portal</small>
         </div>
-    </div>
+      </div>
 
-    <nav>
-        <a href="#" class="active">HOME</a>
-        <a href="#about">ABOUT</a> <!-- smooth scroll -->
-    </nav>
+      <nav class="sidebar-nav">
+        <h4 data-i18n="main">Main</h4>
+        <a class="active" onclick="scrollToSection('dashboard'); return false;">
+          <span style="font-size: 18px;">🏠</span>
+          <span data-i18n="dashboard">Dashboard</span>
+        </a>
+        <a onclick="scrollToSection('announcements'); return false;">
+          <span style="font-size: 18px;">📢</span>
+          <span data-i18n="announcements">Announcements</span>
+        </a>
+        <a onclick="scrollToSection('consultations'); return false;">
+          <span style="font-size: 18px;">💬</span>
+          <span data-i18n="consultations">Consultations</span>
+        </a>
+        <a onclick="scrollToSection('submissions'); return false;">
+          <span style="font-size: 18px;">📄</span>
+          <span data-i18n="mySubmissions">My Submissions</span>
+        </a>
 
-    <div class="flex gap-3">
-        <a href="login.php"><button class="signin-btn">LOG-IN</button></a>
-        <a href="login.php?create=1" class="signup-btn">REGISTER</a>
-    </div>
-</header>
+        <h4 data-i18n="resources">Resources</h4>
+        <a onclick="scrollToSection('documents'); return false;">
+          <span style="font-size: 18px;">📚</span>
+          <span data-i18n="documents">Documents</span>
+        </a>
+        <a onclick="alert(t('helpComingSoon')); return false;">
+          <span style="font-size: 18px;">❓</span>
+          <span data-i18n="helpFaq">Help & FAQ</span>
+        </a>
 
-<!-- HERO SECTION -->
-<section class="hero">
-    <div class="hero-content fade-in">
-        <h2 class="text-4xl font-bold mb-3">Tayo na, Valenzuela!</h2>
-        <p class="text-md mb-4">Shape the Future of Legislation Through Public Participation</p>
+        <h4 data-i18n="account">Account</h4>
+        <a onclick="alert(t('profileComingSoon')); return false;">
+          <span style="font-size: 18px;">👤</span>
+          <span data-i18n="profile">Profile</span>
+        </a>
+        <a onclick="alert(t('settingsComingSoon')); return false;">
+          <span style="font-size: 18px;">⚙️</span>
+          <span data-i18n="settings">Settings</span>
+        </a>
+      </nav>
+    </aside>
 
-        <p class="opacity-90 mb-6 leading-relaxed">
-            Digital na Konsultasyon tungo sa Mas Bukas na Pamamahala, kung saan ang<br>
-            Boses ng Valenzuelano ang Gabay ng Pamahalaan.
-        </p>
-
-        <div class="flex gap-3">
-
-            <a href="login.php?create=1" class="border border-white px-6 py-3 rounded font-semibold hover:bg-white hover:text-red-900 inline-block">
-                REGISTER NOW
-            </a>
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Top Bar -->
+      <div class="top-bar">
+        <h1>Welcome Back</h1>
+        <div class="user-info">
+          <button onclick="toggleLanguage()" style="background: none; border: 1px solid var(--gray-200); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; color: var(--muted); margin-right: 16px; font-family: inherit; transition: all 0.2s;" id="language-btn">🌐 English</button>
+          <div class="user-avatar">👤</div>
+          <div class="user-details">
+            <div class="name">John Citizen</div>
+            <div class="role">Resident</div>
+          </div>
         </div>
-    </div>
+      </div>
 
-    <div class="hero-illustration fade-in-delay">
-        <img src="images/public cons.JPG" class="illustration-img" alt="Consultation">
-    </div>
-</section>
-
-<!-- ABOUT SECTION -->
-<section id="about" class="py-20 px-8 bg-white">
-    <div class="max-w-6xl mx-auto">
-        <!-- Header -->
-        <div class="text-center mb-12">
-            <h2 class="text-4xl font-bold text-red-900 mb-4">About the Public Consultation Portal</h2>
-            <p class="text-gray-600 text-lg max-w-3xl mx-auto">
-                Empowering Valenzuelanos to shape the future through meaningful participation in governance
-            </p>
+      <!-- Dashboard Section -->
+      <div id="dashboard" class="section" style="background: linear-gradient(135deg, rgba(220, 38, 38, 0.05) 0%, rgba(239, 68, 68, 0.05) 100%); padding: 28px; border-radius: 14px; border: 2px solid var(--red-300, #fecaca); margin: -24px -24px 28px -24px;">
+        <!-- Hero Banner -->
+        <div class="hero-banner">
+          <h1 id="dashboard-title" data-i18n="yourDashboard">📊 Your Dashboard</h1>
+          <p id="dashboard-desc" data-i18n="welcome">Welcome! Track consultations, view announcements, and make your voice heard in city governance.</p>
         </div>
 
-        <!-- Main diba Description Card -->
-        <div class="bg-gradient-to-r from-red-50 to-red-100 rounded-lg p-8 mb-12 border-l-4 border-red-900">
-            <p class="text-gray-800 leading-relaxed text-lg mb-4">
-                The Public Consultation Portal is the official digital platform of the Valenzuela City 
-                Government designed to gather citizen insights, preferences, and concerns on proposed 
-                ordinances, programs, and local policies.
-            </p>
-            <p class="text-gray-800 leading-relaxed text-lg">
-                It promotes transparency, inclusion, and data-driven governance by allowing every 
-                Valenzuelano to participate in shaping legislation anytime, anywhere.
-            </p>
-        </div>
-
-        <!-- Features Grid -->
-
-        <div class="mb-12">
-            <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center">Key Features</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
-                    <i class="bi bi-chat-left-dots text-3xl text-red-900 mb-3"></i>
-                    <h4 class="font-bold text-gray-900 mb-2">Review & Comment</h4>
-                    <p class="text-gray-700 text-sm">Review and comment on draft laws with detailed analysis and insights</p>
-                </div>
-
-                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
-                    <i class="bi bi-graph-up text-3xl text-red-900 mb-3"></i>
-                    <h4 class="font-bold text-gray-900 mb-2">Participate in Surveys</h4>
-                    <p class="text-gray-700 text-sm">Take part in digital consultations and surveys shaping our city</p>
-                </div>
-
-                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
-                    <i class="bi bi-file-earmark-check text-3xl text-red-900 mb-3"></i>
-                    <h4 class="font-bold text-gray-900 mb-2">Track Progress</h4>
-                    <p class="text-gray-700 text-sm">Track ordinance status and see how they develop over time</p>
-                </div>
-
-                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
-                    <i class="bi bi-shield-check text-3xl text-red-900 mb-3"></i>
-                    <h4 class="font-bold text-gray-900 mb-2">Verified Information</h4>
-                    <p class="text-gray-700 text-sm">Access verified and official city government information</p>
-                </div>
-
-                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
-                    <i class="bi bi-globe text-3xl text-red-900 mb-3"></i>
-                    <h4 class="font-bold text-gray-900 mb-2">Multilingual</h4>
-                    <p class="text-gray-700 text-sm">Supports multiple languages for inclusive participation</p>
-                </div>
+        <!-- Stats & Quick Links Grid -->
+        <div class="grid-2">
+          <!-- Stats -->
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="stat-card">
+              <span style="font-size: 24px;">📋</span>
+              <div class="number" id="stat-active">3</div>
+              <div class="label">Active Consultations</div>
             </div>
+            <div class="stat-card">
+              <span style="font-size: 24px;">💭</span>
+              <div class="number" id="stat-announcements">0</div>
+              <div class="label">Latest Announcements</div>
+            </div>
+          </div>
+
+          <!-- Quick Links -->
+          <div class="quick-links">
+            <h3>Quick Actions</h3>
+            <div class="links-grid">
+              <button class="link-btn" onclick="scrollToSection('announcements')">
+                <div class="icon">📢</div>
+                View Updates
+              </button>
+              <button class="link-btn" onclick="scrollToSection('citizen-suggestions')">
+                <div class="icon">💡</div>
+                Post Suggestion
+              </button>
+              <button class="link-btn" onclick="alert('Saved items coming soon')">
+                <div class="icon">🔖</div>
+                Saved Items
+              </button>
+              <button class="link-btn" onclick="alert('History coming soon')">
+                <div class="icon">📊</div>
+                My Activity
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Citizen Suggestions Section -->
+      <div id="citizen-suggestions" class="section">
+        <div class="section-header">
+          <h2>💡 Citizen Suggestions & Ideas</h2>
+        </div>
+        <div class="section-divider"></div>
+
+        <!-- Suggestion Post Box -->
+        <div class="suggestion-box">
+          <h3>💬 Share Your Ideas for Change</h3>
+          <p style="margin: 0 0 14px; color: var(--muted); font-size: 13px;">Have a suggestion for improving our city? Share it here and help shape Valenzuela's future.</p>
+          <div class="suggestion-form">
+            <textarea id="suggestion-input" placeholder="What changes would you like to see in our city? (e.g., Better roads, More parks, Improved public safety, etc.)"></textarea>
+            <button onclick="postSuggestion()">🚀 Post My Suggestion</button>
+          </div>
         </div>
 
-        <!-- Commitment Section  whpoooooxxcxoo-->
-        <div class="bg-gradient-to-r from-red-900 to-red-800 text-white rounded-lg p-8 text-center">
-            <h3 class="text-2xl font-bold mb-4">Our Commitment</h3>
-            <p class="text-lg leading-relaxed">
-                Guided by principles of transparency, accountability, and citizen empowerment, this 
-                platform strengthens collaboration between the government and its people through secure 
-                and modern digital participation.
+        <!-- Suggestions Feed -->
+        <div id="suggestions-feed">
+          <div class="empty-state">No suggestions yet. Be the first to share your ideas!</div>
+        </div>
+      </div>
+
+      <!-- Announcements Section -->
+      <div id="announcements" class="section">
+        <div class="section-header">
+          <h2>📢 Latest Announcements</h2>
+        </div>
+        <div class="section-divider"></div>
+        <div id="announcements-feed" class="feed">
+          <div class="empty-state">Loading announcements...</div>
+        </div>
+      </div>
+
+      <!-- Consultations Section (Placeholder) -->
+      <div id="consultations" class="section">
+        <div class="section-header">
+          <h2>💬 Active Consultations</h2>
+        </div>
+        <div class="section-divider"></div>
+        <div class="empty-state">
+          No active consultations at the moment. Check back later or subscribe to updates.
+        </div>
+      </div>
+
+      <!-- Submissions Section (Placeholder) -->
+      <div id="submissions" class="section">
+        <div class="section-header">
+          <h2>📄 My Submissions</h2>
+        </div>
+        <div class="section-divider"></div>
+        <div class="empty-state">
+          You haven't submitted any feedback yet. Navigate to an active consultation to share your views.
+        </div>
+      </div>
+
+      <!-- Documents Section -->
+      <div id="documents" class="section">
+        <div class="section-header">
+          <h2>📚 Important Documents</h2>
+        </div>
+        <div class="section-divider"></div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px;">
+          <!-- Valenzuela Citizen Charter -->
+          <div style="background: white; padding: 20px; border-radius: 12px; border-left: 4px solid var(--red-600); box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: all 0.2s;">
+            <div style="font-size: 32px; margin-bottom: 12px;">📋</div>
+            <h3 style="margin: 0 0 8px; font-size: 16px; font-weight: 700; color: var(--gray-800);">Valenzuela Citizen Charter</h3>
+            <p style="margin: 8px 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
+              A comprehensive charter establishing the rights, responsibilities, and commitments of the City Government towards its citizens.
             </p>
-        </div>
-    </div>
-</section>
+            <div style="display: flex; gap: 8px; margin-top: 14px;">
+              <button onclick="viewDocument('valenzuela-citizen-charter.html', 'Valenzuela Citizen Charter')" style="flex: 1; padding: 8px 12px; background: var(--red-600); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">View</button>
+              <button onclick="downloadDocument('valenzuela-citizen-charter.html')" style="flex: 1; padding: 8px 12px; background: var(--gray-200); color: var(--gray-800); border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">📥 Download</button>
+            </div>
+          </div>
 
+          <!-- Placeholder: City Ordinance -->
+          <div style="background: white; padding: 20px; border-radius: 12px; border-left: 4px solid var(--gray-300); box-shadow: 0 2px 8px rgba(0,0,0,0.06); opacity: 0.6;">
+            <div style="font-size: 32px; margin-bottom: 12px;">⚖️</div>
+            <h3 style="margin: 0 0 8px; font-size: 16px; font-weight: 700; color: var(--gray-800);">City Ordinances</h3>
+            <p style="margin: 8px 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
+              Local laws and regulations governing city operations.
+            </p>
+            <div style="display: flex; gap: 8px; margin-top: 14px;">
+              <button onclick="alert('Coming soon')" style="flex: 1; padding: 8px 12px; background: var(--gray-300); color: var(--muted); border: none; border-radius: 6px; cursor: not-allowed; font-weight: 600; font-size: 13px;">Coming Soon</button>
+            </div>
+          </div>
+
+          <!-- Placeholder: Budget & Finance -->
+          <div style="background: white; padding: 20px; border-radius: 12px; border-left: 4px solid var(--gray-300); box-shadow: 0 2px 8px rgba(0,0,0,0.06); opacity: 0.6;">
+            <div style="font-size: 32px; margin-bottom: 12px;">💰</div>
+            <h3 style="margin: 0 0 8px; font-size: 16px; font-weight: 700; color: var(--gray-800);">Annual Budget Report</h3>
+            <p style="margin: 8px 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
+              Transparent information on city government spending and financial plans.
+            </p>
+            <div style="display: flex; gap: 8px; margin-top: 14px;">
+              <button onclick="alert('Coming soon')" style="flex: 1; padding: 8px 12px; background: var(--gray-300); color: var(--muted); border: none; border-radius: 6px; cursor: not-allowed; font-weight: 600; font-size: 13px;">Coming Soon</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Document Viewer Modal -->
+  <div id="document-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100; overflow-y: auto;">
+    <div style="background: white; margin: 20px auto; border-radius: 12px; max-width: 900px; max-height: 90vh; overflow-y: auto; position: relative;">
+      <div style="position: sticky; top: 0; background: white; padding: 16px 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; z-index: 10;">
+        <h2 id="modal-title" style="margin: 0; font-size: 18px; font-weight: 700;">Document Title</h2>
+        <button onclick="closeDocument()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--muted);">✕</button>
+      </div>
+      <iframe id="document-viewer" style="width: 100%; height: calc(90vh - 60px); border: none;"></iframe>
+    </div>
+  </div>
+
+  <script src="announcements-user.js"></script>
+  <script>
+    const CURRENT_CITIZEN = 'Citizen_' + Math.random().toString(36).substr(2, 9);
+
+    // ========================================
+    // Language & Translation System
+    // ========================================
+    const translations = {
+      en: {
+        welcomeBack: 'Welcome Back',
+        resident: 'Resident',
+        dashboard: 'Dashboard',
+        announcements: 'Announcements',
+        consultations: 'Consultations',
+        mySubmissions: 'My Submissions',
+        documents: 'Documents',
+        helpFaq: 'Help & FAQ',
+        profile: 'Profile',
+        settings: 'Settings',
+        main: 'Main',
+        resources: 'Resources',
+        account: 'Account',
+        yourDashboard: 'Your Dashboard',
+        welcome: 'Welcome! Track consultations, view announcements, and make your voice heard in city governance.',
+        activeConsultations: 'Active Consultations',
+        latestAnnouncements: 'Latest Announcements',
+        quickActions: 'Quick Actions',
+        viewUpdates: 'View Updates',
+        postSuggestion: 'Post Suggestion',
+        savedItems: 'Saved Items',
+        myActivity: 'My Activity',
+        latestAnnouncementsHeader: 'Latest Announcements',
+        activeConsultationsHeader: 'Active Consultations',
+        noActive: 'No active consultations at the moment. Check back later or subscribe to updates.',
+        mySubmissionsHeader: 'My Submissions',
+        noSubmitted: "You haven't submitted any feedback yet. Navigate to an active consultation to share your views.",
+        importantDocuments: 'Important Documents',
+        citizenCharter: 'Valenzuela Citizen Charter',
+        citizenCharterDesc: 'A comprehensive charter establishing the rights, responsibilities, and commitments of the City Government towards its citizens.',
+        view: 'View',
+        download: 'Download',
+        comingSoon: 'Coming Soon',
+        citizenSuggestions: 'Citizen Suggestions & Ideas',
+        shareIdeas: 'Share Your Ideas for Change',
+        shareIdeasDesc: "Have a suggestion for improving our city? Share it here and help shape Valenzuela's future.",
+        placeholder: 'What changes would you like to see in our city? (e.g., Better roads, More parks, Improved public safety, etc.)',
+        postMySuggestion: 'Post My Suggestion',
+        noSuggestions: 'No suggestions yet. Be the first to share your ideas!',
+        supports: 'supports',
+        comments: 'comments',
+        support: 'Support',
+        comment: 'Comment',
+        post: 'Post',
+        addComment: 'Add a comment...',
+        suggestionPosted: '✅ Your suggestion has been posted! Thank you for your input.',
+        pleaseWrite: 'Please write a suggestion before posting.',
+        loading: 'Loading announcements...',
+        documentTitle: 'Document Title',
+        profileComingSoon: 'Profile coming soon',
+        settingsComingSoon: 'Settings coming soon',
+        documentsComingSoon: 'Documents coming soon',
+        helpComingSoon: 'Help & FAQ coming soon',
+        consultationFormComingSoon: 'Consultation form coming soon',
+        savedItemsComingSoon: 'Saved items coming soon',
+        activityComingSoon: 'History coming soon',
+      },
+      fil: {
+        welcomeBack: 'Maligayang Pagbalik',
+        resident: 'Mamamayan',
+        dashboard: 'Dashboard',
+        announcements: 'Mga Abiso',
+        consultations: 'Mga Konsultasyon',
+        mySubmissions: 'Ang Aking Mga Isinumite',
+        documents: 'Mga Dokumento',
+        helpFaq: 'Tulong & FAQ',
+        profile: 'Profil',
+        settings: 'Mga Setting',
+        main: 'Pangunahin',
+        resources: 'Mga Mapagkukunan',
+        account: 'Akawnt',
+        yourDashboard: 'Ang Iyong Dashboard',
+        welcome: 'Maligayang pagbalik! Subaybayan ang mga konsultasyon, tingnan ang mga abiso, at gawin naririnig ang iyong tinig sa pamamhalaan ng lungsod.',
+        activeConsultations: 'Aktibong Mga Konsultasyon',
+        latestAnnouncements: 'Pinakabagong Mga Abiso',
+        quickActions: 'Mabilis na Aksyon',
+        viewUpdates: 'Tingnan ang Mga Update',
+        postSuggestion: 'Magbigay ng Mungkahi',
+        savedItems: 'Nakaligtas na Mga Item',
+        myActivity: 'Ang Aking Aktibidad',
+        latestAnnouncementsHeader: 'Pinakabagong Mga Abiso',
+        activeConsultationsHeader: 'Aktibong Mga Konsultasyon',
+        noActive: 'Walang aktibong konsultasyon sa ngayon. Bumalik mamaya o mag-subscribe sa mga update.',
+        mySubmissionsHeader: 'Ang Aking Mga Isinumite',
+        noSubmitted: 'Hindi ka pa nagsumite ng anumang feedback. Pumunta sa aktibong konsultasyon upang ibahagi ang iyong mga pananaw.',
+        importantDocuments: 'Mahalagang Mga Dokumento',
+        citizenCharter: 'Valenzuela Citizen Charter',
+        citizenCharterDesc: 'Isang komprehensibong charter na nagtatatag ng mga karapatan, responsibilidad, at pangako ng Lungsod ng Pamamhalaan sa pamamagitan ng Valenzuela sa mga mamamayan nito.',
+        view: 'Tingnan',
+        download: 'I-download',
+        comingSoon: 'Paparating na',
+        citizenSuggestions: 'Mga Mungkahi at Ideya ng Mamamayan',
+        shareIdeas: 'Ibahagi ang Iyong Mga Ideya para sa Pagbabago',
+        shareIdeasDesc: 'Mayroon ka bang mungkahi para mapabuti ang aming lungsod? Ibahagi ito dito at tumulong na bumuo ng kinabukasan ng Valenzuela.',
+        placeholder: 'Anong mga pagbabago ang nais mong makita sa aming lungsod? (hal. Mas magandang kalsada, Maraming parke, Mapabuting kaligtasan ng publiko, atl.)',
+        postMySuggestion: 'Ibigay ang Aking Mungkahi',
+        noSuggestions: 'Walang mga mungkahi pa. Maging una na magbahagi ng iyong mga ideya!',
+        supports: 'sumusuporta',
+        comments: 'mga komento',
+        support: 'Suportahan',
+        comment: 'Magkomento',
+        post: 'Ipost',
+        addComment: 'Magdagdag ng komento...',
+        suggestionPosted: '✅ Ang iyong mungkahi ay naipost na! Maraming salamat sa iyong input.',
+        pleaseWrite: 'Mangyaring magsulat ng mungkahi bago magpost.',
+        loading: 'Nagkukumposa ng mga abiso...',
+        documentTitle: 'Pamagat ng Dokumento',
+        profileComingSoon: 'Ang profil ay paparating na',
+        settingsComingSoon: 'Ang mga setting ay paparating na',
+        documentsComingSoon: 'Ang mga dokumento ay paparating na',
+        helpComingSoon: 'Tulong & FAQ paparating na',
+        consultationFormComingSoon: 'Ang form ng konsultasyon ay paparating na',
+        savedItemsComingSoon: 'Ang mga nakaligtas na item ay paparating na',
+        activityComingSoon: 'Ang kasaysayan ay paparating na',
+      }
+    };
+
+    let currentLanguage = localStorage.getItem('language') || 'en';
+
+    function t(key) {
+      return translations[currentLanguage][key] || translations['en'][key];
+    }
+
+    function toggleLanguage() {
+      currentLanguage = currentLanguage === 'en' ? 'fil' : 'en';
+      localStorage.setItem('language', currentLanguage);
+      updateLanguage();
+    }
+
+    function updateLanguage() {
+      // Top bar
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        el.textContent = t(key);
+      });
+
+      // Update language button
+      const langBtn = document.getElementById('language-btn');
+      if (langBtn) {
+        langBtn.textContent = currentLanguage === 'en' ? '🌐 English' : '🇵🇭 Filipino';
+      }
+
+      // Update specific elements that may not have data-i18n
+      const updates = {
+        'dashboard-title': 'yourDashboard',
+        'dashboard-desc': 'welcome',
+        'stat-label-1': 'activeConsultations',
+        'stat-label-2': 'latestAnnouncements',
+        'quick-title': 'quickActions',
+        'announcements-header': 'latestAnnouncementsHeader',
+        'consultations-header': 'activeConsultationsHeader',
+        'submissions-header': 'mySubmissionsHeader',
+        'documents-header': 'importantDocuments',
+        'suggestions-header': 'citizenSuggestions',
+        'share-title': 'shareIdeas',
+        'share-desc': 'shareIdeasDesc',
+      };
+
+      Object.keys(updates).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = t(updates[id]);
+      });
+
+      // Update placeholders
+      const suggestionInput = document.getElementById('suggestion-input');
+      if (suggestionInput) suggestionInput.placeholder = t('placeholder');
+
+      // Update button texts
+      document.querySelectorAll('[data-btn-i18n]').forEach(btn => {
+        const key = btn.getAttribute('data-btn-i18n');
+        btn.textContent = t(key);
+      });
+    }
+
+    function scrollToSection(id) {
+      const element = document.getElementById(id);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Update active nav link
+        document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+        event.target.closest('a').classList.add('active');
+      }
+    }
+
+    // ========================================
+    // Citizen Suggestions Management
+    // ========================================
+    function getSuggestions() {
+      return JSON.parse(localStorage.getItem('citizen_suggestions') || '[]');
+    }
+
+    function saveSuggestions(suggestions) {
+      localStorage.setItem('citizen_suggestions', JSON.stringify(suggestions));
+    }
+
+    function postSuggestion() {
+      const input = document.getElementById('suggestion-input');
+      const text = input.value.trim();
+
+      if (!text) {
+        alert('Please write a suggestion before posting.');
+        return;
+      }
+
+      const suggestion = {
+        id: 'sug_' + Date.now(),
+        author: 'You',
+        text: text,
+        timestamp: Date.now(),
+        supports: [],
+        comments: []
+      };
+
+      const suggestions = getSuggestions();
+      suggestions.push(suggestion);
+      saveSuggestions(suggestions);
+
+      input.value = '';
+      loadSuggestions();
+      alert('✅ Your suggestion has been posted! Thank you for your input.');
+    }
+
+    function loadSuggestions() {
+      const feed = document.getElementById('suggestions-feed');
+      if (!feed) return;
+
+      const suggestions = getSuggestions();
+
+      if (suggestions.length === 0) {
+        feed.innerHTML = '<div class="empty-state">No suggestions yet. Be the first to share your ideas!</div>';
+        return;
+      }
+
+      feed.innerHTML = suggestions.reverse().map(sug => `
+        <div class="suggestion-card">
+          <div class="title">💡 ${escapeHtml(sug.text.substring(0, 60))}${sug.text.length > 60 ? '...' : ''}</div>
+          <div class="meta">${sug.author} • ${new Date(sug.timestamp).toLocaleDateString()}</div>
+          <div class="content">${escapeHtml(sug.text)}</div>
+          <div class="suggestion-stats">
+            <span>👍 ${sug.supports.length} supports</span>
+            <span>💬 ${sug.comments.length} comments</span>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <button onclick="supportSuggestion('${sug.id}')" style="padding: 6px 12px; background: ${sug.supports.includes(CURRENT_CITIZEN) ? 'var(--red-600)' : 'var(--gray-200)'}; color: ${sug.supports.includes(CURRENT_CITIZEN) ? 'white' : 'var(--gray-800)'}; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit;">👍 Support</button>
+            <button onclick="toggleCommentForm('sug_${sug.id}')" style="padding: 6px 12px; background: var(--gray-200); color: var(--gray-800); border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit;">💬 Comment</button>
+          </div>
+          <div id="sug_${sug.id}-comments" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-200);">
+            <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+              <input type="text" id="comment-sug-${sug.id}" placeholder="Add a comment..." style="flex: 1; padding: 6px 10px; border: 1px solid var(--gray-200); border-radius: 6px; font-family: inherit; font-size: 12px;">
+              <button onclick="addSuggestionComment('${sug.id}')" style="padding: 6px 12px; background: var(--red-600); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit;">Post</button>
+            </div>
+            <div id="comments-list-sug-${sug.id}">
+              ${sug.comments.map(c => `
+                <div style="padding: 8px; background: var(--gray-100); border-radius: 6px; margin-bottom: 6px; font-size: 12px;">
+                  <div style="font-weight: 600; color: var(--gray-800);">${escapeHtml(c.author)}</div>
+                  <div style="color: var(--gray-700); margin: 2px 0;">${escapeHtml(c.text)}</div>
+                  <div style="color: var(--muted); font-size: 11px;">${new Date(c.timestamp).toLocaleString()}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function supportSuggestion(id) {
+      const suggestions = getSuggestions();
+      const sug = suggestions.find(s => s.id === id);
+      if (!sug) return;
+
+      if (sug.supports.includes(CURRENT_CITIZEN)) {
+        sug.supports = sug.supports.filter(u => u !== CURRENT_CITIZEN);
+      } else {
+        sug.supports.push(CURRENT_CITIZEN);
+      }
+
+      saveSuggestions(suggestions);
+      loadSuggestions();
+    }
+
+    function toggleCommentForm(id) {
+      const section = document.getElementById(id + '-comments');
+      if (section) {
+        section.style.display = section.style.display === 'none' ? 'block' : 'none';
+        if (section.style.display === 'block') {
+          document.getElementById('comment-sug-' + id.replace('sug_', '')).focus();
+        }
+      }
+    }
+
+    function addSuggestionComment(id) {
+      const input = document.getElementById('comment-sug-' + id);
+      if (!input || !input.value.trim()) return;
+
+      const suggestions = getSuggestions();
+      const sug = suggestions.find(s => s.id === id);
+      if (!sug) return;
+
+      sug.comments.push({
+        author: 'You',
+        text: input.value.trim(),
+        timestamp: Date.now()
+      });
+
+      saveSuggestions(suggestions);
+      input.value = '';
+      loadSuggestions();
+      setTimeout(() => {
+        const section = document.getElementById('sug_' + id + '-comments');
+        if (section) section.style.display = 'block';
+      }, 100);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function viewDocument(url, title) {
+      document.getElementById('modal-title').textContent = title;
+      document.getElementById('document-viewer').src = url;
+      document.getElementById('document-modal').style.display = 'block';
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeDocument() {
+      document.getElementById('document-modal').style.display = 'none';
+      document.body.style.overflow = '';
+    }
+
+    function downloadDocument(url) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = url.split('/').pop();
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      alert('Document download started.');
+    }
+
+    // Close modal when clicking outside
+    document.getElementById('document-modal').addEventListener('click', function(e) {
+      if (e.target === this) closeDocument();
+    });
+
+    // Update stat cards when announcements load
+    function updateStats() {
+      const announcements = JSON.parse(localStorage.getItem('announcements') || '[]');
+      document.getElementById('stat-announcements').textContent = announcements.length;
+    }
+
+    // Initial stats update & load suggestions
+    updateStats();
+    loadSuggestions();
+    updateLanguage();  // Apply initial language
+
+    // Update stats when announcements feed loads
+    const originalLoadFeed = window.loadAnnouncementsFeed;
+    if (originalLoadFeed) {
+      window.loadAnnouncementsFeed = function() {
+        originalLoadFeed();
+        updateStats();
+      };
+    }
+
+    // Auto-refresh suggestions every 5 seconds
+    setInterval(loadSuggestions, 5000);
+  </script>
 </body>
 </html>
