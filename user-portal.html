@@ -21,6 +21,35 @@
       --muted: #6b7280;
     }
 
+    html.dark {
+      --red-700: #7f1d1d;
+      --red-600: #991b1b;
+      --red-500: #b91c1c;
+      --gray-100: #1f2937;
+      --gray-200: #374151;
+      --gray-600: #d1d5db;
+      --gray-700: #e5e7eb;
+      --gray-800: #f3f4f6;
+      --white: #111827;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+    }
+
+    html.dark body { background: #111827; color: var(--text); }
+    html.dark .top-bar,
+    html.dark .quick-links,
+    html.dark .suggestion-box,
+    html.dark .announcement-card,
+    html.dark .suggestion-card,
+    html.dark .empty-state { background: #1f2937; color: var(--text); }
+    html.dark .overlay-menu-panel { background: #1f2937; color: var(--text); border: 1px solid #374151; }
+    html.dark .overlay-menu-panel a { color: var(--text); }
+    html.dark .overlay-menu-panel a:hover { background: #374151; }
+    html.dark .overlay-menu-panel a.active { background: rgba(220, 38, 38, 0.2); color: #fca5a5; }
+    html.dark .overlay-menu-panel hr { border-color: #374151; }
+    html.dark .suggestion-form textarea { background: #374151; color: var(--text); border-color: #4b5563; }
+    html.dark .section-divider { background: linear-gradient(90deg, rgba(220, 38, 38, 0.6) 0%, transparent 100%); }
+
     body { margin: 0; background: var(--gray-100); color: var(--text); }
 
     /* Layout: Sidebar + Main */
@@ -38,6 +67,9 @@
       top: 0;
       z-index: 50;
     }
+
+    /* Hide desktop sidebar - replaced by top-right menu */
+    .sidebar { display: none; }
 
     .sidebar-logo {
       display: flex;
@@ -77,22 +109,81 @@
     .sidebar-nav a.active { background: rgba(255, 255, 255, 0.2); color: white; font-weight: 600; }
 
     .main-content {
-      margin-left: 280px;
+      margin-left: 0;
       flex: 1;
       padding: 24px;
       background: var(--gray-100);
     }
 
+    /* Top-right menu button */
+    #menu-btn {
+      background: none;
+      border: 1px solid var(--gray-200);
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--muted);
+      margin-right: 8px;
+    }
+
+    /* Overlay menu */
+    #overlay-menu {
+      position: fixed;
+      top: 72px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: transparent;
+      display: none;
+      z-index: 60;
+    }
+
+    #overlay-menu.active { display: block; }
+
+    .overlay-menu-panel {
+      background: white;
+      width: 320px;
+      max-width: calc(100% - 32px);
+      border-radius: 10px;
+      padding: 16px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+      position: absolute;
+      right: 16px;
+      top: 8px;
+    }
+
+    /* no blur when menu opens (intentionally disabled) */
+
+    .overlay-menu-panel a {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 8px;
+      text-decoration: none;
+      color: var(--gray-800);
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .overlay-menu-panel a.active { background: rgba(237, 100, 100, 0.08); color: var(--red-600); }
+
     /* Header */
     .top-bar {
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-start;
       align-items: center;
       margin-bottom: 28px;
       background: var(--white);
       padding: 16px 24px;
+      padding-right: 220px;
       border-radius: 12px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      position: sticky;
+      top: 0;
+      z-index: 70;
     }
 
     .top-bar h1 { margin: 0; font-size: 24px; font-weight: 700; color: var(--gray-800); }
@@ -101,6 +192,11 @@
       display: flex;
       align-items: center;
       gap: 14px;
+      position: absolute;
+      right: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 20;
     }
 
     .user-avatar {
@@ -197,6 +293,39 @@
     /* Announcements Section */
     .section {
       margin-bottom: 28px;
+      display: none;
+    }
+
+    .section.active {
+      display: block;
+    }
+
+    /* Two-column grid for side-by-side sections */
+    .section-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .section-grid .section {
+      margin-bottom: 0;
+    }
+
+    .section-grid.active .section {
+      display: block;
+    }
+
+    @media (max-width: 768px) {
+      .section-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Center Settings section */
+    #settings {
+      max-width: 700px;
+      margin-left: auto;
+      margin-right: auto;
     }
 
     .section-header {
@@ -357,7 +486,8 @@
       .sidebar { width: 100%; height: auto; position: relative; }
       .main-content { margin-left: 0; padding: 16px; }
       .grid-2 { grid-template-columns: 1fr; }
-      .top-bar { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .top-bar { flex-direction: column; align-items: flex-start; gap: 12px; padding-right: 16px; }
+      .user-info { position: static; transform: none; right: auto; top: auto; margin-left: auto; }
       .hero-banner { padding: 20px; }
       .hero-banner h1 { font-size: 24px; }
     }
@@ -512,19 +642,40 @@
     <div class="main-content">
       <!-- Top Bar -->
       <div class="top-bar">
-        <h1>Welcome Back</h1>
+        <img src="images/logo.webp" alt="Valenzuela Logo" style="width:44px;height:44px;border-radius:8px;margin-right:12px;object-fit:contain;">
+        <h1 style="margin:0;">Welcome Back</h1>
         <div class="user-info">
-          <button onclick="toggleLanguage()" style="background: none; border: 1px solid var(--gray-200); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; color: var(--muted); margin-right: 16px; font-family: inherit; transition: all 0.2s;" id="language-btn">🌐 English</button>
-          <div class="user-avatar">👤</div>
-          <div class="user-details">
-            <div class="name">John Citizen</div>
-            <div class="role">Resident</div>
+          <button onclick="toggleLanguage()" style="background: none; border: 1px solid var(--gray-200); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; color: var(--muted); margin-right: 12px; font-family: inherit; transition: all 0.2s;" id="language-btn">🌐 English</button>
+          <button onclick="toggleTheme()" style="background: none; border: 1px solid var(--gray-200); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 14px; color: var(--muted); margin-right: 12px; font-family: inherit; transition: all 0.2s;" id="theme-btn" title="Toggle dark mode"><i class="dark-mode-icon">🌙</i><i class="light-mode-icon" style="display:none;">☀️</i></button>
+          <button id="menu-btn" onclick="toggleMenu()" aria-label="Open menu" aria-expanded="false">☰</button>
+        </div>
+      </div>
+
+      <!-- Overlay Menu for Top-right button -->
+      <div id="overlay-menu" onclick="if(event.target.id === 'overlay-menu') toggleMenu()">
+        <div class="overlay-menu-panel" role="dialog" aria-modal="true">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+            <div class="user-avatar" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:20px;">👤</div>
+            <div>
+              <div style="font-weight:700">John Citizen</div>
+              <div style="font-size:12px;color:var(--muted)">Resident</div>
+            </div>
           </div>
+          <nav>
+            <a class="menu-link" data-section="dashboard" onclick="scrollToSection('dashboard', event);">🏠 Dashboard</a>
+            <a class="menu-link" data-section="announcements" onclick="scrollToSection('announcements', event);">📢 Announcements</a>
+            <a class="menu-link" data-section="consultations-submissions" onclick="scrollToSection('consultations-submissions', event);">💬 Consultations & Submissions</a>
+            <a class="menu-link" data-section="documents" onclick="scrollToSection('documents', event);">📚 Documents</a>
+            <a class="menu-link" onclick="alert(t('helpComingSoon')); closeMenu();">❓ Help & FAQ</a>
+            <hr />
+            <a class="menu-link" data-section="profile" onclick="alert(t('profileComingSoon')); closeMenu();">👤 Profile</a>
+            <a class="menu-link" data-section="settings" onclick="scrollToSection('settings', event);">⚙️ Settings</a>
+          </nav>
         </div>
       </div>
 
       <!-- Dashboard Section -->
-      <div id="dashboard" class="section" style="background: linear-gradient(135deg, rgba(220, 38, 38, 0.05) 0%, rgba(239, 68, 68, 0.05) 100%); padding: 28px; border-radius: 14px; border: 2px solid var(--red-300, #fecaca); margin: -24px -24px 28px -24px;">
+      <div id="dashboard" class="section active" style="background: linear-gradient(135deg, rgba(220, 38, 38, 0.05) 0%, rgba(239, 68, 68, 0.05) 100%); padding: 28px; border-radius: 14px; border: 2px solid var(--red-300, #fecaca); margin: -24px -24px 28px -24px;">
         <!-- Hero Banner -->
         <div class="hero-banner">
           <h1 id="dashboard-title" data-i18n="yourDashboard">📊 Your Dashboard</h1>
@@ -606,25 +757,28 @@
         </div>
       </div>
 
-      <!-- Consultations Section (Placeholder) -->
-      <div id="consultations" class="section">
-        <div class="section-header">
-          <h2>💬 Active Consultations</h2>
+      <!-- Consultations & Submissions (Side-by-Side) -->
+      <div id="consultations-submissions" class="section-grid active">
+        <!-- Consultations Section -->
+        <div id="consultations" class="section" style="display: block;">
+          <div class="section-header">
+            <h2>💬 Active Consultations</h2>
+          </div>
+          <div class="section-divider"></div>
+          <div class="empty-state">
+            No active consultations at the moment. Check back later or subscribe to updates.
+          </div>
         </div>
-        <div class="section-divider"></div>
-        <div class="empty-state">
-          No active consultations at the moment. Check back later or subscribe to updates.
-        </div>
-      </div>
 
-      <!-- Submissions Section (Placeholder) -->
-      <div id="submissions" class="section">
-        <div class="section-header">
-          <h2>📄 My Submissions</h2>
-        </div>
-        <div class="section-divider"></div>
-        <div class="empty-state">
-          You haven't submitted any feedback yet. Navigate to an active consultation to share your views.
+        <!-- Submissions Section -->
+        <div id="submissions" class="section" style="display: block;">
+          <div class="section-header">
+            <h2>📄 My Submissions</h2>
+          </div>
+          <div class="section-divider"></div>
+          <div class="empty-state">
+            You haven't submitted any feedback yet. Navigate to an active consultation to share your views.
+          </div>
         </div>
       </div>
 
@@ -669,6 +823,93 @@
             </p>
             <div style="display: flex; gap: 8px; margin-top: 14px;">
               <button onclick="alert('Coming soon')" style="flex: 1; padding: 8px 12px; background: var(--gray-300); color: var(--muted); border: none; border-radius: 6px; cursor: not-allowed; font-weight: 600; font-size: 13px;">Coming Soon</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings Section -->
+      <div id="settings" class="section">
+        <div class="section-header">
+          <h2>⚙️ Settings</h2>
+        </div>
+        <div class="section-divider"></div>
+
+        <div style="max-width: 600px;">
+          <!-- Preferences Card -->
+          <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px;">
+            <h3 style="margin: 0 0 20px; font-size: 16px; font-weight: 700; color: var(--gray-800);">Preferences</h3>
+
+            <!-- Language Setting -->
+            <div style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--gray-200);">
+              <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--gray-800);">Language</label>
+              <select onchange="setLanguage(this.value)" style="width: 100%; padding: 10px; border: 1px solid var(--gray-200); border-radius: 8px; font-family: inherit; font-size: 14px; background: var(--white); color: var(--text); cursor: pointer;">
+                <option value="en">English</option>
+                <option value="fil">Filipino (Tagalog)</option>
+              </select>
+              <p style="margin: 8px 0 0; font-size: 12px; color: var(--muted);">Choose your preferred language for the portal</p>
+            </div>
+
+            <!-- Theme Setting -->
+            <div style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--gray-200);">
+              <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--gray-800);">Theme</label>
+              <div style="display: flex; gap: 12px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+                  <input type="radio" name="theme" value="light" onchange="setTheme('light')" style="cursor: pointer;"> Light Mode
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+                  <input type="radio" name="theme" value="dark" onchange="setTheme('dark')" style="cursor: pointer;"> Dark Mode
+                </label>
+              </div>
+              <p style="margin: 8px 0 0; font-size: 12px; color: var(--muted);">Customize your visual experience</p>
+            </div>
+
+            <!-- Notifications Setting -->
+            <div style="margin-bottom: 20px;">
+              <label style="display: block; margin-bottom: 12px; font-size: 14px; font-weight: 600; color: var(--gray-800);">Notifications</label>
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" id="email-notif" checked style="cursor: pointer; width: 18px; height: 18px;"> Email Notifications
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" id="announcement-notif" checked style="cursor: pointer; width: 18px; height: 18px;"> Announcement Updates
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" id="feedback-notif" checked style="cursor: pointer; width: 18px; height: 18px;"> Feedback Response Alerts
+                </label>
+              </div>
+              <p style="margin: 12px 0 0; font-size: 12px; color: var(--muted);">Control how and when you receive updates</p>
+            </div>
+          </div>
+
+          <!-- Privacy & Security Card -->
+          <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px;">
+            <h3 style="margin: 0 0 20px; font-size: 16px; font-weight: 700; color: var(--gray-800);">Privacy & Security</h3>
+
+            <div style="margin-bottom: 16px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="data-sharing" style="cursor: pointer; width: 18px; height: 18px;"> Allow data sharing for service improvements
+              </label>
+              <p style="margin: 8px 0 0; font-size: 12px; color: var(--muted);">We use this data to improve the portal experience</p>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+              <button onclick="alert('Change password functionality coming soon')" style="width: 100%; padding: 10px; background: var(--red-600); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s;">Change Password</button>
+            </div>
+
+            <div>
+              <button onclick="clearLocalStorage()" style="width: 100%; padding: 10px; background: var(--gray-200); color: var(--gray-800); border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s;">Clear Saved Data</button>
+              <p style="margin: 8px 0 0; font-size: 12px; color: var(--muted);">Clear cached suggestions and preferences (theme/language preserved)</p>
+            </div>
+          </div>
+
+          <!-- About Card -->
+          <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+            <h3 style="margin: 0 0 20px; font-size: 16px; font-weight: 700; color: var(--gray-800);">About</h3>
+            <div style="font-size: 14px; line-height: 1.8; color: var(--gray-700);">
+              <p style="margin: 0 0 12px;"><strong>PCMP - Public Consultation & Management Portal</strong></p>
+              <p style="margin: 0 0 12px;">Version 1.0 | City of Valenzuela</p>
+              <p style="margin: 0;">This portal enables citizens to participate in government consultations, provide feedback, and stay informed about city initiatives.</p>
             </div>
           </div>
         </div>
@@ -871,12 +1112,26 @@
     }
 
     function scrollToSection(id) {
+      // optional event param support
+      const evt = arguments[1];
+      if (evt && evt.preventDefault) evt.preventDefault();
+      
+      // Hide all sections
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      
+      // Show selected section
       const element = document.getElementById(id);
       if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        // Update active nav link
-        document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
-        event.target.closest('a').classList.add('active');
+        element.classList.add('active');
+
+        // Update active link in any menu
+        document.querySelectorAll('.sidebar-nav a, .overlay-menu-panel a').forEach(a => a.classList.remove('active'));
+        const sel = `.overlay-menu-panel a[data-section="${id}"]`;
+        const link = document.querySelector(sel);
+        if (link) link.classList.add('active');
+
+        // close overlay menu if open
+        closeMenu();
       }
     }
 
@@ -1042,11 +1297,107 @@
       if (e.target === this) closeDocument();
     });
 
+    // Top-right menu controls (toggle, blur background, and aria updates)
+    function toggleMenu(){
+      const overlay = document.getElementById('overlay-menu');
+      const main = document.querySelector('.main-content');
+      const topbar = document.querySelector('.top-bar');
+      const btn = document.getElementById('menu-btn');
+      if(!overlay) return;
+
+      const opening = !overlay.classList.contains('active');
+      if(opening){
+        overlay.classList.add('active');
+        overlay.style.display = 'block';
+        if(btn) btn.setAttribute('aria-expanded', 'true');
+      } else {
+        overlay.classList.remove('active');
+        overlay.style.display = 'none';
+        if(btn) btn.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    // Close menu on Escape
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape'){ const overlay = document.getElementById('overlay-menu'); if(overlay && overlay.classList.contains('active')) toggleMenu(); } });
+
+    // Theme Toggle (dark/light mode)
+    function initThemeToggle() {
+      const html = document.documentElement;
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme === 'dark') {
+        html.classList.add('dark');
+        updateThemeIcon(true);
+      } else {
+        updateThemeIcon(false);
+      }
+    }
+
+    function updateThemeIcon(isDark) {
+      const darkIcon = document.querySelector('.dark-mode-icon');
+      const lightIcon = document.querySelector('.light-mode-icon');
+      if (darkIcon && lightIcon) {
+        if (isDark) {
+          darkIcon.style.display = 'none';
+          lightIcon.style.display = 'inline';
+        } else {
+          darkIcon.style.display = 'inline';
+          lightIcon.style.display = 'none';
+        }
+      }
+    }
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      html.classList.toggle('dark');
+      const isDark = html.classList.contains('dark');
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      updateThemeIcon(isDark);
+    }
+
+    // Initialize theme on page load
+
     // Update stat cards when announcements load
     function updateStats() {
       const announcements = JSON.parse(localStorage.getItem('announcements') || '[]');
       document.getElementById('stat-announcements').textContent = announcements.length;
     }
+
+    // Initialize theme on page load
+    initThemeToggle();
+
+    // Settings Functions
+    function setLanguage(lang) {
+      currentLanguage = lang;
+      localStorage.setItem('language', lang);
+      updateLanguage();
+      document.getElementById('language-btn').textContent = lang === 'en' ? '🌐 English' : '🇵🇭 Filipino';
+    }
+
+    function setTheme(theme) {
+      const html = document.documentElement;
+      if (theme === 'dark') {
+        html.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+      } else {
+        html.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+      }
+      updateThemeIcon(theme === 'dark');
+    }
+
+    function clearLocalStorage() {
+      if (confirm('Clear all saved data? (Theme and language preferences will be preserved)')) {
+        localStorage.removeItem('citizen_suggestions');
+        localStorage.removeItem('llrm_announcements');
+        alert('Saved data has been cleared.');
+      }
+    }
+
+    // Sync theme radio buttons on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      const isDark = document.documentElement.classList.contains('dark');
+      document.querySelector(`input[name="theme"][value="${isDark ? 'dark' : 'light'}"]`).checked = true;
+    });
 
     // Initial stats update & load suggestions
     updateStats();

@@ -7,6 +7,7 @@ const AppData = {
     documents: [],
     users: [],
     notifications: [],
+    announcements: [],
     auditLogs: [],
     loginHistory: [],
     currentUser: {
@@ -171,6 +172,8 @@ function initializeData() {
         ];
         saveNotificationsToStorage();
     }
+    // Load announcements (if any) from storage
+    loadAnnouncementsFromStorage();
     
     // Sample Audit Logs - Load from localStorage or seed defaults
     const storedAuditLogs = localStorage.getItem('llrm_auditLogs');
@@ -278,6 +281,9 @@ function showSection(sectionName) {
                 break;
             case 'notifications':
                 renderNotifications();
+                break;
+            case 'announcements':
+                renderAnnouncements();
                 break;
             default:
                 contentArea.innerHTML = `
@@ -2723,6 +2729,51 @@ function saveNotificationsToStorage() {
     }
 }
 
+function saveAnnouncementsToStorage() {
+    try {
+        localStorage.setItem('llrm_announcements', JSON.stringify(AppData.announcements));
+    } catch (e) {
+        console.warn('Failed to save announcements to storage', e);
+    }
+}
+
+function loadAnnouncementsFromStorage() {
+    try {
+        const raw = localStorage.getItem('llrm_announcements');
+        if (raw) {
+            AppData.announcements = JSON.parse(raw);
+        }
+    } catch (e) {
+        console.warn('Failed to load announcements from storage', e);
+    }
+}
+
+function createAnnouncement(title, message, options = {}) {
+    const ann = {
+        id: Date.now(),
+        title: title,
+        message: message,
+        priority: options.priority || 'normal',
+        pinned: !!options.pinned,
+        published: options.published !== undefined ? !!options.published : true,
+        createdBy: AppData.currentUser?.name || 'System',
+        createdAt: new Date().toISOString()
+    };
+
+    AppData.announcements.unshift(ann);
+    saveAnnouncementsToStorage();
+    showNotification('Announcement created', 'success');
+    return ann;
+}
+
+function deleteAnnouncement(id) {
+    if (!confirm('Delete this announcement?')) return;
+    AppData.announcements = AppData.announcements.filter(a => a.id !== id);
+    saveAnnouncementsToStorage();
+    showSection('announcements');
+}
+
+
 function showNotification(message, type = 'info') {
     const colors = {
         success: 'bg-green-100 text-green-800 border-green-300',
@@ -3140,6 +3191,61 @@ function renderNotifications() {
                         </div>
                     </div>
                 `).join('')}
+            </div>
+        </div>
+    `;
+
+    document.getElementById('content-area').innerHTML = html;
+}
+
+// ==============================
+// ANNOUNCEMENTS PAGE (ADMIN)
+// ==============================
+function renderAnnouncements() {
+    // ensure we have announcements loaded from storage
+    loadAnnouncementsFromStorage();
+
+    const html = `
+        <div class="mb-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800">Announcements</h1>
+                    <p class="text-gray-600 mt-1">Create and manage public announcements</p>
+                </div>
+                <div>
+                    <button onclick="document.getElementById('new-ann-title').value=''; document.getElementById('new-ann-message').value=''; openModal('new-ann-modal')" class="btn-primary">New Announcement</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-md p-4 mb-4">
+            ${AppData.announcements.length === 0 ? '<div class="p-6 text-center text-gray-500">No announcements yet</div>' : ''}
+            <div class="space-y-2">
+                ${AppData.announcements.map(a => `
+                    <div class="p-3 border rounded ${a.published ? 'bg-green-50' : ''} flex items-start justify-between">
+                        <div>
+                            <div class="text-sm font-medium text-gray-800">${a.title}</div>
+                            <div class="text-xs text-gray-600">${a.message}</div>
+                            <div class="text-xs text-gray-400 mt-1">By ${a.createdBy} • ${new Date(a.createdAt).toLocaleString()}</div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="deleteAnnouncement(${a.id})" class="text-sm text-red-600">Delete</button>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+
+        <!-- New Announcement Modal -->
+        <div id="new-ann-modal" class="modal hidden">
+            <div class="modal-content">
+                <h3 class="text-lg font-semibold mb-2">New Announcement</h3>
+                <input id="new-ann-title" placeholder="Title" class="input-field mb-2" />
+                <textarea id="new-ann-message" placeholder="Message" class="input-field mb-2" rows="4"></textarea>
+                <div class="flex items-center gap-2 justify-end">
+                    <button onclick="closeModal('new-ann-modal')" class="btn-outline">Cancel</button>
+                    <button onclick="(function(){ const t=document.getElementById('new-ann-title').value; const m=document.getElementById('new-ann-message').value; if(!t||!m){ showNotification('Title and message required','warning'); return;} createAnnouncement(t,m); closeModal('new-ann-modal'); showSection('announcements'); })()" class="btn-primary">Publish</button>
+                </div>
             </div>
         </div>
     `;
