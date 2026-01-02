@@ -1,3 +1,11 @@
+<?php
+session_start();
+if (!isset($_SESSION['fullname'])) {
+    header('Location: login.php');
+    exit();
+}
+$fullname = $_SESSION['fullname'];
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -160,12 +168,17 @@
       display: flex;
       gap: 12px;
       align-items: center;
-      padding: 10px 8px;
+      padding: 12px 12px;
       text-decoration: none;
       color: var(--gray-800);
       border-radius: 8px;
       cursor: pointer;
       font-weight: 600;
+      justify-content: flex-start;
+    }
+
+    .overlay-menu-panel a:hover {
+      background: var(--gray-100);
     }
 
     .overlay-menu-panel a.active { background: rgba(237, 100, 100, 0.08); color: var(--red-600); }
@@ -654,14 +667,14 @@
       <!-- Overlay Menu for Top-right button -->
       <div id="overlay-menu" onclick="if(event.target.id === 'overlay-menu') toggleMenu()">
         <div class="overlay-menu-panel" role="dialog" aria-modal="true">
-          <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
-            <div class="user-avatar" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:20px;">👤</div>
-            <div>
-              <div style="font-weight:700">John Citizen</div>
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px; padding-bottom:12px; border-bottom: 1px solid var(--gray-200);">
+            <div class="user-avatar" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">👤</div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-weight:700; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><?php echo htmlspecialchars($fullname); ?></div>
               <div style="font-size:12px;color:var(--muted)">Resident</div>
             </div>
           </div>
-          <nav>
+          <nav style="display:flex; flex-direction:column; gap:4px;">
             <a class="menu-link" data-section="dashboard" onclick="scrollToSection('dashboard', event);">🏠 Dashboard</a>
             <a class="menu-link" data-section="announcements" onclick="scrollToSection('announcements', event);">📢 Announcements</a>
             <a class="menu-link" data-section="consultations-submissions" onclick="scrollToSection('consultations-submissions', event);">💬 Consultations & Submissions</a>
@@ -670,6 +683,8 @@
             <hr />
             <a class="menu-link" data-section="profile" onclick="alert(t('profileComingSoon')); closeMenu();">👤 Profile</a>
             <a class="menu-link" data-section="settings" onclick="scrollToSection('settings', event);">⚙️ Settings</a>
+            <hr />
+            <a class="menu-link" onclick="window.location.href='logout.php';" style="color: var(--red-600); font-weight: 600;">🚪 Logout</a>
           </nav>
         </div>
       </div>
