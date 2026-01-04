@@ -7,7 +7,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $fullname = trim($_POST['fullname']);
     $email = trim($_POST['email']);
     $password = $_POST['password'];
-
     if (!$fullname || !$email || !$password) {
         $message = "All fields required";
     } else {
@@ -21,11 +20,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $message = "Email already exists";
         } else {
             $hash = password_hash($password, PASSWORD_DEFAULT);
+            $role = 'citizen'; // Default role for all new users
 
             $stmt = $conn->prepare(
-                "INSERT INTO users (fullname, email, password) VALUES (?, ?, ?)"
+                "INSERT INTO users (fullname, email, password, role) VALUES (?, ?, ?, ?)"
             );
-            $stmt->bind_param("sss", $fullname, $email, $hash);
+            $stmt->bind_param("ssss", $fullname, $email, $hash, $role);
 
             $message = $stmt->execute()
                 ? "Account created. You may login."
@@ -81,15 +81,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 <div class="mb-3">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
                     <input type="email" name="email" placeholder="Enter your email" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" required>
-                </div>
-                <div class="mb-3">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Organization/Role</label>
-                    <select id="createRole" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" required>
-                        <option value="">Select your role</option>
-                        <option value="citizen">Citizen</option>
-                        <option value="admin">Admin</option>
-                        <option value="organization">Organization</option>
-                    </select>
                 </div>
                 <div class="mb-3">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
