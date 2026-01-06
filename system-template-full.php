@@ -1,10 +1,55 @@
 <?php
 session_start();
-// If user is not logged in or not an admin, redirect to login
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
+require 'audit-log.php';
+require 'announcements.php';
+require 'posts.php';
+require 'notifications.php';
+// Use strtolower and trim to be safe
+$current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
+
+if ($current_role !== 'admin') {
     header('Location: login.php');
     exit();
 }
+
+// Load audit logs for display
+$auditLogs = [];
+$pageSize = 50;
+$page = isset($_GET['audit_page']) ? (int)$_GET['audit_page'] : 1;
+$offset = ($page - 1) * $pageSize;
+
+$filters = [];
+if (!empty($_GET['filter_admin'])) $filters['admin_user'] = $_GET['filter_admin'];
+if (!empty($_GET['filter_action'])) $filters['action'] = $_GET['filter_action'];
+if (!empty($_GET['filter_type'])) $filters['entity_type'] = $_GET['filter_type'];
+
+$auditLogs = getAuditLogs($pageSize, $offset, $filters);
+$totalLogs = getAuditLogCount($filters);
+$totalPages = ceil($totalLogs / $pageSize);
+
+// Handle new announcement submission
+// (now handled by AJAX in create_announcement.php)
+
+// Mark post as reviewed by admin
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['mark_reviewed_post_id'])) {
+    $postId = (int)$_POST['mark_reviewed_post_id'];
+    $post = getPostById($postId);
+    $admin_id = $_SESSION['user_id'] ?? null;
+    $admin_user = $_SESSION['fullname'] ?? 'Admin';
+    if ($post) {
+        $user_id = $post['user_id'] ?? null;
+        // Create notification to user
+        if ($user_id) {
+            createNotification($user_id, 'Your post has been reviewed by the administration.', 'notice');
+        }
+        if (function_exists('logAction')) {
+            logAction($admin_id, $admin_user, "Marked post #$postId as reviewed", 'post', $postId, null, null, 'success', 'marked_reviewed');
+        }
+    }
+    header('Location: system-template-full.php');
+    exit();
+}
+$totalPages = ceil($totalLogs / $pageSize);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -134,6 +179,10 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
                 <i class="bi bi-people mr-3 text-lg"></i>
                 <span>User Management</span>
             </a>
+            <a href="#" onclick="showSection('announcements')" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
+                <i class="bi bi-megaphone mr-3 text-lg"></i>
+                <span>Announcements</span>
+            </a>
             <a href="#" onclick="showSection('audit')" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
                 <i class="bi bi-shield-check mr-3 text-lg"></i>
                 <span>Audit Log</span>
@@ -214,6 +263,10 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
                     <a href="#" onclick="showSection('users')" class="nav-item" data-section="users">
                         <i class="bi bi-people"></i>
                         <span class="sidebar-text">User Management</span>
+                    </a>
+                    <a href="#" onclick="showSection('announcements')" class="nav-item" data-section="announcements">
+                        <i class="bi bi-megaphone"></i>
+                        <span class="sidebar-text">Announcements</span>
                     </a>
                     <a href="#" onclick="showSection('audit')" class="nav-item" data-section="audit">
                         <i class="bi bi-shield-check"></i>
@@ -338,7 +391,261 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
             <!-- Main Content Area -->
             <main class="flex-1 overflow-y-auto bg-gray-100 p-3 sm:p-4 lg:p-6">
                 <!-- Content sections will be loaded here -->
-                <div id="content-area"></div>
+                <div id="content-area">
+                    <!-- ANNOUNCEMENTS (Admin) -->
+                    <section id="announcements-section" class="mb-6">
+                        <div class="flex gap-6 h-[70vh] items-start">
+                            <!-- Left: Announcements (Posting & Recent) -->
+                            <div class="w-1/2 min-w-0 flex flex-col gap-4">
+                                <!-- Publisher Card (Compact Modern Style) -->
+                                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                                    <form id="announcement-form" onsubmit="submitAnnouncement(event)" class="space-y-3">
+                                        <input type="text" id="announcement_title" name="announcement_title" required class="input-field w-full text-sm font-medium border-0 border-b border-gray-300 focus:border-red-500 focus:ring-0 p-0 mb-2" placeholder="Announcement title...">
+                                        <textarea id="announcement_content" name="announcement_content" rows="3" required class="input-field w-full text-sm border-0 focus:ring-0 p-0 resize-none" placeholder="Write your announcement message..."></textarea>
+                                        <div class="flex justify-end gap-2 pt-2">
+                                            <button type="button" onclick="document.getElementById('announcement-form').reset()" class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded transition">Clear</button>
+                                            <button type="submit" class="btn-primary px-4 py-1.5 text-sm">Publish</button>
+                                        </div>
+                                    </form>
+                                </div>
+
+                                <!-- Recent Announcements List -->
+                                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex-1 flex flex-col">
+                                    <h3 class="text-sm font-semibold text-gray-900 mb-3">Recent Announcements</h3>
+                                    <div id="admin-announcements-list" class="space-y-2 overflow-auto flex-1">
+                                        <?php
+                                            $adminAnns = getAnnouncements(6, 0);
+                                            if (empty($adminAnns)) {
+                                                echo '<div class="text-xs text-gray-400 text-center py-4">No announcements yet.</div>';
+                                            } else {
+                                                foreach ($adminAnns as $a) {
+                                                    $annId = (int)$a['id'];
+                                                    $likes = json_decode($a['liked_by'] ?? '[]', true) ?? [];
+                                                    $saves = json_decode($a['saved_by'] ?? '[]', true) ?? [];
+                                                    $userLiked = in_array($_SESSION['user_id'] ?? null, $likes) ? 'text-red-600' : 'text-gray-400';
+                                                    $userSaved = in_array($_SESSION['user_id'] ?? null, $saves) ? 'text-blue-600' : 'text-gray-400';
+                                                    echo '<div class="p-2.5 border border-gray-200 rounded hover:bg-gray-50 transition text-xs">';
+                                                    echo '<div class="font-semibold text-gray-800 text-sm">' . htmlspecialchars(substr($a['title'], 0, 60)) . '</div>';
+                                                    echo '<div class="text-gray-500 text-xs mt-0.5">' . date('M d, H:i', strtotime($a['created_at'])) . '</div>';
+                                                    echo '<div class="mt-1.5 flex gap-2 text-xs">';
+                                                    echo '<button type="button" onclick="toggleAnnouncementAction(event, ' . $annId . ', \'like\')" class="flex items-center gap-0.5 ' . $userLiked . ' hover:text-red-600 transition">';
+                                                    echo '<i class="bi bi-heart-fill text-xs"></i><span>' . count($likes) . '</span></button>';
+                                                    echo '<button type="button" onclick="toggleAnnouncementAction(event, ' . $annId . ', \'save\')" class="flex items-center gap-0.5 ' . $userSaved . ' hover:text-blue-600 transition">';
+                                                    echo '<i class="bi bi-bookmark-fill text-xs"></i><span>' . count($saves) . '</span></button>';
+                                                    echo '</div>';
+                                                    echo '</div>';
+                                                }
+                                            }
+                                        ?>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right: User Posts (admin moderation) -->
+                            <div class="w-1/2 min-w-0 flex flex-col">
+                                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5 flex-1 flex flex-col">
+                                    <div class="mb-4">
+                                        <h2 class="text-lg font-semibold text-gray-900">User Posts</h2>
+                                        <p class="text-xs text-gray-500 mt-1">Review & take action on citizen posts</p>
+                                    </div>
+                                    <div id="admin-posts-list" class="space-y-3 overflow-auto flex-1">
+                                        <?php
+                                            $posts = getPosts(30, 0);
+                                            if (empty($posts)) {
+                                                echo '<div class="text-gray-500">No user posts yet.</div>';
+                                            } else {
+                                                foreach ($posts as $p) {
+                                                    $uid = htmlspecialchars($p['user_id'] ?? 0);
+                                                    $postId = (int)$p['id'];
+                                                    echo '<div class="p-3 border rounded">';
+                                                    echo '<div class="flex items-center justify-between">';
+                                                    echo '<div class="font-medium">' . htmlspecialchars($p['author']) . '</div>';
+                                                    echo '<div class="text-sm text-gray-500">' . date('M d, Y H:i', strtotime($p['created_at'])) . '</div>';
+                                                    echo '</div>';
+                                                    echo '<div class="text-sm text-gray-800 mt-2">' . nl2br(htmlspecialchars(substr($p['content'],0,800))) . '</div>';
+                                                    echo '<div class="mt-3 flex gap-2 items-center flex-wrap">';
+                                                    echo '<button type="button" onclick="openNotifyModal(' . (int)$p['user_id'] . ', ' . $postId . ')" class="btn-secondary px-3 py-1 text-sm">Notify</button>';
+                                                    echo '<button type="button" onclick="quickNotify(' . (int)$p['user_id'] . ', ' . $postId . ', \'inappropriate\')" class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded">Inappropriate</button>';
+                                                    echo '<button type="button" onclick="quickNotify(' . (int)$p['user_id'] . ', ' . $postId . ', \'untruthful\')" class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">Untruthful</button>';
+                                                    echo '<button type="button" onclick="quickNotify(' . (int)$p['user_id'] . ', ' . $postId . ', \'unlawful\')" class="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">Unlawful</button>';
+                                                    echo '<form method="POST" action="system-template-full.php" style="display:inline">';
+                                                    echo '<input type="hidden" name="mark_reviewed_post_id" value="' . $postId . '">';
+                                                    echo '<button type="submit" class="btn-secondary px-3 py-1 text-sm">Mark Reviewed</button>';
+                                                    echo '</form>';
+                                                    echo '</div>';
+                                                    echo '</div>';
+                                                }
+                                            }
+                                        ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- AUDIT LOG SECTION -->
+                    <section id="audit-section" class="audit-section">
+                        <div class="bg-white rounded-lg shadow-md p-6">
+                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                                <div>
+                                    <h2 class="text-2xl font-bold text-gray-900">Audit Logs</h2>
+                                    <p class="text-gray-600 text-sm mt-1">Track all administrative actions and system activities</p>
+                                </div>
+                                <div class="flex gap-2 w-full sm:w-auto">
+                                    <button onclick="exportAuditLogs()" class="btn-secondary flex items-center justify-center gap-2 px-4 py-2 text-sm">
+                                        <i class="bi bi-download"></i>
+                                        <span class="hidden sm:inline">Export</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Filters -->
+                            <div class="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-200">
+                                <h3 class="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                    <i class="bi bi-funnel"></i> Filters
+                                </h3>
+                                <form method="GET" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Admin User</label>
+                                        <input type="text" name="filter_admin" placeholder="Filter by admin name" value="<?php echo htmlspecialchars($_GET['filter_admin'] ?? ''); ?>" class="input-field w-full">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Action</label>
+                                        <select name="filter_action" class="input-field w-full">
+                                            <option value="">All Actions</option>
+                                            <option value="login" <?php echo ($_GET['filter_action'] ?? '') === 'login' ? 'selected' : ''; ?>>Login</option>
+                                            <option value="logout" <?php echo ($_GET['filter_action'] ?? '') === 'logout' ? 'selected' : ''; ?>>Logout</option>
+                                            <option value="created" <?php echo ($_GET['filter_action'] ?? '') === 'created' ? 'selected' : ''; ?>>Created</option>
+                                            <option value="updated" <?php echo ($_GET['filter_action'] ?? '') === 'updated' ? 'selected' : ''; ?>>Updated</option>
+                                            <option value="deleted" <?php echo ($_GET['filter_action'] ?? '') === 'deleted' ? 'selected' : ''; ?>>Deleted</option>
+                                            <option value="uploaded" <?php echo ($_GET['filter_action'] ?? '') === 'uploaded' ? 'selected' : ''; ?>>Uploaded</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Entity Type</label>
+                                        <select name="filter_type" class="input-field w-full">
+                                            <option value="">All Types</option>
+                                            <option value="user" <?php echo ($_GET['filter_type'] ?? '') === 'user' ? 'selected' : ''; ?>>User</option>
+                                            <option value="document" <?php echo ($_GET['filter_type'] ?? '') === 'document' ? 'selected' : ''; ?>>Document</option>
+                                            <option value="consultation" <?php echo ($_GET['filter_type'] ?? '') === 'consultation' ? 'selected' : ''; ?>>Consultation</option>
+                                            <option value="system" <?php echo ($_GET['filter_type'] ?? '') === 'system' ? 'selected' : ''; ?>>System</option>
+                                        </select>
+                                    </div>
+                                    <div class="sm:col-span-3 flex gap-2">
+                                        <button type="submit" class="btn-primary flex items-center gap-2 px-4 py-2">
+                                            <i class="bi bi-search"></i> Apply Filters
+                                        </button>
+                                        <a href="?audit_page=1" class="btn-secondary flex items-center gap-2 px-4 py-2">
+                                            <i class="bi bi-arrow-clockwise"></i> Reset
+                                        </a>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <!-- Audit Logs Table -->
+                            <div class="overflow-x-auto">
+                                <?php if (empty($auditLogs)): ?>
+                                    <div class="text-center py-12">
+                                        <i class="bi bi-inbox text-5xl text-gray-300 block mb-3"></i>
+                                        <p class="text-gray-500 text-lg">No audit logs found</p>
+                                    </div>
+                                <?php else: ?>
+                                    <table class="w-full text-sm">
+                                        <thead class="bg-gray-50 border-b border-gray-200">
+                                            <tr>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">Timestamp</th>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">Admin User</th>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">Action</th>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">Entity Type</th>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">Entity ID</th>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">IP Address</th>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">Status</th>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">Details</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-gray-200">
+                                            <?php foreach ($auditLogs as $log): ?>
+                                                <tr class="hover:bg-gray-50 transition-colors">
+                                                    <td class="px-6 py-4 whitespace-nowrap text-gray-900 font-medium"><?php echo date('M d, Y H:i:s', strtotime($log['timestamp'])); ?></td>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                            <i class="bi bi-person-fill"></i>
+                                                            <?php echo htmlspecialchars($log['admin_user']); ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <?php
+                                                            $actionColor = 'gray';
+                                                            if (strpos(strtolower($log['action']), 'delete') !== false) $actionColor = 'red';
+                                                            elseif (strpos(strtolower($log['action']), 'create') !== false) $actionColor = 'green';
+                                                            elseif (strpos(strtolower($log['action']), 'update') !== false) $actionColor = 'blue';
+                                                            elseif (strpos(strtolower($log['action']), 'login') !== false) $actionColor = 'indigo';
+                                                        ?>
+                                                        <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-<?php echo $actionColor; ?>-100 text-<?php echo $actionColor; ?>-800">
+                                                            <?php echo htmlspecialchars($log['action']); ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                                            <?php echo htmlspecialchars(ucfirst($log['entity_type'] ?? 'N/A')); ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-gray-600"><?php echo htmlspecialchars($log['entity_id'] ?? '-'); ?></td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-gray-600 font-mono text-xs"><?php echo htmlspecialchars($log['ip_address'] ?? '-'); ?></td>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <?php
+                                                            $statusColor = $log['status'] === 'success' ? 'green' : 'red';
+                                                            $statusIcon = $log['status'] === 'success' ? 'check-circle-fill' : 'x-circle-fill';
+                                                        ?>
+                                                        <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-<?php echo $statusColor; ?>-100 text-<?php echo $statusColor; ?>-800">
+                                                            <i class="bi bi-<?php echo $statusIcon; ?>"></i>
+                                                            <?php echo ucfirst($log['status']); ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-6 py-4">
+                                                        <button onclick="showAuditDetails(<?php echo htmlspecialchars(json_encode($log)); ?>)" class="text-blue-600 hover:text-blue-800 font-medium text-sm">
+                                                            View
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+
+                                    <!-- Pagination -->
+                                    <div class="mt-6 flex items-center justify-between">
+                                        <div class="text-sm text-gray-600">
+                                            Showing <span class="font-medium"><?php echo (($page - 1) * $pageSize) + 1; ?></span> to 
+                                            <span class="font-medium"><?php echo min($page * $pageSize, $totalLogs); ?></span> of 
+                                            <span class="font-medium"><?php echo $totalLogs; ?></span> logs
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <?php if ($page > 1): ?>
+                                                <a href="?audit_page=<?php echo $page - 1; ?><?php echo isset($_GET['filter_admin']) ? '&filter_admin=' . urlencode($_GET['filter_admin']) : ''; ?><?php echo isset($_GET['filter_action']) ? '&filter_action=' . urlencode($_GET['filter_action']) : ''; ?><?php echo isset($_GET['filter_type']) ? '&filter_type=' . urlencode($_GET['filter_type']) : ''; ?>" class="btn-secondary px-4 py-2">
+                                                    <i class="bi bi-chevron-left"></i> Previous
+                                                </a>
+                                            <?php endif; ?>
+                                            
+                                            <div class="flex items-center gap-1">
+                                                <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                                                    <a href="?audit_page=<?php echo $i; ?><?php echo isset($_GET['filter_admin']) ? '&filter_admin=' . urlencode($_GET['filter_admin']) : ''; ?><?php echo isset($_GET['filter_action']) ? '&filter_action=' . urlencode($_GET['filter_action']) : ''; ?><?php echo isset($_GET['filter_type']) ? '&filter_type=' . urlencode($_GET['filter_type']) : ''; ?>" class="px-3 py-1 rounded-lg text-sm font-medium transition-colors <?php echo $i === $page ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'; ?>">
+                                                        <?php echo $i; ?>
+                                                    </a>
+                                                <?php endfor; ?>
+                                            </div>
+
+                                            <?php if ($page < $totalPages): ?>
+                                                <a href="?audit_page=<?php echo $page + 1; ?><?php echo isset($_GET['filter_admin']) ? '&filter_admin=' . urlencode($_GET['filter_admin']) : ''; ?><?php echo isset($_GET['filter_action']) ? '&filter_action=' . urlencode($_GET['filter_action']) : ''; ?><?php echo isset($_GET['filter_type']) ? '&filter_type=' . urlencode($_GET['filter_type']) : ''; ?>" class="btn-secondary px-4 py-2">
+                                                    Next <i class="bi bi-chevron-right"></i>
+                                                </a>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </section>
+                </div>
             </main>
             
             <!-- Footer -->
@@ -473,6 +780,88 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
                 </button>
             </div>
             <div id="document-details"></div>
+        </div>
+    </div>
+
+    <!-- Audit Log Details Modal -->
+    <div id="audit-modal" class="modal">
+        <div class="modal-content p-6 max-w-2xl">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold text-gray-900">Audit Log Details</h3>
+                <button onclick="closeModal('audit-modal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="bi bi-x-lg text-xl"></i>
+                </button>
+            </div>
+            <div id="audit-details" class="space-y-4">
+                <!-- Details will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Announcement Detail Modal -->
+    <div id="announcement-detail-modal" class="modal" style="display: none; align-items: center; justify-content: center;">
+        <div class="modal-content p-6 max-w-4xl w-full max-h-screen overflow-y-auto">
+            <div class="flex items-center justify-between mb-4">
+                <h3 id="ann-detail-title" class="text-2xl font-bold text-gray-900"></h3>
+                <button onclick="closeModal('announcement-detail-modal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="bi bi-x-lg text-xl"></i>
+                </button>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Announcement Detail (Left) -->
+                <div>
+                    <div id="ann-detail-content" class="text-gray-800 mb-4"></div>
+                    <div id="ann-detail-meta" class="text-sm text-gray-600 mb-4"></div>
+                    <div class="flex gap-3 text-sm">
+                        <button type="button" id="ann-like-btn" onclick="toggleAnnouncementAction(event, null, 'like')" class="flex items-center gap-1 text-gray-600 hover:text-red-600">
+                            <i class="bi bi-heart-fill"></i><span id="ann-like-count">0</span>
+                        </button>
+                        <button type="button" id="ann-save-btn" onclick="toggleAnnouncementAction(event, null, 'save')" class="flex items-center gap-1 text-gray-600 hover:text-blue-600">
+                            <i class="bi bi-bookmark-fill"></i><span id="ann-save-count">0</span>
+                        </button>
+                    </div>
+                </div>
+                <!-- User Posts (Right) -->
+                <div>
+                    <h4 class="font-semibold mb-3">User Posts</h4>
+                    <div id="ann-user-posts" class="space-y-3 max-h-96 overflow-y-auto">
+                        <!-- Posts will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notify User Modal -->
+    <div id="notify-modal" class="modal" style="display: none; align-items: center; justify-content: center;">
+        <div class="modal-content p-6 max-w-2xl">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold text-gray-900">Send Notification to User</h3>
+                <button onclick="closeModal('notify-modal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="bi bi-x-lg text-xl"></i>
+                </button>
+            </div>
+            <form id="notify-form" onsubmit="submitNotification(event)">
+                <input type="hidden" id="notify-user-id" name="user_id" value="">
+                <input type="hidden" id="notify-post-id" name="post_id" value="">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Reason</label>
+                    <select id="notify-type" name="type" class="input-field w-full">
+                        <option value="notice">Notice</option>
+                        <option value="inappropriate">Inappropriate</option>
+                        <option value="untruthful">Untruthful</option>
+                        <option value="unlawful">Unlawful</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Message</label>
+                    <textarea id="notify-message" name="message" rows="4" class="input-field w-full" required>Dear user, your post has been flagged as inappropriate. Please review our community guidelines.</textarea>
+                </div>
+                <div class="flex justify-end mt-4 gap-2">
+                    <button type="button" onclick="closeModal('notify-modal')" class="btn-secondary px-4 py-2">Cancel</button>
+                    <button type="submit" class="btn-primary px-4 py-2">Send Notification</button>
+                </div>
+            </form>
         </div>
     </div>
 

@@ -1,6 +1,7 @@
 <?php
 session_start();
 require 'db.php';
+require 'audit-log.php';
 
 $error = "";
 
@@ -22,12 +23,20 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $_SESSION['fullname'] = $user['fullname'];
                 $_SESSION['role'] = $user['role'] ?? 'citizen'; // Default to citizen if role is NULL
                 
-                // Redirect based on user role
+                // Log admin login
                 if (($user['role'] ?? 'citizen') === 'admin') {
-                    header("Location: system-template-full.php");
-                } else {
-                    header("Location: user-portal.php");
+                    logAdminLogin($user['id'], $user['fullname']);
                 }
+                
+                // Redirect based on user role
+                $role = $user['role'] ?? 'citizen';
+                $redirectUrl = ($role === 'admin') ? "system-template-full.php" : "user-portal.php";
+
+                echo "<script>
+                    localStorage.setItem('isLoggedIn', 'true');
+                    localStorage.setItem('role', '" . addslashes($role) . "');
+                    window.location.href = '$redirectUrl';
+                </script>";
                 exit();
             } else {
                 $error = "Invalid password";
@@ -143,10 +152,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             
             <!-- Alternative Login -->
             <div class="grid grid-cols-2 gap-3">
-                <button type="button" class="flex items-center justify-center px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
-                    <i class="bi bi-microsoft text-lg mr-2 text-blue-600"></i>
-                    <span class="text-sm font-medium text-gray-700">Microsoft</span>
-                </button>
+        
                 <button type="button" class="flex items-center justify-center px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
                     <i class="bi bi-google text-lg mr-2 text-red-500"></i>
                     <span class="text-sm font-medium text-gray-700">Google</span>

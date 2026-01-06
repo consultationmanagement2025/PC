@@ -275,11 +275,180 @@ function openModal(modalId) {
     }
 }
 
+// Open Notify Modal and prefill user id
+function openNotifyModal(userId, postId) {
+    const uid = document.getElementById('notify-user-id');
+    const pid = document.getElementById('notify-post-id');
+    const msg = document.getElementById('notify-message');
+    const type = document.getElementById('notify-type');
+    if (uid) uid.value = userId || '';
+    if (pid) pid.value = postId || '';
+    if (type) type.value = 'inappropriate';
+    if (msg) msg.value = 'Dear user, your post has been flagged as inappropriate. Please review our community guidelines.';
+    openModal('notify-modal');
+}
+
+// Quick notify with predefined reason and message
+async function quickNotify(userId, postId, reason) {
+    const templates = {
+        inappropriate: 'Dear user, your post has been flagged as inappropriate. Please review our community guidelines.',
+        untruthful: 'Dear user, your post contains information that appears untruthful. Please provide sources or correct the statement.',
+        unlawful: 'Dear user, your post may contain unlawful content. This has been escalated for further review.'
+    };
+    const message = templates[reason] || 'Dear user, your post has been reviewed by the administration.';
+    const data = new FormData();
+    data.append('user_id', userId);
+    data.append('post_id', postId);
+    data.append('type', reason);
+    data.append('message', message);
+    try {
+        const res = await fetch('send_notification.php', { method: 'POST', body: data });
+        const json = await res.json();
+        if (json.success) {
+            showToast('Notification sent', 'success');
+        } else {
+            showToast(json.error || 'Failed to send notification', 'error');
+        }
+    } catch (err) {
+        console.error(err);
+        showToast('Network error sending notification', 'error');
+    }
+}
+
+async function submitNotification(e) {
+    if (e) e.preventDefault();
+    const form = document.getElementById('notify-form');
+    if (!form) return;
+    const data = new FormData(form);
+    try {
+        const res = await fetch('send_notification.php', { method: 'POST', body: data });
+        const json = await res.json();
+        if (json.success) {
+            showToast('Notification sent', 'success');
+            closeModal('notify-modal');
+        } else {
+            showToast(json.error || 'Failed to send notification', 'error');
+        }
+    } catch (err) {
+        console.error(err);
+        showToast('Network error sending notification', 'error');
+    }
+}
+
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.classList.remove('show');
         document.body.style.overflow = 'auto';
+    }
+}
+
+// Announcement Functions
+async function submitAnnouncement(e) {
+    if (e) e.preventDefault();
+    const form = document.getElementById('announcement-form');
+    if (!form) return;
+    const data = new FormData(form);
+    try {
+        const res = await fetch('create_announcement.php', { method: 'POST', body: data });
+        const json = await res.json();
+        if (json.success) {
+            form.reset();
+            showToast('Announcement published', 'success');
+            location.reload();
+        } else {
+            showToast(json.error || 'Failed to publish announcement', 'error');
+        }
+    } catch (err) {
+        console.error(err);
+        showToast('Network error publishing announcement', 'error');
+    }
+}
+
+async function openAnnouncementDetail(annId) {
+    try {
+        const res = await fetch('get_announcement.php?id=' + annId);
+        const json = await res.json();
+        if (json.success) {
+            const ann = json.announcement;
+            const likes = json.likes || 0;
+            const saves = json.saves || 0;
+            const userLiked = json.userLiked || false;
+            const userSaved = json.userSaved || false;
+            
+            document.getElementById('ann-detail-title').textContent = ann.title;
+            document.getElementById('ann-detail-content').innerHTML = ann.content.replace(/\n/g, '<br>');
+            document.getElementById('ann-detail-meta').textContent = 'Posted by ' + ann.admin_user + ' · ' + new Date(ann.created_at).toLocaleDateString();
+            document.getElementById('ann-like-count').textContent = likes;
+            document.getElementById('ann-save-count').textContent = saves;
+            
+            const likeBtn = document.getElementById('ann-like-btn');
+            const saveBtn = document.getElementById('ann-save-btn');
+            if (userLiked) likeBtn.classList.add('text-red-600');
+            if (userSaved) saveBtn.classList.add('text-blue-600');
+            
+            likeBtn.onclick = (e) => toggleAnnouncementAction(e, annId, 'like');
+            saveBtn.onclick = (e) => toggleAnnouncementAction(e, annId, 'save');
+            
+            // Load user posts
+            const postsRes = await fetch('get_posts.php');
+            const postsJson = await postsRes.json();
+            const postsList = document.getElementById('ann-user-posts');
+            if (postsJson.posts && postsJson.posts.length > 0) {
+                postsList.innerHTML = postsJson.posts.slice(0, 5).map(p => `
+                    <div class="p-2 border rounded text-sm">
+                        <div class="font-medium">${p.author}</div>
+                        <div class="text-gray-600 mt-1">${p.content.substring(0, 150)}...</div>
+                    </div>
+                `).join('');
+            } else {
+                postsList.innerHTML = '<div class="text-gray-500">No user posts yet.</div>';
+            }
+            
+            openModal('announcement-detail-modal');
+        } else {
+            showToast(json.error || 'Failed to load announcement', 'error');
+        }
+    } catch (err) {
+        console.error(err);
+        showToast('Error loading announcement', 'error');
+    }
+}
+
+async function toggleAnnouncementAction(e, annId, action) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    // Get annId from modal if not provided
+    if (!annId && document.getElementById('announcement-detail-modal').classList.contains('show')) {
+        // Extract from title or use data attribute (simplified for now)
+        annId = parseInt(window.currentAnnouncementId || 0);
+    }
+    if (!annId) return;
+    
+    const data = new FormData();
+    data.append('ann_id', annId);
+    data.append('action', action);
+    try {
+        const res = await fetch('toggle_announcement_action.php', { method: 'POST', body: data });
+        const json = await res.json();
+        if (json.success) {
+            const btn = e?.target.closest('button');
+            if (action === 'like' && btn) {
+                btn.classList.toggle('text-red-600');
+                btn.querySelector('span').textContent = json.likes;
+            } else if (action === 'save' && btn) {
+                btn.classList.toggle('text-blue-600');
+                btn.querySelector('span').textContent = json.saves;
+            }
+            showToast(action === 'like' ? 'Announcement liked' : 'Announcement saved', 'success');
+        } else {
+            showToast(json.error || 'Failed to update', 'error');
+        }
+    } catch (err) {
+        console.error(err);
+        showToast('Error updating announcement', 'error');
     }
 }
 
@@ -494,6 +663,7 @@ function showSection(sectionId) {
             'search': 'Advanced Search',
             'analytics': 'Reports & Analytics',
             'users': 'User Management',
+            'announcements': 'Announcements',
             'audit': 'Audit Logs',
             'profile': 'My Profile',
             'settings': 'Settings',
@@ -616,3 +786,111 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log('All initializations complete');
 });
+
+// ==========================================
+// Audit Log Functions
+// ==========================================
+
+function showAuditDetails(logData) {
+    const modal = document.getElementById('audit-modal');
+    const detailsContainer = document.getElementById('audit-details');
+    
+    if (!modal || !detailsContainer) return;
+    
+    const formatDate = (dateStr) => {
+        const date = new Date(dateStr);
+        return date.toLocaleString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric', 
+            hour: '2-digit', 
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    };
+    
+    const statusColor = logData.status === 'success' ? 'text-green-700' : 'text-red-700';
+    const statusBg = logData.status === 'success' ? 'bg-green-50' : 'bg-red-50';
+    
+    detailsContainer.innerHTML = `
+        <div class="grid grid-cols-2 gap-4">
+            <div class="border border-gray-200 rounded-lg p-4">
+                <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Admin User</label>
+                <p class="text-gray-900 font-medium">${escapeHtml(logData.admin_user)}</p>
+            </div>
+            <div class="border border-gray-200 rounded-lg p-4">
+                <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Admin ID</label>
+                <p class="text-gray-900 font-medium">${logData.admin_id || '-'}</p>
+            </div>
+            <div class="border border-gray-200 rounded-lg p-4">
+                <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Action</label>
+                <p class="text-gray-900 font-medium">${escapeHtml(logData.action)}</p>
+            </div>
+            <div class="border border-gray-200 rounded-lg p-4">
+                <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Entity Type</label>
+                <p class="text-gray-900 font-medium">${escapeHtml(logData.entity_type || 'N/A')}</p>
+            </div>
+            <div class="border border-gray-200 rounded-lg p-4">
+                <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Entity ID</label>
+                <p class="text-gray-900 font-medium">${logData.entity_id || '-'}</p>
+            </div>
+            <div class="border border-gray-200 rounded-lg p-4">
+                <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">IP Address</label>
+                <p class="text-gray-900 font-mono text-sm">${escapeHtml(logData.ip_address || '-')}</p>
+            </div>
+            <div class="border border-gray-200 rounded-lg p-4 col-span-2">
+                <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Timestamp</label>
+                <p class="text-gray-900 font-medium">${formatDate(logData.timestamp)}</p>
+            </div>
+            <div class="border border-gray-200 rounded-lg p-4 col-span-2">
+                <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Status</label>
+                <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${statusBg} ${statusColor}">
+                    <i class="bi bi-${logData.status === 'success' ? 'check-circle-fill' : 'x-circle-fill'}"></i>
+                    ${logData.status.charAt(0).toUpperCase() + logData.status.slice(1)}
+                </span>
+            </div>
+            ${logData.old_value ? `
+                <div class="border border-gray-200 rounded-lg p-4 col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Old Value</label>
+                    <p class="text-gray-700 bg-gray-50 p-2 rounded text-sm font-mono max-h-32 overflow-y-auto">${escapeHtml(logData.old_value)}</p>
+                </div>
+            ` : ''}
+            ${logData.new_value ? `
+                <div class="border border-gray-200 rounded-lg p-4 col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">New Value</label>
+                    <p class="text-gray-700 bg-gray-50 p-2 rounded text-sm font-mono max-h-32 overflow-y-auto">${escapeHtml(logData.new_value)}</p>
+                </div>
+            ` : ''}
+            ${logData.details ? `
+                <div class="border border-gray-200 rounded-lg p-4 col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Additional Details</label>
+                    <p class="text-gray-700 bg-gray-50 p-2 rounded text-sm max-h-32 overflow-y-auto">${escapeHtml(logData.details)}</p>
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    openModal('audit-modal');
+}
+
+function exportAuditLogs() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('export', 'csv');
+    window.location.href = url.toString();
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Open modal function (if not already defined)
+function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+

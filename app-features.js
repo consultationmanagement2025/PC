@@ -1,5 +1,5 @@
 // ==============================
-// LLRM SYSTEM - FULL FEATURES
+// PCMP SYSTEM - FULL FEATURES
 // ==============================
 
 // Global Data Store
@@ -3207,51 +3207,97 @@ function renderAnnouncements() {
 
     const html = `
         <div class="mb-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h1 class="text-2xl font-bold text-gray-800">Announcements</h1>
-                    <p class="text-gray-600 mt-1">Create and manage public announcements</p>
-                </div>
-                <div>
-                    <button onclick="document.getElementById('new-ann-title').value=''; document.getElementById('new-ann-message').value=''; openModal('new-ann-modal')" class="btn-primary">New Announcement</button>
-                </div>
-            </div>
+            <h1 class="text-2xl font-bold text-gray-800">Announcements & Moderation</h1>
+            <p class="text-gray-600 mt-1">Manage announcements and review user posts</p>
         </div>
 
-        <div class="bg-white rounded-xl shadow-md p-4 mb-4">
-            ${AppData.announcements.length === 0 ? '<div class="p-6 text-center text-gray-500">No announcements yet</div>' : ''}
-            <div class="space-y-2">
-                ${AppData.announcements.map(a => `
-                    <div class="p-3 border rounded ${a.published ? 'bg-green-50' : ''} flex items-start justify-between">
-                        <div>
-                            <div class="text-sm font-medium text-gray-800">${a.title}</div>
-                            <div class="text-xs text-gray-600">${a.message}</div>
-                            <div class="text-xs text-gray-400 mt-1">By ${a.createdBy} • ${new Date(a.createdAt).toLocaleString()}</div>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button onclick="deleteAnnouncement(${a.id})" class="text-sm text-red-600">Delete</button>
+        <!-- 50/50 Split Layout -->
+        <div class="flex gap-6 h-[70vh]">
+            <!-- Left: Announcements Publisher & List -->
+            <div class="w-1/2 min-w-0 flex flex-col gap-4">
+                <!-- Compact Publisher -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                    <div class="space-y-3">
+                        <input id="new-ann-title" placeholder="Announcement title..." class="input-field w-full text-sm font-medium border-0 border-b border-gray-300 focus:border-red-500 focus:ring-0 p-0" />
+                        <textarea id="new-ann-message" placeholder="Write your announcement message..." class="input-field w-full text-sm border-0 focus:ring-0 p-0 resize-none" rows="3"></textarea>
+                        <div class="flex justify-end gap-2 pt-2">
+                            <button onclick="document.getElementById('new-ann-title').value=''; document.getElementById('new-ann-message').value='';" class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded transition">Clear</button>
+                            <button onclick="(function(){ const t=document.getElementById('new-ann-title').value; const m=document.getElementById('new-ann-message').value; if(!t||!m){ showNotification('Title and message required','warning'); return;} createAnnouncement(t,m); document.getElementById('new-ann-title').value=''; document.getElementById('new-ann-message').value=''; })()" class="btn-primary px-4 py-1.5 text-sm">Publish</button>
                         </div>
                     </div>
-                `).join('')}
-            </div>
-        </div>
+                </div>
 
-        <!-- New Announcement Modal -->
-        <div id="new-ann-modal" class="modal hidden">
-            <div class="modal-content">
-                <h3 class="text-lg font-semibold mb-2">New Announcement</h3>
-                <input id="new-ann-title" placeholder="Title" class="input-field mb-2" />
-                <textarea id="new-ann-message" placeholder="Message" class="input-field mb-2" rows="4"></textarea>
-                <div class="flex items-center gap-2 justify-end">
-                    <button onclick="closeModal('new-ann-modal')" class="btn-outline">Cancel</button>
-                    <button onclick="(function(){ const t=document.getElementById('new-ann-title').value; const m=document.getElementById('new-ann-message').value; if(!t||!m){ showNotification('Title and message required','warning'); return;} createAnnouncement(t,m); closeModal('new-ann-modal'); showSection('announcements'); })()" class="btn-primary">Publish</button>
+                <!-- Announcements List -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex-1 flex flex-col">
+                    <h3 class="text-sm font-semibold text-gray-900 mb-3">Recent Announcements</h3>
+                    <div class="space-y-2 overflow-auto flex-1">
+                        ${AppData.announcements.length === 0 ? '<div class="text-xs text-gray-400 text-center py-4">No announcements yet</div>' : ''}
+                        ${AppData.announcements.map(a => `
+                            <div class="p-2.5 border border-gray-200 rounded hover:bg-gray-50 transition text-xs">
+                                <div class="font-semibold text-gray-800 text-sm">${a.title}</div>
+                                <div class="text-gray-500 text-xs mt-0.5">${new Date(a.createdAt).toLocaleDateString()}</div>
+                                <div class="flex justify-end mt-2">
+                                    <button onclick="deleteAnnouncement(${a.id}); renderAnnouncements()" class="text-xs text-red-600 hover:text-red-700">Delete</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: User Posts for Moderation -->
+            <div class="w-1/2 min-w-0 flex flex-col">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5 flex-1 flex flex-col">
+                    <div class="mb-4">
+                        <h2 class="text-lg font-semibold text-gray-900">User Posts</h2>
+                        <p class="text-xs text-gray-500 mt-1">Review & take action on citizen posts</p>
+                    </div>
+                    <div id="admin-posts-list" class="space-y-3 overflow-auto flex-1">
+                        <div class="text-xs text-gray-400 text-center py-4">Loading posts...</div>
+                    </div>
                 </div>
             </div>
         </div>
     `;
 
     document.getElementById('content-area').innerHTML = html;
+    
+    // Load user posts via AJAX
+    loadUserPostsForModeration();
 }
+
+function loadUserPostsForModeration() {
+    fetch('get_posts.php')
+        .then(res => res.json())
+        .then(data => {
+            const list = document.getElementById('admin-posts-list');
+            if (!data.posts || data.posts.length === 0) {
+                list.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">No user posts yet.</div>';
+                return;
+            }
+            list.innerHTML = data.posts.map(p => `
+                <div class="p-3 border border-gray-200 rounded hover:bg-gray-50 transition text-xs">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <div class="font-semibold text-gray-800">${p.author}</div>
+                            <div class="text-gray-600 text-xs mt-1">${p.content.substring(0, 80)}${p.content.length > 80 ? '...' : ''}</div>
+                            <div class="text-gray-400 text-xs mt-1">${new Date(p.created_at).toLocaleString()}</div>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 mt-2 flex-wrap">
+                        <button onclick="quickNotify(${p.user_id}, ${p.id}, 'inappropriate')" class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200">Inappropriate</button>
+                        <button onclick="quickNotify(${p.user_id}, ${p.id}, 'untruthful')" class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200">Untruthful</button>
+                        <button onclick="quickNotify(${p.user_id}, ${p.id}, 'unlawful')" class="px-2 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200">Unlawful</button>
+                    </div>
+                </div>
+            `).join('');
+        })
+        .catch(err => {
+            console.error(err);
+            document.getElementById('admin-posts-list').innerHTML = '<div class="text-xs text-red-500">Failed to load posts</div>';
+        });
+}
+
 
 function renderConsultationsGrid() {
     const grid = document.getElementById('consultations-grid');

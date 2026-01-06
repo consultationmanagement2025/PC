@@ -5,6 +5,13 @@ if (!isset($_SESSION['fullname'])) {
     exit();
 }
 $fullname = $_SESSION['fullname'];
+require_once 'announcements.php';
+// Redirect admins to the admin dashboard
+$current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
+if ($current_role === 'admin') {
+  header('Location: system-template-full.php');
+  exit();
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -816,7 +823,20 @@ $fullname = $_SESSION['fullname'];
             </div>
             <div class="section-divider"></div>
             <div id="announcements-feed" class="feed" style="max-height: 600px; overflow-y: auto;">
-              <div class="empty-state">Loading updates...</div>
+              <?php
+                $latestAnns = getLatestAnnouncements(10);
+                if (empty($latestAnns)) {
+                    echo '<div class="empty-state">No announcements at the moment.</div>';
+                } else {
+                    foreach ($latestAnns as $ann) {
+                        echo "<div class=\"announcement-card\" style=\"background:white;padding:12px;border-radius:8px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04)\">";
+                        echo '<div style="font-weight:700;margin-bottom:6px">' . htmlspecialchars($ann['title']) . '</div>';
+                        echo '<div style="color:#6b7280;font-size:13px;margin-bottom:8px">' . nl2br(htmlspecialchars(substr($ann['content'],0,400))) . '</div>';
+                        echo '<div style="font-size:12px;color:#9ca3af">' . date('M d, Y H:i', strtotime($ann['created_at'])) . '</div>';
+                        echo '</div>';
+                    }
+                }
+              ?>
             </div>
           </div>
         </div>
@@ -1210,19 +1230,53 @@ $fullname = $_SESSION['fullname'];
     function postSuggestion() {
       const text = getPostContent();
       if (!text) { alert('Please write a post before posting.'); return; }
-      const suggestion = {
-        id: 'sug_' + Date.now(),
-        author: 'You',
-        text: text,
-        timestamp: Date.now(),
-        supports: [],
-        comments: []
-      };
-      const suggestions = getSuggestions();
-      suggestions.push(suggestion);
-      saveSuggestions(suggestions);
-      clearPostInput();
-      loadSuggestions();
+
+      // Try server-side post creation first
+      try {
+        const form = new FormData();
+        form.append('content', text);
+        fetch('create_post.php', { method: 'POST', body: form })
+          .then(res => res.json())
+          .then(json => {
+            if (json && json.success) {
+              // Reload posts from server
+              loadServerPosts();
+              clearPostInput();
+            } else {
+              // Fallback to localStorage
+              const suggestion = {
+                id: 'sug_' + Date.now(),
+                author: 'You',
+                text: text,
+                timestamp: Date.now(),
+                supports: [],
+                comments: []
+              };
+              const suggestions = getSuggestions();
+              suggestions.push(suggestion);
+              saveSuggestions(suggestions);
+              clearPostInput();
+              loadSuggestions();
+            }
+          }).catch(err => {
+            console.warn('Server post failed, using localStorage', err);
+            const suggestion = {
+              id: 'sug_' + Date.now(),
+              author: 'You',
+              text: text,
+              timestamp: Date.now(),
+              supports: [],
+              comments: []
+            };
+            const suggestions = getSuggestions();
+            suggestions.push(suggestion);
+            saveSuggestions(suggestions);
+            clearPostInput();
+            loadSuggestions();
+          });
+      } catch (e) {
+        console.warn('Error posting suggestion', e);
+      }
     }
 
     function resetPostForm() { clearPostInput(); }
@@ -1267,6 +1321,27 @@ $fullname = $_SESSION['fullname'];
           </div>
         </div>
       `).join('');
+    }
+
+    // Load posts from server if available
+    function loadServerPosts() {
+      const feed = document.getElementById('suggestions-feed');
+      if (!feed) return;
+      fetch('get_posts.php?limit=50')
+        .then(res => res.json())
+        .then(posts => {
+          if (!posts || posts.length === 0) {
+            loadSuggestions(); // fallback to local
+            return;
+          }
+          const html = posts.map(p => `
+            <div class="suggestion-card">
+              <div class="meta">${escapeHtml(p.author)} • ${new Date(p.created_at).toLocaleDateString()}</div>
+              <div class="content">${escapeHtml(p.content)}</div>
+            </div>
+          `).join('');
+          feed.innerHTML = html;
+        }).catch(err => { console.warn('Failed to load server posts', err); loadSuggestions(); });
     }
 
     function supportSuggestion(id) {
