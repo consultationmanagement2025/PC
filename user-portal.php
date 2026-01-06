@@ -58,6 +58,45 @@ $fullname = $_SESSION['fullname'];
     html.dark .suggestion-form textarea { background: #374151; color: var(--text); border-color: #4b5563; }
     html.dark .section-divider { background: linear-gradient(90deg, rgba(220, 38, 38, 0.6) 0%, transparent 100%); }
 
+    /* Dark-mode global adjustments to improve contrast */
+    html.dark .main-content, html.dark .main-content * { color: var(--text); }
+    html.dark .quick-links,
+    html.dark .suggestion-box,
+    html.dark .stat-card,
+    html.dark .announcement-card,
+    html.dark .suggestion-card,
+    html.dark .empty-state,
+    html.dark .section-header,
+    html.dark .hero-banner { background: #1f2937; border-color: #374151; color: var(--text); }
+    html.dark .link-btn { background: #111827; color: var(--text); border-color: #374151; }
+    html.dark input, html.dark textarea, html.dark select, html.dark .comment-input input, html.dark #post-input { background: #374151; color: var(--text); border: 1px solid #4b5563; }
+    html.dark .post-actions .post-btn { background: #b91c1c; }
+
+    /* Force-override any inline white backgrounds in dark mode for better readability */
+    html.dark [style*="background: white"] {
+      background: #0f1724 !important;
+      color: var(--text) !important;
+      border-color: #374151 !important;
+      box-shadow: none !important;
+    }
+    html.dark [style*="background:white"] {
+      background: #0f1724 !important;
+      color: var(--text) !important;
+      border-color: #374151 !important;
+      box-shadow: none !important;
+    }
+    html.dark [style*="background: var(--white)"] {
+      background: #0f1724 !important;
+      color: var(--text) !important;
+      border-color: #374151 !important;
+      box-shadow: none !important;
+    }
+    html.dark .overlay-menu-panel { background: #0b1220 !important; color: var(--text) !important; border-color: #374151 !important; }
+    html.dark .link-btn { background: #0b1220 !important; color: var(--text) !important; border-color: #374151 !important; }
+    html.dark input, html.dark textarea, html.dark select, html.dark .comment-input input, html.dark #post-input { background: #0b1220 !important; color: var(--text) !important; border: 1px solid #374151 !important; }
+    html.dark .empty-state { background: transparent !important; color: var(--muted) !important; }
+    html.dark #post-input::placeholder { color: var(--muted) !important; opacity: 0.9 !important; }
+
     body { margin: 0; background: var(--gray-100); color: var(--text); }
 
     /* Layout: Sidebar + Main */
@@ -245,7 +284,7 @@ $fullname = $_SESSION['fullname'];
     /* Grid: Stats & Quick Links */
     .grid-2 {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 280px 1fr 320px;
       gap: 24px;
       margin-bottom: 28px;
     }
@@ -274,7 +313,7 @@ $fullname = $_SESSION['fullname'];
 
     .links-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      grid-template-columns: 1fr;
       gap: 12px;
     }
 
@@ -546,6 +585,31 @@ $fullname = $_SESSION['fullname'];
 
     .suggestion-form button:hover { background: var(--red-700); }
 
+    /* Post box (FB-like) */
+    #post-input {
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      min-height: 56px;
+      outline: none;
+      font-family: inherit;
+      font-size: 15px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    #post-input::placeholder { color: var(--gray-700); opacity: 0.95; }
+    .icon-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 18px;
+      padding: 6px;
+      border-radius: 8px;
+    }
+    .icon-btn:hover { background: rgba(0,0,0,0.04); }
+    .post-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+    .post-actions .post-btn { padding: 8px 16px; background: var(--red-600); color: white; border: none; border-radius: 20px; cursor: pointer; font-weight:600; }
+
     .suggestion-card {
       background: white;
       padding: 18px;
@@ -697,34 +761,12 @@ $fullname = $_SESSION['fullname'];
           <p id="dashboard-desc" data-i18n="welcome">Welcome! Track consultations, view announcements, and make your voice heard in city governance.</p>
         </div>
 
-        <!-- Stats & Quick Links Grid -->
+        <!-- 3-Column Layout: Sidebar | Feed | Announcements -->
         <div class="grid-2">
-          <!-- Stats -->
-          <div style="display: flex; flex-direction: column; gap: 16px;">
-            <div class="stat-card">
-              <span style="font-size: 24px;">📋</span>
-              <div class="number" id="stat-active">3</div>
-              <div class="label">Active Consultations</div>
-            </div>
-            <div class="stat-card">
-              <span style="font-size: 24px;">💭</span>
-              <div class="number" id="stat-announcements">0</div>
-              <div class="label">Latest Announcements</div>
-            </div>
-          </div>
-
-          <!-- Quick Links -->
+          <!-- LEFT: Quick Actions Sidebar -->
           <div class="quick-links">
             <h3>Quick Actions</h3>
             <div class="links-grid">
-              <button class="link-btn" onclick="scrollToSection('announcements')">
-                <div class="icon">📢</div>
-                View Updates
-              </button>
-              <button class="link-btn" onclick="scrollToSection('citizen-suggestions')">
-                <div class="icon">💡</div>
-                Post Suggestion
-              </button>
               <button class="link-btn" onclick="alert('Saved items coming soon')">
                 <div class="icon">🔖</div>
                 Saved Items
@@ -735,70 +777,54 @@ $fullname = $_SESSION['fullname'];
               </button>
             </div>
           </div>
-        </div>
-      </div>
 
-      <!-- Citizen Suggestions Section -->
-      <div id="citizen-suggestions" class="section">
-        <div class="section-header">
-          <h2>💡 Citizen Suggestions & Ideas</h2>
-        </div>
-        <div class="section-divider"></div>
+          <!-- CENTER: Citizen Concerns Feed -->
+          <div id="feed" style="margin: 0; padding: 0; background: transparent; box-shadow: none;">
+            <!-- Facebook-style Post Box -->
+            <div class="suggestion-box" style="margin-bottom: 20px; padding: 18px 20px;">
+              <div style="display:flex; gap:12px; align-items:flex-start;">
+                <div style="width:48px; height:48px; background: linear-gradient(135deg, var(--red-600) 0%, var(--red-700) 100%); border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-weight:700; flex-shrink:0; font-size:18px;">
+                  <?php echo strtoupper(substr($fullname, 0, 1)); ?>
+                </div>
+                <div style="flex:1;">
+                  <textarea id="post-input" placeholder="<?php echo htmlspecialchars("What's on your mind, " . (explode(' ', trim($fullname))[0] ?: $fullname) . '?'); ?>" style="width:100%; min-height:56px; resize:none; padding:12px 16px; outline:none; font-family:inherit; font-size:15px;"></textarea>
+                  <div class="post-actions">
+                    <div style="display:flex; gap:8px;">
+                      <button class="icon-btn" title="Video">📹</button>
+                      <button class="icon-btn" title="Photo">🖼️</button>
+                      <button class="icon-btn" title="Feeling">😊</button>
+                    </div>
+                    <div>
+                      <button onclick="resetPostForm()" style="padding:8px 12px; background:var(--gray-200); color:var(--text); border:none; border-radius:16px; cursor:pointer; margin-right:8px;">Cancel</button>
+                      <button class="post-btn" onclick="postSuggestion()">Post</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-        <!-- Suggestion Post Box -->
-        <div class="suggestion-box">
-          <h3>💬 Share Your Ideas for Change</h3>
-          <p style="margin: 0 0 14px; color: var(--muted); font-size: 13px;">Have a suggestion for improving our city? Share it here and help shape Valenzuela's future.</p>
-          <div class="suggestion-form">
-            <textarea id="suggestion-input" placeholder="What changes would you like to see in our city? (e.g., Better roads, More parks, Improved public safety, etc.)"></textarea>
-            <button onclick="postSuggestion()">🚀 Post My Suggestion</button>
+            <!-- Feed (Scrollable) -->
+            <div id="suggestions-feed" style="max-height: 600px; overflow-y: auto; padding-right: 8px;">
+              <div class="empty-state">No posts yet. Be the first to share!</div>
+            </div>
           </div>
-        </div>
 
-        <!-- Suggestions Feed -->
-        <div id="suggestions-feed">
-          <div class="empty-state">No suggestions yet. Be the first to share your ideas!</div>
-        </div>
-      </div>
-
-      <!-- Announcements Section -->
-      <div id="announcements" class="section">
-        <div class="section-header">
-          <h2>📢 Latest Announcements</h2>
-        </div>
-        <div class="section-divider"></div>
-        <div id="announcements-feed" class="feed">
-          <div class="empty-state">Loading announcements...</div>
-        </div>
-      </div>
-
-      <!-- Consultations & Submissions (Side-by-Side) -->
-      <div id="consultations-submissions" class="section-grid active">
-        <!-- Consultations Section -->
-        <div id="consultations" class="section" style="display: block;">
-          <div class="section-header">
-            <h2>💬 Active Consultations</h2>
-          </div>
-          <div class="section-divider"></div>
-          <div class="empty-state">
-            No active consultations at the moment. Check back later or subscribe to updates.
-          </div>
-        </div>
-
-        <!-- Submissions Section -->
-        <div id="submissions" class="section" style="display: block;">
-          <div class="section-header">
-            <h2>📄 My Submissions</h2>
-          </div>
-          <div class="section-divider"></div>
-          <div class="empty-state">
-            You haven't submitted any feedback yet. Navigate to an active consultation to share your views.
+          <!-- RIGHT: Announcements Sidebar -->
+          <div id="announcements" style="margin: 0; padding: 0; background: transparent; box-shadow: none;">
+            <div class="section-header">
+              <h2 style="font-size: 18px;">📢 Updates</h2>
+            </div>
+            <div class="section-divider"></div>
+            <div id="announcements-feed" class="feed" style="max-height: 600px; overflow-y: auto;">
+              <div class="empty-state">Loading updates...</div>
+            </div>
           </div>
         </div>
       </div>
+
 
       <!-- Documents Section -->
-      <div id="documents" class="section">
+      <div id="documents">
         <div class="section-header">
           <h2>📚 Important Documents</h2>
         </div>
@@ -844,7 +870,7 @@ $fullname = $_SESSION['fullname'];
       </div>
 
       <!-- Settings Section -->
-      <div id="settings" class="section">
+      <div id="settings">
         <div class="section-header">
           <h2>⚙️ Settings</h2>
         </div>
@@ -1161,15 +1187,29 @@ $fullname = $_SESSION['fullname'];
       localStorage.setItem('citizen_suggestions', JSON.stringify(suggestions));
     }
 
-    function postSuggestion() {
-      const input = document.getElementById('suggestion-input');
-      const text = input.value.trim();
-
-      if (!text) {
-        alert('Please write a suggestion before posting.');
-        return;
+    function getPostContent() {
+      const postEl = document.getElementById('post-input');
+      if (postEl) {
+        if (postEl.tagName === 'TEXTAREA' || postEl.tagName === 'INPUT') return postEl.value.trim();
+        return postEl.innerText.trim();
       }
+      const textarea = document.getElementById('suggestion-input');
+      return textarea ? textarea.value.trim() : '';
+    }
 
+    function clearPostInput() {
+      const postEl = document.getElementById('post-input');
+      if (postEl) {
+        if (postEl.tagName === 'TEXTAREA' || postEl.tagName === 'INPUT') postEl.value = '';
+        else postEl.innerText = '';
+      }
+      const textarea = document.getElementById('suggestion-input');
+      if (textarea) textarea.value = '';
+    }
+
+    function postSuggestion() {
+      const text = getPostContent();
+      if (!text) { alert('Please write a post before posting.'); return; }
       const suggestion = {
         id: 'sug_' + Date.now(),
         author: 'You',
@@ -1178,15 +1218,14 @@ $fullname = $_SESSION['fullname'];
         supports: [],
         comments: []
       };
-
       const suggestions = getSuggestions();
       suggestions.push(suggestion);
       saveSuggestions(suggestions);
-
-      input.value = '';
+      clearPostInput();
       loadSuggestions();
-      alert('✅ Your suggestion has been posted! Thank you for your input.');
     }
+
+    function resetPostForm() { clearPostInput(); }
 
     function loadSuggestions() {
       const feed = document.getElementById('suggestions-feed');
@@ -1201,7 +1240,6 @@ $fullname = $_SESSION['fullname'];
 
       feed.innerHTML = suggestions.reverse().map(sug => `
         <div class="suggestion-card">
-          <div class="title">💡 ${escapeHtml(sug.text.substring(0, 60))}${sug.text.length > 60 ? '...' : ''}</div>
           <div class="meta">${sug.author} • ${new Date(sug.timestamp).toLocaleDateString()}</div>
           <div class="content">${escapeHtml(sug.text)}</div>
           <div class="suggestion-stats">

@@ -1,3 +1,11 @@
+<?php
+session_start();
+// If user is not logged in or not an admin, redirect to login
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
+    header('Location: login.php');
+    exit();
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
