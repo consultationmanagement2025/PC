@@ -1,6 +1,7 @@
 <?php
 session_start();
-require_once __DIR__ . '/DATABASE/posts.php';
+require_once __DIR__ . '/../DATABASE/posts.php';
+require_once __DIR__ . '/../DATABASE/audit-log.php';
 
 header('Content-Type: application/json');
 
@@ -20,6 +21,10 @@ $author = $_SESSION['fullname'] ?? 'Anonymous';
 
 $insertId = createPost($user_id, $author, $content);
 if ($insertId) {
+    // Log the post creation for audit
+    if (function_exists('logAction')) {
+        logAction($user_id, $author, "Created user post/concern", 'post', $insertId, null, $content, 'success', '');
+    }
     echo json_encode(['success' => true, 'id' => $insertId]);
 } else {
     echo json_encode(['error' => 'Failed to create post']);

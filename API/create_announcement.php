@@ -1,7 +1,7 @@
 <?php
 session_start();
-require_once 'announcements.php';
-require_once 'audit-log.php';
+require_once __DIR__ . '/../announcements.php';
+require_once __DIR__ . '/../DATABASE/audit-log.php';
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

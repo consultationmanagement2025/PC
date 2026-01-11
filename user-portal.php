@@ -1,7 +1,7 @@
 <?php
 session_start();
 if (!isset($_SESSION['fullname'])) {
-    header('Location: login.php');
+    header('Location: /CAP101/PC/login.php');
     exit();
 }
 $fullname = $_SESSION['fullname'];
@@ -387,6 +387,21 @@ if ($current_role === 'admin') {
       margin-right: auto;
     }
 
+    /* Section Visibility Control */
+    .section {
+      display: none;
+      animation: fadeIn 0.3s ease-in;
+    }
+
+    .section.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
     .section-header {
       display: flex;
       justify-content: space-between;
@@ -669,6 +684,10 @@ if ($current_role === 'admin') {
   </style>
 </head>
 <body>
+  <script>
+    // Make fullname available to JavaScript (from PHP session)
+    const CURRENT_USER_FULLNAME = <?php echo json_encode($fullname); ?>;
+  </script>
 
   <div class="wrapper">
     <!-- Sidebar -->
@@ -749,8 +768,7 @@ if ($current_role === 'admin') {
             <a class="menu-link" data-section="dashboard" onclick="scrollToSection('dashboard', event);">🏠 Dashboard</a>
             <a class="menu-link" data-section="announcements" onclick="scrollToSection('announcements', event);">📢 Announcements</a>
             <a class="menu-link" data-section="consultations-submissions" onclick="scrollToSection('consultations-submissions', event);">💬 Consultations & Submissions</a>
-            <a class="menu-link" data-section="documents" onclick="scrollToSection('documents', event);">📚 Documents</a>
-            <a class="menu-link" onclick="alert(t('helpComingSoon')); closeMenu();">❓ Help & FAQ</a>
+            <a class="menu-link" data-section="faq" onclick="scrollToSection('faq', event);">❓ Help & FAQ</a>
             <hr />
             <a class="menu-link" data-section="profile" onclick="alert(t('profileComingSoon')); closeMenu();">👤 Profile</a>
             <a class="menu-link" data-section="settings" onclick="scrollToSection('settings', event);">⚙️ Settings</a>
@@ -774,6 +792,10 @@ if ($current_role === 'admin') {
           <div class="quick-links">
             <h3>Quick Actions</h3>
             <div class="links-grid">
+              <button class="link-btn" onclick="viewDocument('VIEWS/valenzuela-citizen-charter.html', 'Valenzuela Citizen Charter')">
+                <div class="icon">📋</div>
+                Citizen Charter
+              </button>
               <button class="link-btn" onclick="alert('Saved items coming soon')">
                 <div class="icon">🔖</div>
                 Saved Items
@@ -843,54 +865,228 @@ if ($current_role === 'admin') {
       </div>
 
 
-      <!-- Documents Section -->
-      <div id="documents">
+      <!-- Consultations & Submissions Section -->
+      <div id="consultations-submissions" class="section">
         <div class="section-header">
-          <h2>📚 Important Documents</h2>
+          <h2>💬 Consultations & Your Submissions</h2>
         </div>
         <div class="section-divider"></div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px;">
-          <!-- Valenzuela Citizen Charter -->
-          <div style="background: white; padding: 20px; border-radius: 12px; border-left: 4px solid var(--red-600); box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: all 0.2s;">
-            <div style="font-size: 32px; margin-bottom: 12px;">📋</div>
-            <h3 style="margin: 0 0 8px; font-size: 16px; font-weight: 700; color: var(--gray-800);">Valenzuela Citizen Charter</h3>
-            <p style="margin: 8px 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
-              A comprehensive charter establishing the rights, responsibilities, and commitments of the City Government towards its citizens.
-            </p>
-            <div style="display: flex; gap: 8px; margin-top: 14px;">
-              <button onclick="viewDocument('valenzuela-citizen-charter.html', 'Valenzuela Citizen Charter')" style="flex: 1; padding: 8px 12px; background: var(--red-600); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">View</button>
-              <button onclick="downloadDocument('valenzuela-citizen-charter.html')" style="flex: 1; padding: 8px 12px; background: var(--gray-200); color: var(--gray-800); border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">📥 Download</button>
+
+        <!-- Post Suggestion Box -->
+        <div class="suggestion-box" style="margin-bottom: 24px; padding: 18px 20px; max-width: 900px;">
+          <div style="display:flex; gap:12px; align-items:flex-start;">
+            <div style="width:48px; height:48px; background: linear-gradient(135deg, var(--red-600) 0%, var(--red-700) 100%); border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-weight:700; flex-shrink:0; font-size:18px;">
+              <?php echo strtoupper(substr($fullname, 0, 1)); ?>
+            </div>
+            <div style="flex:1;">
+              <textarea id="consultation-input" placeholder="Share your feedback, concerns, or ideas about city consultations..." style="width:100%; min-height:56px; resize:none; padding:12px 16px; outline:none; font-family:inherit; font-size:15px;"></textarea>
+              <div class="post-actions">
+                <div style="display:flex; gap:8px;">
+                  <button class="icon-btn" title="Video">📹</button>
+                  <button class="icon-btn" title="Photo">🖼️</button>
+                  <button class="icon-btn" title="Feeling">😊</button>
+                </div>
+                <div>
+                  <button onclick="document.getElementById('consultation-input').value=''" style="padding:8px 12px; background:var(--gray-200); color:var(--text); border:none; border-radius:16px; cursor:pointer; margin-right:8px;">Cancel</button>
+                  <button class="post-btn" onclick="postConsultationFeedback()">Submit Feedback</button>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
 
-          <!-- Placeholder: City Ordinance -->
-          <div style="background: white; padding: 20px; border-radius: 12px; border-left: 4px solid var(--gray-300); box-shadow: 0 2px 8px rgba(0,0,0,0.06); opacity: 0.6;">
-            <div style="font-size: 32px; margin-bottom: 12px;">⚖️</div>
-            <h3 style="margin: 0 0 8px; font-size: 16px; font-weight: 700; color: var(--gray-800);">City Ordinances</h3>
-            <p style="margin: 8px 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
-              Local laws and regulations governing city operations.
-            </p>
-            <div style="display: flex; gap: 8px; margin-top: 14px;">
-              <button onclick="alert('Coming soon')" style="flex: 1; padding: 8px 12px; background: var(--gray-300); color: var(--muted); border: none; border-radius: 6px; cursor: not-allowed; font-weight: 600; font-size: 13px;">Coming Soon</button>
-            </div>
+        <!-- Active Consultations & Submissions Feed -->
+        <div style="max-width: 900px;">
+          <h3 style="margin: 20px 0 16px; font-size: 16px; font-weight: 700; color: var(--gray-800);">Your Recent Submissions</h3>
+          <div id="consultations-feed" style="display: grid; gap: 16px;">
+            <div class="empty-state">No submissions yet. Your feedback will appear here after posting.</div>
           </div>
+        </div>
+      </div>
 
-          <!-- Placeholder: Budget & Finance -->
-          <div style="background: white; padding: 20px; border-radius: 12px; border-left: 4px solid var(--gray-300); box-shadow: 0 2px 8px rgba(0,0,0,0.06); opacity: 0.6;">
-            <div style="font-size: 32px; margin-bottom: 12px;">💰</div>
-            <h3 style="margin: 0 0 8px; font-size: 16px; font-weight: 700; color: var(--gray-800);">Annual Budget Report</h3>
-            <p style="margin: 8px 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
-              Transparent information on city government spending and financial plans.
-            </p>
-            <div style="display: flex; gap: 8px; margin-top: 14px;">
-              <button onclick="alert('Coming soon')" style="flex: 1; padding: 8px 12px; background: var(--gray-300); color: var(--muted); border: none; border-radius: 6px; cursor: not-allowed; font-weight: 600; font-size: 13px;">Coming Soon</button>
+      <!-- FAQ Section -->
+      <div id="faq" class="section">
+        <div class="section-header">
+          <h2>❓ Frequently Asked Questions</h2>
+          <p style="margin: 8px 0 0; font-size: 13px; color: var(--muted); font-weight: 500;">Answers to common questions from Valenzuela citizens</p>
+        </div>
+        <div class="section-divider"></div>
+
+        <div style="max-width: 900px;">
+          <!-- FAQ Items -->
+          <div style="display: grid; gap: 16px;">
+            <!-- What is Public Consultation -->
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+              <div style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;" onclick="toggleFAQ(this)">
+                <div style="font-size: 20px; flex-shrink: 0;">📌</div>
+                <div style="flex: 1;">
+                  <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--gray-800);">What is Public Consultation?</h3>
+                </div>
+                <div style="font-size: 18px; color: var(--muted); flex-shrink: 0;">▼</div>
+              </div>
+              <div style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-200); color: var(--gray-700); line-height: 1.6; font-size: 14px;">
+                Public Consultation is a formal process where the City Government of Valenzuela seeks input and feedback from citizens on important policies, programs, and projects. It ensures that your voice is heard in government decision-making and helps create solutions that truly reflect community needs.
+              </div>
+            </div>
+
+            <!-- How do I participate -->
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+              <div style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;" onclick="toggleFAQ(this)">
+                <div style="font-size: 20px; flex-shrink: 0;">🎯</div>
+                <div style="flex: 1;">
+                  <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--gray-800);">How do I participate in consultations?</h3>
+                </div>
+                <div style="font-size: 18px; color: var(--muted); flex-shrink: 0;">▼</div>
+              </div>
+              <div style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-200); color: var(--gray-700); line-height: 1.6; font-size: 14px;">
+                <ol style="margin: 0; padding-left: 20px;">
+                  <li>Log in to the PCMP portal with your account</li>
+                  <li>Navigate to the "Announcements" or "Consultations" section</li>
+                  <li>Find active consultations in your area of interest</li>
+                  <li>Read the consultation details and share your feedback or concerns</li>
+                  <li>Monitor responses and updates from the government</li>
+                </ol>
+              </div>
+            </div>
+
+            <!-- What can I do on this portal -->
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+              <div style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;" onclick="toggleFAQ(this)">
+                <div style="font-size: 20px; flex-shrink: 0;">🔧</div>
+                <div style="flex: 1;">
+                  <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--gray-800);">What features does PCMP offer?</h3>
+                </div>
+                <div style="font-size: 18px; color: var(--muted); flex-shrink: 0;">▼</div>
+              </div>
+              <div style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-200); color: var(--gray-700); line-height: 1.6; font-size: 14px;">
+                <ul style="margin: 0; padding-left: 20px;">
+                  <li><strong>Dashboard:</strong> Get an overview of active consultations and latest updates</li>
+                  <li><strong>Announcements:</strong> Stay informed with city government news and updates</li>
+                  <li><strong>Consultations:</strong> Participate in ongoing public consultations</li>
+                  <li><strong>Post Suggestions:</strong> Share your ideas and concerns with the government</li>
+                  <li><strong>Documents:</strong> Access important city documents like the Citizen Charter</li>
+                  <li><strong>Notifications:</strong> Receive updates on consultations you're interested in</li>
+                </ul>
+              </div>
+            </div>
+
+            <!-- Who can register -->
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+              <div style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;" onclick="toggleFAQ(this)">
+                <div style="font-size: 20px; flex-shrink: 0;">👤</div>
+                <div style="flex: 1;">
+                  <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--gray-800);">Who can register and participate?</h3>
+                </div>
+                <div style="font-size: 18px; color: var(--muted); flex-shrink: 0;">▼</div>
+              </div>
+              <div style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-200); color: var(--gray-700); line-height: 1.6; font-size: 14px;">
+                Any Filipino citizen, 18 years and older, can register and participate in public consultations on the PCMP portal. You just need a valid email address and password. Non-residents can also participate in consultations that affect the broader community or specific interests.
+              </div>
+            </div>
+
+            <!-- Privacy and data security -->
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+              <div style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;" onclick="toggleFAQ(this)">
+                <div style="font-size: 20px; flex-shrink: 0;">🔒</div>
+                <div style="flex: 1;">
+                  <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--gray-800);">Is my data and feedback private?</h3>
+                </div>
+                <div style="font-size: 18px; color: var(--muted); flex-shrink: 0;">▼</div>
+              </div>
+              <div style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-200); color: var(--gray-700); line-height: 1.6; font-size: 14px;">
+                Yes, your personal information is protected and kept confidential. Your feedback and comments submitted during consultations are recorded and used only for government analysis and decision-making. The City Government complies with all data protection laws and regulations. Your name may appear publicly if you submit feedback in certain consultation types, but this can be controlled in your Settings.
+              </div>
+            </div>
+
+            <!-- How feedback is used -->
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+              <div style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;" onclick="toggleFAQ(this)">
+                <div style="font-size: 20px; flex-shrink: 0;">📊</div>
+                <div style="flex: 1;">
+                  <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--gray-800);">How is my feedback used?</h3>
+                </div>
+                <div style="font-size: 18px; color: var(--muted); flex-shrink: 0;">▼</div>
+              </div>
+              <div style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-200); color: var(--gray-700); line-height: 1.6; font-size: 14px;">
+                Your feedback is compiled and analyzed by the appropriate government department or agency. Results are presented to decision-makers and used to shape policies, programs, and projects. You may be notified of outcomes and how your feedback contributed to the final decision. Detailed reports are made public to ensure transparency.
+              </div>
+            </div>
+
+            <!-- Technical requirements -->
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+              <div style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;" onclick="toggleFAQ(this)">
+                <div style="font-size: 20px; flex-shrink: 0;">💻</div>
+                <div style="flex: 1;">
+                  <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--gray-800);">What are the technical requirements?</h3>
+                </div>
+                <div style="font-size: 18px; color: var(--muted); flex-shrink: 0;">▼</div>
+              </div>
+              <div style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-200); color: var(--gray-700); line-height: 1.6; font-size: 14px;">
+                PCMP works on any modern web browser (Chrome, Firefox, Safari, Edge) on desktop or mobile. You need a stable internet connection and JavaScript enabled. We recommend the latest browser version for best performance. If you have technical issues, contact our support team through the Help section.
+              </div>
+            </div>
+
+            <!-- What is the Valenzuela Citizen Charter -->
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+              <div style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;" onclick="toggleFAQ(this)">
+                <div style="font-size: 20px; flex-shrink: 0;">📜</div>
+                <div style="flex: 1;">
+                  <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--gray-800);">What is the Valenzuela Citizen Charter?</h3>
+                </div>
+                <div style="font-size: 18px; color: var(--muted); flex-shrink: 0;">▼</div>
+              </div>
+              <div style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-200); color: var(--gray-700); line-height: 1.6; font-size: 14px;">
+                The Valenzuela Citizen Charter is a commitment by the City Government to provide quality public services to its citizens. It outlines the rights and responsibilities of both citizens and the government. The charter establishes service standards, complaint resolution mechanisms, and accountability measures. You can view and download the full document from the Documents section.
+              </div>
+            </div>
+
+            <!-- How to report issues -->
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+              <div style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;" onclick="toggleFAQ(this)">
+                <div style="font-size: 20px; flex-shrink: 0;">⚠️</div>
+                <div style="flex: 1;">
+                  <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--gray-800);">How do I report a problem or suggest improvements?</h3>
+                </div>
+                <div style="font-size: 18px; color: var(--muted); flex-shrink: 0;">▼</div>
+              </div>
+              <div style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-200); color: var(--gray-700); line-height: 1.6; font-size: 14px;">
+                <p style="margin: 0 0 10px;">You can:</p>
+                <ul style="margin: 0; padding-left: 20px;">
+                  <li>Post a public suggestion on the Dashboard</li>
+                  <li>Contact the City Government directly with specific issues</li>
+                  <li>Use the feedback form in active consultations</li>
+                  <li>Email support: pcmp@valenzuela.gov.ph</li>
+                </ul>
+              </div>
+            </div>
+
+            <!-- Moderation and appropriate behavior -->
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+              <div style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;" onclick="toggleFAQ(this)">
+                <div style="font-size: 20px; flex-shrink: 0;">🚫</div>
+                <div style="flex: 1;">
+                  <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--gray-800);">What behavior is not allowed on PCMP?</h3>
+                </div>
+                <div style="font-size: 18px; color: var(--muted); flex-shrink: 0;">▼</div>
+              </div>
+              <div style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-200); color: var(--gray-700); line-height: 1.6; font-size: 14px;">
+                <p style="margin: 0 0 10px;">To keep the portal respectful and productive, the following are not allowed:</p>
+                <ul style="margin: 0; padding-left: 20px;">
+                  <li>Offensive, abusive, or hateful language</li>
+                  <li>Spam, harassment, or threats</li>
+                  <li>Sharing of false or misleading information</li>
+                  <li>Commercial promotion or advertising</li>
+                  <li>Violation of others' privacy or intellectual property</li>
+                </ul>
+                <p style="margin: 10px 0 0;">Violations may result in account suspension or removal of content.</p>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       <!-- Settings Section -->
-      <div id="settings">
+      <div id="settings" class="section">
         <div class="section-header">
           <h2>⚙️ Settings</h2>
         </div>
@@ -1246,7 +1442,7 @@ if ($current_role === 'admin') {
               // Fallback to localStorage
               const suggestion = {
                 id: 'sug_' + Date.now(),
-                author: 'You',
+                author: CURRENT_USER_FULLNAME,
                 text: text,
                 timestamp: Date.now(),
                 supports: [],
@@ -1262,7 +1458,7 @@ if ($current_role === 'admin') {
             console.warn('Server post failed, using localStorage', err);
             const suggestion = {
               id: 'sug_' + Date.now(),
-              author: 'You',
+              author: CURRENT_USER_FULLNAME,
               text: text,
               timestamp: Date.now(),
               supports: [],
@@ -1280,6 +1476,86 @@ if ($current_role === 'admin') {
     }
 
     function resetPostForm() { clearPostInput(); }
+
+    function postConsultationFeedback() {
+      const input = document.getElementById('consultation-input');
+      const text = input ? input.value.trim() : '';
+      if (!text) { alert('Please write your feedback before submitting.'); return; }
+
+      // Try server-side post creation first
+      try {
+        const form = new FormData();
+        form.append('content', text);
+        fetch('create_post.php', { method: 'POST', body: form })
+          .then(res => res.json())
+          .then(json => {
+            if (json && json.success) {
+              // Reload posts from server
+              loadServerPosts();
+              if (input) input.value = '';
+              alert('Your feedback has been submitted successfully!');
+            } else {
+              // Fallback to localStorage
+              const feedback = {
+                id: 'con_' + Date.now(),
+                author: CURRENT_USER_FULLNAME,
+                text: text,
+                timestamp: Date.now(),
+                type: 'consultation',
+                status: 'submitted'
+              };
+              const consultations = JSON.parse(localStorage.getItem('consultations') || '[]');
+              consultations.push(feedback);
+              localStorage.setItem('consultations', JSON.stringify(consultations));
+              if (input) input.value = '';
+              alert('Your feedback has been submitted successfully!');
+              loadConsultationFeedback();
+            }
+          }).catch(err => {
+            console.warn('Server submission failed, using localStorage', err);
+            const feedback = {
+              id: 'con_' + Date.now(),
+              author: CURRENT_USER_FULLNAME,
+              text: text,
+              timestamp: Date.now(),
+              type: 'consultation',
+              status: 'submitted'
+            };
+            const consultations = JSON.parse(localStorage.getItem('consultations') || '[]');
+            consultations.push(feedback);
+            localStorage.setItem('consultations', JSON.stringify(consultations));
+            if (input) input.value = '';
+            alert('Your feedback has been submitted successfully!');
+            loadConsultationFeedback();
+          });
+      } catch (e) {
+        console.warn('Error submitting consultation feedback', e);
+      }
+    }
+
+    function loadConsultationFeedback() {
+      const feed = document.getElementById('consultations-feed');
+      if (!feed) return;
+
+      const consultations = JSON.parse(localStorage.getItem('consultations') || '[]');
+
+      if (consultations.length === 0) {
+        feed.innerHTML = '<div class="empty-state">No submissions yet. Your feedback will appear here after posting.</div>';
+        return;
+      }
+
+      feed.innerHTML = consultations.slice().reverse().map(con => `
+        <div class="suggestion-card" style="background: white; padding: 16px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+            <div style="font-weight: 700; color: var(--gray-800);">${con.author || 'You'}</div>
+            <span style="background: var(--red-100, #fee2e2); color: var(--red-700); padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">${con.status || 'Pending'}</span>
+          </div>
+          <div style="color: var(--gray-700); margin-bottom: 8px; line-height: 1.5;">${escapeHtml(con.text)}</div>
+          <div style="color: var(--muted); font-size: 12px;">${new Date(con.timestamp).toLocaleDateString()} at ${new Date(con.timestamp).toLocaleTimeString()}</div>
+        </div>
+      `).join('');
+    }
+
 
     function loadSuggestions() {
       const feed = document.getElementById('suggestions-feed');
@@ -1369,16 +1645,24 @@ if ($current_role === 'admin') {
       }
     }
 
+    // FAQ Toggle Function
+    function toggleFAQ(element) {
+      const answer = element.nextElementSibling;
+      if (!answer) return;
+      
+      const isVisible = answer.style.display !== 'none';
+      answer.style.display = isVisible ? 'none' : 'block';
+    }
+
     function addSuggestionComment(id) {
       const input = document.getElementById('comment-sug-' + id);
       if (!input || !input.value.trim()) return;
-
       const suggestions = getSuggestions();
       const sug = suggestions.find(s => s.id === id);
       if (!sug) return;
 
       sug.comments.push({
-        author: 'You',
+        author: CURRENT_USER_FULLNAME,
         text: input.value.trim(),
         timestamp: Date.now()
       });
@@ -1439,6 +1723,16 @@ if ($current_role === 'admin') {
         overlay.style.display = 'block';
         if(btn) btn.setAttribute('aria-expanded', 'true');
       } else {
+        overlay.classList.remove('active');
+        overlay.style.display = 'none';
+        if(btn) btn.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    function closeMenu(){
+      const overlay = document.getElementById('overlay-menu');
+      const btn = document.getElementById('menu-btn');
+      if(overlay && overlay.classList.contains('active')){
         overlay.classList.remove('active');
         overlay.style.display = 'none';
         if(btn) btn.setAttribute('aria-expanded', 'false');
@@ -1527,9 +1821,10 @@ if ($current_role === 'admin') {
       document.querySelector(`input[name="theme"][value="${isDark ? 'dark' : 'light'}"]`).checked = true;
     });
 
-    // Initial stats update & load suggestions
+    // Initial stats update & load suggestions from SERVER (not localStorage!)
     updateStats();
-    loadSuggestions();
+    loadServerPosts();  // Load from database, not localStorage
+    loadConsultationFeedback();
     updateLanguage();  // Apply initial language
 
     // Update stats when announcements feed loads
@@ -1541,8 +1836,8 @@ if ($current_role === 'admin') {
       };
     }
 
-    // Auto-refresh suggestions every 5 seconds
-    setInterval(loadSuggestions, 5000);
+    // Auto-refresh posts from server every 5 seconds (get fresh data, not stale localStorage)
+    setInterval(loadServerPosts, 5000);
   </script>
 </body>
 </html>

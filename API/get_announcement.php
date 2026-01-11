@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once 'announcements.php';
+require_once __DIR__ . '/../announcements.php';
 header('Content-Type: application/json');
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;

@@ -4,7 +4,7 @@
  * Tracks all administrative actions: who did what and when
  */
 
-require 'db.php';
+require_once __DIR__ . '/../db.php';
 
 // ========================================
 // Initialize Audit Logs Table (if not exists)
@@ -217,6 +217,189 @@ function getAuditLogCount($filters = []) {
     if (!$stmt) {
         return 0;
     }
+    
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    $stmt->close();
+    
+    return $row['total'] ?? 0;
+}
+
+// ========================================
+// Get Admin Logs Only
+// ========================================
+function getAdminAuditLogs($limit = 100, $offset = 0, $filters = []) {
+    global $conn;
+    
+    $query = "SELECT * FROM audit_logs WHERE admin_id IS NOT NULL";
+    $params = [];
+    $types = "";
+    
+    // Filter by admin user
+    if (!empty($filters['admin_user'])) {
+        $query .= " AND admin_user LIKE ?";
+        $params[] = '%' . $filters['admin_user'] . '%';
+        $types .= "s";
+    }
+    
+    // Filter by action
+    if (!empty($filters['action'])) {
+        $query .= " AND action LIKE ?";
+        $params[] = '%' . $filters['action'] . '%';
+        $types .= "s";
+    }
+    
+    // Filter by entity type
+    if (!empty($filters['entity_type'])) {
+        $query .= " AND entity_type = ?";
+        $params[] = $filters['entity_type'];
+        $types .= "s";
+    }
+    
+    // Sort by newest first and limit
+    $query .= " ORDER BY timestamp DESC LIMIT ? OFFSET ?";
+    $params[] = $limit;
+    $params[] = $offset;
+    $types .= "ii";
+    
+    $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        error_log("Admin audit log query error: " . $conn->error);
+        return [];
+    }
+    
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $logs = $result->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    
+    return $logs;
+}
+
+// ========================================
+// Get User Activity Logs Only
+// ========================================
+function getUserActivityLogs($limit = 100, $offset = 0, $filters = []) {
+    global $conn;
+    
+    $query = "SELECT * FROM audit_logs WHERE (admin_id IS NULL OR action IN ('Posted Post', 'Posted Suggestion'))";
+    $params = [];
+    $types = "";
+    
+    // Filter by action
+    if (!empty($filters['action'])) {
+        $query .= " AND action LIKE ?";
+        $params[] = '%' . $filters['action'] . '%';
+        $types .= "s";
+    }
+    
+    // Filter by entity type
+    if (!empty($filters['entity_type'])) {
+        $query .= " AND entity_type = ?";
+        $params[] = $filters['entity_type'];
+        $types .= "s";
+    }
+    
+    // Sort by newest first and limit
+    $query .= " ORDER BY timestamp DESC LIMIT ? OFFSET ?";
+    $params[] = $limit;
+    $params[] = $offset;
+    $types .= "ii";
+    
+    $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        error_log("User activity log query error: " . $conn->error);
+        return [];
+    }
+    
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $logs = $result->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    
+    return $logs;
+}
+
+// ========================================
+// Get Count for Admin Logs
+// ========================================
+function getAdminAuditLogCount($filters = []) {
+    global $conn;
+    
+    $query = "SELECT COUNT(*) as total FROM audit_logs WHERE admin_id IS NOT NULL";
+    $params = [];
+    $types = "";
+    
+    if (!empty($filters['admin_user'])) {
+        $query .= " AND admin_user LIKE ?";
+        $params[] = '%' . $filters['admin_user'] . '%';
+        $types .= "s";
+    }
+    
+    if (!empty($filters['action'])) {
+        $query .= " AND action LIKE ?";
+        $params[] = '%' . $filters['action'] . '%';
+        $types .= "s";
+    }
+    
+    if (!empty($filters['entity_type'])) {
+        $query .= " AND entity_type = ?";
+        $params[] = $filters['entity_type'];
+        $types .= "s";
+    }
+    
+    $stmt = $conn->prepare($query);
+    if (!$stmt) return 0;
+    
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    $stmt->close();
+    
+    return $row['total'] ?? 0;
+}
+
+// ========================================
+// Get Count for User Activity Logs
+// ========================================
+function getUserActivityLogCount($filters = []) {
+    global $conn;
+    
+    $query = "SELECT COUNT(*) as total FROM audit_logs WHERE (admin_id IS NULL OR action IN ('Posted Post', 'Posted Suggestion'))";
+    $params = [];
+    $types = "";
+    
+    if (!empty($filters['action'])) {
+        $query .= " AND action LIKE ?";
+        $params[] = '%' . $filters['action'] . '%';
+        $types .= "s";
+    }
+    
+    if (!empty($filters['entity_type'])) {
+        $query .= " AND entity_type = ?";
+        $params[] = $filters['entity_type'];
+        $types .= "s";
+    }
+    
+    $stmt = $conn->prepare($query);
+    if (!$stmt) return 0;
     
     if (!empty($params)) {
         $stmt->bind_param($types, ...$params);

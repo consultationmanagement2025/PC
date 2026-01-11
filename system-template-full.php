@@ -1,19 +1,21 @@
 <?php
 session_start();
-require 'audit-log.php';
-require 'announcements.php';
-require 'posts.php';
-require 'notifications.php';
+require_once __DIR__ . '/DATABASE/audit-log.php';
+require_once __DIR__ . '/announcements.php';
+require_once __DIR__ . '/DATABASE/posts.php';
+require_once __DIR__ . '/DATABASE/notifications.php';
 // Use strtolower and trim to be safe
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
 
 if ($current_role !== 'admin') {
-    header('Location: login.php');
+    header('Location: /CAP101/PC/login.php');
     exit();
 }
 
 // Load audit logs for display
 $auditLogs = [];
+$adminLogs = [];
+$userLogs = [];
 $pageSize = 50;
 $page = isset($_GET['audit_page']) ? (int)$_GET['audit_page'] : 1;
 $offset = ($page - 1) * $pageSize;
@@ -23,6 +25,16 @@ if (!empty($_GET['filter_admin'])) $filters['admin_user'] = $_GET['filter_admin'
 if (!empty($_GET['filter_action'])) $filters['action'] = $_GET['filter_action'];
 if (!empty($_GET['filter_type'])) $filters['entity_type'] = $_GET['filter_type'];
 
+// Get both admin and user logs
+$adminLogs = getAdminAuditLogs($pageSize, $offset, $filters);
+$totalAdminLogs = getAdminAuditLogCount($filters);
+$totalAdminPages = ceil($totalAdminLogs / $pageSize);
+
+$userLogs = getUserActivityLogs($pageSize, $offset, $filters);
+$totalUserLogs = getUserActivityLogCount($filters);
+$totalUserPages = ceil($totalUserLogs / $pageSize);
+
+// Keep old variable for backwards compatibility
 $auditLogs = getAuditLogs($pageSize, $offset, $filters);
 $totalLogs = getAuditLogCount($filters);
 $totalPages = ceil($totalLogs / $pageSize);
@@ -80,7 +92,7 @@ $totalPages = ceil($totalLogs / $pageSize);
         // In production, this would check actual session/token
         if (!localStorage.getItem('isLoggedIn') && !sessionStorage.getItem('isLoggedIn')) {
             // Redirect to login if not logged in
-            window.location.href = 'login.php';
+            window.location.href = '/CAP101/PC/login.php';
         }
         
         // Clear sidebar collapsed state for fresh start (can be removed after testing)
@@ -154,19 +166,19 @@ $totalPages = ceil($totalLogs / $pageSize);
                 <p class="text-xs font-semibold text-red-300/80 uppercase tracking-wider">Public Consultation</p>
             </div>
 
-            <a href="#" onclick="showSection('public-consultation')" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1 bg-red-700">
+            <a href="#" onclick="switchSection('dashboard-section'); return false;" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1 bg-red-700">
                 <i class="bi bi-people-fill mr-3 text-lg"></i>
-                <span>Consultation Dashboard</span>
+                <span>Dashboard</span>
             </a>
-            <a href="#" onclick="showSection('consultation-management')" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
+            <a href="#" onclick="switchSection('consultation-management-section'); return false;" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
                 <i class="bi bi-journal-text mr-3 text-lg"></i>
                 <span>Consultation Management</span>
             </a>
-            <a href="#" onclick="showSection('feedback')" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
+            <a href="#" onclick="switchSection('feedback-management-section'); return false;" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
                 <i class="bi bi-chat-dots mr-3 text-lg"></i>
-                <span>Feedback Collection</span>
+                <span>Feedback Management</span>
             </a>
-            <a href="#" onclick="showSection('pc-documents')" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
+            <a href="#" onclick="switchSection('document-management-section'); return false;" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
                 <i class="bi bi-folder2-open mr-3 text-lg"></i>
                 <span>Document Management</span>
             </a>
@@ -175,15 +187,15 @@ $totalPages = ceil($totalLogs / $pageSize);
             <div class="mt-4 mb-2 px-4">
                 <p class="text-xs font-semibold text-red-300/80 uppercase tracking-wider">Administration</p>
             </div>
-            <a href="#" onclick="showSection('users')" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
+            <a href="#" onclick="switchSection('user-management-section'); return false;" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
                 <i class="bi bi-people mr-3 text-lg"></i>
                 <span>User Management</span>
             </a>
-            <a href="#" onclick="showSection('announcements')" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
+            <a href="#" onclick="switchSection('announcements-section'); return false;" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
                 <i class="bi bi-megaphone mr-3 text-lg"></i>
                 <span>Announcements</span>
             </a>
-            <a href="#" onclick="showSection('audit')" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
+            <a href="#" onclick="switchSection('audit-section'); return false;" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
                 <i class="bi bi-shield-check mr-3 text-lg"></i>
                 <span>Audit Log</span>
             </a>
@@ -239,19 +251,19 @@ $totalPages = ceil($totalLogs / $pageSize);
                     <div class="pt-2 pb-2 sidebar-text">
                         <p class="px-4 text-xs font-semibold text-red-300 uppercase tracking-wider">Public Consultation</p>
                     </div>
-                    <a href="#" onclick="showSection('public-consultation')" class="nav-item" data-section="public-consultation">
+                    <a href="#" onclick="switchSection('dashboard-section'); return false;" class="nav-item" data-section="dashboard-section">
                         <i class="bi bi-people-fill"></i>
-                        <span class="sidebar-text">Consultation Dashboard</span>
+                        <span class="sidebar-text">Dashboard</span>
                     </a>
-                    <a href="#" onclick="showSection('consultation-management')" class="nav-item" data-section="consultation-management">
+                    <a href="#" onclick="switchSection('consultation-management-section'); return false;" class="nav-item" data-section="consultation-management-section">
                         <i class="bi bi-journal-text"></i>
                         <span class="sidebar-text">Consultation Management</span>
                     </a>
-                    <a href="#" onclick="showSection('feedback')" class="nav-item" data-section="feedback">
+                    <a href="#" onclick="switchSection('feedback-management-section'); return false;" class="nav-item" data-section="feedback-management-section">
                         <i class="bi bi-chat-dots"></i>
-                        <span class="sidebar-text">Feedback Collection</span>
+                        <span class="sidebar-text">Feedback Management</span>
                     </a>
-                    <a href="#" onclick="showSection('pc-documents')" class="nav-item" data-section="pc-documents">
+                    <a href="#" onclick="switchSection('document-management-section'); return false;" class="nav-item" data-section="document-management-section">
                         <i class="bi bi-folder2-open"></i>
                         <span class="sidebar-text">Document Management</span>
                     </a>
@@ -260,15 +272,15 @@ $totalPages = ceil($totalLogs / $pageSize);
                     <div class="pt-4 pb-2 sidebar-text">
                         <p class="px-4 text-xs font-semibold text-red-300 uppercase tracking-wider">Administration</p>
                     </div>
-                    <a href="#" onclick="showSection('users')" class="nav-item" data-section="users">
+                    <a href="#" onclick="switchSection('user-management-section'); return false;" class="nav-item" data-section="user-management-section">
                         <i class="bi bi-people"></i>
                         <span class="sidebar-text">User Management</span>
                     </a>
-                    <a href="#" onclick="showSection('announcements')" class="nav-item" data-section="announcements">
+                    <a href="#" onclick="switchSection('announcements-section'); return false;" class="nav-item" data-section="announcements-section">
                         <i class="bi bi-megaphone"></i>
                         <span class="sidebar-text">Announcements</span>
                     </a>
-                    <a href="#" onclick="showSection('audit')" class="nav-item" data-section="audit">
+                    <a href="#" onclick="switchSection('audit-section'); return false;" class="nav-item" data-section="audit-section">
                         <i class="bi bi-shield-check"></i>
                         <span class="sidebar-text">Audit Log</span>
                     </a>
@@ -542,12 +554,24 @@ $totalPages = ceil($totalLogs / $pageSize);
                                 </form>
                             </div>
 
-                            <!-- Audit Logs Table -->
-                            <div class="overflow-x-auto">
-                                <?php if (empty($auditLogs)): ?>
+                            <!-- Tabs for Admin/User Logs -->
+                            <div class="mb-6 border-b border-gray-200">
+                                <div class="flex gap-0">
+                                    <button onclick="switchAuditTab('admin')" id="admin-tab-btn" class="px-6 py-3 font-medium text-gray-900 border-b-2 border-red-600 cursor-pointer hover:text-red-600">
+                                        <i class="bi bi-shield-lock-fill mr-2"></i>Admin Actions <span class="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded-full ml-2"><?php echo $totalAdminLogs; ?></span>
+                                    </button>
+                                    <button onclick="switchAuditTab('user')" id="user-tab-btn" class="px-6 py-3 font-medium text-gray-600 border-b-2 border-transparent cursor-pointer hover:text-gray-900">
+                                        <i class="bi bi-people-fill mr-2"></i>User Activity <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full ml-2"><?php echo $totalUserLogs; ?></span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Admin Actions Table -->
+                            <div id="admin-logs-section" class="overflow-x-auto">
+                                <?php if (empty($adminLogs)): ?>
                                     <div class="text-center py-12">
                                         <i class="bi bi-inbox text-5xl text-gray-300 block mb-3"></i>
-                                        <p class="text-gray-500 text-lg">No audit logs found</p>
+                                        <p class="text-gray-500 text-lg">No admin actions found</p>
                                     </div>
                                 <?php else: ?>
                                     <table class="w-full text-sm">
@@ -564,12 +588,12 @@ $totalPages = ceil($totalLogs / $pageSize);
                                             </tr>
                                         </thead>
                                         <tbody class="divide-y divide-gray-200">
-                                            <?php foreach ($auditLogs as $log): ?>
+                                            <?php foreach ($adminLogs as $log): ?>
                                                 <tr class="hover:bg-gray-50 transition-colors">
                                                     <td class="px-6 py-4 whitespace-nowrap text-gray-900 font-medium"><?php echo date('M d, Y H:i:s', strtotime($log['timestamp'])); ?></td>
                                                     <td class="px-6 py-4 whitespace-nowrap">
-                                                        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                            <i class="bi bi-person-fill"></i>
+                                                        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                                            <i class="bi bi-shield-fill"></i>
                                                             <?php echo htmlspecialchars($log['admin_user']); ?>
                                                         </span>
                                                     </td>
@@ -577,7 +601,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                         <?php
                                                             $actionColor = 'gray';
                                                             if (strpos(strtolower($log['action']), 'delete') !== false) $actionColor = 'red';
-                                                            elseif (strpos(strtolower($log['action']), 'create') !== false) $actionColor = 'green';
+                                                            elseif (strpos(strtolower($log['action']), 'create') !== false || strpos(strtolower($log['action']), 'post') !== false) $actionColor = 'green';
                                                             elseif (strpos(strtolower($log['action']), 'update') !== false) $actionColor = 'blue';
                                                             elseif (strpos(strtolower($log['action']), 'login') !== false) $actionColor = 'indigo';
                                                         ?>
@@ -611,6 +635,78 @@ $totalPages = ceil($totalLogs / $pageSize);
                                             <?php endforeach; ?>
                                         </tbody>
                                     </table>
+                                <?php endif; ?>
+                            </div>
+
+                            <!-- User Activity Table -->
+                            <div id="user-logs-section" class="overflow-x-auto" style="display: none;">
+                                <?php if (empty($userLogs)): ?>
+                                    <div class="text-center py-12">
+                                        <i class="bi bi-inbox text-5xl text-gray-300 block mb-3"></i>
+                                        <p class="text-gray-500 text-lg">No user activities found</p>
+                                    </div>
+                                <?php else: ?>
+                                    <table class="w-full text-sm">
+                                        <thead class="bg-gray-50 border-b border-gray-200">
+                                            <tr>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">Timestamp</th>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">User</th>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">Activity</th>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">Type</th>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">Entity ID</th>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">IP Address</th>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">Status</th>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-900">Details</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-gray-200">
+                                            <?php foreach ($userLogs as $log): ?>
+                                                <tr class="hover:bg-gray-50 transition-colors">
+                                                    <td class="px-6 py-4 whitespace-nowrap text-gray-900 font-medium"><?php echo date('M d, Y H:i:s', strtotime($log['timestamp'])); ?></td>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                            <i class="bi bi-person-fill"></i>
+                                                            <?php echo htmlspecialchars($log['admin_user']); ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <?php
+                                                            $actionColor = 'gray';
+                                                            if (strpos(strtolower($log['action']), 'post') !== false) $actionColor = 'purple';
+                                                            elseif (strpos(strtolower($log['action']), 'suggestion') !== false) $actionColor = 'indigo';
+                                                        ?>
+                                                        <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-<?php echo $actionColor; ?>-100 text-<?php echo $actionColor; ?>-800">
+                                                            <?php echo htmlspecialchars($log['action']); ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                                            <?php echo htmlspecialchars(ucfirst($log['entity_type'] ?? 'N/A')); ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-gray-600"><?php echo htmlspecialchars($log['entity_id'] ?? '-'); ?></td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-gray-600 font-mono text-xs"><?php echo htmlspecialchars($log['ip_address'] ?? '-'); ?></td>
+                                                    <td class="px-6 py-4 whitespace-nowrap">
+                                                        <?php
+                                                            $statusColor = $log['status'] === 'success' ? 'green' : 'red';
+                                                            $statusIcon = $log['status'] === 'success' ? 'check-circle-fill' : 'x-circle-fill';
+                                                        ?>
+                                                        <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-<?php echo $statusColor; ?>-100 text-<?php echo $statusColor; ?>-800">
+                                                            <i class="bi bi-<?php echo $statusIcon; ?>"></i>
+                                                            <?php echo ucfirst($log['status']); ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-6 py-4">
+                                                        <button onclick="showAuditDetails(<?php echo htmlspecialchars(json_encode($log)); ?>)" class="text-blue-600 hover:text-blue-800 font-medium text-sm">
+                                                            View
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                <?php endif; ?>
+                            </div>
 
                                     <!-- Pagination -->
                                     <div class="mt-6 flex items-center justify-between">
@@ -641,7 +737,179 @@ $totalPages = ceil($totalLogs / $pageSize);
                                             <?php endif; ?>
                                         </div>
                                     </div>
-                                <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- DASHBOARD SECTION -->
+                    <section id="dashboard-section" class="mb-6" style="display: none;">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <!-- Stats Cards -->
+                            <div class="bg-white rounded-lg shadow-sm p-6 border-l-4 border-red-600">
+                                <div class="text-gray-600 text-sm font-medium">Total Users</div>
+                                <div class="text-3xl font-bold text-gray-900 mt-2"><?php echo $totalUsers ?? 0; ?></div>
+                                <div class="text-gray-500 text-xs mt-2">Registered citizens</div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow-sm p-6 border-l-4 border-blue-600">
+                                <div class="text-gray-600 text-sm font-medium">User Posts</div>
+                                <div class="text-3xl font-bold text-gray-900 mt-2"><?php echo isset($allPosts) ? count($allPosts) : 0; ?></div>
+                                <div class="text-gray-500 text-xs mt-2">Total concerns submitted</div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow-sm p-6 border-l-4 border-green-600">
+                                <div class="text-gray-600 text-sm font-medium">Announcements</div>
+                                <div class="text-3xl font-bold text-gray-900 mt-2"><?php echo isset($allAnnouncements) ? count($allAnnouncements) : 0; ?></div>
+                                <div class="text-gray-500 text-xs mt-2">Active announcements</div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow-sm p-6 border-l-4 border-yellow-600">
+                                <div class="text-gray-600 text-sm font-medium">Audit Logs</div>
+                                <div class="text-3xl font-bold text-gray-900 mt-2"><?php echo isset($totalLogs) ? $totalLogs : 0; ?></div>
+                                <div class="text-gray-500 text-xs mt-2">System activities tracked</div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Dashboard Overview</h3>
+                            <p class="text-gray-600">Welcome to the admin dashboard. Use the menu on the left to manage different aspects of the system.</p>
+                        </div>
+                    </section>
+
+                    <!-- USER MANAGEMENT SECTION -->
+                    <section id="user-management-section" class="mb-6" style="display: none;">
+                        <div class="bg-white rounded-lg shadow-md p-6">
+                            <div class="flex justify-between items-center mb-6">
+                                <div>
+                                    <h2 class="text-2xl font-bold text-gray-900">User Management</h2>
+                                    <p class="text-gray-600 text-sm mt-1">Manage registered citizens and their accounts</p>
+                                </div>
+                            </div>
+                            
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-gray-50 border-b border-gray-200">
+                                        <tr>
+                                            <th class="px-6 py-3 text-left font-semibold text-gray-900">Name</th>
+                                            <th class="px-6 py-3 text-left font-semibold text-gray-900">Email</th>
+                                            <th class="px-6 py-3 text-left font-semibold text-gray-900">Role</th>
+                                            <th class="px-6 py-3 text-left font-semibold text-gray-900">Status</th>
+                                            <th class="px-6 py-3 text-left font-semibold text-gray-900">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-200">
+                                        <?php
+                                            $allUsers = isset($users) ? $users : [];
+                                            if (empty($allUsers)) {
+                                                echo '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No users found</td></tr>';
+                                            } else {
+                                                foreach ($allUsers as $u) {
+                                                    echo '<tr class="hover:bg-gray-50">';
+                                                    echo '<td class="px-6 py-4">' . htmlspecialchars($u['fullname'] ?? 'N/A') . '</td>';
+                                                    echo '<td class="px-6 py-4">' . htmlspecialchars($u['email'] ?? 'N/A') . '</td>';
+                                                    echo '<td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">' . htmlspecialchars($u['role'] ?? 'User') . '</span></td>';
+                                                    echo '<td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Active</span></td>';
+                                                    echo '<td class="px-6 py-4"><button class="text-blue-600 hover:text-blue-800 text-sm font-medium">View</button></td>';
+                                                    echo '</tr>';
+                                                }
+                                            }
+                                        ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- DOCUMENT MANAGEMENT SECTION -->
+                    <section id="document-management-section" class="mb-6" style="display: none;">
+                        <div class="bg-white rounded-lg shadow-md p-6">
+                            <div class="flex justify-between items-center mb-6">
+                                <div>
+                                    <h2 class="text-2xl font-bold text-gray-900">Document Management</h2>
+                                    <p class="text-gray-600 text-sm mt-1">Manage official documents and charters</p>
+                                </div>
+                                <button class="btn-primary px-4 py-2">Upload Document</button>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="border border-gray-200 rounded-lg p-4">
+                                    <div class="text-2xl mb-2">📋</div>
+                                    <h3 class="font-semibold text-gray-900">Valenzuela Citizen Charter</h3>
+                                    <p class="text-sm text-gray-600 mt-1">Rights and responsibilities of citizens</p>
+                                    <div class="mt-4 flex gap-2">
+                                        <button class="text-sm text-blue-600 hover:text-blue-800">View</button>
+                                        <button class="text-sm text-red-600 hover:text-red-800">Delete</button>
+                                    </div>
+                                </div>
+                                
+                                <div class="border border-gray-200 rounded-lg p-4 opacity-60">
+                                    <div class="text-2xl mb-2">⚖️</div>
+                                    <h3 class="font-semibold text-gray-900">City Ordinances</h3>
+                                    <p class="text-sm text-gray-600 mt-1">Local laws and regulations</p>
+                                    <div class="mt-4"><span class="text-xs text-gray-500">Coming soon</span></div>
+                                </div>
+                                
+                                <div class="border border-gray-200 rounded-lg p-4 opacity-60">
+                                    <div class="text-2xl mb-2">💰</div>
+                                    <h3 class="font-semibold text-gray-900">Budget Reports</h3>
+                                    <p class="text-sm text-gray-600 mt-1">Annual finance information</p>
+                                    <div class="mt-4"><span class="text-xs text-gray-500">Coming soon</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- CONSULTATION MANAGEMENT SECTION -->
+                    <section id="consultation-management-section" class="mb-6" style="display: none;">
+                        <div class="bg-white rounded-lg shadow-md p-6">
+                            <div class="flex justify-between items-center mb-6">
+                                <div>
+                                    <h2 class="text-2xl font-bold text-gray-900">Consultation Management</h2>
+                                    <p class="text-gray-600 text-sm mt-1">Create and manage public consultations</p>
+                                </div>
+                                <button class="btn-primary px-4 py-2">Create Consultation</button>
+                            </div>
+                            
+                            <div class="space-y-4">
+                                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
+                                    <div class="flex justify-between items-start">
+                                        <div class="flex-1">
+                                            <h3 class="font-semibold text-gray-900">Sample Consultation Topic</h3>
+                                            <p class="text-sm text-gray-600 mt-1">Description of the consultation topic</p>
+                                            <div class="mt-3 flex gap-2">
+                                                <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Active</span>
+                                                <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">5 Responses</span>
+                                            </div>
+                                        </div>
+                                        <button class="text-gray-600 hover:text-gray-900">⋯</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- FEEDBACK MANAGEMENT SECTION -->
+                    <section id="feedback-management-section" class="mb-6" style="display: none;">
+                        <div class="bg-white rounded-lg shadow-md p-6">
+                            <div class="flex justify-between items-center mb-6">
+                                <div>
+                                    <h2 class="text-2xl font-bold text-gray-900">Feedback Management</h2>
+                                    <p class="text-gray-600 text-sm mt-1">Review and respond to user feedback</p>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-4">
+                                <div class="border border-gray-200 rounded-lg p-4">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <div>
+                                            <h3 class="font-semibold text-gray-900">Sample Feedback</h3>
+                                            <p class="text-sm text-gray-600 mt-1">Feedback content goes here</p>
+                                        </div>
+                                        <span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Pending</span>
+                                    </div>
+                                    <div class="mt-3 flex gap-2">
+                                        <button class="btn-secondary text-sm px-3 py-1">Respond</button>
+                                        <button class="text-sm text-gray-600 hover:text-gray-900">Archive</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -1029,6 +1297,130 @@ $totalPages = ceil($totalLogs / $pageSize);
             
             console.log('Mobile sidebar toggle initialized');
         })();
+
+        // ========================================
+        // Section Switching Functionality
+        // ========================================
+        function switchSection(sectionId) {
+            // Hide all sections
+            const sections = document.querySelectorAll('section');
+            sections.forEach(section => {
+                section.style.display = 'none';
+            });
+            
+            // Show selected section
+            const selectedSection = document.getElementById(sectionId);
+            if (selectedSection) {
+                selectedSection.style.display = 'block';
+            }
+            
+            // Close mobile sidebar if open
+            const sidebarOverlay = document.getElementById('sidebar-overlay');
+            const mobileNav = document.getElementById('mobile-nav');
+            if (sidebarOverlay && mobileNav) {
+                sidebarOverlay.classList.remove('active');
+                mobileNav.classList.remove('active');
+            }
+        }
+
+        // ========================================
+        // Audit Log Tabs Functionality
+        // ========================================
+        function switchAuditTab(tab) {
+            const adminBtn = document.getElementById('admin-tab-btn');
+            const userBtn = document.getElementById('user-tab-btn');
+            const adminSection = document.getElementById('admin-logs-section');
+            const userSection = document.getElementById('user-logs-section');
+
+            if (tab === 'admin') {
+                // Show admin logs
+                adminSection.style.display = 'block';
+                userSection.style.display = 'none';
+                
+                // Update button styles
+                adminBtn.classList.add('text-gray-900', 'border-red-600');
+                adminBtn.classList.remove('text-gray-600', 'border-transparent');
+                userBtn.classList.add('text-gray-600', 'border-transparent');
+                userBtn.classList.remove('text-gray-900', 'border-red-600');
+            } else if (tab === 'user') {
+                // Show user logs
+                adminSection.style.display = 'none';
+                userSection.style.display = 'block';
+                
+                // Update button styles
+                userBtn.classList.add('text-gray-900', 'border-red-600');
+                userBtn.classList.remove('text-gray-600', 'border-transparent');
+                adminBtn.classList.add('text-gray-600', 'border-transparent');
+                adminBtn.classList.remove('text-gray-900', 'border-red-600');
+            }
+        }
+
+        // ========================================
+        // Show Audit Log Details Modal
+        // ========================================
+        function showAuditDetails(log) {
+            const modal = document.getElementById('audit-modal');
+            const detailsDiv = document.getElementById('audit-details');
+            
+            if (!modal || !detailsDiv) return;
+
+            // Build HTML for the details
+            const detailsHTML = `
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm font-semibold text-gray-600">Timestamp</label>
+                        <p class="text-gray-900">${new Date(log.timestamp).toLocaleString()}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm font-semibold text-gray-600">Status</label>
+                        <p class="text-gray-900">
+                            <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${log.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                ${log.status || 'Unknown'}
+                            </span>
+                        </p>
+                    </div>
+                    <div>
+                        <label class="text-sm font-semibold text-gray-600">Admin/User</label>
+                        <p class="text-gray-900">${log.admin_user || 'System'}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm font-semibold text-gray-600">Action</label>
+                        <p class="text-gray-900">${log.action || 'N/A'}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm font-semibold text-gray-600">Entity Type</label>
+                        <p class="text-gray-900">${log.entity_type || 'N/A'}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm font-semibold text-gray-600">Entity ID</label>
+                        <p class="text-gray-900">${log.entity_id || 'N/A'}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm font-semibold text-gray-600">IP Address</label>
+                        <p class="text-gray-900 font-mono text-sm">${log.ip_address || 'N/A'}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm font-semibold text-gray-600">User Agent</label>
+                        <p class="text-gray-900 text-sm break-words">${log.user_agent || 'N/A'}</p>
+                    </div>
+                </div>
+                ${log.details ? `<div class="mt-4"><label class="text-sm font-semibold text-gray-600">Details</label><p class="text-gray-900 mt-2 p-3 bg-gray-50 rounded">${log.details}</p></div>` : ''}
+            `;
+
+            detailsDiv.innerHTML = detailsHTML;
+
+            // Show modal
+            modal.style.display = 'flex';
+            modal.style.alignItems = 'center';
+            modal.style.justifyContent = 'center';
+        }
+
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
     </script>
 </body>
 </html>
