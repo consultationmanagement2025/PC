@@ -2,6 +2,7 @@
 session_start();
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../DATABASE/audit-log.php';
+require_once __DIR__ . '/../DATABASE/user-logs.php';
 
 $error = "";
 
@@ -25,26 +26,33 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $_SESSION['role'] = $user['role'] ?? 'citizen'; // Default to citizen if role is NULL
                 session_regenerate_id(true);
                 
-                // Log admin login
-                if (($user['role'] ?? 'citizen') === 'admin') {
+                // Log user login
+                $userRole = $user['role'] ?? 'citizen';
+                logUserAction($user['id'], $user['fullname'], 'login', 'authentication', 'user', $user['id'], 'User logged in', 'success');
+                
+                // Log admin login in audit log
+                if ($userRole === 'admin') {
                     logAdminLogin($user['id'], $user['fullname']);
                 }
                 
                 // Redirect based on user role
-                $role = $user['role'] ?? 'citizen';
-                $redirectUrl = ($role === 'admin') ? "system-template-full.php" : "user-portal.php";
+                $redirectUrl = ($userRole === 'admin') ? "system-template-full.php" : "user-portal.php";
 
                 echo "<script>
                     localStorage.setItem('isLoggedIn', 'true');
-                    localStorage.setItem('role', '" . addslashes($role) . "');
+                    localStorage.setItem('role', '" . addslashes($userRole) . "');
                     window.location.href = '$redirectUrl';
                 </script>";
                 exit();
             } else {
                 $error = "Invalid password";
+                // Log failed login attempt
+                logUserAction(null, $email, 'login', 'authentication', 'user', null, 'Failed login attempt', 'failure');
             }
         } else {
             $error = "Email not found";
+            // Log failed login attempt
+            logUserAction(null, $email, 'login', 'authentication', 'user', null, 'Login attempt with unknown email', 'failure');
         }
     }
 }

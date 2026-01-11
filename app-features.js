@@ -269,9 +269,6 @@ function showSection(sectionName) {
             case 'audit':
                 renderAudit();
                 break;
-            case 'user-logs':
-                renderUserLogs();
-                break;
             case 'profile':
                 renderProfile();
                 break;
@@ -848,248 +845,112 @@ function clearAdvancedSearch() {
 // ANALYTICS MODULE
 // ==============================
 function renderAnalytics() {
-    const pageTitle = document.querySelector('.page-title');
-    const breadcrumbCurrent = document.querySelector('.breadcrumb-current');
-    
-    if (pageTitle) pageTitle.textContent = 'Analytics & Reports';
-    if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'Analytics & Reports';
-    
-    const contentArea = document.getElementById('content-area');
-    contentArea.innerHTML = '<div class="text-center py-8"><i class="bi bi-hourglass text-4xl text-gray-400 mb-4"></i><p class="text-gray-500">Loading analytics...</p></div>';
-    
-    // Fetch real analytics data
-    fetch('API/analytics_api.php')
-        .then(response => response.json())
-        .then(result => {
-            if (!result.success) {
-                contentArea.innerHTML = '<div class="text-red-600">Error loading analytics</div>';
-                return;
-            }
-            
-            const data = result.data;
-            const users = data.users || {};
-            const posts = data.posts || {};
-            
-            const html = `
-                <div class="space-y-6">
-                    <!-- Header -->
-                    <div class="mb-6">
-                        <h1 class="text-3xl font-bold text-gray-800">Analytics & Reports</h1>
-                        <p class="text-gray-600 mt-1">System activity and engagement metrics</p>
+    const html = `
+        <div class="mb-6 animate-fade-in">
+            <h1 class="text-2xl font-bold text-gray-800">Reports & Analytics</h1>
+            <p class="text-gray-600 mt-1">View detailed reports and statistics</p>
+        </div>
+
+        <!-- Analytics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in-up animation-delay-100">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-gray-800">Monthly Uploads</h3>
+                    <i class="bi bi-graph-up text-2xl text-red-600"></i>
+                </div>
+                <p class="text-3xl font-bold text-gray-900">24</p>
+                <p class="text-sm text-green-600 mt-2"><i class="bi bi-arrow-up mr-1"></i>12% from last month</p>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in-up animation-delay-200">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-gray-800">Total Views</h3>
+                    <i class="bi bi-eye text-2xl text-blue-600"></i>
+                </div>
+                <p class="text-3xl font-bold text-gray-900">1,234</p>
+                <p class="text-sm text-green-600 mt-2"><i class="bi bi-arrow-up mr-1"></i>8% from last month</p>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in-up animation-delay-300">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-gray-800">Total Downloads</h3>
+                    <i class="bi bi-download text-2xl text-green-600"></i>
+                </div>
+                <p class="text-3xl font-bold text-gray-900">567</p>
+                <p class="text-sm text-red-600 mt-2"><i class="bi bi-arrow-down mr-1"></i>3% from last month</p>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in-up animation-delay-400">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">Documents Over Time</h3>
+                <canvas id="documentsOverTimeChart"></canvas>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in-up animation-delay-500">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">Documents by Status</h3>
+                <canvas id="documentsByStatusChart"></canvas>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in-up animation-delay-600">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">Top Uploaders</h3>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mr-3">
+                                <span class="text-red-600 font-bold">AU</span>
+                            </div>
+                            <span class="text-gray-800">Admin User</span>
+                        </div>
+                        <span class="text-gray-600 font-medium">12 documents</span>
                     </div>
-
-                    <!-- Main Statistics Cards -->
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 shadow">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <p class="text-blue-600 text-sm font-semibold mb-1">Total Users</p>
-                                    <p class="text-3xl font-bold text-gray-900">${users.total_users || 0}</p>
-                                    <p class="text-xs text-blue-600 mt-2">+${users.new_users_30d || 0} this month</p>
-                                </div>
-                                <i class="bi bi-people text-3xl text-blue-600 opacity-20"></i>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3">
+                                <span class="text-blue-600 font-bold">OS</span>
                             </div>
+                            <span class="text-gray-800">Officer Smith</span>
                         </div>
-
-                        <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 shadow">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <p class="text-green-600 text-sm font-semibold mb-1">Total Posts</p>
-                                    <p class="text-3xl font-bold text-gray-900">${posts.total_posts || 0}</p>
-                                    <p class="text-xs text-green-600 mt-2">+${posts.posts_30d || 0} this month</p>
-                                </div>
-                                <i class="bi bi-chat-dots text-3xl text-green-600 opacity-20"></i>
-                            </div>
-                        </div>
-
-                        <div class="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-6 shadow">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <p class="text-yellow-600 text-sm font-semibold mb-1">Active Users</p>
-                                    <p class="text-3xl font-bold text-gray-900">${users.active_users || 0}</p>
-                                    <p class="text-xs text-yellow-600 mt-2">${users.total_users ? Math.round((users.active_users / users.total_users) * 100) : 0}% of total</p>
-                                </div>
-                                <i class="bi bi-activity text-3xl text-yellow-600 opacity-20"></i>
-                            </div>
-                        </div>
-
-                        <div class="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-6 shadow">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <p class="text-red-600 text-sm font-semibold mb-1">Pending Posts</p>
-                                    <p class="text-3xl font-bold text-gray-900">${posts.pending_posts || 0}</p>
-                                    <p class="text-xs text-red-600 mt-2">Awaiting approval</p>
-                                </div>
-                                <i class="bi bi-exclamation-circle text-3xl text-red-600 opacity-20"></i>
-                            </div>
-                        </div>
+                        <span class="text-gray-600 font-medium">8 documents</span>
                     </div>
-
-                    <!-- Charts Section -->
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <!-- Posts Trend -->
-                        <div class="bg-white rounded-lg shadow p-6">
-                            <h3 class="text-lg font-bold text-gray-800 mb-4">Posts Activity (Last 30 Days)</h3>
-                            <canvas id="postsChart"></canvas>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mr-3">
+                                <span class="text-green-600 font-bold">SJ</span>
+                            </div>
+                            <span class="text-gray-800">Staff Jones</span>
                         </div>
-
-                        <!-- Post Status Distribution -->
-                        <div class="bg-white rounded-lg shadow p-6">
-                            <h3 class="text-lg font-bold text-gray-800 mb-4">Posts by Status</h3>
-                            <canvas id="statusChart"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Additional Charts -->
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <!-- User Registrations -->
-                        <div class="bg-white rounded-lg shadow p-6">
-                            <h3 class="text-lg font-bold text-gray-800 mb-4">User Registrations (Last 30 Days)</h3>
-                            <canvas id="usersChart"></canvas>
-                        </div>
-
-                        <!-- Top Contributors -->
-                        <div class="bg-white rounded-lg shadow p-6">
-                            <h3 class="text-lg font-bold text-gray-800 mb-4">Top 5 Contributors</h3>
-                            <div class="space-y-3">
-                                ${(data.top_users || []).map(user => `
-                                    <div class="flex items-center justify-between pb-3 border-b border-gray-100 last:border-0">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                                                <span class="text-red-600 font-bold text-sm">${user.username.substring(0, 2).toUpperCase()}</span>
-                                            </div>
-                                            <div>
-                                                <p class="font-medium text-gray-800">${user.username}</p>
-                                                <p class="text-xs text-gray-500">Post contributor</p>
-                                            </div>
-                                        </div>
-                                        <span class="bg-red-100 text-red-600 px-3 py-1 rounded-full text-sm font-semibold">${user.post_count}</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Summary Stats -->
-                    <div class="bg-white rounded-lg shadow p-6">
-                        <h3 class="text-lg font-bold text-gray-800 mb-4">Summary</h3>
-                        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-                            <div class="text-center">
-                                <p class="text-2xl font-bold text-gray-900">${users.admins || 0}</p>
-                                <p class="text-xs text-gray-600 mt-1">Administrators</p>
-                            </div>
-                            <div class="text-center">
-                                <p class="text-2xl font-bold text-gray-900">${users.citizens || 0}</p>
-                                <p class="text-xs text-gray-600 mt-1">Citizens</p>
-                            </div>
-                            <div class="text-center">
-                                <p class="text-2xl font-bold text-gray-900">${posts.approved_posts || 0}</p>
-                                <p class="text-xs text-gray-600 mt-1">Approved Posts</p>
-                            </div>
-                            <div class="text-center">
-                                <p class="text-2xl font-bold text-gray-900">${posts.rejected_posts || 0}</p>
-                                <p class="text-xs text-gray-600 mt-1">Rejected Posts</p>
-                            </div>
-                            <div class="text-center">
-                                <p class="text-2xl font-bold text-gray-900">${posts.unique_contributors || 0}</p>
-                                <p class="text-xs text-gray-600 mt-1">Contributors</p>
-                            </div>
-                        </div>
+                        <span class="text-gray-600 font-medium">4 documents</span>
                     </div>
                 </div>
-            `;
-            
-            contentArea.innerHTML = html;
-            
-            // Render charts after content loads
-            setTimeout(() => {
-                renderAnalyticsCharts(data);
-            }, 100);
-        })
-        .catch(err => {
-            console.error('Error fetching analytics:', err);
-            contentArea.innerHTML = '<div class="text-red-600">Error loading analytics. Check console.</div>';
-        });
-}
+            </div>
 
-function renderAnalyticsCharts(data) {
-    // Posts trend chart
-    const postsChartCtx = document.getElementById('postsChart');
-    if (postsChartCtx) {
-        const dailyPosts = data.daily_posts || [];
-        new Chart(postsChartCtx, {
-            type: 'line',
-            data: {
-                labels: dailyPosts.map(d => new Date(d.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})),
-                datasets: [{
-                    label: 'Posts',
-                    data: dailyPosts.map(d => d.count),
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    pointBackgroundColor: '#10b981',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 4
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: true } }
-            }
-        });
-    }
-
-    // Status breakdown chart
-    const statusChartCtx = document.getElementById('statusChart');
-    if (statusChartCtx) {
-        const statuses = data.status_breakdown || [];
-        new Chart(statusChartCtx, {
-            type: 'doughnut',
-            data: {
-                labels: statuses.map(s => s.status.charAt(0).toUpperCase() + s.status.slice(1)),
-                datasets: [{
-                    data: statuses.map(s => s.count),
-                    backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#6b7280'],
-                    borderColor: '#fff',
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'bottom' }
-                }
-            }
-        });
-    }
-
-    // Users registration chart
-    const usersChartCtx = document.getElementById('usersChart');
-    if (usersChartCtx) {
-        const dailyUsers = data.daily_users || [];
-        new Chart(usersChartCtx, {
-            type: 'bar',
-            data: {
-                labels: dailyUsers.map(d => new Date(d.date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})),
-                datasets: [{
-                    label: 'New Users',
-                    data: dailyUsers.map(d => d.count),
-                    backgroundColor: '#3b82f6',
-                    borderColor: '#1d4ed8',
-                    borderWidth: 1,
-                    borderRadius: 4
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: true } }
-            }
-        });
-    }
+            <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in-up animation-delay-700">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">Popular Documents</h3>
+                <div class="space-y-3">
+                    ${AppData.documents.slice(0, 5).map(doc => `
+                        <div class="flex items-center justify-between py-2 border-b border-gray-100">
+                            <div class="flex-1">
+                                <p class="text-sm font-medium text-gray-800">${doc.title}</p>
+                                <p class="text-xs text-gray-500">${doc.reference}</p>
+                            </div>
+                            <span class="text-sm text-gray-600">${doc.views} views</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('content-area').innerHTML = html;
+    
+    setTimeout(() => {
+        renderDocumentsOverTimeChart();
+        renderDocumentsByStatusChart();
+    }, 100);
 }
 
 function renderDocumentsOverTimeChart() {
@@ -1182,80 +1043,79 @@ function renderUsers() {
     if (pageTitle) pageTitle.textContent = 'User Management';
     if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'User Management';
 
-    const contentArea = document.getElementById('content-area');
-    contentArea.innerHTML = '<div class="text-center py-8"><i class="bi bi-hourglass text-4xl text-gray-400 mb-4"></i><p class="text-gray-500">Loading users...</p></div>';
-    
-    // Fetch user data and stats
-    Promise.all([
-        fetch('API/users_api.php?action=list').then(r => r.json()),
-        fetch('API/users_api.php?action=stats').then(r => r.json())
-    ])
-    .then(([usersResult, statsResult]) => {
-        if (!usersResult.success || !statsResult.success) {
-            contentArea.innerHTML = '<div class="text-red-600">Error loading users</div>';
-            return;
-        }
-        
-        const users = usersResult.data || [];
-        const stats = statsResult.data || {};
-        
-        const html = `
+    const totalUsers = AppData.users.length;
+    const activeUsers = AppData.users.filter(u => u.status === 'active').length;
+    const adminUsers = AppData.users.filter(u => u.role === 'Administrator').length;
+
+    const html = `
         <div class="space-y-6">
             <!-- Header with Statistics -->
             <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-8 rounded-lg shadow-lg">
                 <div class="flex justify-between items-start mb-6">
                     <div>
                         <h1 class="text-3xl font-bold mb-2">User Management</h1>
-                        <p class="text-red-100">Manage user accounts, roles, and permissions</p>
+                        <p class="text-red-100">Manage user accounts, roles, departments, and permissions</p>
                     </div>
+                    <button onclick="openAddUserModal()" class="btn-primary flex items-center gap-2 bg-white text-red-600 hover:bg-red-50">
+                        <i class="bi bi-person-plus"></i> Add New User
+                    </button>
                 </div>
                 
                 <!-- Stats Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
                         <div class="text-red-100 text-sm font-semibold mb-1">Total Users</div>
-                        <div class="text-3xl font-bold">${stats.total_users || 0}</div>
+                        <div class="text-3xl font-bold">${totalUsers}</div>
                     </div>
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
                         <div class="text-red-100 text-sm font-semibold mb-1">Active Users</div>
-                        <div class="text-3xl font-bold">${stats.active_count || 0}</div>
+                        <div class="text-3xl font-bold">${activeUsers}</div>
                     </div>
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
                         <div class="text-red-100 text-sm font-semibold mb-1">Administrators</div>
-                        <div class="text-3xl font-bold">${stats.admin_count || 0}</div>
-                    </div>
-                    <div class="bg-white bg-opacity-20 rounded-lg p-4">
-                        <div class="text-red-100 text-sm font-semibold mb-1">Citizens</div>
-                        <div class="text-3xl font-bold">${stats.citizen_count || 0}</div>
+                        <div class="text-3xl font-bold">${adminUsers}</div>
                     </div>
                 </div>
             </div>
 
             <!-- Filter and Search -->
             <div class="bg-white p-6 rounded-lg shadow">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Search Users</label>
-                        <input type="text" id="user-search" placeholder="Search by username or email..." 
+                        <input type="text" id="user-search" placeholder="Search by name or email..." 
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                            onkeyup="loadUsersTable()">
+                            onkeyup="filterUsers()">
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Role</label>
                         <select id="user-role-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
-                            onchange="loadUsersTable()">
+                            onchange="filterUsers()">
                             <option value="">All Roles</option>
                             <option value="Administrator">Administrator</option>
-                            <option value="Citizen">Citizen</option>
+                            <option value="Officer">Officer</option>
+                            <option value="Staff">Staff</option>
+                            <option value="Viewer">Viewer</option>
                         </select>
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Status</label>
                         <select id="user-status-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
-                            onchange="loadUsersTable()">
+                            onchange="filterUsers()">
                             <option value="">All Status</option>
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Department</label>
+                        <select id="user-dept-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                            onchange="filterUsers()">
+                            <option value="">All Departments</option>
+                            <option value="IT Department">IT Department</option>
+                            <option value="Legislative">Legislative</option>
+                            <option value="Records">Records</option>
+                            <option value="Public">Public</option>
                         </select>
                     </div>
                 </div>
@@ -1267,9 +1127,10 @@ function renderUsers() {
                     <table class="w-full text-sm">
                         <thead class="bg-gray-100 border-b-2 border-gray-300">
                             <tr>
-                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Username</th>
+                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Name</th>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Email</th>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Role</th>
+                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Department</th>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Status</th>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Last Login</th>
                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Actions</th>
@@ -1281,111 +1142,73 @@ function renderUsers() {
                 </div>
             </div>
         </div>
-        `;
-        
-        contentArea.innerHTML = html;
-        loadUsersTable();
-    })
-    .catch(err => {
-        console.error('Error loading users:', err);
-        contentArea.innerHTML = '<div class="text-red-600">Error loading users</div>';
-    });
-}
 
-function loadUsersTable() {
-    const searchTerm = document.getElementById('user-search')?.value.toLowerCase() || '';
-    const roleFilter = document.getElementById('user-role-filter')?.value || '';
-    const statusFilter = document.getElementById('user-status-filter')?.value || '';
-    
-    fetch('API/users_api.php?action=list')
-        .then(r => r.json())
-        .then(result => {
-            if (!result.success) return;
-            
-            let users = result.data || [];
-            
-            // Apply filters
-            if (searchTerm) {
-                users = users.filter(u => 
-                    u.username.toLowerCase().includes(searchTerm) || 
-                    u.email.toLowerCase().includes(searchTerm)
-                );
-            }
-            
-            if (roleFilter) {
-                users = users.filter(u => u.role === roleFilter);
-            }
-            
-            if (statusFilter) {
-                users = users.filter(u => u.status === statusFilter);
-            }
-            
-            const tbody = document.getElementById('users-table-body');
-            if (!tbody) return;
-            
-            if (users.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">No users found</td></tr>`;
-                return;
-            }
-            
-            tbody.innerHTML = users.map(user => {
-                const statusColor = user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
-                const roleColor = user.role === 'Administrator' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800';
-                const lastLogin = user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never';
-                
-                return `
-                    <tr class="border-b hover:bg-gray-50 transition">
-                        <td class="px-6 py-4 font-semibold text-gray-900">${user.username}</td>
-                        <td class="px-6 py-4 text-gray-600 text-sm">${user.email}</td>
-                        <td class="px-6 py-4">
-                            <span class="px-3 py-1 rounded-full text-xs font-semibold ${roleColor}">
-                                ${user.role}
-                            </span>
-                        </td>
-                        <td class="px-6 py-4">
-                            <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColor}">
-                                ${user.status.charAt(0).toUpperCase() + user.status.slice(1)}
-                            </span>
-                        </td>
-                        <td class="px-6 py-4 text-sm text-gray-600">${lastLogin}</td>
-                        <td class="px-6 py-4 text-center">
-                            <div class="flex gap-2 justify-center">
-                                <button onclick="editUser(${user.id})" class="text-yellow-600 hover:text-yellow-800" title="Edit">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
-                                <button onclick="toggleUserStatus(${user.id}, '${user.status}')" class="text-blue-600 hover:text-blue-800" title="Toggle Status">
-                                    <i class="bi ${user.status === 'active' ? 'bi-toggle-on' : 'bi-toggle-off'}"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        });
-}
+        <!-- Add/Edit User Modal -->
+        <div id="user-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-96 overflow-y-auto">
+                <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-6 flex justify-between items-center">
+                    <h2 id="user-modal-title" class="text-2xl font-bold">Add New User</h2>
+                    <button onclick="closeUserModal()" class="text-white hover:text-red-100 text-2xl">&times;</button>
+                </div>
+                <div class="p-6 space-y-4">
+                    <input type="hidden" id="user-id">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Full Name *</label>
+                            <input type="text" id="user-name" placeholder="Full name" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Email *</label>
+                            <input type="email" id="user-email" placeholder="user@lgu.gov.ph" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Role *</label>
+                            <select id="user-role" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500">
+                                <option value="">Select Role</option>
+                                <option value="Administrator">Administrator</option>
+                                <option value="Officer">Officer</option>
+                                <option value="Staff">Staff</option>
+                                <option value="Viewer">Viewer</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Department *</label>
+                            <select id="user-department" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500">
+                                <option value="">Select Department</option>
+                                <option value="IT Department">IT Department</option>
+                                <option value="Legislative">Legislative</option>
+                                <option value="Records">Records</option>
+                                <option value="Public">Public</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Status *</label>
+                            <select id="user-status" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500">
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Last Login</label>
+                            <input type="datetime-local" id="user-lastlogin" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                        </div>
+                    </div>
+                    <div class="flex gap-3 pt-4">
+                        <button onclick="saveUser()" class="flex-1 btn-primary">Save User</button>
+                        <button onclick="closeUserModal()" class="flex-1 btn-secondary">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-function toggleUserStatus(userId, currentStatus) {
-    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-    
-    fetch('API/users_api.php?action=update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: userId, status: newStatus })
-    })
-    .then(r => r.json())
-    .then(result => {
-        if (result.success) {
-            showNotification(`User status changed to ${newStatus}`, 'success');
-            loadUsersTable();
-        } else {
-            showNotification('Error updating user status', 'error');
-        }
-    });
-}
-
-function editUser(userId) {
-    showNotification('User editing not yet implemented', 'info');
-}
+        <!-- User Details Modal -->
+        <div id="user-details-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-96 overflow-y-auto">
+                <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-6 flex justify-between items-center">
+                    <h2 id="user-details-title" class="text-2xl font-bold">User Details</h2>
                     <button onclick="closeUserDetailsModal()" class="text-white hover:text-red-100 text-2xl">&times;</button>
                 </div>
                 <div id="user-details-content" class="p-6 space-y-4">
@@ -1691,7 +1514,7 @@ function renderAudit() {
                     <option value="updated">Updated</option>
                     <option value="deleted">Deleted</option>
                 </select>
-                <input type="text" id="filterUser" class="input-field" placeholder="Filter by user..." oninput="filterAuditLogs()">
+                <input type="text" id="filterUser" class="input-field" placeholder="Filter by admin user..." oninput="filterAuditLogs()">
                 <input type="date" id="filterDate" class="input-field" onchange="filterAuditLogs()">
                 <button onclick="resetAuditFilters()" class="btn-outline">
                     <i class="bi bi-arrow-clockwise mr-2"></i>Reset
@@ -1703,15 +1526,15 @@ function renderAudit() {
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
                 <p class="text-sm text-gray-600">Total Logs</p>
-                <p id="totalLogsCount" class="text-2xl font-bold text-blue-600">0</p>
+                <p class="text-2xl font-bold text-blue-600" id="totalLogsCount">0</p>
             </div>
             <div class="bg-green-50 rounded-lg p-4 border border-green-200">
                 <p class="text-sm text-gray-600">Today's Activity</p>
-                <p id="todayLogsCount" class="text-2xl font-bold text-green-600">0</p>
+                <p class="text-2xl font-bold text-green-600" id="todayActivityCount">0</p>
             </div>
             <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                <p class="text-sm text-gray-600">Active Users</p>
-                <p id="activeUsersCount" class="text-2xl font-bold text-purple-600">0</p>
+                <p class="text-sm text-gray-600">Active Admins</p>
+                <p class="text-2xl font-bold text-purple-600" id="activeAdminsCount">0</p>
             </div>
         </div>
 
@@ -1730,7 +1553,7 @@ function renderAudit() {
                         </tr>
                     </thead>
                     <tbody id="auditLogsList" class="divide-y divide-gray-200">
-                        <!-- Populated by loadAuditLogsFromDatabase() -->
+                        <tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">Loading audit logs...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1742,16 +1565,25 @@ function renderAudit() {
 }
 
 function loadAuditLogsFromDatabase() {
+    // Fetch audit logs from the API
     fetch('API/get_audit_logs_api.php')
         .then(response => response.json())
         .then(data => {
+            // Store in AppData for filtering
             AppData.auditLogs = data || [];
+            
+            // Update stats
             updateAuditStats();
+            
+            // Display logs
             filterAuditLogs();
         })
         .catch(error => {
             console.error('Error loading audit logs:', error);
-            document.getElementById('auditLogsList').innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-red-500">Error loading audit logs</td></tr>';
+            const tbody = document.getElementById('auditLogsList');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-red-500">Failed to load audit logs</td></tr>';
+            }
         });
 }
 
@@ -1759,11 +1591,11 @@ function updateAuditStats() {
     const totalCount = AppData.auditLogs.length;
     const today = new Date().toISOString().split('T')[0];
     const todayCount = AppData.auditLogs.filter(log => log.timestamp.includes(today)).length;
-    const activeUsers = [...new Set(AppData.auditLogs.map(log => log.admin_user))].length;
+    const adminsSet = new Set(AppData.auditLogs.map(log => log.admin_user));
     
     document.getElementById('totalLogsCount').textContent = totalCount;
-    document.getElementById('todayLogsCount').textContent = todayCount;
-    document.getElementById('activeUsersCount').textContent = activeUsers;
+    document.getElementById('todayActivityCount').textContent = todayCount;
+    document.getElementById('activeAdminsCount').textContent = adminsSet.size;
 }
 
 function filterAuditLogs() {
@@ -1789,12 +1621,12 @@ function filterAuditLogs() {
     
     tbody.innerHTML = filtered.map(log => `
         <tr class="hover:bg-gray-50 transition">
-            <td class="px-6 py-4 text-sm text-gray-700">${log.timestamp}</td>
+            <td class="px-6 py-4 text-sm text-gray-700">${new Date(log.timestamp).toLocaleString()}</td>
             <td class="px-6 py-4 text-sm font-medium text-gray-900">${log.admin_user}</td>
             <td class="px-6 py-4">${getActionBadge(log.action)}</td>
-            <td class="px-6 py-4 text-sm text-gray-700">${log.entity_type}</td>
+            <td class="px-6 py-4 text-sm text-gray-700">${log.entity_type || 'system'}</td>
             <td class="px-6 py-4">${getStatusBadge(log.status)}</td>
-            <td class="px-6 py-4 text-sm text-gray-700">${log.ip_address || 'N/A'}</td>
+            <td class="px-6 py-4 text-sm font-mono text-gray-700">${log.ip_address || 'N/A'}</td>
         </tr>
     `).join('');
 }
@@ -1804,140 +1636,6 @@ function resetAuditFilters() {
     document.getElementById('filterUser').value = '';
     document.getElementById('filterDate').value = '';
     filterAuditLogs();
-}
-
-function renderUserLogs() {
-    const html = `
-        <div class="mb-6 animate-fade-in">
-            <h1 class="text-2xl font-bold text-gray-800">User Activity Logs</h1>
-            <p class="text-gray-600 mt-1">Monitor all user actions and interactions</p>
-        </div>
-
-        <!-- Filters -->
-        <div class="bg-white rounded-xl shadow-md p-6 mb-6 animate-fade-in-up animation-delay-100">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <select id="filterUserAction" class="input-field" onchange="filterUserLogs()">
-                    <option value="">All Actions</option>
-                    <option value="submitted_post">Submitted Post</option>
-                    <option value="viewed_consultation">Viewed Consultation</option>
-                    <option value="login">Login</option>
-                    <option value="logout">Logout</option>
-                    <option value="edited_post">Edited Post</option>
-                    <option value="commented">Commented</option>
-                </select>
-                <input type="text" id="filterUserName" class="input-field" placeholder="Filter by username..." oninput="filterUserLogs()">
-                <input type="date" id="filterUserDate" class="input-field" onchange="filterUserLogs()">
-                <button onclick="resetUserLogFilters()" class="btn-outline">
-                    <i class="bi bi-arrow-clockwise mr-2"></i>Reset
-                </button>
-            </div>
-        </div>
-
-        <!-- Summary Stats -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                <p class="text-sm text-gray-600">Total Actions</p>
-                <p id="totalUserActionsCount" class="text-2xl font-bold text-blue-600">0</p>
-            </div>
-            <div class="bg-green-50 rounded-lg p-4 border border-green-200">
-                <p class="text-sm text-gray-600">Active Users Today</p>
-                <p id="todayUserActionsCount" class="text-2xl font-bold text-green-600">0</p>
-            </div>
-            <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                <p class="text-sm text-gray-600">Unique Users</p>
-                <p id="uniqueUsersCount" class="text-2xl font-bold text-purple-600">0</p>
-            </div>
-        </div>
-
-        <!-- User Logs Table -->
-        <div class="bg-white rounded-xl shadow-md overflow-hidden animate-fade-in-up animation-delay-200">
-            <div class="overflow-x-auto">
-                <table class="min-w-full">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Entity Type</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP Address</th>
-                        </tr>
-                    </thead>
-                    <tbody id="userLogsList" class="divide-y divide-gray-200">
-                        <!-- Populated by loadUserLogsFromDatabase() -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    `;
-    
-    document.getElementById('content-area').innerHTML = html;
-    loadUserLogsFromDatabase();
-}
-
-function loadUserLogsFromDatabase() {
-    fetch('API/get_user_logs_api.php')
-        .then(response => response.json())
-        .then(data => {
-            AppData.userLogs = data || [];
-            updateUserLogStats();
-            filterUserLogs();
-        })
-        .catch(error => {
-            console.error('Error loading user logs:', error);
-            document.getElementById('userLogsList').innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-red-500">Error loading user logs</td></tr>';
-        });
-}
-
-function updateUserLogStats() {
-    const totalCount = AppData.userLogs.length;
-    const today = new Date().toISOString().split('T')[0];
-    const todayCount = AppData.userLogs.filter(log => log.timestamp.includes(today)).length;
-    const uniqueUsers = [...new Set(AppData.userLogs.map(log => log.username))].length;
-    
-    document.getElementById('totalUserActionsCount').textContent = totalCount;
-    document.getElementById('todayUserActionsCount').textContent = todayCount;
-    document.getElementById('uniqueUsersCount').textContent = uniqueUsers;
-}
-
-function filterUserLogs() {
-    const actionFilter = document.getElementById('filterUserAction')?.value || '';
-    const userFilter = document.getElementById('filterUserName')?.value.toLowerCase() || '';
-    const dateFilter = document.getElementById('filterUserDate')?.value || '';
-    
-    let filtered = AppData.userLogs.filter(log => {
-        const matchesAction = !actionFilter || log.action === actionFilter;
-        const matchesUser = !userFilter || log.username.toLowerCase().includes(userFilter);
-        const matchesDate = !dateFilter || log.timestamp.includes(dateFilter);
-        
-        return matchesAction && matchesUser && matchesDate;
-    });
-    
-    const tbody = document.getElementById('userLogsList');
-    if (!tbody) return;
-    
-    if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">No user logs found</td></tr>';
-        return;
-    }
-    
-    tbody.innerHTML = filtered.map(log => `
-        <tr class="hover:bg-gray-50 transition">
-            <td class="px-6 py-4 text-sm text-gray-700">${log.timestamp}</td>
-            <td class="px-6 py-4 text-sm font-medium text-gray-900">${log.username}</td>
-            <td class="px-6 py-4">${getUserActionBadge(log.action)}</td>
-            <td class="px-6 py-4 text-sm text-gray-700">${log.entity_type || 'N/A'}</td>
-            <td class="px-6 py-4">${getStatusBadge(log.status)}</td>
-            <td class="px-6 py-4 text-sm text-gray-700">${log.ip_address || 'N/A'}</td>
-        </tr>
-    `).join('');
-}
-
-function resetUserLogFilters() {
-    document.getElementById('filterUserAction').value = '';
-    document.getElementById('filterUserName').value = '';
-    document.getElementById('filterUserDate').value = '';
-    filterUserLogs();
 }
 
 function addAuditLog(action, description) {
@@ -3104,120 +2802,11 @@ function createAnnouncement(title, message, options = {}) {
     return ann;
 }
 
-function previewAnnImage(input) {
-    const preview = document.getElementById('ann-image-preview');
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            preview.innerHTML = `
-                <div style="position:relative;">
-                    <img src="${e.target.result}" style="max-width:100%; max-height:200px; border-radius:6px; display:block; margin:auto;">
-                    <button type="button" onclick="document.getElementById('ann-image-input').value=''; document.getElementById('ann-image-preview').innerHTML='<i class=\"bi bi-image text-2xl text-gray-400\"></i><p class=\"text-xs text-gray-500 mt-1\">Click to upload image (optional)</p>';" style="position:absolute;top:5px;right:5px;background:red;color:white;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;"><i class="bi bi-x" style="margin:0;"></i></button>
-                </div>
-            `;
-        };
-        reader.readAsDataURL(input.files[0]);
-    }
-}
-
-function createAnnouncementWithImage() {
-    const title = document.getElementById('new-ann-title').value.trim();
-    const content = document.getElementById('new-ann-message').value.trim();
-    const imageInput = document.getElementById('ann-image-input');
-    
-    if (!title || !content) {
-        showNotification('Title and message required', 'warning');
-        return;
-    }
-    
-    const formData = new FormData();
-    formData.append('title', title);
-    formData.append('content', content);
-    if (imageInput.files && imageInput.files[0]) {
-        formData.append('image', imageInput.files[0]);
-    }
-    
-    fetch('API/create_announcement_api.php', {
-        method: 'POST',
-        body: formData
-    })
-    .then(res => res.json())
-    .then(json => {
-        if (json.success) {
-            showNotification('✅ Announcement published!', 'success');
-            document.getElementById('new-ann-title').value = '';
-            document.getElementById('new-ann-message').value = '';
-            document.getElementById('ann-image-input').value = '';
-            document.getElementById('ann-image-preview').innerHTML = '<i class="bi bi-image text-2xl text-gray-400"></i><p class="text-xs text-gray-500 mt-1">Click to upload image (optional)</p>';
-            setTimeout(loadAnnouncementsFromDatabase, 500);
-        } else {
-            showNotification('Error: ' + (json.error || 'Failed to create announcement'), 'error');
-        }
-    })
-    .catch(err => {
-        console.error('Error creating announcement:', err);
-        showNotification('Error creating announcement', 'error');
-    });
-}
-
-function loadAnnouncementsFromDatabase() {
-    fetch('API/get_announcements_api.php')
-        .then(res => res.json())
-        .then(data => {
-            AppData.announcements = data || [];
-            displayAdminAnnouncements();
-        })
-        .catch(err => {
-            console.error('Error loading announcements:', err);
-            // Fallback to localStorage
-            loadAnnouncementsFromStorage();
-        });
-}
-
-function displayAdminAnnouncements() {
-    const list = document.getElementById('admin-announcements-list');
-    if (!list) return;
-    
-    if (!AppData.announcements || AppData.announcements.length === 0) {
-        list.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">No announcements yet</div>';
-        return;
-    }
-    
-    list.innerHTML = AppData.announcements.map(a => `
-        <div class="p-2.5 border border-gray-200 rounded hover:bg-gray-50 transition text-xs">
-            ${a.image_path ? `<div style="margin-bottom:6px;border-radius:4px;overflow:hidden;"><img src="${a.image_path}" style="width:100%;height:80px;object-fit:cover;"></div>` : ''}
-            <div class="font-semibold text-gray-800 text-sm">${a.title}</div>
-            <div class="text-gray-500 text-xs mt-0.5">${new Date(a.created_at).toLocaleDateString()}</div>
-            <div class="flex justify-end mt-2">
-                <button onclick="deleteAnnouncement(${a.id}); loadAnnouncementsFromDatabase();" class="text-xs text-red-600 hover:text-red-700">Delete</button>
-            </div>
-        </div>
-    `).join('');
-}
-
 function deleteAnnouncement(id) {
     if (!confirm('Delete this announcement?')) return;
-    
-    const formData = new FormData();
-    formData.append('id', id);
-    
-    fetch('API/delete_announcement.php', {
-        method: 'POST',
-        body: formData
-    })
-    .then(res => res.json())
-    .then(json => {
-        if (json.success) {
-            showNotification('Announcement deleted', 'success');
-            loadAnnouncementsFromDatabase();
-        } else {
-            showNotification('Error: ' + (json.error || 'Failed to delete'), 'error');
-        }
-    })
-    .catch(err => {
-        console.error('Error deleting announcement:', err);
-        showNotification('Error deleting announcement', 'error');
-    });
+    AppData.announcements = AppData.announcements.filter(a => a.id !== id);
+    saveAnnouncementsToStorage();
+    showSection('announcements');
 }
 
 
@@ -3252,14 +2841,15 @@ function showNotification(message, type = 'info') {
 }
 
 function getStatusBadge(status) {
+    const statusLower = (status || '').toLowerCase();
     const badges = {
-        approved: '<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Approved</span>',
-        pending: '<span class="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">Pending</span>',
-        draft: '<span class="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">Draft</span>',
-        success: '<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Success</span>',
-        failure: '<span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">Failed</span>'
+        'approved': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Approved</span>',
+        'pending': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Pending</span>',
+        'draft': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Draft</span>',
+        'success': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800"><i class="bi bi-check-circle mr-1"></i>Success</span>',
+        'failure': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800"><i class="bi bi-x-circle mr-1"></i>Failed</span>'
     };
-    return badges[status] || '<span class="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">' + (status || 'Unknown') + '</span>';
+    return badges[statusLower] || '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">' + (status || 'N/A') + '</span>';
 }
 
 function getUserStatusBadge(status) {
@@ -3271,30 +2861,17 @@ function getUserStatusBadge(status) {
 }
 
 function getActionBadge(action) {
+    const actionLower = (action || '').toLowerCase();
     const badges = {
-        upload: '<span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">Upload</span>',
-        approve: '<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Approve</span>',
-        update: '<span class="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">Update</span>',
-        delete: '<span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">Delete</span>',
-        login: '<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Login</span>',
-        logout: '<span class="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">Logout</span>',
-        created: '<span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">Created</span>'
+        'upload': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Upload</span>',
+        'approve': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Approve</span>',
+        'update': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Update</span>',
+        'delete': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">Delete</span>',
+        'login': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">Login</span>',
+        'logout': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Logout</span>',
+        'created': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Created</span>'
     };
-    return badges[action] || '<span class="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">' + (action || 'Unknown') + '</span>';
-}
-
-function getUserActionBadge(action) {
-    const badges = {
-        'submitted_post': '<span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">Submitted Post</span>',
-        'viewed_consultation': '<span class="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">Viewed Consultation</span>',
-        'login': '<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Login</span>',
-        'logout': '<span class="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">Logout</span>',
-        'edited_post': '<span class="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">Edited Post</span>',
-        'commented': '<span class="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-medium">Commented</span>',
-        'approved': '<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Approved</span>',
-        'rejected': '<span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">Rejected</span>'
-    };
-    return badges[action] || '<span class="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">' + (action || 'Unknown') + '</span>';
+    return badges[actionLower] || '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">' + (action || 'N/A') + '</span>';
 }
 
 function getNotificationIcon(type) {
@@ -3668,8 +3245,8 @@ function renderNotifications() {
 // ANNOUNCEMENTS PAGE (ADMIN)
 // ==============================
 function renderAnnouncements() {
-    // Load announcements from server
-    loadAnnouncementsFromDatabase();
+    // ensure we have announcements loaded from storage
+    loadAnnouncementsFromStorage();
 
     const html = `
         <div class="mb-6">
@@ -3686,19 +3263,9 @@ function renderAnnouncements() {
                     <div class="space-y-3">
                         <input id="new-ann-title" placeholder="Announcement title..." class="input-field w-full text-sm font-medium border-0 border-b border-gray-300 focus:border-red-500 focus:ring-0 p-0" />
                         <textarea id="new-ann-message" placeholder="Write your announcement message..." class="input-field w-full text-sm border-0 focus:ring-0 p-0 resize-none" rows="3"></textarea>
-                        
-                        <!-- Image Upload -->
-                        <div class="border-2 border-dashed border-gray-300 rounded-lg p-3 hover:border-red-500 transition cursor-pointer" onclick="document.getElementById('ann-image-input').click()">
-                            <input type="file" id="ann-image-input" accept="image/*" style="display:none;" onchange="previewAnnImage(this)">
-                            <div id="ann-image-preview" style="text-align:center;">
-                                <i class="bi bi-image text-2xl text-gray-400"></i>
-                                <p class="text-xs text-gray-500 mt-1">Click to upload image (optional)</p>
-                            </div>
-                        </div>
-                        
                         <div class="flex justify-end gap-2 pt-2">
-                            <button onclick="document.getElementById('new-ann-title').value=''; document.getElementById('new-ann-message').value=''; document.getElementById('ann-image-input').value=''; document.getElementById('ann-image-preview').innerHTML='<i class=\"bi bi-image text-2xl text-gray-400\"></i><p class=\"text-xs text-gray-500 mt-1\">Click to upload image (optional)</p>';" class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded transition">Clear</button>
-                            <button onclick="createAnnouncementWithImage()" class="btn-primary px-4 py-1.5 text-sm">Publish</button>
+                            <button onclick="document.getElementById('new-ann-title').value=''; document.getElementById('new-ann-message').value='';" class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded transition">Clear</button>
+                            <button onclick="(function(){ const t=document.getElementById('new-ann-title').value; const m=document.getElementById('new-ann-message').value; if(!t||!m){ showNotification('Title and message required','warning'); return;} createAnnouncement(t,m); document.getElementById('new-ann-title').value=''; document.getElementById('new-ann-message').value=''; })()" class="btn-primary px-4 py-1.5 text-sm">Publish</button>
                         </div>
                     </div>
                 </div>
@@ -3706,8 +3273,17 @@ function renderAnnouncements() {
                 <!-- Announcements List -->
                 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex-1 flex flex-col">
                     <h3 class="text-sm font-semibold text-gray-900 mb-3">Recent Announcements</h3>
-                    <div id="admin-announcements-list" class="space-y-2 overflow-auto flex-1">
-                        <div class="text-xs text-gray-400 text-center py-4">Loading announcements...</div>
+                    <div class="space-y-2 overflow-auto flex-1">
+                        ${AppData.announcements.length === 0 ? '<div class="text-xs text-gray-400 text-center py-4">No announcements yet</div>' : ''}
+                        ${AppData.announcements.map(a => `
+                            <div class="p-2.5 border border-gray-200 rounded hover:bg-gray-50 transition text-xs">
+                                <div class="font-semibold text-gray-800 text-sm">${a.title}</div>
+                                <div class="text-gray-500 text-xs mt-0.5">${new Date(a.createdAt).toLocaleDateString()}</div>
+                                <div class="flex justify-end mt-2">
+                                    <button onclick="deleteAnnouncement(${a.id}); renderAnnouncements()" class="text-xs text-red-600 hover:text-red-700">Delete</button>
+                                </div>
+                            </div>
+                        `).join('')}
                     </div>
                 </div>
             </div>
@@ -4013,23 +3589,11 @@ function renderConsultationManagement() {
     if (pageTitle) pageTitle.textContent = 'Consultation Management';
     if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'Consultation Management';
 
-    contentArea.innerHTML = '<div class="text-center py-8"><i class="bi bi-hourglass text-4xl text-gray-400 mb-4"></i><p class="text-gray-500">Loading consultations...</p></div>';
-    
-    // Fetch real consultation data
-    fetch('API/consultations_api.php?action=list')
-        .then(response => response.json())
-        .then(result => {
-            if (!result.success) {
-                contentArea.innerHTML = '<div class="text-red-600">Error loading consultations</div>';
-                return;
-            }
-            
-            const consultations = result.data || [];
-            const totalConsultations = consultations.length;
-            const activeConsultations = consultations.filter(c => c.status === 'active').length;
-            const closedConsultations = consultations.filter(c => c.status === 'closed').length;
+    const totalConsultations = AppData.consultations.length;
+    const openConsultations = AppData.consultations.filter(c => c.status.toLowerCase() === 'open').length;
+    const scheduledConsultations = AppData.consultations.filter(c => c.status.toLowerCase() === 'scheduled').length;
 
-            contentArea.innerHTML = `
+    contentArea.innerHTML = `
         <div class="space-y-6">
             <!-- Header with Statistics -->
             <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-8 rounded-lg shadow-lg">
@@ -4050,12 +3614,12 @@ function renderConsultationManagement() {
                         <div class="text-3xl font-bold">${totalConsultations}</div>
                     </div>
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
-                        <div class="text-red-100 text-sm font-semibold mb-1">Active Consultations</div>
-                        <div class="text-3xl font-bold">${activeConsultations}</div>
+                        <div class="text-red-100 text-sm font-semibold mb-1">Open Consultations</div>
+                        <div class="text-3xl font-bold">${openConsultations}</div>
                     </div>
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
-                        <div class="text-red-100 text-sm font-semibold mb-1">Closed</div>
-                        <div class="text-3xl font-bold">${closedConsultations}</div>
+                        <div class="text-red-100 text-sm font-semibold mb-1">Scheduled</div>
+                        <div class="text-3xl font-bold">${scheduledConsultations}</div>
                     </div>
                 </div>
             </div>
@@ -4074,21 +3638,19 @@ function renderConsultationManagement() {
                         <select id="consultation-status-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
                             onchange="filterConsultations()">
                             <option value="">All Status</option>
-                            <option value="active">Active</option>
-                            <option value="draft">Draft</option>
-                            <option value="closed">Closed</option>
+                            <option value="Open">Open</option>
+                            <option value="Scheduled">Scheduled</option>
+                            <option value="Closed">Closed</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Category</label>
-                        <select id="consultation-category-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Type</label>
+                        <select id="consultation-type-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
                             onchange="filterConsultations()">
-                            <option value="">All Categories</option>
-                            <option value="infrastructure">Infrastructure</option>
-                            <option value="environment">Environment</option>
-                            <option value="health">Health</option>
-                            <option value="education">Education</option>
-                            <option value="other">Other</option>
+                            <option value="">All Types</option>
+                            <option value="In-person">In-person</option>
+                            <option value="Online">Online</option>
+                            <option value="Survey">Survey</option>
                         </select>
                     </div>
                     <div>
@@ -4097,7 +3659,7 @@ function renderConsultationManagement() {
                             onchange="filterConsultations()">
                             <option value="date-desc">Latest First</option>
                             <option value="date-asc">Oldest First</option>
-                            <option value="posts">Most Posts</option>
+                            <option value="feedback">Most Feedback</option>
                             <option value="title">A-Z Title</option>
                         </select>
                     </div>
@@ -4111,10 +3673,11 @@ function renderConsultationManagement() {
                         <thead class="bg-gray-100 border-b-2 border-gray-300">
                             <tr>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Title</th>
-                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Category</th>
+                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Type</th>
+                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Date</th>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Status</th>
-                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Posts</th>
-                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Dates</th>
+                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Feedback</th>
+                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Documents</th>
                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Actions</th>
                             </tr>
                         </thead>
@@ -4124,78 +3687,73 @@ function renderConsultationManagement() {
                 </div>
             </div>
         </div>
-            `;
-            
-            contentArea.innerHTML = html;
-            renderConsultationsTableFromData(consultations);
-        })
-        .catch(err => {
-            console.error('Error fetching consultations:', err);
-            contentArea.innerHTML = '<div class="text-red-600">Error loading consultations</div>';
-        });
-}
 
-function renderConsultationsTableFromData(consultations) {
-    const tbody = document.getElementById('consultations-table-body');
-
-    if (!tbody) return;
-
-    if (consultations.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">No consultations found</td></tr>`;
-        return;
-    }
-
-    tbody.innerHTML = consultations.map(consultation => {
-        const statusColor = consultation.status === 'active' ? 'bg-green-100 text-green-800' : 
-                           consultation.status === 'draft' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800';
-        
-        const startDate = new Date(consultation.start_date).toLocaleDateString();
-        const endDate = consultation.end_date ? new Date(consultation.end_date).toLocaleDateString() : 'TBD';
-
-        return `
-            <tr class="border-b hover:bg-gray-50 transition">
-                <td class="px-6 py-4 font-semibold text-gray-900">${consultation.title}</td>
-                <td class="px-6 py-4 text-gray-600">${consultation.category || '-'}</td>
-                <td class="px-6 py-4">
-                    <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColor}">
-                        ${consultation.status.charAt(0).toUpperCase() + consultation.status.slice(1)}
-                    </span>
-                </td>
-                <td class="px-6 py-4 text-center">
-                    <span class="inline-flex items-center justify-center w-8 h-8 bg-red-100 text-red-600 rounded-full font-semibold text-sm">
-                        ${consultation.posts_count || 0}
-                    </span>
-                </td>
-                <td class="px-6 py-4 text-sm text-gray-600">
-                    <span title="${startDate} to ${endDate}">${startDate}</span>
-                </td>
-                <td class="px-6 py-4 text-center">
-                    <div class="flex gap-2 justify-center">
-                        <button onclick="viewConsultationDetails(${consultation.id})" class="text-blue-600 hover:text-blue-800" title="View">
-                            <i class="bi bi-eye"></i>
-                        </button>
-                        <button onclick="editConsultation(${consultation.id})" class="text-yellow-600 hover:text-yellow-800" title="Edit">
-                            <i class="bi bi-pencil"></i>
-                        </button>
-                        <button onclick="deleteConsultation(${consultation.id})" class="text-red-600 hover:text-red-800" title="Delete">
-                            <i class="bi bi-trash"></i>
-                        </button>
+        <!-- Create/Edit Consultation Modal -->
+        <div id="consultation-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-96 overflow-y-auto">
+                <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-6 flex justify-between items-center">
+                    <h2 id="modal-title" class="text-2xl font-bold">Create New Consultation</h2>
+                    <button onclick="closeConsultationModal()" class="text-white hover:text-red-100 text-2xl">&times;</button>
+                </div>
+                <div class="p-6 space-y-4">
+                    <input type="hidden" id="consultation-id">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Title *</label>
+                            <input type="text" id="consultation-title" placeholder="Consultation title" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Type *</label>
+                            <select id="consultation-type" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500">
+                                <option value="">Select Type</option>
+                                <option value="In-person">In-person</option>
+                                <option value="Online">Online</option>
+                                <option value="Survey">Survey</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Date *</label>
+                            <input type="date" id="consultation-date" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Status *</label>
+                            <select id="consultation-status" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500">
+                                <option value="">Select Status</option>
+                                <option value="Open">Open</option>
+                                <option value="Scheduled">Scheduled</option>
+                                <option value="Closed">Closed</option>
+                            </select>
+                        </div>
                     </div>
-                </td>
-            </tr>
-        `;
-    }).join('');
-}
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+                        <textarea id="consultation-description" placeholder="Consultation description..." rows="4"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"></textarea>
+                    </div>
+                    <div class="flex gap-3 pt-4">
+                        <button onclick="saveConsultation()" class="flex-1 btn-primary">Save Consultation</button>
+                        <button onclick="closeConsultationModal()" class="flex-1 btn-secondary">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-function filterConsultations() {
-    // Re-fetch and filter
-    fetch('API/consultations_api.php?action=list')
-        .then(r => r.json())
-        .then(result => {
-            if (result.success) {
-                renderConsultationsTableFromData(result.data);
-            }
-        });
+        <!-- Consultation Details Modal -->
+        <div id="consultation-details-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-96 overflow-y-auto">
+                <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-6 flex justify-between items-center">
+                    <h2 id="details-modal-title" class="text-2xl font-bold">Consultation Details</h2>
+                    <button onclick="closeDetailsModal()" class="text-white hover:text-red-100 text-2xl">&times;</button>
+                </div>
+                <div id="details-modal-content" class="p-6 space-y-4">
+                </div>
+            </div>
+        </div>
+    `;
+
+    renderConsultationsTable();
 }
 
 function renderConsultationsTable() {
