@@ -452,6 +452,38 @@ async function toggleAnnouncementAction(e, annId, action) {
     }
 }
 
+async function toggleAllowComments(e, annId) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    if (!annId) return;
+    
+    const data = new FormData();
+    data.append('ann_id', annId);
+    try {
+        const res = await fetch('API/toggle_comments_api.php', { method: 'POST', body: data });
+        const json = await res.json();
+        if (json.success) {
+            const btn = e?.target.closest('button');
+            if (btn) {
+                const isNowAllowed = json.allow_comments;
+                btn.classList.toggle('text-green-600');
+                btn.classList.toggle('text-gray-400');
+                const span = btn.querySelector('span');
+                if (span) span.textContent = isNowAllowed ? 'On' : 'Off';
+                btn.title = isNowAllowed ? 'Comments Allowed' : 'Comments Disabled';
+            }
+            showToast(json.allow_comments ? 'Comments enabled for this announcement' : 'Comments disabled for this announcement', 'success');
+        } else {
+            showToast(json.error || 'Failed to update', 'error');
+        }
+    } catch (err) {
+        console.error(err);
+        showToast('Error updating announcement settings', 'error');
+    }
+}
+
 // Toast Notification (Updated)
 // Note: showToast function has been moved and updated above in the DOMContentLoaded section
 // The function below is kept for reference but the main one is used
@@ -986,6 +1018,38 @@ async function loadAdminAnnouncements() {
     } catch (err) {
         console.warn('Failed to load admin announcements', err);
     }
+}
+
+// Remove Saved Item Function
+function removeSavedItem(announcementId, button) {
+    button.disabled = true;
+    button.textContent = 'Removing...';
+    
+    toggleAnnouncementAction({
+        target: button,
+        stopPropagation: function() {}
+    }, announcementId, 'save').then(() => {
+        // Remove the item container
+        const itemContainer = button.closest('div[style*="padding: 16px"]');
+        if (itemContainer) {
+            itemContainer.style.opacity = '0';
+            itemContainer.style.transition = 'opacity 0.3s ease';
+            setTimeout(() => {
+                itemContainer.remove();
+                
+                // Check if no items left
+                const container = document.getElementById('saved-items-container');
+                if (container && container.children.length === 0) {
+                    container.innerHTML = '<div class="empty-state" style="background: transparent; padding: 40px 20px;">No saved items yet. Save announcements from the announcements page!</div>';
+                }
+            }, 300);
+        }
+    }).catch(err => {
+        button.disabled = false;
+        button.textContent = 'Remove ✕';
+        alert('Error removing saved item. Please try again.');
+        console.error('Error removing saved item:', err);
+    });
 }
 
 // Initialize auto-refresh on page load

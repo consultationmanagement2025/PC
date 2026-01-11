@@ -18,6 +18,7 @@ function initializeAnnouncementsTable() {
         admin_user VARCHAR(255),
         visibility VARCHAR(50) DEFAULT 'public',
         status VARCHAR(50) DEFAULT 'published',
+        allow_comments BOOLEAN DEFAULT TRUE,
         liked_by LONGTEXT DEFAULT '[]',
         saved_by LONGTEXT DEFAULT '[]',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -30,7 +31,7 @@ function initializeAnnouncementsTable() {
     }
     
     // Add columns if they don't exist
-    $checkCols = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'announcements' AND COLUMN_NAME IN ('liked_by', 'saved_by', 'image_path')";
+    $checkCols = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'announcements' AND COLUMN_NAME IN ('liked_by', 'saved_by', 'image_path', 'allow_comments')";
     $result = $conn->query($checkCols);
     $existingCols = [];
     while ($row = $result->fetch_assoc()) {
@@ -45,6 +46,9 @@ function initializeAnnouncementsTable() {
     }
     if (!in_array('image_path', $existingCols)) {
         $conn->query("ALTER TABLE announcements ADD COLUMN image_path VARCHAR(255)");
+    }
+    if (!in_array('allow_comments', $existingCols)) {
+        $conn->query("ALTER TABLE announcements ADD COLUMN allow_comments BOOLEAN DEFAULT TRUE");
     }
     
     return true;
@@ -67,8 +71,9 @@ function getLatestAnnouncements($limit = 10) {
     global $conn;
     initializeAnnouncementsTable();
 
-    $stmt = $conn->prepare("SELECT id, title, content, image_path, admin_user, created_at FROM announcements WHERE status = 'published' AND visibility = 'public' ORDER BY created_at DESC LIMIT ?");
+    $stmt = $conn->prepare("SELECT id, title, content, image_path, admin_user, allow_comments, created_at FROM announcements WHERE status = 'published' AND visibility = 'public' ORDER BY created_at DESC LIMIT ?");
     if (!$stmt) {
+        error_log("Prepare error: " . $conn->error);
         // Fallback if columns don't exist
         $stmt = $conn->prepare("SELECT id, title, content, admin_user, created_at FROM announcements WHERE status = 'published' AND visibility = 'public' ORDER BY created_at DESC LIMIT ?");
     }
@@ -92,8 +97,9 @@ function getAnnouncements($limit = 50, $offset = 0) {
     global $conn;
     initializeAnnouncementsTable();
 
-    $stmt = $conn->prepare("SELECT id, title, content, image_path, admin_user, liked_by, saved_by, created_at FROM announcements WHERE status = 'published' ORDER BY created_at DESC LIMIT ? OFFSET ?");
+    $stmt = $conn->prepare("SELECT id, title, content, image_path, admin_user, liked_by, saved_by, allow_comments, created_at FROM announcements WHERE status = 'published' ORDER BY created_at DESC LIMIT ? OFFSET ?");
     if (!$stmt) {
+        error_log("Prepare error: " . $conn->error);
         // Fallback if columns don't exist
         $stmt = $conn->prepare("SELECT id, title, content, admin_user, created_at FROM announcements WHERE status = 'published' ORDER BY created_at DESC LIMIT ? OFFSET ?");
     }
@@ -116,8 +122,11 @@ function getAnnouncements($limit = 50, $offset = 0) {
 function getAnnouncementById($id) {
     global $conn;
     initializeAnnouncementsTable();
-    
-    $stmt = $conn->prepare("SELECT id, title, content, admin_user, liked_by, saved_by, created_at FROM announcements WHERE id = ? AND status = 'published'");
+    allow_comments, created_at FROM announcements WHERE id = ? AND status = 'published'");
+    if (!$stmt) {
+        error_log("Prepare error: " . $conn->error);
+        return null;
+    }SELECT id, title, content, admin_user, liked_by, saved_by, created_at FROM announcements WHERE id = ? AND status = 'published'");
     if (!$stmt) return null;
     $stmt->bind_param('i', $id);
     $stmt->execute();
@@ -164,6 +173,18 @@ function toggleAnnouncementSave($ann_id, $user_id) {
     $stmt = $conn->prepare("UPDATE announcements SET saved_by = ? WHERE id = ?");
     if (!$stmt) return false;
     $stmt->bind_param('si', $saved_json, $ann_id);
+    $res = $stmt->execute();
+    $stmt->close();
+    return $res;
+}
+
+function toggleAllowComments($ann_id) {
+    global $conn;
+    initializeAnnouncementsTable();
+    
+    $stmt = $conn->prepare("UPDATE announcements SET allow_comments = NOT allow_comments WHERE id = ?");
+    if (!$stmt) return false;
+    $stmt->bind_param('i', $ann_id);
     $res = $stmt->execute();
     $stmt->close();
     return $res;

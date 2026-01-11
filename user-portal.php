@@ -5,12 +5,24 @@ if (!isset($_SESSION['fullname'])) {
     exit();
 }
 $fullname = $_SESSION['fullname'];
+$user_id = $_SESSION['user_id'] ?? null;
 require_once 'announcements.php';
+require_once 'DATABASE/feedback.php';
+require_once 'DATABASE/audit-log.php';
+require_once 'DATABASE/posts.php';
+
 // Redirect admins to the admin dashboard
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
 if ($current_role === 'admin') {
   header('Location: system-template-full.php');
   exit();
+}
+
+// Determine which section to display
+$section = isset($_GET['section']) ? $_GET['section'] : 'dashboard';
+$allowed_sections = ['dashboard', 'announcements', 'feedback', 'documents', 'audit-log', 'saved', 'settings'];
+if (!in_array($section, $allowed_sections)) {
+    $section = 'dashboard';
 }
 ?>
 <!DOCTYPE html>
@@ -195,6 +207,19 @@ if ($current_role === 'admin') {
     }
 
     #overlay-menu.active { display: block; }
+
+    #notifications-overlay {
+      position: fixed;
+      top: 72px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: transparent;
+      display: none;
+      z-index: 60;
+    }
+
+    #notifications-overlay.active { display: block; }
 
     .overlay-menu-panel {
       background: white;
@@ -684,39 +709,39 @@ if ($current_role === 'admin') {
       <nav class="sidebar-nav">
         <h4 data-i18n="main">Main</h4>
         <a class="active" onclick="scrollToSection('dashboard'); return false;">
-          <span style="font-size: 18px;">🏠</span>
+          <span style="font-size: 18px;">⌂</span>
           <span data-i18n="dashboard">Dashboard</span>
         </a>
         <a onclick="scrollToSection('announcements'); return false;">
-          <span style="font-size: 18px;">📢</span>
+          <span style="font-size: 18px;">↓</span>
           <span data-i18n="announcements">Announcements</span>
         </a>
         <a onclick="scrollToSection('consultations'); return false;">
-          <span style="font-size: 18px;">💬</span>
+          <span style="font-size: 18px;">≡</span>
           <span data-i18n="consultations">Consultations</span>
         </a>
         <a onclick="scrollToSection('submissions'); return false;">
-          <span style="font-size: 18px;">📄</span>
+          <span style="font-size: 18px;">◈</span>
           <span data-i18n="mySubmissions">My Submissions</span>
         </a>
 
         <h4 data-i18n="resources">Resources</h4>
         <a onclick="scrollToSection('documents'); return false;">
-          <span style="font-size: 18px;">📚</span>
+          <span style="font-size: 18px;">▦</span>
           <span data-i18n="documents">Documents</span>
         </a>
         <a onclick="alert(t('helpComingSoon')); return false;">
-          <span style="font-size: 18px;">❓</span>
+          <span style="font-size: 18px;">?</span>
           <span data-i18n="helpFaq">Help & FAQ</span>
         </a>
 
         <h4 data-i18n="account">Account</h4>
         <a onclick="alert(t('profileComingSoon')); return false;">
-          <span style="font-size: 18px;">👤</span>
+          <span style="font-size: 18px;">⊙</span>
           <span data-i18n="profile">Profile</span>
         </a>
         <a onclick="alert(t('settingsComingSoon')); return false;">
-          <span style="font-size: 18px;">⚙️</span>
+          <span style="font-size: 18px;">⚙</span>
           <span data-i18n="settings">Settings</span>
         </a>
       </nav>
@@ -729,8 +754,9 @@ if ($current_role === 'admin') {
         <img src="images/logo.webp" alt="Valenzuela Logo" style="width:44px;height:44px;border-radius:8px;margin-right:12px;object-fit:contain;">
         <h1 style="margin:0;">Welcome Back</h1>
         <div class="user-info">
-          <button onclick="toggleLanguage()" style="background: none; border: 1px solid var(--gray-200); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; color: var(--muted); margin-right: 12px; font-family: inherit; transition: all 0.2s;" id="language-btn">🌐 English</button>
-          <button onclick="toggleTheme()" style="background: none; border: 1px solid var(--gray-200); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 14px; color: var(--muted); margin-right: 12px; font-family: inherit; transition: all 0.2s;" id="theme-btn" title="Toggle dark mode"><i class="dark-mode-icon">🌙</i><i class="light-mode-icon" style="display:none;">☀️</i></button>
+          <button onclick="toggleLanguage()" style="background: none; border: 1px solid var(--gray-200); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; color: var(--muted); margin-right: 12px; font-family: inherit; transition: all 0.2s;" id="language-btn">EN</button>
+          <button onclick="openNotifications()" style="background: none; border: 1px solid var(--gray-200); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 14px; color: var(--muted); margin-right: 12px; font-family: inherit; transition: all 0.2s; position: relative;" id="notification-btn" title="Notifications">✦ Notify</button>
+          <button onclick="toggleTheme()" style="background: none; border: 1px solid var(--gray-200); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 14px; color: var(--muted); margin-right: 12px; font-family: inherit; transition: all 0.2s;" id="theme-btn" title="Toggle dark mode"><i class="dark-mode-icon">★</i><i class="light-mode-icon" style="display:none;">☀</i></button>
           <button id="menu-btn" onclick="toggleMenu()" aria-label="Open menu" aria-expanded="false">☰</button>
         </div>
       </div>
@@ -739,32 +765,31 @@ if ($current_role === 'admin') {
       <div id="overlay-menu" onclick="if(event.target.id === 'overlay-menu') toggleMenu()">
         <div class="overlay-menu-panel" role="dialog" aria-modal="true">
           <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px; padding-bottom:12px; border-bottom: 1px solid var(--gray-200);">
-            <div class="user-avatar" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">👤</div>
+            <div class="user-avatar" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;background: linear-gradient(135deg, var(--red-600) 0%, var(--red-700) 100%); border-radius: 50%; color: white;">U</div>
             <div style="flex:1; min-width:0;">
               <div style="font-weight:700; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><?php echo htmlspecialchars($fullname); ?></div>
               <div style="font-size:12px;color:var(--muted)">Resident</div>
             </div>
           </div>
           <nav style="display:flex; flex-direction:column; gap:4px;">
-            <a class="menu-link" data-section="dashboard" onclick="scrollToSection('dashboard', event);">🏠 Dashboard</a>
-            <a class="menu-link" data-section="announcements" onclick="scrollToSection('announcements', event);">📢 Announcements</a>
-            <a class="menu-link" data-section="consultations-submissions" onclick="scrollToSection('consultations-submissions', event);">💬 Consultations & Submissions</a>
-            <a class="menu-link" data-section="documents" onclick="scrollToSection('documents', event);">📚 Documents</a>
-            <a class="menu-link" onclick="alert(t('helpComingSoon')); closeMenu();">❓ Help & FAQ</a>
+            <a class="menu-link" href="user-portal.php?section=dashboard" data-section="dashboard">⌂ Dashboard</a>
+            <a class="menu-link" href="user-portal.php?section=announcements" data-section="announcements">↓ Announcements</a>
+            <a class="menu-link" href="user-portal.php?section=feedback" data-section="feedback">≣ Feedback</a>
+            <a class="menu-link" href="user-portal.php?section=audit-log" data-section="audit-log">◊ Activity Log</a>
             <hr />
-            <a class="menu-link" data-section="profile" onclick="alert(t('profileComingSoon')); closeMenu();">👤 Profile</a>
-            <a class="menu-link" data-section="settings" onclick="scrollToSection('settings', event);">⚙️ Settings</a>
+            <a class="menu-link" href="user-portal.php?section=settings" data-section="settings">⚙ Settings</a>
             <hr />
-            <a class="menu-link" onclick="window.location.href='logout.php';" style="color: var(--red-600); font-weight: 600;">🚪 Logout</a>
+            <a class="menu-link" onclick="window.location.href='logout.php';" style="color: var(--red-600); font-weight: 600;">✕ Logout</a>
           </nav>
         </div>
       </div>
 
       <!-- Dashboard Section -->
+      <?php if ($section === 'dashboard'): ?>
       <div id="dashboard" class="section active" style="background: linear-gradient(135deg, rgba(220, 38, 38, 0.05) 0%, rgba(239, 68, 68, 0.05) 100%); padding: 28px; border-radius: 14px; border: 2px solid var(--red-300, #fecaca); margin: -24px -24px 28px -24px;">
         <!-- Hero Banner -->
         <div class="hero-banner">
-          <h1 id="dashboard-title" data-i18n="yourDashboard">📊 Your Dashboard</h1>
+          <h1 id="dashboard-title" data-i18n="yourDashboard">◈ Your Dashboard</h1>
           <p id="dashboard-desc" data-i18n="welcome">Welcome! Track consultations, view announcements, and make your voice heard in city governance.</p>
         </div>
 
@@ -774,14 +799,18 @@ if ($current_role === 'admin') {
           <div class="quick-links">
             <h3>Quick Actions</h3>
             <div class="links-grid">
-              <button class="link-btn" onclick="alert('Saved items coming soon')">
-                <div class="icon">🔖</div>
+              <a href="user-portal.php?section=saved" class="link-btn" style="text-decoration: none; color: inherit;">
+                <div class="icon">♥</div>
                 Saved Items
-              </button>
-              <button class="link-btn" onclick="alert('History coming soon')">
-                <div class="icon">📊</div>
+              </a>
+              <a href="user-portal.php?section=audit-log" class="link-btn" style="text-decoration: none; color: inherit;">
+                <div class="icon">◈</div>
                 My Activity
-              </button>
+              </a>
+              <a href="user-portal.php?section=documents" class="link-btn" style="text-decoration: none; color: inherit;">
+                <div class="icon">◊</div>
+                Citizen Charter
+              </a>
             </div>
           </div>
 
@@ -797,9 +826,9 @@ if ($current_role === 'admin') {
                   <textarea id="post-input" placeholder="<?php echo htmlspecialchars("What's on your mind, " . (explode(' ', trim($fullname))[0] ?: $fullname) . '?'); ?>" style="width:100%; min-height:56px; resize:none; padding:12px 16px; outline:none; font-family:inherit; font-size:15px;"></textarea>
                   <div class="post-actions">
                     <div style="display:flex; gap:8px;">
-                      <button class="icon-btn" title="Video">📹</button>
-                      <button class="icon-btn" title="Photo">🖼️</button>
-                      <button class="icon-btn" title="Feeling">😊</button>
+                      <button class="icon-btn" title="Video">◊</button>
+                      <button class="icon-btn" title="Photo">◬</button>
+                      <button class="icon-btn" title="Feeling">◐</button>
                     </div>
                     <div>
                       <button onclick="resetPostForm()" style="padding:8px 12px; background:var(--gray-200); color:var(--text); border:none; border-radius:16px; cursor:pointer; margin-right:8px;">Cancel</button>
@@ -819,7 +848,7 @@ if ($current_role === 'admin') {
           <!-- RIGHT: Announcements Sidebar -->
           <div id="announcements" style="margin: 0; padding: 0; background: transparent; box-shadow: none;">
             <div class="section-header">
-              <h2 style="font-size: 18px;">📢 Updates</h2>
+              <h2 style="font-size: 18px; cursor: pointer;" onclick="window.location.href='user-portal.php?section=announcements'">↓ Announcements</h2>
             </div>
             <div class="section-divider"></div>
             <div id="announcements-feed" class="feed" style="max-height: 600px; overflow-y: auto;">
@@ -829,7 +858,7 @@ if ($current_role === 'admin') {
                     echo '<div class="empty-state">No announcements at the moment.</div>';
                 } else {
                     foreach ($latestAnns as $ann) {
-                        echo "<div class=\"announcement-card\" style=\"background:white;padding:12px;border-radius:8px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04)\">";
+                        echo "<div class=\"announcement-card\" style=\"background:white;padding:12px;border-radius:8px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04); cursor: pointer;\" onclick=\"window.location.href='user-portal.php?section=announcements'\">";
                         
                         // Display image if available
                         if (!empty($ann['image_path']) && file_exists($ann['image_path'])) {
@@ -847,64 +876,334 @@ if ($current_role === 'admin') {
           </div>
         </div>
       </div>
+      <?php endif; ?>
 
+      <!-- Announcements Page -->
+      <?php if ($section === 'announcements'): ?>
+      <div class="section-header" style="margin-bottom: 20px;">
+        <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: var(--gray-800);">↓ Announcements</h1>
+        <p style="margin: 8px 0 0; color: var(--muted); font-size: 15px;">Stay updated with the latest announcements from the City of Valenzuela</p>
+      </div>
+      <div class="section-divider"></div>
+      <div id="full-announcements-feed" class="feed" style="margin-top: 24px;">
+        <?php
+          $allAnns = getLatestAnnouncements(100);
+          if (empty($allAnns)) {
+              echo '<div class="empty-state">No announcements at the moment. Check back soon!</div>';
+          } else {
+              foreach ($allAnns as $ann) {
+                  $ann_id = $ann['id'] ?? 'ann_' . time() . rand(1000, 9999);
+                  $allow_comments = $ann['allow_comments'] ?? true;
+                  echo "<div class=\"announcement-card\" data-ann-id=\"$ann_id\">";
+                  
+                  // Display image if available
+                  if (!empty($ann['image_path']) && file_exists($ann['image_path'])) {
+                      echo '<div style="margin-bottom:12px; border-radius:8px; overflow:hidden;"><img src="' . htmlspecialchars($ann['image_path']) . '" alt="' . htmlspecialchars($ann['title']) . '" style="width:100%; max-height:300px; object-fit:cover; display:block;"></div>';
+                  }
+                  
+                  echo '<div class="announcement-header">';
+                  echo '<div>';
+                  echo '<h3 class="announcement-title">' . htmlspecialchars($ann['title']) . '</h3>';
+                  echo '<p class="announcement-meta">' . date('F d, Y • H:i', strtotime($ann['created_at'])) . '</p>';
+                  echo '</div>';
+                  echo '</div>';
+                  echo '<div class="announcement-content">' . nl2br(htmlspecialchars($ann['content'])) . '</div>';
+                  echo '<div class="announcement-actions">';
+                  echo '<button class="action-btn like-btn" data-ann-id="' . $ann_id . '" onclick="toggleLikeAnnouncement(this, \'' . $ann_id . '\')"><i style="font-size:16px;">▲</i> <span class="like-count">0</span> Like</button>';
+                  
+                  if ($allow_comments) {
+                    echo '<button class="action-btn" onclick="toggleCommentForm(\'ann_' . $ann_id . '\')"><i style="font-size:16px;">≡</i> Comment</button>';
+                  } else {
+                    echo '<button class="action-btn" style="opacity: 0.5; cursor: not-allowed;" title="Comments disabled"><i style="font-size:16px;">✗</i> Comments Off</button>';
+                  }
+                  
+                  echo '<button class="action-btn save-btn" data-ann-id="' . $ann_id . '" onclick="toggleSaveAnnouncement(this, \'' . $ann_id . '\')"><i style="font-size:16px;">♥</i> Save</button>';
+                  echo '</div>';
+                  
+                  // Comments section (only if comments allowed)
+                  if ($allow_comments) {
+                    echo '<div id="ann_' . $ann_id . '-comments" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--gray-200);">';
+                    echo '<div style="display: flex; gap: 8px; margin-bottom: 12px;">';
+                    echo '<input type="text" id="comment-ann-' . $ann_id . '" placeholder="Add a comment..." style="flex: 1; padding: 8px 12px; border: 1px solid var(--gray-200); border-radius: 6px; font-family: inherit; font-size: 13px;">';
+                    echo '<button onclick="addAnnouncementComment(\'' . $ann_id . '\')" style="padding: 8px 14px; background: var(--red-600); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; transition: all 0.2s;">Post</button>';
+                    echo '</div>';
+                    echo '<div id="comments-list-ann-' . $ann_id . '" style="display: flex; flex-direction: column; gap: 8px;"></div>';
+                    echo '</div>';
+                  }
+                  
+                  echo "</div>";
+              }
+          }
+        ?>
+      </div>
+      <?php endif; ?>
 
-      <!-- Documents Section -->
-      <div id="documents">
-        <div class="section-header">
-          <h2>📚 Important Documents</h2>
-        </div>
-        <div class="section-divider"></div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px;">
-          <!-- Valenzuela Citizen Charter -->
-          <div style="background: white; padding: 20px; border-radius: 12px; border-left: 4px solid var(--red-600); box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: all 0.2s;">
-            <div style="font-size: 32px; margin-bottom: 12px;">📋</div>
-            <h3 style="margin: 0 0 8px; font-size: 16px; font-weight: 700; color: var(--gray-800);">Valenzuela Citizen Charter</h3>
-            <p style="margin: 8px 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
-              A comprehensive charter establishing the rights, responsibilities, and commitments of the City Government towards its citizens.
-            </p>
-            <div style="display: flex; gap: 8px; margin-top: 14px;">
-              <button onclick="viewDocument('valenzuela-citizen-charter.html', 'Valenzuela Citizen Charter')" style="flex: 1; padding: 8px 12px; background: var(--red-600); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">View</button>
-              <button onclick="downloadDocument('valenzuela-citizen-charter.html')" style="flex: 1; padding: 8px 12px; background: var(--gray-200); color: var(--gray-800); border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">📥 Download</button>
+      <!-- Feedback Page -->
+      <?php if ($section === 'feedback'): ?>
+      <div class="section-header" style="margin-bottom: 20px;">
+        <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: var(--gray-800);">≣ Feedback & Suggestions</h1>
+        <p style="margin: 8px 0 0; color: var(--muted); font-size: 15px;">Share your feedback and suggestions to help us improve</p>
+      </div>
+      <div class="section-divider"></div>
+      
+      <!-- Feedback Submission Form -->
+      <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 28px;">
+        <h3 style="margin: 0 0 16px; font-size: 18px; font-weight: 700; color: var(--gray-800);">Submit Your Feedback</h3>
+        <form id="feedback-form" style="display: flex; flex-direction: column; gap: 16px;">
+          <div>
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--gray-800);">Category</label>
+            <select name="category" required style="width: 100%; padding: 10px; border: 1px solid var(--gray-200); border-radius: 8px; font-family: inherit;">
+              <option value="">Select a category...</option>
+              <option value="suggestion">Suggestion</option>
+              <option value="complaint">Complaint</option>
+              <option value="compliment">Compliment</option>
+              <option value="request">Service Request</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--gray-800);">Rating (Optional)</label>
+            <div style="display: flex; gap: 8px;">
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="rating" value="5"> ⭐⭐⭐⭐⭐ Excellent
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="rating" value="4"> ⭐⭐⭐⭐ Good
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="radio" name="rating" value="3"> ⭐⭐⭐ Average
+              </label>
             </div>
           </div>
-
-          <!-- Placeholder: City Ordinance -->
-          <div style="background: white; padding: 20px; border-radius: 12px; border-left: 4px solid var(--gray-300); box-shadow: 0 2px 8px rgba(0,0,0,0.06); opacity: 0.6;">
-            <div style="font-size: 32px; margin-bottom: 12px;">⚖️</div>
-            <h3 style="margin: 0 0 8px; font-size: 16px; font-weight: 700; color: var(--gray-800);">City Ordinances</h3>
-            <p style="margin: 8px 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
-              Local laws and regulations governing city operations.
-            </p>
-            <div style="display: flex; gap: 8px; margin-top: 14px;">
-              <button onclick="alert('Coming soon')" style="flex: 1; padding: 8px 12px; background: var(--gray-300); color: var(--muted); border: none; border-radius: 6px; cursor: not-allowed; font-weight: 600; font-size: 13px;">Coming Soon</button>
-            </div>
+          <div>
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--gray-800);">Your Feedback</label>
+            <textarea name="message" placeholder="Tell us what you think..." required style="width: 100%; min-height: 120px; padding: 12px; border: 1px solid var(--gray-200); border-radius: 8px; font-family: inherit; resize: vertical;"></textarea>
           </div>
-
-          <!-- Placeholder: Budget & Finance -->
-          <div style="background: white; padding: 20px; border-radius: 12px; border-left: 4px solid var(--gray-300); box-shadow: 0 2px 8px rgba(0,0,0,0.06); opacity: 0.6;">
-            <div style="font-size: 32px; margin-bottom: 12px;">💰</div>
-            <h3 style="margin: 0 0 8px; font-size: 16px; font-weight: 700; color: var(--gray-800);">Annual Budget Report</h3>
-            <p style="margin: 8px 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
-              Transparent information on city government spending and financial plans.
-            </p>
-            <div style="display: flex; gap: 8px; margin-top: 14px;">
-              <button onclick="alert('Coming soon')" style="flex: 1; padding: 8px 12px; background: var(--gray-300); color: var(--muted); border: none; border-radius: 6px; cursor: not-allowed; font-weight: 600; font-size: 13px;">Coming Soon</button>
-            </div>
-          </div>
-        </div>
+          <button type="submit" style="padding: 12px 24px; background: var(--red-600); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.2s;">Submit Feedback</button>
+        </form>
       </div>
 
-      <!-- Settings Section -->
-      <div id="settings">
-        <div class="section-header">
-          <h2>⚙️ Settings</h2>
+      <!-- Your Feedback History -->
+      <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+        <h3 style="margin: 0 0 16px; font-size: 18px; font-weight: 700; color: var(--gray-800);">Your Feedback History</h3>
+        <div id="feedback-history" style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="empty-state" style="background: transparent; padding: 40px 20px;">No feedback submitted yet. Start sharing your thoughts!</div>
         </div>
-        <div class="section-divider"></div>
+      </div>
+      <?php endif; ?>
 
-        <div style="max-width: 600px;">
-          <!-- Preferences Card -->
-          <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px;">
+      <!-- Documents Page -->
+      <?php if ($section === 'documents'): ?>
+      <div class="section-header" style="margin-bottom: 20px;">
+        <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: var(--gray-800);">▦ Important Documents</h1>
+        <p style="margin: 8px 0 0; color: var(--muted); font-size: 15px;">Access important documents and resources</p>
+      </div>
+      <div class="section-divider"></div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 24px;">
+        <!-- Valenzuela Citizen Charter -->
+        <div style="background: white; padding: 24px; border-radius: 12px; border-left: 4px solid var(--red-600); box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: all 0.2s;">
+          <div style="font-size: 40px; margin-bottom: 12px;">◊</div>
+          <h3 style="margin: 0 0 12px; font-size: 18px; font-weight: 700; color: var(--gray-800);">Valenzuela Citizen Charter</h3>
+          <p style="margin: 12px 0; font-size: 14px; color: var(--muted); line-height: 1.6;">
+            A comprehensive charter establishing the rights, responsibilities, and commitments of the City Government towards its citizens.
+          </p>
+          <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button onclick="viewDocument('valenzuela-citizen-charter.html', 'Valenzuela Citizen Charter')" style="flex: 1; padding: 10px 12px; background: var(--red-600); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s;">View</button>
+            <button onclick="downloadDocument('valenzuela-citizen-charter.html')" style="flex: 1; padding: 10px 12px; background: var(--gray-200); color: var(--gray-800); border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s;">📥 Download</button>
+          </div>
+        </div>
+
+        <!-- Placeholder: City Ordinance -->
+        <div style="background: white; padding: 24px; border-radius: 12px; border-left: 4px solid var(--gray-300); box-shadow: 0 2px 8px rgba(0,0,0,0.06); opacity: 0.6;">
+          <div style="font-size: 40px; margin-bottom: 12px;">※</div>
+          <h3 style="margin: 0 0 12px; font-size: 18px; font-weight: 700; color: var(--gray-800);">City Ordinances</h3>
+          <p style="margin: 12px 0; font-size: 14px; color: var(--muted); line-height: 1.6;">
+            Local laws and regulations governing city operations.
+          </p>
+          <button onclick="alert('Coming soon')" style="width: 100%; padding: 10px 12px; background: var(--gray-300); color: var(--muted); border: none; border-radius: 6px; cursor: not-allowed; font-weight: 600; font-size: 14px; margin-top: 16px;">Coming Soon</button>
+        </div>
+
+        <!-- Placeholder: Budget & Finance -->
+        <div style="background: white; padding: 24px; border-radius: 12px; border-left: 4px solid var(--gray-300); box-shadow: 0 2px 8px rgba(0,0,0,0.06); opacity: 0.6;">
+          <div style="font-size: 40px; margin-bottom: 12px;">◄</div>
+          <h3 style="margin: 0 0 12px; font-size: 18px; font-weight: 700; color: var(--gray-800);">Annual Budget Report</h3>
+          <p style="margin: 12px 0; font-size: 14px; color: var(--muted); line-height: 1.6;">
+            Transparent information on city government spending and financial plans.
+          </p>
+          <button onclick="alert('Coming soon')" style="width: 100%; padding: 10px 12px; background: var(--gray-300); color: var(--muted); border: none; border-radius: 6px; cursor: not-allowed; font-weight: 600; font-size: 14px; margin-top: 16px;">Coming Soon</button>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <!-- Activity Log Page -->
+      <?php if ($section === 'audit-log'): ?>
+      <div class="section-header" style="margin-bottom: 20px;">
+        <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: var(--gray-800);">◊ Your Activity Log</h1>
+        <p style="margin: 8px 0 0; color: var(--muted); font-size: 15px;">View your interaction history with the portal</p>
+      </div>
+      <div class="section-divider"></div>
+      
+      <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+        <div id="activity-log-container" style="display: flex; flex-direction: column; gap: 12px;">
+          <?php
+            if ($user_id) {
+              $userLogs = getUserLogs(50, 0, ['user_id' => $user_id]);
+              if (empty($userLogs)) {
+                echo '<div class="empty-state" style="background: transparent;">No activity recorded yet.</div>';
+              } else {
+                foreach ($userLogs as $log) {
+                  echo '<div style="padding: 14px; background: var(--gray-100); border-radius: 8px; border-left: 3px solid var(--red-600);">';
+                  echo '<div style="font-weight: 600; color: var(--gray-800); margin-bottom: 4px;">' . htmlspecialchars($log['action'] ?? '') . '</div>';
+                  echo '<div style="font-size: 13px; color: var(--muted);">' . date('F d, Y • H:i', strtotime($log['timestamp'] ?? 'now')) . '</div>';
+                  if (!empty($log['details'])) {
+                    echo '<div style="font-size: 13px; color: var(--gray-700); margin-top: 6px;">' . htmlspecialchars($log['details']) . '</div>';
+                  }
+                  echo '</div>';
+                }
+              }
+            } else {
+              echo '<div class="empty-state" style="background: transparent;">Unable to load activity log.</div>';
+            }
+          ?>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <!-- Saved Items Page -->
+      <?php if ($section === 'saved'): ?>
+      <div class="section-header" style="margin-bottom: 20px;">
+        <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: var(--gray-800);">♥ Saved Items</h1>
+        <p style="margin: 8px 0 0; color: var(--muted); font-size: 15px;">View all your saved announcements and items</p>
+      </div>
+      <div class="section-divider"></div>
+      
+      <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+        <div id="saved-items-container" style="display: flex; flex-direction: column; gap: 16px;">
+          <?php
+            if ($user_id) {
+              // Get all announcements
+              $allAnns = getLatestAnnouncements(100);
+              $hasSaved = false;
+              
+              foreach ($allAnns as $ann) {
+                $saved_by = json_decode($ann['saved_by'] ?? '[]', true) ?? [];
+                
+                // Check if current user saved this announcement
+                if (in_array($user_id, $saved_by)) {
+                  $hasSaved = true;
+                  echo '<div style="padding: 16px; background: var(--gray-100); border-radius: 8px; border-left: 4px solid var(--red-600);">';
+                  
+                  // Display image if available
+                  if (!empty($ann['image_path']) && file_exists($ann['image_path'])) {
+                    echo '<div style="margin-bottom: 12px; border-radius: 6px; overflow: hidden;"><img src="' . htmlspecialchars($ann['image_path']) . '" alt="' . htmlspecialchars($ann['title']) . '" style="width: 100%; max-height: 250px; object-fit: cover; display: block;"></div>';
+                  }
+                  
+                  echo '<div style="display: flex; justify-content: space-between; align-items: start;">';
+                  echo '<div style="flex: 1;">';
+                  echo '<h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 700; color: var(--gray-800);">' . htmlspecialchars($ann['title']) . '</h3>';
+                  echo '<p style="margin: 0 0 10px; font-size: 13px; color: var(--muted);">' . date('F d, Y • H:i', strtotime($ann['created_at'])) . '</p>';
+                  echo '<div style="font-size: 14px; color: var(--gray-700); line-height: 1.6;">' . nl2br(htmlspecialchars(substr($ann['content'], 0, 500))) . (strlen($ann['content']) > 500 ? '...' : '') . '</div>';
+                  echo '</div>';
+                  
+                  echo '<button onclick="removeSavedItem(' . $ann['id'] . ', this)" style="padding: 8px 12px; background: var(--gray-200); color: var(--gray-800); border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; margin-left: 12px; white-space: nowrap;">Remove</button>';
+                  echo '</div>';
+                  echo '</div>';
+                }
+              }
+              
+              if (!$hasSaved) {
+                echo '<div class="empty-state" style="background: transparent; padding: 40px 20px;">No saved items yet. Save announcements from the announcements page!</div>';
+              }
+            } else {
+              echo '<div class="empty-state" style="background: transparent;">Unable to load saved items.</div>';
+            }
+          ?>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <!-- Settings Page -->
+      <?php if ($section === 'settings'): ?>
+      <div class="section-header" style="margin-bottom: 20px;">
+        <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: var(--gray-800);">⚙ Settings</h1>
+        <p style="margin: 8px 0 0; color: var(--muted); font-size: 15px;">Manage your account and preferences</p>
+      </div>
+      <div class="section-divider"></div>
+
+      <!-- Settings Tabs -->
+      <div style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden;">
+        <!-- Tab Navigation -->
+        <div style="display: flex; gap: 0; border-bottom: 1px solid var(--gray-200); overflow-x: auto;">
+          <button onclick="switchSettingsTab('profile')" class="settings-tab active" data-tab="profile" style="padding: 14px 20px; border: none; background: none; cursor: pointer; font-weight: 600; color: var(--muted); border-bottom: 3px solid transparent; transition: all 0.2s; white-space: nowrap;">Profile</button>
+          <button onclick="switchSettingsTab('preferences')" class="settings-tab" data-tab="preferences" style="padding: 14px 20px; border: none; background: none; cursor: pointer; font-weight: 600; color: var(--muted); border-bottom: 3px solid transparent; transition: all 0.2s; white-space: nowrap;">⚙ Preferences</button>
+          <button onclick="switchSettingsTab('faq')" class="settings-tab" data-tab="faq" style="padding: 14px 20px; border: none; background: none; cursor: pointer; font-weight: 600; color: var(--muted); border-bottom: 3px solid transparent; transition: all 0.2s; white-space: nowrap;">ℹ FAQs</button>
+          <button onclick="switchSettingsTab('privacy')" class="settings-tab" data-tab="privacy" style="padding: 14px 20px; border: none; background: none; cursor: pointer; font-weight: 600; color: var(--muted); border-bottom: 3px solid transparent; transition: all 0.2s; white-space: nowrap;">Privacy</button>
+        </div>
+
+        <!-- Tab Content -->
+        <div style="padding: 24px;">
+          <!-- Profile Tab -->
+          <div id="profile-tab" class="settings-tab-content" style="display: block;">
+            <h3 style="margin: 0 0 20px; font-size: 16px; font-weight: 700; color: var(--gray-800);">Profile Information</h3>
+            
+            <!-- Profile Photo -->
+            <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--gray-200);">
+              <label style="display: block; margin-bottom: 12px; font-size: 14px; font-weight: 600; color: var(--gray-800);">Profile Photo</label>
+              <div style="display: flex; gap: 16px; align-items: center;">
+                <div id="profile-avatar" style="width: 80px; height: 80px; background: linear-gradient(135deg, var(--red-600) 0%, var(--red-700) 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 36px; flex-shrink: 0;">U</div>
+                <div style="flex: 1;">
+                  <input type="file" accept="image/*" id="photo-upload" style="padding: 8px 12px; border: 1px solid var(--gray-200); border-radius: 8px; cursor: pointer; font-size: 14px;">
+                  <button onclick="uploadProfilePhoto()" style="width: 100%; padding: 8px; background: var(--red-600); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; margin-top: 8px;">Upload Photo</button>
+                </div>
+              </div>
+              <p style="margin: 8px 0 0; font-size: 12px; color: var(--muted);">Upload a profile photo (JPG, PNG, max 5MB)</p>
+            </div>
+
+            <!-- Full Name -->
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--gray-800);">Full Name</label>
+              <input type="text" id="profile-fullname" value="<?php echo htmlspecialchars($fullname); ?>" style="width: 100%; padding: 10px; border: 1px solid var(--gray-200); border-radius: 8px; font-family: inherit; font-size: 14px; color: var(--text); background: var(--white);">
+            </div>
+
+            <!-- Email -->
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--gray-800);">Email Address</label>
+              <input type="email" id="profile-email" placeholder="your@email.com" style="width: 100%; padding: 10px; border: 1px solid var(--gray-200); border-radius: 8px; font-family: inherit; font-size: 14px; color: var(--text); background: var(--white);">
+            </div>
+
+            <!-- Username -->
+            <div style="margin-bottom: 24px;">
+              <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--gray-800);">Username</label>
+              <input type="text" id="profile-username" placeholder="Choose a username" style="width: 100%; padding: 10px; border: 1px solid var(--gray-200); border-radius: 8px; font-family: inherit; font-size: 14px; color: var(--text); background: var(--white);">
+            </div>
+
+            <!-- Change Password -->
+            <div style="margin-bottom: 16px;">
+              <button onclick="togglePasswordChange()" style="width: 100%; padding: 10px; background: var(--red-600); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s; margin-bottom: 12px;">Change Password</button>
+              
+              <div id="password-change-form" style="display: none; background: var(--gray-100); padding: 16px; border-radius: 8px;">
+                <div style="margin-bottom: 12px;">
+                  <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600;">Current Password</label>
+                  <input type="password" id="current-password" placeholder="Enter current password" style="width: 100%; padding: 8px; border: 1px solid var(--gray-200); border-radius: 6px; font-size: 14px;">
+                </div>
+                <div style="margin-bottom: 12px;">
+                  <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600;">New Password</label>
+                  <input type="password" id="new-password" placeholder="Enter new password" style="width: 100%; padding: 8px; border: 1px solid var(--gray-200); border-radius: 6px; font-size: 14px;">
+                </div>
+                <div style="margin-bottom: 12px;">
+                  <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600;">Confirm New Password</label>
+                  <input type="password" id="confirm-password" placeholder="Confirm new password" style="width: 100%; padding: 8px; border: 1px solid var(--gray-200); border-radius: 6px; font-size: 14px;">
+                </div>
+                <button onclick="updatePassword()" style="width: 100%; padding: 8px; background: var(--red-600); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; margin-bottom: 8px;">Update Password</button>
+                <button onclick="togglePasswordChange()" style="width: 100%; padding: 8px; background: var(--gray-200); color: var(--gray-800); border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">Cancel</button>
+              </div>
+            </div>
+
+            <button onclick="saveProfileChanges()" style="width: 100%; padding: 10px; background: var(--red-600); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s;">Save Profile Changes</button>
+          </div>
+
+          <!-- Preferences Tab -->
+          <div id="preferences-tab" class="settings-tab-content" style="display: none;">
             <h3 style="margin: 0 0 20px; font-size: 16px; font-weight: 700; color: var(--gray-800);">Preferences</h3>
 
             <!-- Language Setting -->
@@ -912,15 +1211,14 @@ if ($current_role === 'admin') {
               <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--gray-800);">Language</label>
               <select onchange="setLanguage(this.value)" style="width: 100%; padding: 10px; border: 1px solid var(--gray-200); border-radius: 8px; font-family: inherit; font-size: 14px; background: var(--white); color: var(--text); cursor: pointer;">
                 <option value="en">English</option>
-                <option value="fil">Filipino (Tagalog)</option>
+                <option value="fil">Filipino</option>
               </select>
-              <p style="margin: 8px 0 0; font-size: 12px; color: var(--muted);">Choose your preferred language for the portal</p>
             </div>
 
             <!-- Theme Setting -->
             <div style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--gray-200);">
-              <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--gray-800);">Theme</label>
-              <div style="display: flex; gap: 12px;">
+              <label style="display: block; margin-bottom: 12px; font-size: 14px; font-weight: 600; color: var(--gray-800);">Theme</label>
+              <div style="display: flex; flex-direction: column; gap: 10px;">
                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
                   <input type="radio" name="theme" value="light" onchange="setTheme('light')" style="cursor: pointer;"> Light Mode
                 </label>
@@ -947,40 +1245,89 @@ if ($current_role === 'admin') {
               </div>
               <p style="margin: 12px 0 0; font-size: 12px; color: var(--muted);">Control how and when you receive updates</p>
             </div>
+
+            <button onclick="savePreferences()" style="width: 100%; padding: 10px; background: var(--red-600); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s; margin-bottom: 12px;">Save Preferences</button>
+            <button onclick="clearLocalStorage()" style="width: 100%; padding: 10px; background: var(--gray-200); color: var(--gray-800); border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s;">Clear Saved Data</button>
+            <p style="margin: 8px 0 0; font-size: 12px; color: var(--muted);">Clear cached suggestions and preferences (theme/language preserved)</p>
           </div>
 
-          <!-- Privacy & Security Card -->
-          <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px;">
-            <h3 style="margin: 0 0 20px; font-size: 16px; font-weight: 700; color: var(--gray-800);">Privacy & Security</h3>
+          <!-- FAQs Tab -->
+          <div id="faq-tab" class="settings-tab-content" style="display: none;">
+            <h3 style="margin: 0 0 20px; font-size: 16px; font-weight: 700; color: var(--gray-800);">Frequently Asked Questions</h3>
+            
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <div style="background: var(--gray-100); padding: 16px; border-radius: 8px; border-left: 4px solid var(--red-600);">
+                <h4 style="margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--gray-800); cursor: pointer;">What is the PCMP Portal?</h4>
+                <p style="margin: 0; font-size: 13px; color: var(--gray-700); line-height: 1.6;">The Public Consultation and Management Portal (PCMP) is an online platform that allows residents of Valenzuela to participate in government consultations, provide feedback on city initiatives, and stay informed about important announcements.</p>
+              </div>
 
-            <div style="margin-bottom: 16px;">
-              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                <input type="checkbox" id="data-sharing" style="cursor: pointer; width: 18px; height: 18px;"> Allow data sharing for service improvements
-              </label>
-              <p style="margin: 8px 0 0; font-size: 12px; color: var(--muted);">We use this data to improve the portal experience</p>
-            </div>
+              <div style="background: var(--gray-100); padding: 16px; border-radius: 8px; border-left: 4px solid var(--red-600);">
+                <h4 style="margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--gray-800); cursor: pointer;">How do I submit feedback?</h4>
+                <p style="margin: 0; font-size: 13px; color: var(--gray-700); line-height: 1.6;">Navigate to the Feedback section in your dashboard. You can share suggestions, report concerns, or provide comments on ongoing consultations. Your feedback helps shape the city's future!</p>
+              </div>
 
-            <div style="margin-bottom: 16px;">
-              <button onclick="alert('Change password functionality coming soon')" style="width: 100%; padding: 10px; background: var(--red-600); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s;">Change Password</button>
-            </div>
+              <div style="background: var(--gray-100); padding: 16px; border-radius: 8px; border-left: 4px solid var(--red-600);">
+                <h4 style="margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--gray-800); cursor: pointer;">Can I save announcements for later?</h4>
+                <p style="margin: 0; font-size: 13px; color: var(--gray-700); line-height: 1.6;">Yes! Click the bookmark icon on any announcement to save it. You can view all saved items in the Saved Items section of your Quick Actions.</p>
+              </div>
 
-            <div>
-              <button onclick="clearLocalStorage()" style="width: 100%; padding: 10px; background: var(--gray-200); color: var(--gray-800); border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s;">Clear Saved Data</button>
-              <p style="margin: 8px 0 0; font-size: 12px; color: var(--muted);">Clear cached suggestions and preferences (theme/language preserved)</p>
+              <div style="background: var(--gray-100); padding: 16px; border-radius: 8px; border-left: 4px solid var(--red-600);">
+                <h4 style="margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--gray-800); cursor: pointer;">How do I change my password?</h4>
+                <p style="margin: 0; font-size: 13px; color: var(--gray-700); line-height: 1.6;">Go to the Profile tab in Settings and click "Change Password". Enter your current password and your new password. Make sure to create a strong password for security.</p>
+              </div>
+
+              <div style="background: var(--gray-100); padding: 16px; border-radius: 8px; border-left: 4px solid var(--red-600);">
+                <h4 style="margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--gray-800); cursor: pointer;">What information do you collect?</h4>
+                <p style="margin: 0; font-size: 13px; color: var(--gray-700); line-height: 1.6;">We collect basic profile information (name, email, address) and your feedback/submissions. We do not share your data with third parties without your consent. See our Privacy Policy for details.</p>
+              </div>
+
+              <div style="background: var(--gray-100); padding: 16px; border-radius: 8px; border-left: 4px solid var(--red-600);">
+                <h4 style="margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--gray-800); cursor: pointer;">How can I contact support?</h4>
+                <p style="margin: 0; font-size: 13px; color: var(--gray-700); line-height: 1.6;">For technical issues or questions, please email support@valenzuela.gov.ph or call the city hotline. Our team is available Monday-Friday, 8 AM - 5 PM.</p>
+              </div>
             </div>
           </div>
 
-          <!-- About Card -->
-          <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
-            <h3 style="margin: 0 0 20px; font-size: 16px; font-weight: 700; color: var(--gray-800);">About</h3>
-            <div style="font-size: 14px; line-height: 1.8; color: var(--gray-700);">
-              <p style="margin: 0 0 12px;"><strong>PCMP - Public Consultation & Management Portal</strong></p>
-              <p style="margin: 0 0 12px;">Version 1.0 | City of Valenzuela</p>
-              <p style="margin: 0;">This portal enables citizens to participate in government consultations, provide feedback, and stay informed about city initiatives.</p>
+          <!-- Privacy Tab -->
+          <div id="privacy-tab" class="settings-tab-content" style="display: none;">
+            <h3 style="margin: 0 0 20px; font-size: 16px; font-weight: 700; color: var(--gray-800);">Privacy Policy & Data Protection</h3>
+
+            <div style="font-size: 13px; line-height: 1.8; color: var(--gray-700);">
+              <h4 style="margin: 16px 0 8px; font-weight: 700;">Your Privacy Matters</h4>
+              <p style="margin: 0 0 16px;">We are committed to protecting your personal data. This portal collects only information necessary to provide services and improve your experience.</p>
+
+              <h4 style="margin: 16px 0 8px; font-weight: 700;">Data We Collect</h4>
+              <ul style="margin: 0 0 16px; padding-left: 20px;">
+                <li>Name, email, and contact information</li>
+                <li>Residential address and barangay</li>
+                <li>Feedback, suggestions, and submitted forms</li>
+                <li>Activity logs (for security purposes)</li>
+                <li>Browser and device information</li>
+              </ul>
+
+              <h4 style="margin: 16px 0 8px; font-weight: 700;">How We Protect Your Data</h4>
+              <ul style="margin: 0 0 16px; padding-left: 20px;">
+                <li>All data is encrypted using industry-standard protocols</li>
+                <li>Access is restricted to authorized personnel only</li>
+                <li>Regular security audits and updates</li>
+                <li>Compliance with Data Privacy Act of 2012</li>
+              </ul>
+
+              <h4 style="margin: 16px 0 8px; font-weight: 700;">Your Rights</h4>
+              <ul style="margin: 0 0 16px; padding-left: 20px;">
+                <li>Access your personal data anytime</li>
+                <li>Request corrections to your information</li>
+                <li>Request deletion of your account and data</li>
+                <li>Opt-out of marketing communications</li>
+              </ul>
+
+              <h4 style="margin: 16px 0 8px; font-weight: 700;">Contact Us</h4>
+              <p style="margin: 0;">If you have privacy concerns, contact our Data Protection Officer at: <strong>dpo@valenzuela.gov.ph</strong></p>
             </div>
           </div>
         </div>
       </div>
+      <?php endif; ?>
     </div>
   </div>
 
@@ -989,7 +1336,7 @@ if ($current_role === 'admin') {
     <div style="background: white; margin: 20px auto; border-radius: 12px; max-width: 900px; max-height: 90vh; overflow-y: auto; position: relative;">
       <div style="position: sticky; top: 0; background: white; padding: 16px 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; z-index: 10;">
         <h2 id="modal-title" style="margin: 0; font-size: 18px; font-weight: 700;">Document Title</h2>
-        <button onclick="closeDocument()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--muted);">✕</button>
+        <button onclick="closeDocument()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--muted);">×</button>
       </div>
       <iframe id="document-viewer" style="width: 100%; height: calc(90vh - 60px); border: none;"></iframe>
     </div>
@@ -1143,7 +1490,7 @@ if ($current_role === 'admin') {
       // Update language button
       const langBtn = document.getElementById('language-btn');
       if (langBtn) {
-        langBtn.textContent = currentLanguage === 'en' ? '🌐 English' : '🇵🇭 Filipino';
+        langBtn.textContent = currentLanguage === 'en' ? 'EN' : 'TL';
       }
 
       // Update specific elements that may not have data-i18n
@@ -1277,12 +1624,12 @@ if ($current_role === 'admin') {
           <div class="meta">${sug.author} • ${new Date(sug.timestamp).toLocaleDateString()}</div>
           <div class="content">${escapeHtml(sug.text)}</div>
           <div class="suggestion-stats">
-            <span>👍 ${sug.supports.length} supports</span>
-            <span>💬 ${sug.comments.length} comments</span>
+            <span>▲ ${sug.supports.length} supports</span>
+            <span>≡ ${sug.comments.length} comments</span>
           </div>
           <div style="display: flex; gap: 8px; margin-top: 10px;">
-            <button onclick="supportSuggestion('${sug.id}')" style="padding: 6px 12px; background: ${sug.supports.includes(CURRENT_CITIZEN) ? 'var(--red-600)' : 'var(--gray-200)'}; color: ${sug.supports.includes(CURRENT_CITIZEN) ? 'white' : 'var(--gray-800)'}; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit;">👍 Support</button>
-            <button onclick="toggleCommentForm('sug_${sug.id}')" style="padding: 6px 12px; background: var(--gray-200); color: var(--gray-800); border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit;">💬 Comment</button>
+            <button onclick="supportSuggestion('${sug.id}')" style="padding: 6px 12px; background: ${sug.supports.includes(CURRENT_CITIZEN) ? 'var(--red-600)' : 'var(--gray-200)'}; color: ${sug.supports.includes(CURRENT_CITIZEN) ? 'white' : 'var(--gray-800)'}; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit;">▲ Support</button>
+            <button onclick="toggleCommentForm('sug_${sug.id}')" style="padding: 6px 12px; background: var(--gray-200); color: var(--gray-800); border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit;">≡ Comment</button>
           </div>
           <div id="sug_${sug.id}-comments" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-200);">
             <div style="display: flex; gap: 8px; margin-bottom: 10px;">
@@ -1325,6 +1672,59 @@ if ($current_role === 'admin') {
           console.warn('Failed to load server posts', err); 
           feed.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--muted);">Unable to load suggestions. Please refresh the page.</div>';
         });
+    }
+
+    function addAnnouncementComment(annId) {
+      const input = document.getElementById('comment-ann-' + annId);
+      if (!input || !input.value.trim()) return;
+
+      const commentsList = document.getElementById('comments-list-ann-' + annId);
+      const comment = {
+        author: 'You',
+        text: input.value.trim(),
+        timestamp: new Date().toLocaleString()
+      };
+
+      const commentEl = document.createElement('div');
+      commentEl.style.cssText = 'padding: 8px; background: var(--gray-100); border-radius: 6px; font-size: 13px;';
+      commentEl.innerHTML = `
+        <div style="font-weight: 600; color: var(--gray-800);">${escapeHtml(comment.author)}</div>
+        <div style="color: var(--gray-700); margin: 2px 0;">${escapeHtml(comment.text)}</div>
+        <div style="color: var(--muted); font-size: 11px;">${comment.timestamp}</div>
+      `;
+      commentsList.appendChild(commentEl);
+      input.value = '';
+    }
+
+    function toggleCommentForm(id) {
+      const section = document.getElementById(id + '-comments');
+      if (section) {
+        section.style.display = section.style.display === 'none' ? 'block' : 'none';
+        if (section.style.display === 'block') {
+          const inputId = id.replace('ann_', 'comment-ann-');
+          const input = document.getElementById(inputId);
+          if (input) input.focus();
+        }
+      }
+    }
+
+    function toggleLikeAnnouncement(btn, annId) {
+      btn.classList.toggle('liked');
+      const likeCount = btn.querySelector('.like-count');
+      let count = parseInt(likeCount.textContent) || 0;
+      count = btn.classList.contains('liked') ? count + 1 : count - 1;
+      likeCount.textContent = count;
+    }
+
+    function toggleSaveAnnouncement(btn, annId) {
+      btn.classList.toggle('saved');
+      if (btn.classList.contains('saved')) {
+        btn.style.color = 'var(--red-600)';
+        btn.style.fontWeight = '600';
+      } else {
+        btn.style.color = 'var(--muted)';
+        btn.style.fontWeight = '500';
+      }
     }
 
     function supportSuggestion(id) {
@@ -1428,7 +1828,32 @@ if ($current_role === 'admin') {
       }
     }
 
-    // Close menu on Escape
+    function closeMenu() {
+      const overlay = document.getElementById('overlay-menu');
+      if (overlay) {
+        overlay.classList.remove('active');
+        overlay.style.display = 'none';
+      }
+      const btn = document.getElementById('menu-btn');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+
+    function updateActiveMenuLink() {
+      const params = new URLSearchParams(window.location.search);
+      const currentSection = params.get('section') || 'dashboard';
+      
+      document.querySelectorAll('.overlay-menu-panel a[data-section]').forEach(link => {
+        const dataSection = link.getAttribute('data-section');
+        if (dataSection === currentSection) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      });
+    }
+
+    // Initialize active menu link on page load
+    window.addEventListener('DOMContentLoaded', updateActiveMenuLink);
     document.addEventListener('keydown', function(e){ if(e.key === 'Escape'){ const overlay = document.getElementById('overlay-menu'); if(overlay && overlay.classList.contains('active')) toggleMenu(); } });
 
     // Theme Toggle (dark/light mode)
@@ -1481,7 +1906,7 @@ if ($current_role === 'admin') {
       currentLanguage = lang;
       localStorage.setItem('language', lang);
       updateLanguage();
-      document.getElementById('language-btn').textContent = lang === 'en' ? '🌐 English' : '🇵🇭 Filipino';
+      document.getElementById('language-btn').textContent = lang === 'en' ? 'EN' : 'TL';
     }
 
     function setTheme(theme) {
@@ -1526,6 +1951,368 @@ if ($current_role === 'admin') {
 
     // Auto-refresh suggestions every 5 seconds from server
     setInterval(loadServerPosts, 5000);
+
+    // Saved Items Modal Functions
+    function openSavedItemsModal() {
+      const overlay = document.getElementById('saved-items-overlay');
+      if (!overlay) return;
+      overlay.classList.add('active');
+      overlay.style.display = 'block';
+      loadSavedItemsForModal();
+    }
+
+    function closeSavedItemsModal() {
+      const overlay = document.getElementById('saved-items-overlay');
+      if (overlay) {
+        overlay.classList.remove('active');
+        overlay.style.display = 'none';
+      }
+    }
+
+    function loadSavedItemsForModal() {
+      const container = document.getElementById('modal-saved-items-container');
+      if (!container) return;
+      
+      // Get all announcements from the page or fetch them
+      const allAnns = document.querySelectorAll('[data-announcement-id]');
+      let hasSaved = false;
+      let html = '';
+      
+      // If no announcements on page, fetch them
+      if (allAnns.length === 0) {
+        fetch('API/get_announcements_api.php')
+          .then(r => r.json())
+          .then(data => {
+            if (data && data.announcements) {
+              html = generateSavedItemsHtml(data.announcements);
+              container.innerHTML = html || '<div style="text-align: center; padding: 30px 20px; color: var(--muted);">No saved items yet. Save announcements!</div>';
+            }
+          })
+          .catch(err => {
+            console.error('Error loading announcements:', err);
+            container.innerHTML = '<div style="text-align: center; padding: 30px 20px; color: var(--muted);">Error loading saved items.</div>';
+          });
+      } else {
+        // Use announcements already on page
+        allAnns.forEach(ann => {
+          const savesEl = ann.querySelector('[data-saves]');
+          const saves = savesEl ? JSON.parse(savesEl.dataset.saves || '[]') : [];
+          const userId = <?php echo json_encode($user_id); ?>;
+          
+          if (saves.includes(userId)) {
+            hasSaved = true;
+            html += generateSingleSavedItemHtml(ann);
+          }
+        });
+        
+        if (!hasSaved) {
+          html = '<div style="text-align: center; padding: 30px 20px; color: var(--muted);">No saved items yet. Save announcements!</div>';
+        }
+        container.innerHTML = html;
+      }
+    }
+
+    function generateSingleSavedItemHtml(annElement) {
+      const id = annElement.getAttribute('data-announcement-id');
+      const title = annElement.querySelector('[data-title]')?.textContent || 'Untitled';
+      const content = annElement.querySelector('[data-content]')?.textContent || '';
+      const date = annElement.querySelector('[data-date]')?.textContent || '';
+      const img = annElement.querySelector('img')?.src || '';
+      
+      let html = '<div style="padding: 16px; background: var(--gray-100); border-radius: 8px; border-left: 4px solid var(--red-600); margin-bottom: 12px;">';
+      if (img) {
+        html += '<div style="margin-bottom: 12px; border-radius: 6px; overflow: hidden;"><img src="' + img + '" alt="' + title + '" style="width: 100%; max-height: 200px; object-fit: cover;"></div>';
+      }
+      html += '<div style="display: flex; justify-content: space-between; align-items: start;">';
+      html += '<div style="flex: 1;"><h3 style="margin: 0 0 6px; font-size: 16px; font-weight: 700;">' + title + '</h3>';
+      html += '<p style="margin: 0 0 10px; font-size: 13px; color: var(--muted);">' + date + '</p>';
+      html += '<div style="font-size: 14px; color: var(--gray-700);">' + (content.substring(0, 300) + (content.length > 300 ? '...' : '')) + '</div></div>';
+      html += '<button onclick="removeSavedItemFromModal(' + id + ', this)" style="padding: 8px 12px; background: var(--gray-200); color: var(--gray-800); border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; margin-left: 12px; white-space: nowrap;">Remove</button>';
+      html += '</div></div>';
+      return html;
+    }
+
+    function generateSavedItemsHtml(announcements) {
+      const userId = <?php echo json_encode($user_id); ?>;
+      let html = '';
+      let hasSaved = false;
+      
+      announcements.forEach(ann => {
+        const saved_by = JSON.parse(ann.saved_by || '[]');
+        if (saved_by.includes(userId)) {
+          hasSaved = true;
+          html += '<div style="padding: 16px; background: var(--gray-100); border-radius: 8px; border-left: 4px solid var(--red-600); margin-bottom: 12px;" data-saved-item="' + ann.id + '">';
+          if (ann.image_path) {
+            html += '<div style="margin-bottom: 12px; border-radius: 6px; overflow: hidden;"><img src="' + ann.image_path + '" alt="' + ann.title + '" style="width: 100%; max-height: 200px; object-fit: cover;"></div>';
+          }
+          html += '<div style="display: flex; justify-content: space-between; align-items: start;">';
+          html += '<div style="flex: 1;"><h3 style="margin: 0 0 6px; font-size: 16px; font-weight: 700;">' + ann.title + '</h3>';
+          html += '<p style="margin: 0 0 10px; font-size: 13px; color: var(--muted);">| ' + new Date(ann.created_at).toLocaleDateString() + '</p>';
+          html += '<div style="font-size: 14px; color: var(--gray-700);">' + (ann.content.substring(0, 300) + (ann.content.length > 300 ? '...' : '')) + '</div></div>';
+          html += '<button onclick="removeSavedItemFromModal(' + ann.id + ', this)" style="padding: 8px 12px; background: var(--gray-200); color: var(--gray-800); border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; margin-left: 12px; white-space: nowrap;">Remove</button>';
+          html += '</div></div>';
+        }
+      });
+      
+      return html;
+    }
+
+    function removeSavedItemFromModal(announcementId, button) {
+      button.disabled = true;
+      button.textContent = 'Removing...';
+      
+      toggleAnnouncementAction({
+        target: button,
+        stopPropagation: function() {}
+      }, announcementId, 'save').then(() => {
+        // Remove the item
+        const itemContainer = button.closest('[data-saved-item], [style*="padding: 16px"]');
+        if (itemContainer) {
+          itemContainer.style.opacity = '0';
+          itemContainer.style.transition = 'opacity 0.3s ease';
+          setTimeout(() => {
+            itemContainer.remove();
+            
+            // Check if no items left
+            const container = document.getElementById('modal-saved-items-container');
+            if (container && container.children.length === 0) {
+              container.innerHTML = '<div style="text-align: center; padding: 30px 20px; color: var(--muted);">No saved items yet. Save announcements!</div>';
+            }
+          }, 300);
+        }
+      }).catch(err => {
+        button.disabled = false;
+        button.textContent = 'Remove';
+        alert('Error removing saved item');
+        console.error(err);
+      });
+    }
+
+    function openNotifications() {
+      const overlay = document.getElementById('notifications-overlay');
+      if (!overlay) return;
+      overlay.classList.add('active');
+      overlay.style.display = 'block';
+    }
+
+    function closeNotificationsModal() {
+      const overlay = document.getElementById('notifications-overlay');
+      if (overlay) {
+        overlay.classList.remove('active');
+        overlay.style.display = 'none';
+      }
+    }
+
+    // ========================================
+    // Settings Functions
+    // ========================================
+    function saveProfileChanges() {
+      const fullname = document.getElementById('profile-fullname')?.value;
+      const email = document.getElementById('profile-email')?.value;
+      const username = document.getElementById('profile-username')?.value;
+
+      if (!fullname || !email) {
+        alert('Please fill in name and email');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('action', 'update_profile');
+      formData.append('fullname', fullname);
+      formData.append('email', email);
+      formData.append('username', username || '');
+
+      fetch('API/update_profile.php', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert('Profile updated successfully!');
+          location.reload();
+        } else {
+          alert('Error: ' + data.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to update profile');
+      });
+    }
+
+    function uploadProfilePhoto() {
+      const fileInput = document.getElementById('photo-upload');
+      if (!fileInput || !fileInput.files[0]) {
+        alert('Please select a file');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('action', 'upload_photo');
+      formData.append('photo', fileInput.files[0]);
+
+      fetch('API/update_profile.php', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert('Photo uploaded successfully!');
+          location.reload();
+        } else {
+          alert('Error: ' + data.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to upload photo');
+      });
+    }
+
+    function updatePassword() {
+      const currentPassword = document.getElementById('current-password')?.value;
+      const newPassword = document.getElementById('new-password')?.value;
+      const confirmPassword = document.getElementById('confirm-password')?.value;
+
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        alert('Please fill in all password fields');
+        return;
+      }
+
+      if (newPassword !== confirmPassword) {
+        alert('New passwords do not match');
+        return;
+      }
+
+      if (newPassword.length < 6) {
+        alert('New password must be at least 6 characters');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('action', 'change_password');
+      formData.append('current_password', currentPassword);
+      formData.append('new_password', newPassword);
+      formData.append('confirm_password', confirmPassword);
+
+      fetch('API/update_profile.php', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert('Password changed successfully!');
+          document.getElementById('current-password').value = '';
+          document.getElementById('new-password').value = '';
+          document.getElementById('confirm-password').value = '';
+          togglePasswordChange();
+        } else {
+          alert('Error: ' + data.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to change password');
+      });
+    }
+
+    function savePreferences() {
+      const language = document.querySelector('select')?.value || 'en';
+      const themeRadio = document.querySelector('input[name="theme"]:checked');
+      const theme = themeRadio?.value || 'light';
+      const emailNotif = document.getElementById('email-notif')?.checked || false;
+      const announcementNotif = document.getElementById('announcement-notif')?.checked || false;
+      const feedbackNotif = document.getElementById('feedback-notif')?.checked || false;
+
+      const formData = new FormData();
+      formData.append('action', 'save_preferences');
+      formData.append('language', language);
+      formData.append('theme', theme);
+      if (emailNotif) formData.append('email_notif', '1');
+      if (announcementNotif) formData.append('announcement_notif', '1');
+      if (feedbackNotif) formData.append('feedback_notif', '1');
+
+      fetch('API/update_profile.php', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert('Preferences saved successfully!');
+        } else {
+          alert('Error: ' + data.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to save preferences');
+      });
+    }
+
+    function clearLocalStorage() {
+      if (confirm('Are you sure you want to clear all saved data? (Theme and language will be preserved)')) {
+        localStorage.clear();
+        alert('Saved data cleared successfully!');
+        location.reload();
+      }
+    }
+  
+
+    function loadNotificationsForModal() {
+      // Already rendered in HTML - no need to load dynamically
+    }
+
+    // Settings Tab Functions
+    function switchSettingsTab(tabName) {
+      // Hide all tabs
+      document.querySelectorAll('.settings-tab-content').forEach(tab => {
+        tab.style.display = 'none';
+      });
+      
+      // Remove active state from all buttons
+      document.querySelectorAll('.settings-tab').forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.borderBottomColor = 'transparent';
+        btn.style.color = 'var(--muted)';
+      });
+      
+      // Show selected tab
+      const selectedTab = document.getElementById(tabName + '-tab');
+      if (selectedTab) {
+        selectedTab.style.display = 'block';
+      }
+      
+      // Mark button as active
+      const activeBtn = document.querySelector(`.settings-tab[data-tab="${tabName}"]`);
+      if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.style.borderBottomColor = 'var(--red-600)';
+        activeBtn.style.color = 'var(--red-600)';
+      }
+    }
+
+    function togglePasswordChange() {
+      const form = document.getElementById('password-change-form');
+      if (form) {
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+      }
+    }
   </script>
-</body>
-</html>
+
+  <!-- Notifications Side Panel -->
+  <div id="notifications-overlay" onclick="if(event.target.id === 'notifications-overlay') closeNotificationsModal()">
+    <div class="overlay-menu-panel" style="right: 16px; top: 8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; padding-bottom:12px; border-bottom: 1px solid var(--gray-200);">
+        <h2 style="margin: 0; font-size: 18px; font-weight: 700;">● Notifications</h2>
+        <button onclick="closeNotificationsModal()" style="background: none; border: none; font-size: 20px; cursor: pointer; padding: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">×</button>
+      </div>
+      <div style="padding: 16px; text-align: center; color: var(--muted);">
+        <div style="font-size: 40px; margin-bottom: 12px;">◐</div>
+        <p style="margin: 0; font-size: 14px;">You have no new notifications at this time.</p>
+      </div>
+    </div>
+  </div>
