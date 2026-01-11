@@ -78,16 +78,25 @@ try {
             $sql = "UPDATE users SET $set_clause WHERE id = $id";
             
             if ($conn->query($sql) === TRUE) {
-                // Log the action
-                require_once '../DATABASE/user-logs.php';
-                logUserAction(
+                // Log admin action to AUDIT LOG (not user activity log)
+                require_once '../DATABASE/audit-log.php';
+                $change_description = 'Updated user #' . $id;
+                if (isset($data['role'])) {
+                    $change_description .= ' - Role changed to: ' . $data['role'];
+                }
+                if (isset($data['status'])) {
+                    $change_description .= ' - Status changed to: ' . $data['status'];
+                }
+                logAction(
                     $_SESSION['user_id'],
                     $_SESSION['username'],
                     'modify_user',
                     'user',
                     $id,
-                    "Updated user #$id",
-                    'success'
+                    null,
+                    json_encode($data),
+                    'success',
+                    $change_description
                 );
                 
                 echo json_encode(['success' => true]);

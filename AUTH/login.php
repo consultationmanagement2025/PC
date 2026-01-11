@@ -26,13 +26,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $_SESSION['role'] = $user['role'] ?? 'citizen'; // Default to citizen if role is NULL
                 session_regenerate_id(true);
                 
-                // Log user login
-                $userRole = $user['role'] ?? 'citizen';
-                logUserAction($user['id'], $user['fullname'], 'login', 'authentication', 'user', $user['id'], 'User logged in', 'success');
+                $userRole = $user['role'] ?? 'Citizen';
                 
-                // Log admin login in audit log
-                if ($userRole === 'admin') {
+                // Log ADMIN logins to audit log, CITIZEN logins to user activity log
+                if ($userRole === 'Administrator') {
+                    // Admin login - log to audit log
                     logAdminLogin($user['id'], $user['fullname']);
+                } else {
+                    // Citizen login - log to user activity log
+                    logUserAction($user['id'], $user['fullname'], 'login', 'authentication', 'user', $user['id'], 'Citizen logged in', 'success');
                 }
                 
                 // Redirect based on user role

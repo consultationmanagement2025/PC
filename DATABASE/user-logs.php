@@ -1,7 +1,20 @@
 <?php
 /**
- * User Action Logging System for PCMP
- * Tracks all user activities: posts, comments, approvals, etc.
+ * User Activity Logging System for PCMP
+ * IMPORTANT: This logs CITIZEN ACTIONS ONLY (not admin actions)
+ * Admin actions should go to DATABASE/audit-log.php via logAction() function
+ * 
+ * Purpose: Track citizen engagement and activity (metrics, moderation, posts)
+ * Examples:
+ * - Citizen login/logout
+ * - Citizen creates post
+ * - Citizen submits feedback
+ * - Citizen comments on post
+ * 
+ * Do NOT log here:
+ * - Admin logins/logouts
+ * - Admin user management actions
+ * - Admin consultation management
  */
 
 require_once __DIR__ . '/../db.php';
@@ -41,10 +54,29 @@ function initializeUserLogsTable() {
 }
 
 // ========================================
-// Log a User Action
+// Log a User Action (CITIZENS ONLY - NOT ADMINS)
 // ========================================
 function logUserAction($user_id, $username, $action, $action_type = null, $entity_type = null, $entity_id = null, $description = null, $status = 'success', $details = null) {
     global $conn;
+    
+    // IMPORTANT: Only log citizen actions, NOT admin actions
+    // Admin actions should be logged to audit_logs instead via logAction()
+    // Exclude admin login/logout - those go to audit log
+    if (($action === 'login' || $action === 'logout') && $user_id) {
+        $stmt = $conn->prepare("SELECT role FROM users WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("i", $user_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($row = $result->fetch_assoc()) {
+                if ($row['role'] === 'Administrator') {
+                    $stmt->close();
+                    return true; // Skip - will be logged in audit log instead
+                }
+            }
+            $stmt->close();
+        }
+    }
     
     // Ensure table exists
     initializeUserLogsTable();

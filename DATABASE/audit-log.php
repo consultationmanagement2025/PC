@@ -1,7 +1,16 @@
 <?php
 /**
  * Audit Log System for PCMP
- * Tracks all administrative actions: who did what and when
+ * IMPORTANT: This logs ADMIN ACTIONS ONLY (user management, consultation creation, post approval, etc.)
+ * Do NOT use this for citizen activity logging - use DATABASE/user-logs.php instead
+ * 
+ * Purpose: Track what admins did to the system (security, compliance, accountability)
+ * Examples:
+ * - Admin login/logout
+ * - Admin creates/edits/deletes consultation
+ * - Admin creates/edits/deletes user
+ * - Admin changes user roles or status
+ * - Admin approves/rejects posts
  */
 
 require_once __DIR__ . '/../db.php';
