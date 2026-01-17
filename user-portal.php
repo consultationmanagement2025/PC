@@ -268,9 +268,10 @@ if (!in_array($section, $allowed_sections)) {
       position: sticky;
       top: 0;
       z-index: 70;
+      gap: 12px;
     }
 
-    .top-bar h1 { margin: 0; font-size: 24px; font-weight: 700; color: var(--gray-800); }
+    .top-bar h1 { margin: 0; font-size: 24px; font-weight: 700; color: var(--gray-800); flex: 1; }
 
     .user-info {
       display: flex;
@@ -570,10 +571,18 @@ if (!in_array($section, $allowed_sections)) {
       .sidebar { width: 100%; height: auto; position: relative; }
       .main-content { margin-left: 0; padding: 16px; }
       .grid-2 { grid-template-columns: 1fr; }
-      .top-bar { flex-direction: column; align-items: flex-start; gap: 12px; padding-right: 16px; }
-      .user-info { position: static; transform: none; right: auto; top: auto; margin-left: auto; }
+      .top-bar { flex-direction: row; align-items: center; gap: 8px; padding-right: 16px; flex-wrap: nowrap; }
+      .top-bar h1 { font-size: 18px; flex: 1; margin: 0; }
+      .top-bar img { width: 40px !important; height: 40px !important; flex-shrink: 0; }
+      .user-info { position: static; transform: none; right: auto; top: auto; margin-left: 0; }
       .hero-banner { padding: 20px; }
       .hero-banner h1 { font-size: 24px; }
+      .quick-links { background: transparent; box-shadow: none; padding: 0; margin-bottom: 16px; border-radius: 0; }
+      .quick-links.mobile-collapsed .links-grid { display: none; }
+      .quick-links h3 { margin: 0; padding: 0; font-size: 14px; }
+      .links-grid { display: flex; flex-direction: row; gap: 8px; flex-wrap: wrap; }
+      .link-btn { flex: 1; min-width: 90px; padding: 12px 8px; font-size: 11px; text-align: center; }
+      .link-btn .icon { font-size: 20px; margin-bottom: 4px; }
     }
 
     /* Suggestion Box Styles */
@@ -1806,6 +1815,31 @@ if (!in_array($section, $allowed_sections)) {
     // Close modal when clicking outside
     document.getElementById('document-modal').addEventListener('click', function(e) {
       if (e.target === this) closeDocument();
+    });
+
+    function toggleQuickActions() {
+      const quickLinks = document.querySelector('.quick-links');
+      if (quickLinks) {
+        quickLinks.classList.toggle('mobile-collapsed');
+      }
+    }
+
+    // Initialize quick actions toggle on mobile
+    window.addEventListener('DOMContentLoaded', function() {
+      const isMobile = window.innerWidth <= 768;
+      const quickLinks = document.querySelector('.quick-links');
+      const h3 = quickLinks ? quickLinks.querySelector('h3') : null;
+      
+      if (isMobile && h3) {
+        h3.style.cursor = 'pointer';
+        h3.style.display = 'flex';
+        h3.style.alignItems = 'center';
+        h3.style.justifyContent = 'space-between';
+        h3.style.userSelect = 'none';
+        h3.innerHTML = 'Quick Actions <span style="font-size: 12px;">▼</span>';
+        h3.onclick = toggleQuickActions;
+        quickLinks.classList.add('mobile-collapsed');
+      }
     });
 
     // Top-right menu controls (toggle, blur background, and aria updates)

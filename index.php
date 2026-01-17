@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <meta name="theme-color" content="#dc2626">
     <title>Public Consultation</title>
@@ -36,6 +36,13 @@
             position: sticky;
             top: 0;
             z-index: 50;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 768px) {
+            header {
+                padding: 0.75rem 1rem;
+            }
         }
 
         .logo-section {
@@ -58,6 +65,18 @@
             margin: 0 15px;
             border-bottom: 2px solid transparent;
             font-weight: 500;
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            nav {
+                display: none;
+            }
+
+            nav a {
+                margin: 0 8px;
+                font-size: 12px;
+            }
         }
 
         nav a:hover,
@@ -78,6 +97,13 @@
             transition: 0.3s;
         }
 
+        @media (max-width: 768px) {
+            .signin-btn, .signup-btn {
+                padding: 0.45rem 0.9rem;
+                font-size: 11px;
+            }
+        }
+
         .signin-btn:hover, .signup-btn:hover {
             background: #7f1d1d;
         }
@@ -91,6 +117,30 @@
             align-items: center;
             color: white;
             gap: 3rem;
+        }
+
+        @media (max-width: 1024px) {
+            .hero {
+                padding: 3rem 1.5rem;
+                gap: 2rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .hero {
+                flex-direction: column;
+                text-align: center;
+                padding: 2rem 1rem;
+                gap: 1.5rem;
+            }
+
+            .hero h2 {
+                font-size: 2rem !important;
+            }
+
+            .hero p {
+                font-size: 0.95rem !important;
+            }
         }
 
         /* Fade-in transitions */
@@ -130,6 +180,13 @@
             border-radius: 12px;
             mix-blend-mode: screen;
             filter: drop-shadow(0 10px 30px rgba(0,0,0,0.2));
+        }
+
+        @media (max-width: 768px) {
+            .illustration-img {
+                max-width: 280px;
+                height: auto;
+            }
         }
 
         @media (max-width: 768px) {
