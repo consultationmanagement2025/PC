@@ -57,6 +57,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <link rel="icon" type="image/webp" href="images/logo.webp">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
         @keyframes fade-in-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
@@ -152,11 +153,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             
             <!-- Alternative Login -->
             <div class="grid grid-cols-2 gap-3">
-        
-                <button type="button" class="flex items-center justify-center px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
-                    <i class="bi bi-google text-lg mr-2 text-red-500"></i>
-                    <span class="text-sm font-medium text-gray-700">Google</span>
-                </button>
+                <div id="g_id_onload" data-client_id="YOUR_GOOGLE_CLIENT_ID" data-callback="handleGoogleLogin">
+                </div>
+                <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="signin" data-shape="rectangular" data-logo_alignment="left" data-width="100%"></div>
             </div>
             
             <!-- Register Link -->
@@ -182,24 +181,55 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     </div>
     
     <script>
-        // Toggle password visibility
-        document.getElementById('toggle-password')?.addEventListener('click', function() {
-            const passwordField = document.getElementById('password');
-            const eyeIcon = document.getElementById('eye-icon');
+        // Handle Google Login
+        function handleGoogleLogin(response) {
+            const credential = response.credential;
             
-            if (passwordField.type === 'password') {
-                passwordField.type = 'text';
-                eyeIcon.classList.remove('bi-eye');
-                eyeIcon.classList.add('bi-eye-slash');
-            } else {
-                passwordField.type = 'password';
-                eyeIcon.classList.remove('bi-eye-slash');
-                eyeIcon.classList.add('bi-eye');
-            }
-        });
+            // Send token to backend
+            const formData = new FormData();
+            formData.append('action', 'google_login');
+            formData.append('token', credential);
+            
+            fetch('AUTH/google_auth.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    localStorage.setItem('isLoggedIn', 'true');
+                    localStorage.setItem('role', data.role || 'citizen');
+                    window.location.href = data.redirect || 'user-portal.php';
+                } else {
+                    alert('Login failed: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred during login');
+            });
+        }
 
-        // Auto-focus email
-        document.getElementById('email').focus();
+        window.onload = function() {
+            // Toggle password visibility
+            document.getElementById('toggle-password')?.addEventListener('click', function() {
+                const passwordField = document.getElementById('password');
+                const eyeIcon = document.getElementById('eye-icon');
+                
+                if (passwordField.type === 'password') {
+                    passwordField.type = 'text';
+                    eyeIcon.classList.remove('bi-eye');
+                    eyeIcon.classList.add('bi-eye-slash');
+                } else {
+                    passwordField.type = 'password';
+                    eyeIcon.classList.remove('bi-eye-slash');
+                    eyeIcon.classList.add('bi-eye');
+                }
+            });
+
+            // Auto-focus email
+            document.getElementById('email').focus();
+        };
     </script>
 </body>
 </html>
