@@ -27,4 +27,5 @@ if ($insertId) {
 } else {
     echo json_encode(['error' => 'Failed to create post']);
     // Log failed post creation
-    logUserAction($user_id, $author, 'submitted_post', 'post', 'consultation_post', null, 'Failed to create post', 'failure');
+    logUserAction($user_id, $author, 'submitted_post', 'post', 'consultation_post', null, 'Failed to create post', 'failure');}
+?>

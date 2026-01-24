@@ -3547,9 +3547,37 @@ function renderSettings() {
 function saveSettings() {
     const name = document.getElementById('setting-name')?.value || AppData.currentUser.name;
     const email = document.getElementById('setting-email')?.value || AppData.currentUser.email;
-    AppData.currentUser.name = name;
-    AppData.currentUser.email = email;
-    showNotification('Settings saved', 'success');
+    
+    if (!name || !email) {
+        showNotification('Name and email are required', 'warning');
+        return;
+    }
+
+    // Send update to backend
+    const formData = new FormData();
+    formData.append('action', 'update_profile');
+    formData.append('fullname', name);
+    formData.append('email', email);
+    formData.append('username', AppData.currentUser.name);
+
+    fetch('API/update_profile.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            AppData.currentUser.name = name;
+            AppData.currentUser.email = email;
+            showNotification('Settings saved successfully', 'success');
+        } else {
+            showNotification(data.message || 'Failed to save settings', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving settings:', error);
+        showNotification('Error saving settings', 'error');
+    });
 }
 
 // ==============================

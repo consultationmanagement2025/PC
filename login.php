@@ -58,6 +58,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         * {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -190,24 +191,55 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     </div>
     
     <script>
-        // Toggle password visibility
-        document.getElementById('toggle-password')?.addEventListener('click', function() {
-            const passwordField = document.getElementById('password');
-            const eyeIcon = document.getElementById('eye-icon');
+        // Handle Google Login
+        function handleGoogleLogin(response) {
+            const credential = response.credential;
             
-            if (passwordField.type === 'password') {
-                passwordField.type = 'text';
-                eyeIcon.classList.remove('bi-eye');
-                eyeIcon.classList.add('bi-eye-slash');
-            } else {
-                passwordField.type = 'password';
-                eyeIcon.classList.remove('bi-eye-slash');
-                eyeIcon.classList.add('bi-eye');
-            }
-        });
+            // Send token to backend
+            const formData = new FormData();
+            formData.append('action', 'google_login');
+            formData.append('token', credential);
+            
+            fetch('AUTH/google_auth.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    localStorage.setItem('isLoggedIn', 'true');
+                    localStorage.setItem('role', data.role || 'citizen');
+                    window.location.href = data.redirect || 'user-portal.php';
+                } else {
+                    alert('Login failed: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred during login');
+            });
+        }
 
-        // Auto-focus email
-        document.getElementById('email').focus();
+        window.onload = function() {
+            // Toggle password visibility
+            document.getElementById('toggle-password')?.addEventListener('click', function() {
+                const passwordField = document.getElementById('password');
+                const eyeIcon = document.getElementById('eye-icon');
+                
+                if (passwordField.type === 'password') {
+                    passwordField.type = 'text';
+                    eyeIcon.classList.remove('bi-eye');
+                    eyeIcon.classList.add('bi-eye-slash');
+                } else {
+                    passwordField.type = 'password';
+                    eyeIcon.classList.remove('bi-eye-slash');
+                    eyeIcon.classList.add('bi-eye');
+                }
+            });
+
+            // Auto-focus email
+            document.getElementById('email').focus();
+        };
     </script>
 </body>
 </html>
