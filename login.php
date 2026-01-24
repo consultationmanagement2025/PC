@@ -55,9 +55,20 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <meta name="theme-color" content="#dc2626">
     <title>Login - PCMP | City of Valenzuela</title>
     <link rel="icon" type="image/webp" href="images/logo.webp">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        body {
+            letter-spacing: -0.3px;
+        }
+        h1, h2, h3 {
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
         @keyframes fade-in-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fade-in 0.6s ease-out forwards; }
@@ -65,7 +76,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         .animation-delay-100 { animation-delay: 100ms; }
         .animation-delay-200 { animation-delay: 200ms; }
         .animation-delay-300 { animation-delay: 300ms; }
-        @media screen and (max-width: 767px) {
+        @media screen and (max-width: 640px) {
             input, select, textarea { font-size: 16px !important; }
         }
     </style>
@@ -75,17 +86,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <!-- Logo Section -->
         <div class="text-center mb-6 md:mb-8 animate-fade-in">
             <div class="inline-flex items-center justify-center mb-3 md:mb-4">
-                <div class="bg-white rounded-full shadow-xl flex items-center justify-center overflow-hidden" style="width: 120px; height: 120px;">
+                <div class="bg-white rounded-full shadow-xl flex items-center justify-center overflow-hidden" style="width: 100px; height: 100px;">
                     <img src="images/logo.webp" alt="City Government of Valenzuela" class="w-full h-full object-contain p-2">
                 </div>
             </div>
             <h1 class="text-2xl md:text-3xl font-bold text-gray-800 animate-fade-in-up animation-delay-100">PCMP</h1>
-            <p class="text-sm md:text-base text-gray-600 mt-1 md:mt-2 animate-fade-in-up animation-delay-200">Public Consultation Management Portal</p>
+            <p class="text-sm md:text-base text-gray-600 mt-2 animate-fade-in-up animation-delay-200">Public Consultation Management Portal</p>
             <p class="text-xs md:text-sm text-red-600 font-semibold mt-1 animate-fade-in-up animation-delay-300">City Government of Valenzuela</p>
         </div>
         
         <!-- Login Card -->
-        <div class="bg-white rounded-xl md:rounded-2xl shadow-xl p-5 md:p-8 animate-fade-in-up transform hover:shadow-2xl transition-all duration-300">
+        <div class="bg-white rounded-xl md:rounded-2xl shadow-xl p-5 md:p-8 animate-fade-in-up">
             <div class="mb-4 md:mb-6 text-center">
                 <h2 class="text-xl md:text-2xl font-bold text-gray-800">Welcome Back</h2>
                 <p class="text-sm md:text-base text-gray-600 mt-1">Sign in to access your account</p>
@@ -93,8 +104,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             
             <!-- Error Message -->
             <?php if ($error): ?>
-                <div class="mb-4 px-3 md:px-4 py-2 md:py-3 rounded-lg flex items-center text-sm bg-red-50 border border-red-200 text-red-700">
-                    <i class="bi bi-exclamation-circle mr-2"></i>
+                <div class="mb-4 px-3 md:px-4 py-2.5 md:py-3 rounded-lg flex items-center text-sm bg-red-50 border border-red-200 text-red-700">
+                    <i class="bi bi-exclamation-circle mr-2 flex-shrink-0"></i>
                     <span><?= htmlspecialchars($error) ?></span>
                 </div>
             <?php endif; ?>
@@ -103,38 +114,38 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <form method="POST" action="login.php" class="space-y-4 md:space-y-5">
                 <!-- Email Field -->
                 <div>
-                    <label for="email" class="block text-sm font-medium text-gray-700 mb-1 md:mb-2">
-                        <i class="bi bi-envelope mr-1"></i>Email Address
+                    <label for="email" class="block text-sm font-medium text-gray-700 mb-1.5">
+                        <i class="bi bi-envelope mr-1.5"></i>Email Address
                     </label>
                     <input type="email" id="email" name="email" required placeholder="your.email@lgu.gov.ph"
-                           class="w-full px-3 md:px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition text-base">
+                           class="w-full px-3 md:px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition text-base">
                 </div>
                 
                 <!-- Password Field -->
                 <div>
-                    <label for="password" class="block text-sm font-medium text-gray-700 mb-1 md:mb-2">
-                        <i class="bi bi-lock mr-1"></i>Password
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-1.5">
+                        <i class="bi bi-lock mr-1.5"></i>Password
                     </label>
                     <div class="relative">
                         <input type="password" id="password" name="password" required placeholder="Enter your password"
-                               class="w-full px-3 md:px-4 py-2.5 md:py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition text-base">
-                        <button type="button" id="toggle-password" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                               class="w-full px-3 md:px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition text-base">
+                        <button type="button" id="toggle-password" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition">
                             <i class="bi bi-eye text-lg" id="eye-icon"></i>
                         </button>
                     </div>
                 </div>
                 
                 <!-- Remember Me & Forgot Password -->
-                <div class="flex items-center justify-between">
+                <div class="flex items-center justify-between text-sm">
                     <label class="flex items-center cursor-pointer">
                         <input type="checkbox" name="remember" class="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-2 focus:ring-red-500 cursor-pointer">
-                        <span class="ml-2 text-sm text-gray-700">Remember me</span>
+                        <span class="ml-2 text-gray-700 font-medium">Remember me</span>
                     </label>
-                    <a href="#" class="text-sm text-red-600 hover:text-red-700 font-medium transition-colors">Forgot password?</a>
+                    <a href="#" class="text-red-600 hover:text-red-700 font-medium transition-colors">Forgot password?</a>
                 </div>
                 
                 <!-- Submit Button -->
-                <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 md:py-3 rounded-lg transition duration-200 ease-in-out shadow-md hover:shadow-lg flex items-center justify-center">
+                <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 md:py-3 rounded-lg transition duration-200 shadow-md hover:shadow-lg flex items-center justify-center">
                     <span>Sign In</span>
                     <i class="bi bi-arrow-right ml-2"></i>
                 </button>
@@ -146,18 +157,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     <div class="w-full border-t border-gray-300"></div>
                 </div>
                 <div class="relative flex justify-center text-sm">
-                    <span class="px-2 bg-white text-gray-500">Or continue with</span>
+                    <span class="px-2 bg-white text-gray-500 font-medium">Or continue with</span>
                 </div>
             </div>
             
             <!-- Alternative Login -->
-            <div class="grid grid-cols-2 gap-3">
-        
-                <button type="button" class="flex items-center justify-center px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
-                    <i class="bi bi-google text-lg mr-2 text-red-500"></i>
-                    <span class="text-sm font-medium text-gray-700">Google</span>
-                </button>
-            </div>
+            <button type="button" class="w-full flex items-center justify-center px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
+                <i class="bi bi-google text-lg mr-2 text-red-500"></i>
+                <span class="text-sm text-gray-700">Google</span>
+            </button>
             
             <!-- Register Link -->
             <div class="mt-5 md:mt-6 text-center">
@@ -171,7 +179,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <!-- Footer Info -->
         <div class="mt-6 md:mt-8 text-center text-xs md:text-sm text-gray-600">
             <p>&copy; 2025 City Government of Valenzuela. All rights reserved.</p>
-            <div class="mt-2 space-x-2 md:space-x-4">
+            <div class="mt-2 space-x-2 md:space-x-4 text-xs md:text-sm">
                 <a href="#" class="hover:text-red-600 transition-colors">Privacy Policy</a>
                 <span>•</span>
                 <a href="#" class="hover:text-red-600 transition-colors">Terms of Service</a>

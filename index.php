@@ -8,6 +8,7 @@
     <title>Public Consultation</title>
 
     <link rel="icon" type="image/png" href="images/logo.webp">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 
@@ -17,9 +18,26 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-            color: #333;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: #1f2937;
             background: #f3f4f6;
+            font-weight: 400;
+            letter-spacing: -0.3px;
+            line-height: 1.6;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            line-height: 1.2;
+        }
+
+        p {
+            font-weight: 400;
+        }
+
+        strong, .font-bold {
+            font-weight: 600;
         }
 
         html {
@@ -37,11 +55,19 @@
             top: 0;
             z-index: 50;
             flex-wrap: wrap;
+            gap: 1rem;
         }
 
         @media (max-width: 768px) {
             header {
                 padding: 0.75rem 1rem;
+                justify-content: space-between;
+            }
+        }
+
+        @media (max-width: 480px) {
+            header {
+                padding: 0.5rem 0.75rem;
             }
         }
 
@@ -49,23 +75,56 @@
             display: flex;
             align-items: center;
             gap: 0.75rem;
+            min-width: 0;
+            flex: 1;
         }
 
         .logo-section img {
-            width: 50px; height: 50px;
+            width: 45px; height: 45px;
             border-radius: 50%;
             background: white;
             padding: 2px;
+            flex-shrink: 0;
+        }
+
+        .logo-section h1 {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 1rem;
+        }
+
+        @media (max-width: 480px) {
+            .logo-section h1 {
+                font-size: 0.875rem;
+            }
+            
+            .logo-section p {
+                font-size: 0.625rem;
+            }
+        }
+
+        nav {
+            display: flex;
+            gap: 0.5rem;
         }
 
         nav a {
             text-decoration: none;
             color: #666;
             padding: 4px 0;
-            margin: 0 15px;
+            margin: 0 12px;
             border-bottom: 2px solid transparent;
             font-weight: 500;
-            font-size: 14px;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 1024px) {
+            nav a {
+                margin: 0 8px;
+                font-size: 12px;
+            }
         }
 
         @media (max-width: 768px) {
@@ -74,8 +133,8 @@
             }
 
             nav a {
-                margin: 0 8px;
-                font-size: 12px;
+                margin: 0 4px;
+                font-size: 11px;
             }
         }
 
@@ -83,6 +142,12 @@
         nav a.active {
             color: #991b1b;
             border-bottom-color: #991b1b;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 0.75rem;
+            flex-shrink: 0;
         }
 
         .signin-btn, .signup-btn {
@@ -95,12 +160,27 @@
             font-weight: 600;
             cursor: pointer;
             transition: 0.3s;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 1024px) {
+            .signin-btn, .signup-btn {
+                padding: 0.5rem 1rem;
+                font-size: 12px;
+            }
         }
 
         @media (max-width: 768px) {
             .signin-btn, .signup-btn {
-                padding: 0.45rem 0.9rem;
+                padding: 0.5rem 0.9rem;
                 font-size: 11px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .signin-btn, .signup-btn {
+                padding: 0.45rem 0.75rem;
+                font-size: 10px;
             }
         }
 
@@ -130,17 +210,99 @@
             .hero {
                 flex-direction: column;
                 text-align: center;
-                padding: 2rem 1rem;
+                padding: 2.5rem 1.5rem;
+                gap: 2rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .hero {
+                padding: 1.5rem 1rem;
                 gap: 1.5rem;
             }
+        }
 
+        .hero-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .hero h2 {
+            font-size: 3rem;
+            line-height: 1.1;
+        }
+
+        @media (max-width: 1024px) {
             .hero h2 {
-                font-size: 2rem !important;
+                font-size: 2.5rem;
             }
+        }
 
-            .hero p {
-                font-size: 0.95rem !important;
+        @media (max-width: 768px) {
+            .hero h2 {
+                font-size: 2rem;
             }
+        }
+
+        @media (max-width: 480px) {
+            .hero h2 {
+                font-size: 1.5rem;
+            }
+        }
+
+        .hero p {
+            font-size: 1rem;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .hero p {
+                font-size: 0.95rem;
+                margin-bottom: 0.75rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .hero p {
+                font-size: 0.875rem;
+                margin-bottom: 0.5rem;
+                line-height: 1.4;
+            }
+        }
+
+        .hero-button {
+            border: 2px solid white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 600;
+            display: inline-block;
+            text-decoration: none;
+            color: white;
+            transition: all 0.3s ease;
+            font-size: 0.95rem;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 480px) {
+            .hero-button {
+                padding: 0.6rem 1.2rem;
+                font-size: 0.8rem;
+                border-width: 1.5px;
+            }
+        }
+
+        .hero-button:hover {
+            background: white;
+            color: #991b1b;
+        }
+
+        .hero .flex {
+            justify-content: center;
+        }
+
+        .hero a {
+            display: inline-block;
         }
 
         /* Fade-in transitions */
@@ -162,6 +324,11 @@
         /* Red-to-white glow behind image */
         .hero-illustration {
             position: relative;
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-width: 0;
         }
 
         .hero-illustration::before {
@@ -177,9 +344,16 @@
         .illustration-img {
             width: 100%;
             max-width: 420px;
+            height: auto;
             border-radius: 12px;
             mix-blend-mode: screen;
             filter: drop-shadow(0 10px 30px rgba(0,0,0,0.2));
+        }
+
+        @media (max-width: 1024px) {
+            .illustration-img {
+                max-width: 350px;
+            }
         }
 
         @media (max-width: 768px) {
@@ -189,10 +363,9 @@
             }
         }
 
-        @media (max-width: 768px) {
-            .hero {
-                flex-direction: column;
-                text-align: center;
+        @media (max-width: 480px) {
+            .illustration-img {
+                max-width: 220px;
             }
         }
     </style>
@@ -215,26 +388,24 @@
         <a href="#about">ABOUT</a> <!-- smooth scroll -->
     </nav>
 
-    <div class="flex gap-3">
+    <div class="header-buttons">
         <a href="login.php"><button class="signin-btn">LOG-IN</button></a>
-        <a href="login.php?create=1" class="signup-btn">REGISTER</a>
+        <a href="login.php?create=1"><button class="signup-btn">REGISTER</button></a>
     </div>
 </header>
 
 <!-- HERO SECTION -->
 <section class="hero">
     <div class="hero-content fade-in">
-        <h2 class="text-4xl font-bold mb-3">Tayo na, Valenzuela!</h2>
-        <p class="text-md mb-4">Shape the Future of Legislation Through Public Participation</p>
+        <h2 style="font-size: clamp(1.5rem, 8vw, 3rem); margin-bottom: 1rem;">Tayo na, Valenzuela!</h2>
+        <p style="font-size: clamp(0.95rem, 2.5vw, 1rem); margin-bottom: 1rem;">Shape the Future of Legislation Through Public Participation</p>
 
-        <p class="opacity-90 mb-6 leading-relaxed">
-            Digital na Konsultasyon tungo sa Mas Bukas na Pamamahala, kung saan ang<br>
-            Boses ng Valenzuelano ang Gabay ng Pamahalaan.
+        <p class="opacity-90 leading-relaxed">
+            Digital na Konsultasyon tungo sa Mas Bukas na Pamamahala, kung saan ang Boses ng Valenzuelano ang Gabay ng Pamahalaan.
         </p>
 
-        <div class="flex gap-3">
-
-            <a href="login.php?create=1" class="border border-white px-6 py-3 rounded font-semibold hover:bg-white hover:text-red-900 inline-block">
+        <div style="margin-top: 1.5rem; display: flex; justify-content: center;">
+            <a href="login.php?create=1" class="hero-button">
                 REGISTER NOW
             </a>
         </div>
@@ -246,70 +417,69 @@
 </section>
 
 <!-- ABOUT SECTION -->
-<section id="about" class="py-20 px-8 bg-white">
+<section id="about" class="py-12 md:py-20 px-4 md:px-8 bg-white">
     <div class="max-w-6xl mx-auto">
         <!-- Header -->
-        <div class="text-center mb-12">
-            <h2 class="text-4xl font-bold text-red-900 mb-4">About the Public Consultation Portal</h2>
-            <p class="text-gray-600 text-lg max-w-3xl mx-auto">
+        <div class="text-center mb-8 md:mb-12">
+            <h2 style="font-size: clamp(1.5rem, 6vw, 2.25rem); font-weight: 700; color: #991b1b; margin-bottom: 1rem;">About the Public Consultation Portal</h2>
+            <p style="font-size: clamp(0.9rem, 2vw, 1.125rem); color: #4b5563; max-width: 48rem; margin-left: auto; margin-right: auto; padding: 0 0.5rem;">
                 Empowering Valenzuelanos to shape the future through meaningful participation in governance
             </p>
         </div>
 
-        <!-- Main diba Description Card -->
-        <div class="bg-gradient-to-r from-red-50 to-red-100 rounded-lg p-8 mb-12 border-l-4 border-red-900">
-            <p class="text-gray-800 leading-relaxed text-lg mb-4">
+        <!-- Main Description Card -->
+        <div class="bg-gradient-to-r from-red-50 to-red-100 rounded-lg p-6 md:p-8 mb-8 md:mb-12 border-l-4 border-red-900">
+            <p style="color: #374151; line-height: 1.6; margin-bottom: 1rem; font-size: clamp(0.9rem, 2vw, 1.125rem);">
                 The Public Consultation Portal is the official digital platform of the Valenzuela City 
                 Government designed to gather citizen insights, preferences, and concerns on proposed 
                 ordinances, programs, and local policies.
             </p>
-            <p class="text-gray-800 leading-relaxed text-lg">
+            <p style="color: #374151; line-height: 1.6; font-size: clamp(0.9rem, 2vw, 1.125rem);">
                 It promotes transparency, inclusion, and data-driven governance by allowing every 
                 Valenzuelano to participate in shaping legislation anytime, anywhere.
             </p>
         </div>
 
         <!-- Features Grid -->
-
-        <div class="mb-12">
-            <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center">Key Features</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
-                    <i class="bi bi-chat-left-dots text-3xl text-red-900 mb-3"></i>
-                    <h4 class="font-bold text-gray-900 mb-2">Review & Comment</h4>
-                    <p class="text-gray-700 text-sm">Review and comment on draft laws with detailed analysis and insights</p>
+        <div class="mb-8 md:mb-12">
+            <h3 style="font-size: clamp(1.25rem, 5vw, 1.5rem); font-weight: 700; color: #1f2937; margin-bottom: 1.5rem; text-align: center;">Key Features</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                <div class="bg-red-50 p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                    <i class="bi bi-chat-left-dots text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.5rem; font-size: clamp(0.95rem, 2vw, 1rem);">Review & Comment</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem);">Review and comment on draft laws with detailed analysis and insights</p>
                 </div>
 
-                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
-                    <i class="bi bi-graph-up text-3xl text-red-900 mb-3"></i>
-                    <h4 class="font-bold text-gray-900 mb-2">Participate in Surveys</h4>
-                    <p class="text-gray-700 text-sm">Take part in digital consultations and surveys shaping our city</p>
+                <div class="bg-red-50 p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                    <i class="bi bi-graph-up text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.5rem; font-size: clamp(0.95rem, 2vw, 1rem);">Participate in Surveys</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem);">Take part in digital consultations and surveys shaping our city</p>
                 </div>
 
-                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
-                    <i class="bi bi-file-earmark-check text-3xl text-red-900 mb-3"></i>
-                    <h4 class="font-bold text-gray-900 mb-2">Track Progress</h4>
-                    <p class="text-gray-700 text-sm">Track ordinance status and see how they develop over time</p>
+                <div class="bg-red-50 p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                    <i class="bi bi-file-earmark-check text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.5rem; font-size: clamp(0.95rem, 2vw, 1rem);">Track Progress</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem);">Track ordinance status and see how they develop over time</p>
                 </div>
 
-                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
-                    <i class="bi bi-shield-check text-3xl text-red-900 mb-3"></i>
-                    <h4 class="font-bold text-gray-900 mb-2">Verified Information</h4>
-                    <p class="text-gray-700 text-sm">Access verified and official city government information</p>
+                <div class="bg-red-50 p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                    <i class="bi bi-shield-check text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.5rem; font-size: clamp(0.95rem, 2vw, 1rem);">Verified Information</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem);">Access verified and official city government information</p>
                 </div>
 
-                <div class="bg-red-50 p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
-                    <i class="bi bi-globe text-3xl text-red-900 mb-3"></i>
-                    <h4 class="font-bold text-gray-900 mb-2">Multilingual</h4>
-                    <p class="text-gray-700 text-sm">Supports multiple languages for inclusive participation</p>
+                <div class="bg-red-50 p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                    <i class="bi bi-globe text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.5rem; font-size: clamp(0.95rem, 2vw, 1rem);">Multilingual</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem);">Supports multiple languages for inclusive participation</p>
                 </div>
             </div>
         </div>
 
-        <!-- Commitment Section  whpoooooxxcxoo-->
-        <div class="bg-gradient-to-r from-red-900 to-red-800 text-white rounded-lg p-8 text-center">
-            <h3 class="text-2xl font-bold mb-4">Our Commitment</h3>
-            <p class="text-lg leading-relaxed">
+        <!-- Commitment Section -->
+        <div class="bg-gradient-to-r from-red-900 to-red-800 text-white rounded-lg p-6 md:p-8 text-center">
+            <h3 style="font-size: clamp(1.25rem, 5vw, 1.5rem); font-weight: 700; margin-bottom: 1rem;">Our Commitment</h3>
+            <p style="font-size: clamp(0.9rem, 2vw, 1.125rem); line-height: 1.6;">
                 Guided by principles of transparency, accountability, and citizen empowerment, this 
                 platform strengthens collaboration between the government and its people through secure 
                 and modern digital participation.
