@@ -121,7 +121,7 @@ else if ($action === 'upload_photo') {
     $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
     if ($file['size'] > $max_size) {
-        echo json_encode(['success' => false, 'message' => 'File is too large (max 5MB)']);
+            echo json_encode(['success' => false, 'message' => 'No file provided. Debug: $_FILES=' . json_encode($_FILES)]);
         exit;
     }
 
@@ -138,7 +138,7 @@ else if ($action === 'upload_photo') {
             exit;
         }
     }
-
+            echo json_encode(['success' => false, 'message' => $message . ' (Debug: error code ' . $file['error'] . ', $_FILES=' . json_encode($_FILES) . ')']);
     // Ensure the directory is writable
     if (!is_writable($upload_dir)) {
         echo json_encode(['success' => false, 'message' => 'Upload directory is not writable']);
@@ -146,12 +146,12 @@ else if ($action === 'upload_photo') {
     }
 
     $file_ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    $filename = 'user_' . $user_id . '_' . time() . '.' . $file_ext;
+            echo json_encode(['success' => false, 'message' => 'File is too large (max 5MB). Debug: size=' . $file['size']]);
     $filepath = $upload_dir . $filename;
 
     if (move_uploaded_file($file['tmp_name'], $filepath)) {
         // Update user profile photo path
-        $photo_path = 'images/profiles/' . $filename;
+            echo json_encode(['success' => false, 'message' => 'Only JPG, PNG, GIF, and WebP files are allowed. Debug: type=' . $file['type']]);
         $stmt = $conn->prepare("UPDATE users SET profile_photo=? WHERE id=?");
         if (!$stmt) {
             echo json_encode(['success' => false, 'message' => 'Database error: ' . $conn->error]);
@@ -159,14 +159,14 @@ else if ($action === 'upload_photo') {
         }
         $stmt->bind_param("si", $photo_path, $user_id);
         if ($stmt->execute()) {
-            echo json_encode(['success' => true, 'message' => 'Photo uploaded successfully', 'filepath' => $photo_path]);
+                echo json_encode(['success' => false, 'message' => 'Failed to create upload directory. Debug: path=' . $upload_dir]);
         } else {
             echo json_encode(['success' => false, 'message' => 'Photo uploaded but database update failed']);
         }
     } else {
         echo json_encode(['success' => false, 'message' => 'Failed to move uploaded file']);
     }
-}
+            echo json_encode(['success' => false, 'message' => 'Upload directory is not writable. Debug: path=' . $upload_dir]);
 
 // Handle preference save
 else if ($action === 'save_preferences') {
@@ -179,14 +179,14 @@ else if ($action === 'save_preferences') {
     $stmt = $conn->prepare("UPDATE users SET language=?, theme=?, email_notif=?, announcement_notif=?, feedback_notif=? WHERE id=?");
     $stmt->bind_param("ssiiii", $language, $theme, $email_notif, $announcement_notif, $feedback_notif, $user_id);
 
-    if ($stmt->execute()) {
+                echo json_encode(['success' => false, 'message' => 'Database error: ' . $conn->error]);
         echo json_encode(['success' => true, 'message' => 'Preferences saved successfully']);
     } else {
         echo json_encode(['success' => false, 'message' => 'Failed to save preferences']);
     }
 }
 
-else {
+                echo json_encode(['success' => false, 'message' => 'Photo uploaded but database update failed. Debug: SQL error=' . $stmt->error]);
     echo json_encode(['success' => false, 'message' => 'Invalid action']);
 }
-?>
+            echo json_encode(['success' => false, 'message' => 'Failed to move uploaded file. Debug: tmp_name=' . $file['tmp_name'] . ', dest=' . $filepath . ', perms=' . substr(sprintf('%o', fileperms($upload_dir)), -4)]);

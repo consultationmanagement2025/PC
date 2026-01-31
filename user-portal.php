@@ -9,6 +9,7 @@ $user_id = $_SESSION['user_id'] ?? null;
 require_once 'announcements.php';
 require_once 'DATABASE/feedback.php';
 require_once 'DATABASE/audit-log.php';
+require_once 'DATABASE/user-logs.php';
 require_once 'DATABASE/posts.php';
 
 // Redirect admins to the admin dashboard
@@ -20,7 +21,7 @@ if ($current_role === 'admin') {
 
 // Determine which section to display
 $section = isset($_GET['section']) ? $_GET['section'] : 'dashboard';
-$allowed_sections = ['dashboard', 'announcements', 'feedback', 'documents', 'audit-log', 'saved', 'settings'];
+$allowed_sections = ['dashboard', 'announcements', 'consultations', 'feedback', 'documents', 'audit-log', 'saved', 'settings'];
 if (!in_array($section, $allowed_sections)) {
     $section = 'dashboard';
 }
@@ -787,7 +788,7 @@ if (!in_array($section, $allowed_sections)) {
             <a class="menu-link" href="user-portal.php?section=dashboard" data-section="dashboard"><i class="bi bi-house-door" style="font-size: 16px; margin-right: 6px;"></i>Dashboard</a>
             <a class="menu-link" href="user-portal.php?section=announcements" data-section="announcements"><i class="bi bi-megaphone" style="font-size: 16px; margin-right: 6px;"></i>Announcements</a>
             <a class="menu-link" href="user-portal.php?section=feedback" data-section="feedback"><i class="bi bi-chat-dots" style="font-size: 16px; margin-right: 6px;"></i>Feedback</a>
-            <a class="menu-link" href="user-portal.php?section=audit-log" data-section="audit-log"><i class="bi bi-clock-history" style="font-size: 16px; margin-right: 6px;"></i>Activity Log</a>
+            <a class="menu-link" href="user-portal.php?section=audit-log" data-section="audit-log"><i class="bi bi-journal-text" style="font-size: 16px; margin-right: 6px;"></i>Activity Log</a>
             <hr />
             <a class="menu-link" href="user-portal.php?section=settings" data-section="settings"><i class="bi bi-gear" style="font-size: 16px; margin-right: 6px;"></i>Settings</a>
             <hr />
@@ -809,7 +810,10 @@ if (!in_array($section, $allowed_sections)) {
         <div class="grid-2">
           <!-- LEFT: Quick Actions Sidebar -->
           <div class="quick-links">
-            <h3>Quick Actions</h3>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <h3 style="margin: 0;">Quick Actions</h3>
+              <button id="add-consultation-btn" title="Add Consultation" style="background: var(--red-600); color: white; border: none; border-radius: 50%; width: 36px; height: 36px; font-size: 22px; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 8px rgba(220,38,38,0.10);">+</button>
+            </div>
             <div class="links-grid">
               <a href="user-portal.php?section=saved" class="link-btn" style="text-decoration: none; color: inherit;">
                 <div class="icon"><i class="bi bi-heart" style="font-size: 18px;"></i></div>
@@ -825,6 +829,55 @@ if (!in_array($section, $allowed_sections)) {
               </a>
             </div>
           </div>
+
+          <!-- Modal for New Consultation -->
+          <div id="consultation-modal" style="display:none; position:fixed; z-index:2000; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.45); align-items:center; justify-content:center;">
+            <div style="background:white; max-width:420px; width:95vw; border-radius:14px; box-shadow:0 8px 32px rgba(0,0,0,0.18); padding:32px 24px 24px 24px; position:relative;">
+              <button id="close-consultation-modal" style="position:absolute; top:12px; right:16px; background:none; border:none; font-size:22px; color:var(--muted); cursor:pointer;">&times;</button>
+              <h2 style="margin:0 0 18px 0; font-size:20px; font-weight:700; color:var(--red-700);">New Consultation Request</h2>
+              <form id="consultation-form" enctype="multipart/form-data" autocomplete="off">
+                <div style="margin-bottom:14px;">
+                  <label style="font-weight:600; color:var(--gray-800); display:block; margin-bottom:6px;">Topic/Title <span style="color:var(--red-600);">*</span></label>
+                  <input type="text" name="topic" required style="width:100%; padding:10px; border:1px solid var(--gray-200); border-radius:8px; font-size:15px;">
+                </div>
+                <div style="margin-bottom:14px;">
+                  <label style="font-weight:600; color:var(--gray-800); display:block; margin-bottom:6px;">Description</label>
+                  <textarea name="description" rows="3" style="width:100%; padding:10px; border:1px solid var(--gray-200); border-radius:8px; font-size:15px;"></textarea>
+                </div>
+                <div style="margin-bottom:14px;">
+                  <label style="font-weight:600; color:var(--gray-800); display:block; margin-bottom:6px;">Preferred Date <span style="color:var(--red-600);">*</span></label>
+                  <input type="text" name="preferred_date" placeholder="e.g. 2026-02-01 or Feb 1, 2026" required style="width:100%; padding:10px; border:1px solid var(--gray-200); border-radius:8px; font-size:15px;">
+                </div>
+                <div style="margin-bottom:14px;">
+                  <label style="font-weight:600; color:var(--gray-800); display:block; margin-bottom:6px;">Preferred Time <span style="color:var(--red-600);">*</span></label>
+                  <input type="time" name="preferred_time" required style="width:100%; padding:10px; border:1px solid var(--gray-200); border-radius:8px; font-size:15px;">
+                </div>
+                <div style="margin-bottom:18px;">
+                  <label style="font-weight:600; color:var(--gray-800); display:block; margin-bottom:6px;">Attach Document (optional)</label>
+                  <input type="file" name="attachment" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" style="width:100%;">
+                  <small style="color:var(--muted);">Accepted: PDF, DOC, JPG, PNG, WEBP. Max 5MB.</small>
+                </div>
+                <button type="submit" style="width:100%; padding:12px; background:var(--red-600); color:white; border:none; border-radius:8px; font-weight:700; font-size:16px;">Submit Consultation</button>
+              </form>
+            </div>
+          </div>
+  <script>
+    // Modal open/close logic
+    document.addEventListener('DOMContentLoaded', function() {
+      var modal = document.getElementById('consultation-modal');
+      var openBtn = document.getElementById('add-consultation-btn');
+      var closeBtn = document.getElementById('close-consultation-modal');
+      if (openBtn && modal) {
+        openBtn.onclick = function() { modal.style.display = 'flex'; };
+      }
+      if (closeBtn && modal) {
+        closeBtn.onclick = function() { modal.style.display = 'none'; };
+      }
+      window.onclick = function(event) {
+        if (event.target === modal) { modal.style.display = 'none'; }
+      };
+    });
+  </script>
 
           <!-- CENTER: Citizen Concerns Feed -->
           <div id="feed" style="margin: 0; padding: 0; background: transparent; box-shadow: none;">
@@ -887,6 +940,56 @@ if (!in_array($section, $allowed_sections)) {
             </div>
           </div>
         </div>
+      </div>
+      <?php endif; ?>
+
+      <!-- Consultations Page -->
+      <?php if ($section === 'consultations'): ?>
+      <div class="section-header" style="margin-bottom: 20px;">
+        <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: var(--gray-800);">🗨 My Consultations</h1>
+        <p style="margin: 8px 0 0; color: var(--muted); font-size: 15px;">View your submitted consultation requests and their status.</p>
+      </div>
+      <div class="section-divider"></div>
+      <div id="my-consultations-feed" class="feed" style="margin-top: 24px;">
+        <?php
+          // Fetch user's consultations (legacy and new)
+          $consultations = [];
+          // Try legacy user_submit_consultation.php table structure
+          $legacy = false;
+          if (isset($conn)) {
+            $q = $conn->query("SHOW COLUMNS FROM consultations LIKE 'user_id'");
+            if ($q && $q->num_rows > 0) {
+              $legacy = true;
+            }
+          }
+          if ($legacy && $user_id) {
+            $result = $conn->query("SELECT * FROM consultations WHERE user_id = " . intval($user_id) . " ORDER BY created_at DESC, id DESC");
+            if ($result && $result->num_rows > 0) {
+              while ($row = $result->fetch_assoc()) $consultations[] = $row;
+            }
+          } else if (function_exists('getConsultations')) {
+            $all = getConsultations(null, 100, 0);
+            foreach ($all as $c) {
+              if (isset($c['admin_id']) && $c['admin_id'] == $user_id) $consultations[] = $c;
+            }
+          }
+          if (empty($consultations)) {
+            echo '<div class="empty-state">No consultations submitted yet.</div>';
+          } else {
+            foreach ($consultations as $c) {
+              $title = htmlspecialchars($c['topic'] ?? $c['title'] ?? 'Untitled');
+              $desc = htmlspecialchars($c['description'] ?? '');
+              $date = isset($c['preferred_datetime']) ? date('M d, Y H:i', strtotime($c['preferred_datetime'])) : (isset($c['created_at']) ? date('M d, Y H:i', strtotime($c['created_at'])) : '');
+              $status = htmlspecialchars($c['status'] ?? 'pending');
+              echo '<div class="suggestion-card">';
+              echo '<div class="meta">' . $date . ' &bull; <span style="text-transform:capitalize;">' . $status . '</span></div>';
+              echo '<div class="title">' . $title . '</div>';
+              if ($desc) echo '<div class="content">' . nl2br($desc) . '</div>';
+              if (!empty($c['attachment'])) echo '<div style="margin-top:8px;"><a href="' . htmlspecialchars($c['attachment']) . '" target="_blank" style="color:var(--red-600);text-decoration:underline;">View Attachment</a></div>';
+              echo '</div>';
+            }
+          }
+        ?>
       </div>
       <?php endif; ?>
 
@@ -1116,14 +1219,14 @@ if (!in_array($section, $allowed_sections)) {
 
       <!-- Settings Page -->
       <?php if ($section === 'settings'): ?>
-      <div class="section-header" style="margin-bottom: 20px;">
+      <div class="section-header" style="margin-bottom: 20px; max-width: 700px; margin-left: auto; margin-right: auto;">
         <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: var(--gray-800);">⚙ Settings</h1>
         <p style="margin: 8px 0 0; color: var(--muted); font-size: 15px;">Manage your account and preferences</p>
       </div>
-      <div class="section-divider"></div>
+      <div class="section-divider" style="max-width: 700px; margin-left: auto; margin-right: auto;"></div>
 
       <!-- Settings Tabs -->
-      <div style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden;">
+      <div style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden; max-width: 700px; margin-left: auto; margin-right: auto;">
         <!-- Tab Navigation -->
         <div style="display: flex; gap: 0; border-bottom: 1px solid var(--gray-200); overflow-x: auto;">
           <button onclick="switchSettingsTab('profile')" class="settings-tab active" data-tab="profile" style="padding: 14px 20px; border: none; background: none; cursor: pointer; font-weight: 600; color: var(--muted); border-bottom: 3px solid transparent; transition: all 0.2s; white-space: nowrap;">Profile</button>
