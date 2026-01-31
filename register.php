@@ -1,4 +1,8 @@
 <?php
+// --- Migration: Ensure users table has ID verification columns ---
+require 'db.php';
+$conn->query("ALTER TABLE users ADD COLUMN IF NOT EXISTS valid_id_path VARCHAR(255) AFTER role");
+$conn->query("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_status ENUM('pending','verified','rejected') DEFAULT 'pending' AFTER valid_id_path");
 require 'db.php';
 
 $message = "";
@@ -7,8 +11,36 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $fullname = trim($_POST['fullname']);
     $email = trim($_POST['email']);
     $password = $_POST['password'];
-    if (!$fullname || !$email || !$password) {
-        $message = "All fields required";
+    $valid_id_path = null;
+    $upload_dir = __DIR__ . '/images/profiles/';
+    if (!is_dir($upload_dir)) {
+        mkdir($upload_dir, 0777, true);
+    }
+
+    // Handle file upload
+    if (isset($_FILES['valid_id']) && $_FILES['valid_id']['error'] === UPLOAD_ERR_OK) {
+        $file_tmp = $_FILES['valid_id']['tmp_name'];
+        $file_name = basename($_FILES['valid_id']['name']);
+        $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+        $allowed = ['jpg', 'jpeg', 'png', 'gif', 'pdf'];
+        $max_size = 5 * 1024 * 1024; // 5MB
+        if (in_array($file_ext, $allowed) && $_FILES['valid_id']['size'] <= $max_size) {
+            $new_name = uniqid('id_', true) . '.' . $file_ext;
+            $dest = $upload_dir . $new_name;
+            if (move_uploaded_file($file_tmp, $dest)) {
+                $valid_id_path = 'images/profiles/' . $new_name;
+            } else {
+                $message = "Failed to upload ID. Please try again.";
+            }
+        } else {
+            $message = "Invalid file type or size for ID.";
+        }
+    } else {
+        $message = "Valid ID upload is required.";
+    }
+
+    if (!$fullname || !$email || !$password || !$valid_id_path) {
+        $message = "All fields required, including valid ID.";
     } else {
         // Check duplicate email
         $check = $conn->prepare("SELECT id FROM users WHERE email=?");
@@ -22,14 +54,44 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $hash = password_hash($password, PASSWORD_DEFAULT);
             $role = 'citizen'; // Default role for all new users
 
-            $stmt = $conn->prepare(
-                "INSERT INTO users (fullname, email, password, role) VALUES (?, ?, ?, ?)"
-            );
-            $stmt->bind_param("ssss", $fullname, $email, $hash, $role);
+            // --- OCR: Extract text from uploaded ID using Tesseract ---
+            $extracted_text = '';
+            $tesseract_path = 'tesseract'; // Assumes tesseract is in PATH
+            $image_path = __DIR__ . '/' . $valid_id_path;
+            $output_txt = tempnam(sys_get_temp_dir(), 'ocr_');
+            $cmd = escapeshellcmd("$tesseract_path " . escapeshellarg($image_path) . " " . escapeshellarg($output_txt) . " -l eng");
+            @exec($cmd);
+            $ocr_result = @file_get_contents($output_txt . '.txt');
+            @unlink($output_txt);
+            @unlink($output_txt . '.txt');
 
-            $message = $stmt->execute()
-                ? "Account created. You may login."
-                : "Registration failed";
+            if (!$ocr_result || strlen(trim($ocr_result)) < 5) {
+                $message = "ID image is unreadable. Please upload a clearer image of your ID.";
+            } else {
+                $extracted_text = strtolower($ocr_result);
+                $entered_name = strtolower($fullname);
+                $all_match = true;
+                foreach (explode(' ', $entered_name) as $word) {
+                    if (strlen($word) > 2 && strpos($extracted_text, $word) === false) {
+                        $all_match = false;
+                        break;
+                    }
+                }
+                if (!$all_match) {
+                    $message = "The name you entered does not match the name on your ID. Please make sure your input matches your ID exactly.";
+                } else {
+                    $verification_status = 'verified';
+                    $stmt = $conn->prepare(
+                        "INSERT INTO users (fullname, email, password, role, valid_id_path, verification_status) VALUES (?, ?, ?, ?, ?, ?)"
+                    );
+                    $stmt->bind_param("ssssss", $fullname, $email, $hash, $role, $valid_id_path, $verification_status);
+                    if ($stmt->execute()) {
+                        $message = "Account created and automatically verified.";
+                    } else {
+                        $message = "Registration failed";
+                    }
+                }
+            }
         }
     }
 }
@@ -90,7 +152,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 </div>
             <?php endif; ?>
             
-            <form method="POST" action="register.php" class="space-y-4 md:space-y-5">
+            <form method="POST" action="register.php" class="space-y-4 md:space-y-5" enctype="multipart/form-data">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Upload Valid School ID (Required)</label>
+                                    <input type="file" name="valid_id" accept="image/*,.pdf" class="w-full px-3 md:px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition text-base" required>
+                                    <span class="text-xs text-gray-500 block mb-1">Accepted: image or PDF. Max 5MB.</span>
+                                    <span class="text-xs text-blue-600 block mb-1">Tip: Make sure your name is clear and readable. The name you enter must match your ID exactly.</span>
+                                    <span class="text-xs text-blue-600 block mb-1">Example:</span>
+                                    <img src="images/sample_school_id.jpg" alt="Sample School ID" class="w-48 border rounded mb-1">
+                                </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Full Name</label>
                     <input type="text" name="fullname" placeholder="Enter your full name" class="w-full px-3 md:px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition text-base" required>
@@ -124,6 +194,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     </label>
                 </div>
                 <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 md:py-3 rounded-lg transition duration-200 font-medium shadow-md hover:shadow-lg">Create Account</button>
+                <div class="text-xs text-gray-500 mt-2">If you encounter errors, please check your ID image quality and make sure your name matches your ID.</div>
                 <a href="login.php" class="block text-center text-sm text-gray-600 hover:text-red-600 transition font-medium">Back to Sign In</a>
             </form>
         </div>

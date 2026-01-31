@@ -29,6 +29,8 @@ if (!in_array($section, $allowed_sections)) {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <!-- Bootstrap Icons CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PCMP – Citizen Portal</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -203,7 +205,7 @@ if (!in_array($section, $allowed_sections)) {
       bottom: 0;
       background: transparent;
       display: none;
-      z-index: 60;
+      z-index: 1200;
     }
 
     #overlay-menu.active { display: block; }
@@ -231,6 +233,7 @@ if (!in_array($section, $allowed_sections)) {
       position: absolute;
       right: 16px;
       top: 8px;
+      z-index: 1300;
     }
 
     /* no blur when menu opens (intentionally disabled) */
@@ -718,39 +721,39 @@ if (!in_array($section, $allowed_sections)) {
       <nav class="sidebar-nav">
         <h4 data-i18n="main">Main</h4>
         <a class="active" onclick="scrollToSection('dashboard'); return false;">
-          <span style="font-size: 18px;">⌂</span>
+          <i class="bi bi-house-door" style="font-size: 18px;"></i>
           <span data-i18n="dashboard">Dashboard</span>
         </a>
         <a onclick="scrollToSection('announcements'); return false;">
-          <span style="font-size: 18px;">↓</span>
+          <i class="bi bi-megaphone" style="font-size: 18px;"></i>
           <span data-i18n="announcements">Announcements</span>
         </a>
         <a onclick="scrollToSection('consultations'); return false;">
-          <span style="font-size: 18px;">≡</span>
+          <i class="bi bi-chat-dots" style="font-size: 18px;"></i>
           <span data-i18n="consultations">Consultations</span>
         </a>
         <a onclick="scrollToSection('submissions'); return false;">
-          <span style="font-size: 18px;">◈</span>
+          <i class="bi bi-send" style="font-size: 18px;"></i>
           <span data-i18n="mySubmissions">My Submissions</span>
         </a>
 
         <h4 data-i18n="resources">Resources</h4>
         <a onclick="scrollToSection('documents'); return false;">
-          <span style="font-size: 18px;">▦</span>
+          <i class="bi bi-file-earmark-text" style="font-size: 18px;"></i>
           <span data-i18n="documents">Documents</span>
         </a>
         <a onclick="alert(t('helpComingSoon')); return false;">
-          <span style="font-size: 18px;">?</span>
+          <i class="bi bi-question-circle" style="font-size: 18px;"></i>
           <span data-i18n="helpFaq">Help & FAQ</span>
         </a>
 
         <h4 data-i18n="account">Account</h4>
         <a onclick="alert(t('profileComingSoon')); return false;">
-          <span style="font-size: 18px;">⊙</span>
+          <i class="bi bi-person-circle" style="font-size: 18px;"></i>
           <span data-i18n="profile">Profile</span>
         </a>
         <a onclick="alert(t('settingsComingSoon')); return false;">
-          <span style="font-size: 18px;">⚙</span>
+          <i class="bi bi-gear" style="font-size: 18px;"></i>
           <span data-i18n="settings">Settings</span>
         </a>
       </nav>
@@ -764,8 +767,8 @@ if (!in_array($section, $allowed_sections)) {
         <h1 style="margin:0;">Welcome Back</h1>
         <div class="user-info">
           <button onclick="toggleLanguage()" style="background: none; border: 1px solid var(--gray-200); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; color: var(--muted); margin-right: 12px; font-family: inherit; transition: all 0.2s;" id="language-btn">EN</button>
-          <button onclick="openNotifications()" style="background: none; border: 1px solid var(--gray-200); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 14px; color: var(--muted); margin-right: 12px; font-family: inherit; transition: all 0.2s; position: relative;" id="notification-btn" title="Notifications">✦ Notify</button>
-          <button onclick="toggleTheme()" style="background: none; border: 1px solid var(--gray-200); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 14px; color: var(--muted); margin-right: 12px; font-family: inherit; transition: all 0.2s;" id="theme-btn" title="Toggle dark mode"><i class="dark-mode-icon">★</i><i class="light-mode-icon" style="display:none;">☀</i></button>
+          <button onclick="openNotifications()" style="background: none; border: 1px solid var(--gray-200); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 14px; color: var(--muted); margin-right: 12px; font-family: inherit; transition: all 0.2s; position: relative;" id="notification-btn" title="Notifications"><i class="bi bi-bell" style="font-size: 18px;"></i></button>
+          <button onclick="toggleTheme()" style="background: none; border: 1px solid var(--gray-200); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 14px; color: var(--muted); margin-right: 12px; font-family: inherit; transition: all 0.2s;" id="theme-btn" title="Toggle dark mode"><i class="dark-mode-icon bi bi-moon" style="font-size: 18px;"></i><i class="light-mode-icon bi bi-sun" style="display:none; font-size: 18px;"></i></button>
           <button id="menu-btn" onclick="toggleMenu()" aria-label="Open menu" aria-expanded="false">☰</button>
         </div>
       </div>
@@ -781,14 +784,14 @@ if (!in_array($section, $allowed_sections)) {
             </div>
           </div>
           <nav style="display:flex; flex-direction:column; gap:4px;">
-            <a class="menu-link" href="user-portal.php?section=dashboard" data-section="dashboard">⌂ Dashboard</a>
-            <a class="menu-link" href="user-portal.php?section=announcements" data-section="announcements">↓ Announcements</a>
-            <a class="menu-link" href="user-portal.php?section=feedback" data-section="feedback">≣ Feedback</a>
-            <a class="menu-link" href="user-portal.php?section=audit-log" data-section="audit-log">◊ Activity Log</a>
+            <a class="menu-link" href="user-portal.php?section=dashboard" data-section="dashboard"><i class="bi bi-house-door" style="font-size: 16px; margin-right: 6px;"></i>Dashboard</a>
+            <a class="menu-link" href="user-portal.php?section=announcements" data-section="announcements"><i class="bi bi-megaphone" style="font-size: 16px; margin-right: 6px;"></i>Announcements</a>
+            <a class="menu-link" href="user-portal.php?section=feedback" data-section="feedback"><i class="bi bi-chat-dots" style="font-size: 16px; margin-right: 6px;"></i>Feedback</a>
+            <a class="menu-link" href="user-portal.php?section=audit-log" data-section="audit-log"><i class="bi bi-clock-history" style="font-size: 16px; margin-right: 6px;"></i>Activity Log</a>
             <hr />
-            <a class="menu-link" href="user-portal.php?section=settings" data-section="settings">⚙ Settings</a>
+            <a class="menu-link" href="user-portal.php?section=settings" data-section="settings"><i class="bi bi-gear" style="font-size: 16px; margin-right: 6px;"></i>Settings</a>
             <hr />
-            <a class="menu-link" onclick="window.location.href='logout.php';" style="color: var(--red-600); font-weight: 600;">✕ Logout</a>
+            <a class="menu-link" onclick="window.location.href='logout.php';" style="color: var(--red-600); font-weight: 600;"><i class="bi bi-box-arrow-right" style="font-size: 16px; margin-right: 6px;"></i>Logout</a>
           </nav>
         </div>
       </div>
@@ -809,15 +812,15 @@ if (!in_array($section, $allowed_sections)) {
             <h3>Quick Actions</h3>
             <div class="links-grid">
               <a href="user-portal.php?section=saved" class="link-btn" style="text-decoration: none; color: inherit;">
-                <div class="icon">♥</div>
+                <div class="icon"><i class="bi bi-heart" style="font-size: 18px;"></i></div>
                 Saved Items
               </a>
               <a href="user-portal.php?section=audit-log" class="link-btn" style="text-decoration: none; color: inherit;">
-                <div class="icon">◈</div>
+                <div class="icon"><i class="bi bi-clock-history" style="font-size: 18px;"></i></div>
                 My Activity
               </a>
               <a href="user-portal.php?section=documents" class="link-btn" style="text-decoration: none; color: inherit;">
-                <div class="icon">◊</div>
+                <div class="icon"><i class="bi bi-file-earmark-text" style="font-size: 18px;"></i></div>
                 Citizen Charter
               </a>
             </div>
@@ -835,9 +838,9 @@ if (!in_array($section, $allowed_sections)) {
                   <textarea id="post-input" placeholder="<?php echo htmlspecialchars("What's on your mind, " . (explode(' ', trim($fullname))[0] ?: $fullname) . '?'); ?>" style="width:100%; min-height:56px; resize:none; padding:12px 16px; outline:none; font-family:inherit; font-size:15px;"></textarea>
                   <div class="post-actions">
                     <div style="display:flex; gap:8px;">
-                      <button class="icon-btn" title="Video">◊</button>
-                      <button class="icon-btn" title="Photo">◬</button>
-                      <button class="icon-btn" title="Feeling">◐</button>
+                      <button class="icon-btn" title="Video"><i class="bi bi-camera-video" style="font-size: 16px;"></i></button>
+                      <button class="icon-btn" title="Photo"><i class="bi bi-image" style="font-size: 16px;"></i></button>
+                      <button class="icon-btn" title="Feeling"><i class="bi bi-emoji-smile" style="font-size: 16px;"></i></button>
                     </div>
                     <div>
                       <button onclick="resetPostForm()" style="padding:8px 12px; background:var(--gray-200); color:var(--text); border:none; border-radius:16px; cursor:pointer; margin-right:8px;">Cancel</button>
@@ -1004,12 +1007,12 @@ if (!in_array($section, $allowed_sections)) {
       <!-- Documents Page -->
       <?php if ($section === 'documents'): ?>
       <div class="section-header" style="margin-bottom: 20px;">
-        <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: var(--gray-800);">▦ Important Documents</h1>
+        <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: var(--gray-800);">Important Documents</h1>
         <p style="margin: 8px 0 0; color: var(--muted); font-size: 15px;">Access important documents and resources</p>
       </div>
       <div class="section-divider"></div>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 24px;">
-        <!-- Valenzuela Citizen Charter -->
+        <!-- Valenzuela Citizen Charter Only -->
         <div style="background: white; padding: 24px; border-radius: 12px; border-left: 4px solid var(--red-600); box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: all 0.2s;">
           <div style="font-size: 40px; margin-bottom: 12px;">◊</div>
           <h3 style="margin: 0 0 12px; font-size: 18px; font-weight: 700; color: var(--gray-800);">Valenzuela Citizen Charter</h3>
@@ -1020,26 +1023,6 @@ if (!in_array($section, $allowed_sections)) {
             <button onclick="viewDocument('valenzuela-citizen-charter.html', 'Valenzuela Citizen Charter')" style="flex: 1; padding: 10px 12px; background: var(--red-600); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s;">View</button>
             <button onclick="downloadDocument('valenzuela-citizen-charter.html')" style="flex: 1; padding: 10px 12px; background: var(--gray-200); color: var(--gray-800); border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s;">📥 Download</button>
           </div>
-        </div>
-
-        <!-- Placeholder: City Ordinance -->
-        <div style="background: white; padding: 24px; border-radius: 12px; border-left: 4px solid var(--gray-300); box-shadow: 0 2px 8px rgba(0,0,0,0.06); opacity: 0.6;">
-          <div style="font-size: 40px; margin-bottom: 12px;">※</div>
-          <h3 style="margin: 0 0 12px; font-size: 18px; font-weight: 700; color: var(--gray-800);">City Ordinances</h3>
-          <p style="margin: 12px 0; font-size: 14px; color: var(--muted); line-height: 1.6;">
-            Local laws and regulations governing city operations.
-          </p>
-          <button onclick="alert('Coming soon')" style="width: 100%; padding: 10px 12px; background: var(--gray-300); color: var(--muted); border: none; border-radius: 6px; cursor: not-allowed; font-weight: 600; font-size: 14px; margin-top: 16px;">Coming Soon</button>
-        </div>
-
-        <!-- Placeholder: Budget & Finance -->
-        <div style="background: white; padding: 24px; border-radius: 12px; border-left: 4px solid var(--gray-300); box-shadow: 0 2px 8px rgba(0,0,0,0.06); opacity: 0.6;">
-          <div style="font-size: 40px; margin-bottom: 12px;">◄</div>
-          <h3 style="margin: 0 0 12px; font-size: 18px; font-weight: 700; color: var(--gray-800);">Annual Budget Report</h3>
-          <p style="margin: 12px 0; font-size: 14px; color: var(--muted); line-height: 1.6;">
-            Transparent information on city government spending and financial plans.
-          </p>
-          <button onclick="alert('Coming soon')" style="width: 100%; padding: 10px 12px; background: var(--gray-300); color: var(--muted); border: none; border-radius: 6px; cursor: not-allowed; font-weight: 600; font-size: 14px; margin-top: 16px;">Coming Soon</button>
         </div>
       </div>
       <?php endif; ?>
@@ -1971,17 +1954,11 @@ if (!in_array($section, $allowed_sections)) {
 
     // Initial stats update & load suggestions
     updateStats();
-    loadServerPosts();  // Load from database first
+    loadServerPosts();  // Always load from database, not localStorage
     updateLanguage();  // Apply initial language
 
-    // Update stats when announcements feed loads
-    const originalLoadFeed = window.loadAnnouncementsFeed;
-    if (originalLoadFeed) {
-      window.loadAnnouncementsFeed = function() {
-        originalLoadFeed();
-        updateStats();
-      };
-    }
+    // Remove localStorage fallback for suggestions
+    window.loadSuggestions = function() { loadServerPosts(); };
 
     // Auto-refresh suggestions every 5 seconds from server
     setInterval(loadServerPosts, 5000);

@@ -7,10 +7,32 @@ require 'DATABASE/posts.php';
 require 'DATABASE/notifications.php';
 // Use strtolower and trim to be safe
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
-
 if ($current_role !== 'admin') {
     header('Location: login.php');
     exit();
+}
+
+// --- Consultation Management Dashboard Stats ---
+$consult_total = 0;
+$consult_open = 0;
+$consult_scheduled = 0;
+$consultations = [];
+if (file_exists('db.php')) {
+    require_once 'db.php';
+    // Get summary counts
+    $res = $conn->query("SELECT COUNT(*) as total, SUM(status='pending' OR status='approved') as open, SUM(status='approved') as scheduled FROM consultations");
+    if ($res && $row = $res->fetch_assoc()) {
+        $consult_total = (int)$row['total'];
+        $consult_open = (int)$row['open'];
+        $consult_scheduled = (int)$row['scheduled'];
+    }
+    // Get all consultations for management table
+    $res2 = $conn->query("SELECT * FROM consultations ORDER BY created_at DESC");
+    if ($res2) {
+        while ($row = $res2->fetch_assoc()) {
+            $consultations[] = $row;
+        }
+    }
 }
 
 // Load audit logs for display
@@ -855,29 +877,15 @@ $totalPages = ceil($totalLogs / $pageSize);
                                 <button class="btn-primary px-4 py-2">Upload Document</button>
                             </div>
                             
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="grid grid-cols-1 md:grid-cols-1 gap-4">
                                 <div class="border border-gray-200 rounded-lg p-4">
-                                    <div class="text-2xl mb-2">📋</div>
+                                    <div class="text-2xl mb-2"><i class="bi bi-file-earmark-text-fill text-gray-700"></i></div>
                                     <h3 class="font-semibold text-gray-900">Valenzuela Citizen Charter</h3>
-                                    <p class="text-sm text-gray-600 mt-1">Rights and responsibilities of citizens</p>
+                                    <p class="text-sm text-gray-600 mt-1">A comprehensive charter establishing the rights, responsibilities, and commitments of the City Government towards its citizens.</p>
                                     <div class="mt-4 flex gap-2">
-                                        <button class="text-sm text-blue-600 hover:text-blue-800">View</button>
-                                        <button class="text-sm text-red-600 hover:text-red-800">Delete</button>
+                                        <button class="text-sm text-red-600 hover:text-red-800">View</button>
+                                        <button class="text-sm text-gray-600 hover:text-blue-800">Download</button>
                                     </div>
-                                </div>
-                                
-                                <div class="border border-gray-200 rounded-lg p-4 opacity-60">
-                                    <div class="text-2xl mb-2">⚖️</div>
-                                    <h3 class="font-semibold text-gray-900">City Ordinances</h3>
-                                    <p class="text-sm text-gray-600 mt-1">Local laws and regulations</p>
-                                    <div class="mt-4"><span class="text-xs text-gray-500">Coming soon</span></div>
-                                </div>
-                                
-                                <div class="border border-gray-200 rounded-lg p-4 opacity-60">
-                                    <div class="text-2xl mb-2">💰</div>
-                                    <h3 class="font-semibold text-gray-900">Budget Reports</h3>
-                                    <p class="text-sm text-gray-600 mt-1">Annual finance information</p>
-                                    <div class="mt-4"><span class="text-xs text-gray-500">Coming soon</span></div>
                                 </div>
                             </div>
                         </div>
@@ -886,28 +894,69 @@ $totalPages = ceil($totalLogs / $pageSize);
                     <!-- CONSULTATION MANAGEMENT SECTION -->
                     <section id="consultation-management-section" class="mb-6" style="display: none;">
                         <div class="bg-white rounded-lg shadow-md p-6">
-                            <div class="flex justify-between items-center mb-6">
+                            <div class="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
                                 <div>
-                                    <h2 class="text-2xl font-bold text-gray-900">Consultation Management</h2>
-                                    <p class="text-gray-600 text-sm mt-1">Create and manage public consultations</p>
+                                    <h2 class="text-2xl font-bold text-red-800 mb-2">Consultation Management</h2>
+                                    <p class="text-gray-600">Manage all public consultations, track feedback, and monitor engagement</p>
                                 </div>
-                                <button class="btn-primary px-4 py-2">Create Consultation</button>
-                            </div>
-                            
-                            <div class="space-y-4">
-                                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
-                                    <div class="flex justify-between items-start">
-                                        <div class="flex-1">
-                                            <h3 class="font-semibold text-gray-900">Sample Consultation Topic</h3>
-                                            <p class="text-sm text-gray-600 mt-1">Description of the consultation topic</p>
-                                            <div class="mt-3 flex gap-2">
-                                                <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Active</span>
-                                                <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">5 Responses</span>
-                                            </div>
-                                        </div>
-                                        <button class="text-gray-600 hover:text-gray-900">⋯</button>
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 md:mt-0">
+                                    <div class="bg-red-100 rounded-lg p-4 text-center">
+                                        <div class="text-xs text-gray-600">Total Consultations</div>
+                                        <div class="text-2xl font-bold text-red-800 mt-1"><?= $consult_total ?></div>
+                                    </div>
+                                    <div class="bg-red-100 rounded-lg p-4 text-center">
+                                        <div class="text-xs text-gray-600">Open Consultations</div>
+                                        <div class="text-2xl font-bold text-red-800 mt-1"><?= $consult_open ?></div>
+                                    </div>
+                                    <div class="bg-red-100 rounded-lg p-4 text-center">
+                                        <div class="text-xs text-gray-600">Scheduled</div>
+                                        <div class="text-2xl font-bold text-red-800 mt-1"><?= $consult_scheduled ?></div>
                                     </div>
                                 </div>
+                            </div>
+                            <div class="overflow-x-auto mt-6">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="bg-gray-50">
+                                            <th class="p-2">Title</th>
+                                            <th class="p-2">Type</th>
+                                            <th class="p-2">Date</th>
+                                            <th class="p-2">Status</th>
+                                            <th class="p-2">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php if (empty($consultations)): ?>
+                                            <tr><td colspan="5" class="text-center text-gray-400">No consultations found.</td></tr>
+                                        <?php else: foreach ($consultations as $c): ?>
+                                            <tr>
+                                                <td><?= htmlspecialchars($c['topic']) ?></td>
+                                                <td><?= htmlspecialchars($c['type'] ?? '-') ?></td>
+                                                <td><?= htmlspecialchars($c['preferred_datetime']) ?></td>
+                                                <td><?= htmlspecialchars(ucfirst($c['status'])) ?></td>
+                                                <td>
+                                                    <?php if ($c['status'] === 'pending'): ?>
+                                                        <form method="POST" action="admin_manage_consultations.php" style="display:inline;">
+                                                            <input type="hidden" name="id" value="<?= $c['id'] ?>">
+                                                            <input type="hidden" name="action" value="approve">
+                                                            <input type="datetime-local" name="scheduled_datetime" required>
+                                                            <input type="text" name="admin_note" placeholder="Admin note">
+                                                            <button type="submit" class="text-green-700 font-bold">Approve</button>
+                                                        </form>
+                                                        <form method="POST" action="admin_manage_consultations.php" style="display:inline;">
+                                                            <input type="hidden" name="id" value="<?= $c['id'] ?>">
+                                                            <input type="hidden" name="action" value="disapprove">
+                                                            <input type="text" name="admin_note" placeholder="Reason">
+                                                            <button type="submit" class="text-red-700 font-bold">Disapprove</button>
+                                                        </form>
+                                                    <?php else: ?>
+                                                        <span class="text-gray-500">-</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; endif; ?>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </section>

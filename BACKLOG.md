@@ -1,17 +1,770 @@
-# Project Backlog - PCMP/LLRM System
+# Project Backlog - PCMP
 
-**Project**: Public Consultation Management Portal (PCMP) / Legislative Records Management (LLRM) System  
-**Last Updated**: January 9, 2026  
+**Project**: Public Consultation Management Portal (PCMP)  
+**Organization**: City of Valenzuela, Metropolitan Manila  
+**Last Updated**: January 26, 2026  
 **Status**: Active Development
 
 ---
 
 ## Table of Contents
-1. [Product Backlog](#product-backlog)
-2. [Sprint Priorities](#sprint-priorities)
-3. [Technical Debt](#technical-debt)
-4. [Bug Fixes](#bug-fixes)
-5. [Performance Improvements](#performance-improvements)
+1. [System Architecture & Diagrams](#system-architecture--diagrams)
+2. [Use Cases & ERD](#use-cases--system-architecture)
+3. [Product Backlog](#product-backlog)
+4. [Sprint Priorities](#sprint-priorities)
+5. [Technical Debt](#technical-debt)
+6. [Bug Fixes](#bug-fixes)
+7. [Performance Improvements](#performance-improvements)
+
+---
+
+## System Architecture & Diagrams
+
+### 📊 Diagram Index
+
+```
+Available Diagrams:
+├── DFD (Data Flow Diagrams)
+│   ├── Level 0 - Context Diagram
+│   ├── Level 1 - Main Processes
+│   └── Level 2 - Detailed Processes
+├── BPA (Business Process Analysis) - Level 2
+├── BPMN (Business Process Model & Notation) with Integration
+├── Use Case Diagram (with Actor Mapping)
+├── Flowchart (System Workflows)
+├── Micro API Architecture
+├── Micro Services Communication
+├── API Pipeline & Data Flow
+└── ERD (Entity-Relationship Diagram)
+```
+
+---
+
+### 1️⃣ **DFD Level 0 - Context Diagram**
+
+```
+                          ┌──────────────────────────────┐
+                          │  PCMP System                 │
+                          │  (Single Entity)             │
+                          └──────────┬───────────────────┘
+                                     │
+                ┌────────────────────┼────────────────────┐
+                │                    │                    │
+                ▼                    ▼                    ▼
+        ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+        │    Citizens  │    │ Portal Staff │    │  Admin Users │
+        │              │    │              │    │              │
+        │ • Submit     │    │ • Upload     │    │ • Monitor    │
+        │   feedback   │    │   documents  │    │   system     │
+        │ • View docs  │    │ • Manage     │    │ • Manage     │
+        │ • Submit      │    │   staff      │    │   users      │
+        │   feedback    │    │ • Manage     │    │ • View audit │
+        └──────────────┘    │   users      │    │   logs       │
+                            └──────────────┘    └──────────────┘
+```
+
+---
+
+### 2️⃣ **DFD Level 1 - Main Processes**
+
+```
+                          Input: Posts, Comments, Users
+                                    │
+                    ┌───────────────┼───────────────┐
+                    │               │               │
+            ┌───────▼──────┐ ┌──────▼──────┐ ┌─────▼───────┐
+            │  1.0          │ │  2.0        │ │  3.0        │
+            │ Consultation  │ │ User & Auth │ │ Notification│
+            │ Management    │ │ Management  │ │ System      │
+            └───────┬──────┘ └──────┬──────┘ └─────┬───────┘
+                    │               │               │
+                    ▼               ▼               ▼
+            ┌───────────────────────────────────────────────┐
+            │          4.0 Audit Logging                    │
+            │  (Tracks all actions across system)           │
+            └───────────────────────────────────────────────┘
+                    │
+                    ▼
+            ┌───────────────────────────────────────────────┐
+            │      5.0 Report & Analytics Generation        │
+            │  (Generates reports from audit logs)          │
+            └───────────────────────────────────────────────┘
+```
+
+---
+
+### 3️⃣ **DFD Level 2 - Consultation Post Submission (Detailed)**
+
+```
+Input: Citizen submits consultation/feedback
+       │
+       ▼
+┌─────────────────────┐
+│ 1.1 Validate        │
+│ Post Content        │
+└──────────┬──────────┘
+           │
+       ✓ Yes
+           │
+           ▼
+┌─────────────────────┐
+│ 1.2 Store to        │
+│ Database            │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ 1.3 Create Audit    │
+│ Log Entry           │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ 1.4 Tag Post with   │
+│ Category/Topic      │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ 1.5 Notify Staff    │
+│ of New Post         │
+└──────────┬──────────┘
+           │
+       Output: Document Stored, Indexed, Users Notified
+```
+
+---
+
+### 4️⃣ **BPA Level 2 - Business Process Analysis**
+
+```
+PROCESS: Consultation Post Moderation Workflow
+
+┌────────────────────────────────────────────────────────────┐
+│ Process Owner: Moderator       Priority: HIGH              │
+│ Frequency: Continuous          Duration: 1-4 hours         │
+├────────────────────────────────────────────────────────────┤
+
+TRIGGER: Citizen submits post/feedback
+
+STEPS:
+  1. Citizen submits post/feedback
+     └─ Duration: 2 min
+     └─ Resources: Citizen, System
+
+  2. Staff member receives notification
+     └─ Duration: Real-time
+     └─ Resources: Email/In-app notification
+
+  3. Moderator reviews content
+     └─ Duration: 30 min - 1 hour
+     └─ Resources: Manager, Document
+
+  4. Decision point:
+     ├─ APPROVED → Step 5
+     ├─ REJECTED → Step 6
+     └─ FLAGGED → Step 7
+
+  5. Publish post/feedback
+     └─ Duration: 5 min
+     └─ Resources: System, Staff
+     └─ Output: Published, Notify citizen and stakeholders
+
+  6. Reject with feedback
+     └─ Duration: 5 min
+     └─ Resources: System
+     └─ Output: Citizen notified, Request revision or clarification
+
+  7. Flag for review
+     └─ Duration: 5 min
+     └─ Resources: System
+     └─ Output: Escalated to manager for further review
+
+END: Post status updated, Actions logged
+
+KPIs:
+  • Moderation time: < 4 hours (Target)
+  • Approval rate: > 80%
+  • Rejection rate: < 10%
+  • Flag rate: < 10%
+└────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 5️⃣ **BPMN - Business Process Model & Notation (with Integration)**
+
+```
+START
+  │
+  ▼
+┌─────────────────┐
+│ Citizen submits │ ◄──────── Integration: Post Submission Service
+│ Post/Feedback   │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────────┐
+│ Validate post content           │ ◄──── Integration: Content Validator API
+│ (No spam, profanity check)      │
+└────────┬────────────────────────┘
+         │
+    ┌────┴──────┐
+    │ Yes   No  │
+    ▼    ▼
+  ✓     ✗ Reject
+    │    │
+    │    └─────────┐
+    │              │
+    ▼              ▼
+   ┌─────────────────────────────────┐
+   │ Send notification to Citizen     │ ◄──── Integration: Email/SMS Service
+   │ (Post rejected)                  │
+   └─────────────────────────────────┘
+    │
+    ▼ (After revision)
+┌─────────────────────┐
+│ Store to Database   │ ◄────────── Integration: Database Service
+│                     │
+└────────┬────────────┘
+         │
+         ▼
+┌──────────────────────────────────────┐
+│ Tag & Categorize Post                │ ◄──── Integration: Search Service
+│ (Topic, Sentiment, Keywords)         │
+└────────┬─────────────────────────────┘
+         │
+         ▼
+┌──────────────────────────────────────┐
+│ Log action in Audit Trail            │ ◄──── Integration: Logging Service
+│                                      │
+└────────┬─────────────────────────────┘
+         │
+         ▼
+┌──────────────────────────────────────┐
+│ Notify Moderators for review         │ ◄──── Integration: Notification Service
+│                                      │
+└────────┬─────────────────────────────┘
+         │
+    ┌────┴──────────────┐
+    │ Moderator action  │
+    ▼                   ▼
+  APPROVE             REJECT
+    │                   │
+    │                   └─────────────┐
+    │                                 │
+    ▼                                 ▼
+┌────────────────────┐   ┌─────────────────────┐
+│ Publish Post       │   │ Return for revision │
+│                    │   │ (Request clarif.)   │
+└────────┬───────────┘   └────────┬────────────┘
+         │                        │
+         ▼                        ▼
+┌──────────────────────────────────────┐
+│ Notify stakeholders & followers      │ ◄──── Integration: Broadcast Service
+│                                      │
+└────────┬─────────────────────────────┘
+         │
+         ▼
+       END
+```
+
+---
+
+### 6️⃣ **Flowchart - Citizen Post Submission Workflow**
+
+```
+                              START
+                                │
+                                ▼
+                    ┌───────────────────────┐
+                    │ Citizen opens         │
+                    │ consultation/feedback │
+                    │ form                  │
+                    └───────────┬───────────┘
+                                │
+                                ▼
+                    ┌───────────────────────┐
+                    │ Fill post form        │
+                    │ (Opinion, Rating)     │
+                    └───────────┬───────────┘
+                                │
+                                ▼
+                    ┌───────────────────────┐
+              ┌─────┤ Valid submission?     │
+              │ No  └───────────┬───────────┘
+              │                 │ Yes
+              │                 ▼
+              │     ┌───────────────────────┐
+              │     │ Store post in DB      │
+              │     └───────────┬───────────┘
+              │                 │
+              │                 ▼
+              │     ┌───────────────────────┐
+              │     │ Create notification   │
+              │     │ for moderators        │
+              │     └───────────┬───────────┘
+              │                 │
+              │                 ▼
+              │     ┌───────────────────────┐
+              │     │ Log audit event       │
+              │     └───────────┬───────────┘
+              │                 │
+              │                 ▼
+              │     ┌───────────────────────┐
+              │     │ Show success message  │
+              │     └───────────┬───────────┘
+              │                 │
+              └─────────────┬───┘
+                            │
+                            ▼
+                        [END]
+                     Post submitted for review
+```
+
+---
+
+### 7️⃣ **Microservices API Architecture**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     CLIENT LAYER                                 │
+│  (Web Browser, Mobile, External Systems)                        │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │
+                          ▼
+        ┌─────────────────────────────────────┐
+        │    API GATEWAY / Load Balancer      │
+        │  (Routes requests to services)      │
+        └─────────────────────────────────────┘
+                    │    │    │    │    │
+        ┌───────────┼────┼────┼────┼────┼────────────┐
+        │           │    │    │    │    │            │
+        ▼           ▼    ▼    ▼    ▼    ▼            ▼
+    ┌───────┐ ┌────────┐ ┌────────┐ ┌─────┐ ┌──────────┐ ┌─────┐
+    │ Auth  │ │Post/   │ │Comment │ │User │ │Audit Log │ │Notif│
+    │Service│ │Feedback│ │Service │ │Mgmt │ │Service   │ │ica- │
+    │       │ │Service │ │        │ │Serv │ │          │ │tion │
+    └───────┘ └────────┘ └────────┘ └─────┘ └──────────┘ └─────┘
+        │          │         │         │          │           │
+        └──────────┴─────────┴─────────┴──────────┴───────────┘
+                          │
+                          ▼
+        ┌─────────────────────────────────────┐
+        │    DATABASE LAYER                   │
+        │  (MySQL, PostgreSQL)                │
+        └─────────────────────────────────────┘
+```
+
+---
+
+### 8️⃣ **Microservices Communication Pattern**
+
+```
+SYNCHRONOUS (Request-Response) - REST/gRPC
+                │
+                ▼
+    ┌──────────────────────────┐
+    │ Service A                │
+    │  (Document Service)      │
+    └──────────┬───────────────┘
+               │
+          HTTP GET /documents
+               │
+               ▼
+    ┌──────────────────────────┐
+    │ Service B                │
+    │  (Search Service)        │
+    │  Query: "annual report"  │
+    └──────────┬───────────────┘
+               │
+        JSON Response
+               │
+               ▼
+    ┌──────────────────────────┐
+    │ Results displayed        │
+    └──────────────────────────┘
+
+═══════════════════════════════════════════════════════════
+
+ASYNCHRONOUS (Event-Driven) - Message Queue
+                │
+                ▼
+    ┌──────────────────────────┐
+    │ Service A                │
+    │  (Document Service)      │
+    │ Publishes: "doc.created" │
+    └──────────┬───────────────┘
+               │
+          EVENT MESSAGE
+               │
+          ┌────▼──────────┐
+          │ Message Queue │
+          │  (RabbitMQ/   │
+          │   Kafka)      │
+          └────┬──────────┘
+               │
+    ┌──────────┼──────────────┐
+    │          │              │
+    ▼          ▼              ▼
+┌────────┐ ┌──────────┐ ┌──────────┐
+│Service │ │ Service  │ │ Service  │
+│   B    │ │    C     │ │    D     │
+│Notifi- │ │ Indexing │ │ Analytics│
+│cation  │ │ Service  │ │ Service  │
+└────────┘ └──────────┘ └──────────┘
+
+(Services handle events independently)
+```
+
+---
+
+### 9️⃣ **API Pipeline & Data Flow**
+
+```
+REQUEST FLOW (Incoming)
+═════════════════════════════════════════════════════════════
+
+1. Client Request
+   │
+   ▼
+2. API Gateway
+   ├─ Validate token/authentication
+   ├─ Rate limiting check
+   └─ Request logging
+   │
+   ▼
+3. Route to Service
+   ├─ Identify target service
+   └─ Load balance
+   │
+   ▼
+4. Service Handler
+   ├─ Validate input parameters
+   ├─ Check user permissions
+   └─ Business logic
+   │
+   ▼
+5. Database Operations
+   ├─ Query/Insert/Update
+   ├─ Transaction management
+   └─ Index updates
+   │
+   ▼
+6. Cache Layer (Optional)
+   ├─ Store frequently accessed data
+   └─ TTL management
+   │
+   ▼
+7. Response Formation
+   ├─ Serialize response
+   ├─ Add metadata
+   └─ Compress (if needed)
+   │
+   ▼
+8. Return to Client
+   ├─ HTTP status code
+   ├─ Headers
+   └─ JSON/XML body
+
+
+RESPONSE FLOW (Outgoing)
+═════════════════════════════════════════════════════════════
+
+Response Ready
+   │
+   ▼
+Post-Process
+├─ Log action (Audit)
+├─ Trigger webhooks
+└─ Send notifications
+   │
+   ▼
+Queue Async Tasks
+├─ Email notifications
+├─ Report generation
+└─ Analytics updates
+   │
+   ▼
+Return to Client
+├─ 200 OK
+├─ 400 Bad Request
+├─ 401 Unauthorized
+├─ 403 Forbidden
+├─ 404 Not Found
+├─ 500 Server Error
+   │
+   ▼
+Client receives response
+```
+
+---
+
+### 🔟 **Complete Data Flow Example: Document Upload**
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                   DOCUMENT UPLOAD FLOW                        │
+├──────────────────────────────────────────────────────────────┤
+
+INPUT: User uploads "annual_report.pdf"
+         │
+         ▼
+    ┌────────────────────┐
+    │ 1. API Gateway     │ ✓ Authenticate user
+    │    Middleware      │ ✓ Rate limit check
+    │                    │ ✓ File type whitelist
+    └─────────┬──────────┘
+              │
+              ▼
+    ┌────────────────────────────────┐
+    │ 2. Document Service            │
+    │ ├─ Validate file size          │
+    │ ├─ Scan for viruses (optional) │
+    │ └─ Generate file hash          │
+    └─────────┬──────────────────────┘
+              │
+              ▼
+    ┌────────────────────────────────┐
+    │ 3. File Storage Service        │
+    │ ├─ Store file in storage       │
+    │ ├─ Create backup               │
+    │ └─ Return file URL             │
+    └─────────┬──────────────────────┘
+              │
+              ▼
+    ┌────────────────────────────────┐
+    │ 4. Database Service            │
+    │ ├─ Insert document record      │
+    │ ├─ Store metadata              │
+    │ └─ Return doc_id               │
+    └─────────┬──────────────────────┘
+              │
+              ▼
+    ┌────────────────────────────────┐
+    │ 5. Audit Log Service           │
+    │ ├─ Log upload action           │
+    │ ├─ Store user ID, timestamp    │
+    │ └─ Mark action type            │
+    └─────────┬──────────────────────┘
+              │
+              ▼
+    ┌────────────────────────────────┐
+    │ 6. Search/Index Service        │
+    │ ├─ Extract text from PDF       │
+    │ ├─ Create searchable index     │
+    │ └─ Auto-tag document           │
+    └─────────┬──────────────────────┘
+              │
+              ▼
+    ┌────────────────────────────────┐
+    │ 7. Notification Service        │
+    │ ├─ Notify managers for review  │
+    │ ├─ Notify stakeholders         │
+    │ └─ Queue email tasks           │
+    └─────────┬──────────────────────┘
+              │
+              ▼
+    ┌────────────────────────────────┐
+    │ 8. Analytics Service           │
+    │ ├─ Update upload metrics       │
+    │ ├─ Track user activity         │
+    │ └─ Update category stats       │
+    └─────────┬──────────────────────┘
+              │
+              ▼
+        ✓ Response sent to client
+        ├─ Status: 201 Created
+        ├─ Document ID
+        └─ File URL
+└──────────────────────────────────────────────────────────────┘
+
+TIME: ~500-800ms (depending on file size)
+ASYNC TASKS: Email notification, Full-text indexing, Analytics
+```
+
+---
+
+## Use Cases & System Architecture
+
+### 👥 Actors
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     SYSTEM ACTORS                            │
+├─────────────────────────────────────────────────────────────┤
+│ 👤 CITIZEN      │ Public user accessing documents & feedback  │
+│ 👤 STAFF       │ Government staff managing documents          │
+│ 👤 MANAGER     │ Department manager with approval authority  │
+│ 👤 ADMIN       │ System administrator - full access          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 🎯 Use Case Diagram Overview
+
+```
+                           ┌─────────────────────────────────┐
+                           │   PCMP/LLRM SYSTEM              │
+                           │                                 │
+                    ┌──────┼─────────┬──────────┬────────┐   │
+                    │      │         │          │        │   │
+              ┌─────▼─┐ ┌──▼───┐ ┌──▼───┐ ┌───▼─┐ ┌─────▼┐ │
+              │Upload │ │Create│ │View  │ │Mgmt │ │Audit │ │
+              │Docs   │ │Anno- │ │Anno- │ │User │ │Logs  │ │
+              └─┬─────┘ │unce- │ └──┬───┘ └─┬───┘ └──┬───┘ │
+                │       │ments │    │       │       │      │
+              ┌─▼─┐ ┌───▼──┐ ┌─▼──┐ ┌──▼──┐ ┌──▼──┐        │
+              │Tag│ │Track │ │Post│ │Appr-│ │Gener│ Filter │
+              │Docs│ │Status│ │Cmnt│ │ove  │ │ Rate│ Logs   │
+              └───┘ └──────┘ └────┘ └─────┘ └─────┘        │
+                    │         │       │      │              │
+                    ▼         ▼       ▼      ▼              │
+              ┌────────────────────────────────┐            │
+              │    CORE DATABASE               │            │
+              │   (Users, Documents, Posts)    │            │
+              └────────────────────────────────┘            │
+                           │
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+    ┌───▼─┐           ┌────▼────┐       ┌────▼───┐
+    │ 👤  │           │   👤    │       │  👤   │
+    │CITIZEN          │  STAFF  │       │MANAGER │ ADMIN
+    └──────┘           └─────────┘       └────────┘
+```
+
+### 📋 Use Cases by Category
+
+#### 1️⃣ **Document & Legislative Management**
+| UC# | Use Case | Citizen | Staff | Manager | Admin |
+|-----|----------|:-------:|:-----:|:-------:|:-----:|
+| UC-1 | Upload/Encode Documents | | ✓ | ✓ | ✓ |
+| UC-2 | Create Document Versions | | ✓ | ✓ | ✓ |
+| UC-3 | Index & Tag Documents | | ✓ | ✓ | ✓ |
+| UC-4 | Search & Browse Documents | ✓ | ✓ | ✓ | ✓ |
+| UC-5 | Download/Print Documents | ✓ | ✓ | ✓ | ✓ |
+| UC-6 | Track Document Status | ✓ | ✓ | ✓ | ✓ |
+| UC-7 | Approve/Reject Documents | | | ✓ | ✓ |
+
+#### 2️⃣ **Announcement & Communication**
+| UC# | Use Case | Citizen | Staff | Manager | Admin |
+|-----|----------|:-------:|:-----:|:-------:|:-----:|
+| UC-8 | Create Announcements | | ✓ | ✓ | ✓ |
+| UC-9 | Schedule Announcements | | ✓ | ✓ | ✓ |
+| UC-10 | Target Announcements by Role/Dept | | ✓ | ✓ | ✓ |
+| UC-11 | View Announcements | ✓ | ✓ | ✓ | ✓ |
+
+#### 3️⃣ **Public Consultation & Feedback**
+| UC# | Use Case | Citizen | Staff | Manager | Admin |
+|-----|----------|:-------:|:-----:|:-------:|:-----:|
+| UC-12 | Submit Consultation Feedback | ✓ | | | |
+| UC-13 | Post Comments on Documents | ✓ | ✓ | ✓ | ✓ |
+| UC-14 | View Consultation Progress | ✓ | ✓ | ✓ | ✓ |
+| UC-15 | Track Legislation Timeline | ✓ | ✓ | ✓ | ✓ |
+
+#### 4️⃣ **User & Access Management**
+| UC# | Use Case | Citizen | Staff | Manager | Admin |
+|-----|----------|:-------:|:-----:|:-------:|:-----:|
+| UC-16 | Register/Create User Account | ✓ | | | ✓ |
+| UC-17 | Manage User Roles & Permissions | | | ✓ | ✓ |
+| UC-18 | Create Custom Roles | | | | ✓ |
+| UC-19 | Assign User Groups/Teams | | | ✓ | ✓ |
+| UC-20 | Reset User Password | | | ✓ | ✓ |
+
+#### 5️⃣ **Notifications & Alerts**
+| UC# | Use Case | Citizen | Staff | Manager | Admin |
+|-----|----------|:-------:|:-----:|:-------:|:-----:|
+| UC-21 | Receive In-App Notifications | ✓ | ✓ | ✓ | ✓ |
+| UC-22 | Receive Email Notifications | ✓ | ✓ | ✓ | ✓ |
+| UC-23 | Set Notification Preferences | ✓ | ✓ | ✓ | ✓ |
+| UC-24 | Track Document Mentions | ✓ | ✓ | ✓ | ✓ |
+
+#### 6️⃣ **Reporting & Analytics**
+| UC# | Use Case | Citizen | Staff | Manager | Admin |
+|-----|----------|:-------:|:-----:|:-------:|:-----:|
+| UC-25 | Generate Activity Reports | | | ✓ | ✓ |
+| UC-26 | Generate Consultation Reports | | | ✓ | ✓ |
+| UC-27 | Export Data (PDF/Excel/CSV) | | | ✓ | ✓ |
+| UC-28 | View System Analytics Dashboard | | | ✓ | ✓ |
+
+#### 7️⃣ **Audit & Compliance**
+| UC# | Use Case | Citizen | Staff | Manager | Admin |
+|-----|----------|:-------:|:-----:|:-------:|:-----:|
+| UC-29 | View Audit Logs | | | ✓ | ✓ |
+| UC-30 | Filter Audit Logs by User/Action | | | ✓ | ✓ |
+| UC-31 | Track User Login History | | | ✓ | ✓ |
+| UC-32 | Export Audit Reports | | | ✓ | ✓ |
+
+---
+
+## Entity-Relationship Diagram (ERD)
+
+### Database Schema & Relationships
+
+```
+                              ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+                              ┃          USERS             ┃
+                              ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+                              ┃ PK: user_id (INT)          ┃
+                              ┃ username (VARCHAR)         ┃
+                              ┃ email (VARCHAR)            ┃
+                              ┃ password_hash (VARCHAR)    ┃
+                              ┃ fullname (VARCHAR)         ┃
+                              ┃ role (VARCHAR)             ┃
+                              ┃ department (VARCHAR)       ┃
+                              ┃ profile_picture (TEXT)     ┃
+                              ┃ created_at (TIMESTAMP)     ┃
+                              ┗━━━┬━━━━━━━━━━━━━━━━━━━━━━━┛
+                                  │
+                    ┌─────────────┼─────────────┬──────────┐
+                    │             │             │          │
+           ┌────────▼──────┐ ┌────▼─────────────▼──┐ ┌────▼──────────┐
+           ┃  DOCUMENTS    ┃ ┃ POSTS/FEEDBACK    ┃ ┃ NOTIFICATIONS ┃
+           ┣────────────────┫ ┣─────────────────────┫ ┣───────────────┫
+           ┃ PK: doc_id    ┃ ┃ PK: post_id       ┃ ┃ PK: notif_id  ┃
+           ┃ FK: user_id ──┼─┫ FK: user_id ──────┼─┫ FK: user_id   ┃
+           ┃ title (VAR)   ┃ ┃ content (TEXT)    ┃ ┃ message (TEXT)┃
+           ┃ content (TEXT)┃ ┃ is_approved (BOOL)┃ ┃ type (VARCHAR)┃
+           ┃ category (VAR)┃ ┃ created_at (TIME) ┃ ┃ is_read (BOOL)┃
+           ┃ status (VAR)  ┃ ┗───────────────────┛ ┃ created_at    ┃
+           ┃ uploaded_by   ┃                       ┗───────────────┛
+           ┃ created_at    ┃
+           ┃ updated_at    ┃
+           ┗────────┬───────┘
+                    │
+        ┌───────────┴──────────┬──────────┐
+        │                      │          │
+   ┌────▼────────────┐ ┌───────▼──────┐ ┌▼──────────────────┐
+   ┃ ANNOUNCEMENTS   ┃ ┃ AUDIT_LOGS   ┃ ┃ USER_LOGS         ┃
+   ┣─────────────────┫ ┣──────────────┫ ┣──────────────────┫
+   ┃ PK: announce_id┃ ┃ PK: log_id   ┃ ┃ PK: user_log_id  ┃
+   ┃ FK: user_id ──┼─┫ FK: admin_id ┃ ┃ FK: user_id ────┼─┫
+   ┃ title (VARCHAR)┃ ┃ action (VAR) ┃ ┃ action (VARCHAR) ┃
+   ┃ content (TEXT) ┃ ┃ entity_type  ┃ ┃ login_time       ┃
+   ┃ target_role    ┃ ┃ entity_id    ┃ ┃ logout_time      ┃
+   ┃ scheduled_at   ┃ ┃ details (JAX)┃ ┃ ip_address       ┃
+   ┃ expires_at     ┃ ┃ created_at   ┃ ┃ user_agent       ┃
+   ┃ is_active      ┃ ┗──────────────┘ ┗──────────────────┘
+   ┃ created_at     ┃
+   ┗────────────────┘
+
+Legend:
+  PK = Primary Key
+  FK = Foreign Key
+  — = One-to-Many relationship
+  ┃ = Table boundary
+```
+
+### Relationship Summary
+
+| Entity 1 | Relationship | Entity 2 | Description |
+|----------|-------------|----------|-------------|
+| USERS | 1:N | DOCUMENTS | One user uploads many documents |
+| USERS | 1:N | POSTS | One user creates many posts/feedback |
+| USERS | 1:N | NOTIFICATIONS | One user receives many notifications |
+| USERS | 1:N | ANNOUNCEMENTS | One user creates many announcements |
+| USERS | 1:N | AUDIT_LOGS | Admin logs track user actions |
+| USERS | 1:N | USER_LOGS | Track user login/logout history |
+| DOCUMENTS | 1:N | POSTS | Users comment on documents |
 
 ---
 
@@ -29,46 +782,46 @@
 
 ---
 
-### Epic 2: Document Management - IN PROGRESS 🔄
+### Epic 2: Consultation Post Management - IN PROGRESS 🔄
 
-#### Story 1: Advanced Document Features
-- [ ] Document Versioning
-  - Track document changes over time
+#### Story 1: Advanced Post Features
+- [ ] Post Versioning
+  - Track post edits over time
   - Allow rollback to previous versions
-  - Display version history timeline
-  - Priority: High
-  - Estimated: 13 story points
+  - Display edit history
+  - Priority: Medium
+  - Estimated: 8 story points
 
-- [ ] Bulk Document Operations
-  - Multi-select documents
+- [ ] Bulk Post Operations
+  - Multi-select posts
   - Bulk approve/reject functionality
-  - Bulk delete with confirmation
+  - Bulk archive with confirmation
   - Bulk export (PDF/CSV)
   - Priority: Medium
   - Estimated: 8 story points
 
-- [ ] Document Collaboration
-  - Comments on documents
-  - Discussion threads
+- [ ] Post Comments & Threads
+  - Comments on citizen posts
+  - Staff/manager replies
   - Mention users with @mention
-  - Email notifications for mentions
-  - Priority: Medium
+  - Email notifications for replies
+  - Priority: High
   - Estimated: 13 story points
 
-- [ ] Document Templates
-  - Create reusable document templates
-  - Quick document creation from templates
-  - Template management interface
-  - Priority: Low
-  - Estimated: 8 story points
+- [ ] Post Moderation Tools
+  - Flag inappropriate content
+  - Automatic spam detection
+  - Content filtering rules
+  - Priority: High
+  - Estimated: 13 story points
 
-- [ ] Document Workflows
-  - Define custom approval workflows
-  - Multi-level approval process
-  - Workflow status tracking
+- [ ] Post Workflows
+  - Moderation approval workflow
+  - Multi-level review process
+  - Status tracking (submitted, approved, published, archived)
   - Deadline management
   - Priority: High
-  - Estimated: 21 story points
+  - Estimated: 13 story points
 
 ---
 
@@ -76,31 +829,31 @@
 
 #### Story 1: Enhanced Role-Based Access Control (RBAC)
 - [ ] Custom Role Creation
-  - Define custom roles with specific permissions
+  - Define custom roles (Citizen, Moderator, Manager, Admin)
   - Role permission matrix
   - Role templates
   - Priority: High
   - Estimated: 13 story points
 
 - [ ] Fine-Grained Permissions
-  - Document-level permissions
-  - Field-level access control
-  - Department-level restrictions
+  - Post-level permissions
+  - Category-level access control
+  - Staff viewing restrictions
   - Priority: High
   - Estimated: 13 story points
 
 - [ ] User Groups/Teams
-  - Create user groups/teams
-  - Assign group permissions
-  - Group-based notifications
+  - Create moderation teams
+  - Assign team permissions
+  - Team-based notifications
   - Team collaboration features
   - Priority: Medium
   - Estimated: 13 story points
 
 - [ ] User Activity Tracking
   - Track user logins (already partially done)
-  - Track document access
-  - Track search queries
+  - Track post submissions
+  - Track searches
   - User behavior analytics
   - Priority: Medium
   - Estimated: 8 story points
@@ -111,7 +864,7 @@
 
 #### Story 1: Advanced Search
 - [ ] Full-Text Search
-  - Search across all documents and content
+  - Search across all posts and content
   - Search result highlighting
   - Search suggestions/autocomplete
   - Priority: High
@@ -125,19 +878,19 @@
   - Estimated: 5 story points
 
 - [ ] Advanced Filters
-  - Filter by tags (currently exists, enhance)
-  - Filter by file type
-  - Filter by size
+  - Filter by category/topic
+  - Filter by status (submitted, approved, rejected)
+  - Filter by date range
+  - Filter by sentiment
   - Filter by author
-  - Filter by department
   - Combined filters with AND/OR logic
   - Priority: High
   - Estimated: 8 story points
 
 - [ ] Search Analytics
-  - Track popular searches
+  - Track popular search terms
   - Search trend analysis
-  - Provide search suggestions based on trends
+  - Search-based topic identification
   - Priority: Low
   - Estimated: 8 story points
 
@@ -165,12 +918,12 @@
   - System uptime/availability
   - Response time metrics
   - User engagement metrics
-  - Document lifecycle metrics
+  - Post submission/approval metrics
   - Priority: Medium
   - Estimated: 13 story points
 
 - [ ] Export Functionality
-  - Export reports to PDF
+  - Export consultation summary reports to PDF
   - Export to Excel
   - Export to CSV
   - Email report delivery
@@ -183,9 +936,9 @@
 
 #### Story 1: Enhanced Notification System
 - [ ] Email Notifications
-  - Document upload notifications
+  - Post submission notifications
   - Approval/rejection notifications
-  - Deadline reminder notifications
+  - Response notifications
   - User mention notifications
   - Priority: High
   - Estimated: 8 story points
@@ -200,7 +953,7 @@
 
 - [ ] SMS Notifications
   - SMS for critical alerts
-  - SMS for deadline reminders
+  - SMS for post responses
   - Two-factor authentication via SMS
   - Priority: Low
   - Estimated: 13 story points
@@ -342,31 +1095,31 @@
 
 #### Story 1: Portal Features
 - [ ] Public Consultation Features
-  - Submit feedback/comments on public documents
-  - Public opinion survey system
-  - Voting/rating system for documents
+  - Submit feedback/comments on consultations
+  - Opinion survey system
+  - Sentiment analysis for posts
   - Priority: High
   - Estimated: 13 story points
 
 - [ ] Knowledge Base
-  - FAQ section
-  - How-to guides
+  - FAQ section for consultations
+  - How-to guides for citizens
   - Video tutorials
   - User documentation
   - Priority: Medium
   - Estimated: 13 story points
 
-- [ ] Document Tracking
-  - Track document status for citizens
-  - Timeline view of document progress
-  - Notifications for status changes
+- [ ] Consultation Tracking
+  - Track consultation progress for citizens
+  - Timeline view of consultation phases
+  - Notifications for phase changes
   - Priority: Medium
   - Estimated: 8 story points
 
 - [ ] User Profiles Enhancement
-  - User activity history
-  - Submission history
-  - Profile badges/achievements
+  - User submission history
+  - Citizen achievement badges
+  - Citizen reputation system
   - Priority: Low
   - Estimated: 8 story points
 
