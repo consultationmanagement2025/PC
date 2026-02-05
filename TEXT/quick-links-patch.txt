@@ -1,0 +1,101 @@
+REPLACEMENT FOR QUICK LINKS SECTION (Lines 1772-1801 in app-features.js)
+
+<!-- Quick Links -->
+                <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in-up animation-delay-800">
+                    <div class="flex items-center gap-3 mb-6">
+                        <i class="bi bi-link-45deg text-2xl text-red-600"></i>
+                        <h2 class="text-xl font-bold text-gray-800">Quick Links</h2>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <!-- Account & Profile -->
+                        <button onclick="openEditProfileModal()" class="w-full flex items-center gap-3 p-3 text-left hover:bg-red-50 rounded-lg transition group">
+                            <i class="bi bi-gear text-gray-600 group-hover:text-red-600"></i>
+                            <div class="flex-1">
+                                <span class="text-sm text-gray-700 group-hover:text-red-600">Account Settings</span>
+                                <p class="text-xs text-gray-500">Manage profile & preferences</p>
+                            </div>
+                            <i class="bi bi-chevron-right text-gray-400"></i>
+                        </button>
+
+                        <!-- My Documents -->
+                        <button onclick="showSection('documents')" class="w-full flex items-center gap-3 p-3 text-left hover:bg-blue-50 rounded-lg transition group">
+                            <i class="bi bi-files text-gray-600 group-hover:text-blue-600"></i>
+                            <div class="flex-1">
+                                <span class="text-sm text-gray-700 group-hover:text-blue-600">My Documents</span>
+                                <p class="text-xs text-gray-500">${AppData.documents.filter(d => d.uploadedBy === currentUser.name).length} documents</p>
+                            </div>
+                            <i class="bi bi-chevron-right text-gray-400"></i>
+                        </button>
+
+                        <!-- Consultations -->
+                        <button onclick="showSection('consultation-management')" class="w-full flex items-center gap-3 p-3 text-left hover:bg-purple-50 rounded-lg transition group">
+                            <i class="bi bi-chat-dots text-gray-600 group-hover:text-purple-600"></i>
+                            <div class="flex-1">
+                                <span class="text-sm text-gray-700 group-hover:text-purple-600">Consultations</span>
+                                <p class="text-xs text-gray-500">${AppData.consultations.length} active consultations</p>
+                            </div>
+                            <i class="bi bi-chevron-right text-gray-400"></i>
+                        </button>
+
+                        <!-- Feedback -->
+                        <button onclick="showSection('feedback-collection')" class="w-full flex items-center gap-3 p-3 text-left hover:bg-green-50 rounded-lg transition group">
+                            <i class="bi bi-chat-left-quote text-gray-600 group-hover:text-green-600"></i>
+                            <div class="flex-1">
+                                <span class="text-sm text-gray-700 group-hover:text-green-600">Feedback & Responses</span>
+                                <p class="text-xs text-gray-500">${AppData.feedback.length} feedback entries</p>
+                            </div>
+                            <i class="bi bi-chevron-right text-gray-400"></i>
+                        </button>
+
+                        <!-- Users Management -->
+                        <button onclick="showSection('users')" class="w-full flex items-center gap-3 p-3 text-left hover:bg-yellow-50 rounded-lg transition group">
+                            <i class="bi bi-people text-gray-600 group-hover:text-yellow-600"></i>
+                            <div class="flex-1">
+                                <span class="text-sm text-gray-700 group-hover:text-yellow-600">User Management</span>
+                                <p class="text-xs text-gray-500">${AppData.users.length} registered users</p>
+                            </div>
+                            <i class="bi bi-chevron-right text-gray-400"></i>
+                        </button>
+
+                        <!-- Audit Log -->
+                        <button onclick="showSection('audit')" class="w-full flex items-center gap-3 p-3 text-left hover:bg-orange-50 rounded-lg transition group">
+                            <i class="bi bi-shield-check text-gray-600 group-hover:text-orange-600"></i>
+                            <div class="flex-1">
+                                <span class="text-sm text-gray-700 group-hover:text-orange-600">Audit Log</span>
+                                <p class="text-xs text-gray-500">${AppData.auditLogs.length} activities logged</p>
+                            </div>
+                            <i class="bi bi-chevron-right text-gray-400"></i>
+                        </button>
+
+                        <!-- Activity Report -->
+                        <button onclick="openActivityReportModal()" class="w-full flex items-center gap-3 p-3 text-left hover:bg-indigo-50 rounded-lg transition group">
+                            <i class="bi bi-bar-chart text-gray-600 group-hover:text-indigo-600"></i>
+                            <div class="flex-1">
+                                <span class="text-sm text-gray-700 group-hover:text-indigo-600">Activity Report</span>
+                                <p class="text-xs text-gray-500">Your system activities</p>
+                            </div>
+                            <i class="bi bi-chevron-right text-gray-400"></i>
+                        </button>
+
+                        <!-- Session Settings -->
+                        <button onclick="openSessionSettingsModal()" class="w-full flex items-center gap-3 p-3 text-left hover:bg-cyan-50 rounded-lg transition group">
+                            <i class="bi bi-wifi text-gray-600 group-hover:text-cyan-600"></i>
+                            <div class="flex-1">
+                                <span class="text-sm text-gray-700 group-hover:text-cyan-600">Session Settings</span>
+                                <p class="text-xs text-gray-500">Manage device sessions</p>
+                            </div>
+                            <i class="bi bi-chevron-right text-gray-400"></i>
+                        </button>
+
+                        <!-- Help Center -->
+                        <button onclick="showSection('help')" class="w-full flex items-center gap-3 p-3 text-left hover:bg-pink-50 rounded-lg transition group">
+                            <i class="bi bi-question-circle text-gray-600 group-hover:text-pink-600"></i>
+                            <div class="flex-1">
+                                <span class="text-sm text-gray-700 group-hover:text-pink-600">Help Center</span>
+                                <p class="text-xs text-gray-500">Documentation & support</p>
+                            </div>
+                            <i class="bi bi-chevron-right text-gray-400"></i>
+                        </button>
+                    </div>
+                </div>
