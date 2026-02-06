@@ -382,7 +382,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                             </div>
                         </div>
                         
-                        <!-- Right Side Actions -->
+                        <!-- Right Side Actions hayss -->
                         <div class="flex items-center space-x-1 md:space-x-4">
                             <!-- Search Bar (Hidden on mobile) -->
                             <div class="hidden lg:block">
