@@ -401,7 +401,25 @@ $totalPages = ceil($totalLogs / $pageSize);
                                 <i class="bi bi-sun-fill text-xl light-mode-icon hidden"></i>
                             </button>
                         
-                            <!-- Notifications removed per user request -->
+                            <!-- Notifications Bell -->
+                            <div class="relative">
+                                <button id="notifications-btn" onclick="toggleNotifications()" class="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition relative" title="Notifications">
+                                    <i class="bi bi-bell text-lg md:text-xl"></i>
+                                    <span id="notif-badge" class="hidden absolute top-1 right-1 bg-red-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">0</span>
+                                </button>
+                                <!-- Notifications Dropdown -->
+                                <div id="notifications-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-96 flex flex-col">
+                                    <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                                        <h3 class="font-semibold text-gray-900">Notifications</h3>
+                                        <button onclick="toggleNotifications()" class="text-gray-400 hover:text-gray-600">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+                                    <div id="notifications-list" class="overflow-y-auto flex-1 space-y-2 p-3">
+                                        <div class="text-sm text-gray-500 text-center py-4">No notifications yet</div>
+                                    </div>
+                                </div>
+                            </div>
                         
                             <!-- User Profile Dropdown -->
                             <div class="relative">
@@ -972,19 +990,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                             </div>
                             
                             <div class="space-y-4">
-                                <div class="border border-gray-200 rounded-lg p-4">
-                                    <div class="flex justify-between items-start mb-2">
-                                        <div>
-                                            <h3 class="font-semibold text-gray-900">Sample Feedback</h3>
-                                            <p class="text-sm text-gray-600 mt-1">Feedback content goes here</p>
-                                        </div>
-                                        <span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Pending</span>
-                                    </div>
-                                    <div class="mt-3 flex gap-2">
-                                        <button class="btn-secondary text-sm px-3 py-1">Respond</button>
-                                        <button class="text-sm text-gray-600 hover:text-gray-900">Archive</button>
-                                    </div>
-                                </div>
+                                <!-- Feedback list will populate here when real data exists -->
                             </div>
                         </div>
                     </section>

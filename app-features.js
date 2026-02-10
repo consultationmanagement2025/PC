@@ -2,7 +2,7 @@
 // PCMP SYSTEM - FULL FEATURES
 // ==============================
 
-// Global Data Store
+// Global Data Store (no seeded/sample data)
 const AppData = {
     documents: [],
     users: [],
@@ -10,20 +10,7 @@ const AppData = {
     announcements: [],
     auditLogs: [],
     loginHistory: [],
-    currentUser: {
-        id: 1,
-        name: 'Admin User',
-        email: 'admin@lgu.gov.ph',
-        role: 'Administrator',
-        profilePicture: null,
-        phone: '1954654564',
-        department: 'IT Department',
-        position: 'Secretary',
-        twoFactorEnabled: false,
-        twoFactorMethod: 'email',
-        memberSince: 'Nov 2025',
-        lastLogin: new Date().toLocaleString()
-    }
+    currentUser: null
 };
 
 // Initialize App
@@ -61,150 +48,42 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Initialize Sample Data
 function initializeData() {
-    // Sample Documents
-    AppData.documents = [
-        {
-            id: 1,
-            reference: 'ORD-2025-001',
-            title: 'Annual Budget Ordinance 2025',
-            type: 'ordinance',
-            status: 'approved',
-            date: '2025-01-15',
-            uploadedBy: 'Admin User',
-            uploadedAt: '2025-01-15 10:30 AM',
-            fileSize: '2.5 MB',
-            description: 'Annual budget allocation for fiscal year 2025',
-            tags: ['budget', 'finance', '2025'],
-            views: 45,
-            downloads: 12
-        },
-        {
-            id: 2,
-            reference: 'RES-2025-042',
-            title: 'COVID-19 Response Resolution',
-            type: 'resolution',
-            status: 'approved',
-            date: '2025-02-01',
-            uploadedBy: 'Officer User',
-            uploadedAt: '2025-02-01 02:15 PM',
-            fileSize: '1.8 MB',
-            description: 'Resolution for enhanced COVID-19 response measures',
-            tags: ['health', 'covid-19', 'emergency'],
-            views: 78,
-            downloads: 23
-        },
-        {
-            id: 3,
-            reference: 'SM-2025-11',
-            title: 'Regular Session Minutes - November 2025',
-            type: 'session',
-            status: 'pending',
-            date: '2025-11-20',
-            uploadedBy: 'Staff User',
-            uploadedAt: '2025-11-21 09:00 AM',
-            fileSize: '3.2 MB',
-            description: 'Minutes of the regular session held on November 20, 2025',
-            tags: ['session', 'minutes', 'november'],
-            views: 12,
-            downloads: 3
-        },
-        {
-            id: 4,
-            reference: 'AG-2025-12',
-            title: 'December Session Agenda',
-            type: 'agenda',
-            status: 'draft',
-            date: '2025-12-01',
-            uploadedBy: 'Admin User',
-            uploadedAt: '2025-11-28 04:45 PM',
-            fileSize: '856 KB',
-            description: 'Agenda for the December regular session',
-            tags: ['agenda', 'december', 'session'],
-            views: 8,
-            downloads: 2
-        }
-    ];
-    
-    // Sample Users
-    AppData.users = [
-        { id: 1, name: 'Admin User', email: 'admin@lgu.gov.ph', role: 'Administrator', status: 'active', department: 'IT Department', lastLogin: '2025-12-02 08:30 AM' },
-        { id: 2, name: 'Officer Smith', email: 'officer@lgu.gov.ph', role: 'Officer', status: 'active', department: 'Legislative', lastLogin: '2025-12-02 07:15 AM' },
-        { id: 3, name: 'Staff Jones', email: 'staff@lgu.gov.ph', role: 'Staff', status: 'active', department: 'Records', lastLogin: '2025-12-01 05:20 PM' },
-        { id: 4, name: 'Viewer Brown', email: 'viewer@lgu.gov.ph', role: 'Viewer', status: 'inactive', department: 'Public', lastLogin: '2025-11-30 03:10 PM' }
-    ];
-
-    // Sample Consultations
-    AppData.consultations = [
-        { id: 1, title: 'Community Hearing - Brgy. 1', date: '2025-12-12', type: 'In-person', status: 'Open', feedbackCount: 34, documentsAttached: 3 },
-        { id: 2, title: 'Online Forum on Budget', date: '2025-12-20', type: 'Online', status: 'Scheduled', feedbackCount: 58, documentsAttached: 5 },
-        { id: 3, title: 'Survey: Public Transport', date: '2025-11-25', type: 'Survey', status: 'Closed', feedbackCount: 36, documentsAttached: 2 }
-    ];
-
-    // Sample Feedback entries
-    AppData.feedback = [
-        { id: 1, consultationId: 1, author: 'Juan Dela Cruz', message: 'Support this ordinance.', date: '2025-12-03' },
-        { id: 2, consultationId: 2, author: 'Maria Santos', message: 'Please consider evening schedule.', date: '2025-12-01' },
-        { id: 3, consultationId: 3, author: 'Pedro Reyes', message: 'Add more survey options.', date: '2025-11-26' }
-    ];
-    
-    // Sample Notifications with enhanced system events
-    // Load notifications from localStorage if present, otherwise seed sample data
+    // Ensure data stores exist; do not seed sample data.
+    // Load notifications from storage if present, otherwise leave empty.
     const storedNotifs = localStorage.getItem('llrm_notifications');
     if (storedNotifs) {
         try {
             AppData.notifications = JSON.parse(storedNotifs);
         } catch (e) {
-            console.warn('Failed to parse notifications from storage, using defaults');
-            AppData.notifications = [
-                { id: 1, title: 'Document Approved', message: 'ORD-2025-001 approved by Officer Smith', time: '2 hours ago', type: 'document', read: false, priority: 'high', category: 'documents', action: 'View' },
-                { id: 2, title: 'New Feedback Received', message: '3 new feedback entries for Community Hearing', time: '5 hours ago', type: 'feedback', read: false, priority: 'high', category: 'feedback', action: 'Review' },
-                { id: 3, title: 'User Added', message: 'Viewer Brown joined the system', time: '1 day ago', type: 'user', read: true, priority: 'normal', category: 'users', action: 'View User' }
-            ];
-            localStorage.removeItem('llrm_notifications');
+            console.warn('Failed to parse notifications from storage');
+            AppData.notifications = [];
         }
     } else {
-        AppData.notifications = [
-            { id: 1, title: 'Document Approved', message: 'ORD-2025-001 approved by Officer Smith', time: '2 hours ago', type: 'document', read: false, priority: 'high', category: 'documents', action: 'View' },
-            { id: 2, title: 'New Feedback Received', message: '3 new feedback entries for Community Hearing', time: '5 hours ago', type: 'feedback', read: false, priority: 'high', category: 'feedback', action: 'Review' },
-            { id: 3, title: 'User Added', message: 'Viewer Brown joined the system', time: '1 day ago', type: 'user', read: true, priority: 'normal', category: 'users', action: 'View User' },
-            { id: 4, title: 'System Update Completed', message: 'System maintenance completed successfully', time: '2 days ago', type: 'system', read: true, priority: 'normal', category: 'system', action: null },
-            { id: 5, title: 'Storage Warning', message: 'System storage is 80% full. Please review documents.', time: '6 hours ago', type: 'alert', read: false, priority: 'critical', category: 'system', action: 'Review Storage' }
-        ];
-        saveNotificationsToStorage();
+        AppData.notifications = [];
     }
+
     // Load announcements (if any) from storage
     loadAnnouncementsFromStorage();
-    
-    // Sample Audit Logs - Load from localStorage or seed defaults
+
+    // Load audit logs from storage if present
     const storedAuditLogs = localStorage.getItem('llrm_auditLogs');
     if (storedAuditLogs) {
         try {
             AppData.auditLogs = JSON.parse(storedAuditLogs);
         } catch (e) {
-            console.warn('Failed to parse audit logs from storage, using defaults');
-            AppData.auditLogs = [
-                { id: 1, user: 'Admin User', action: 'upload', description: 'Uploaded document ORD-2025-001', timestamp: '2025-12-02 10:30 AM', ipAddress: '192.168.1.100' },
-                { id: 2, user: 'Officer Smith', action: 'approve', description: 'Approved document RES-2025-042', timestamp: '2025-12-02 09:15 AM', ipAddress: '192.168.1.101' },
-                { id: 3, user: 'Staff Jones', action: 'update', description: 'Updated document SM-2025-11', timestamp: '2025-12-01 04:45 PM', ipAddress: '192.168.1.102' },
-                { id: 4, user: 'Admin User', action: 'delete', description: 'Deleted draft document AG-2024-15', timestamp: '2025-12-01 02:20 PM', ipAddress: '192.168.1.100' }
-            ];
+            console.warn('Failed to parse audit logs from storage');
+            AppData.auditLogs = [];
         }
     } else {
-        AppData.auditLogs = [
-            { id: 1, user: 'Admin User', action: 'upload', description: 'Uploaded document ORD-2025-001', timestamp: '2025-12-02 10:30 AM', ipAddress: '192.168.1.100' },
-            { id: 2, user: 'Officer Smith', action: 'approve', description: 'Approved document RES-2025-042', timestamp: '2025-12-02 09:15 AM', ipAddress: '192.168.1.101' },
-            { id: 3, user: 'Staff Jones', action: 'update', description: 'Updated document SM-2025-11', timestamp: '2025-12-01 04:45 PM', ipAddress: '192.168.1.102' },
-            { id: 4, user: 'Admin User', action: 'delete', description: 'Deleted draft document AG-2024-15', timestamp: '2025-12-01 02:20 PM', ipAddress: '192.168.1.100' }
-        ];
+        AppData.auditLogs = [];
     }
 
-    // Login History
-    AppData.loginHistory = [
-        { id: 1, user: 'Admin User', timestamp: '2025-12-15 08:30 AM', ipAddress: '192.168.1.100', device: 'Chrome on Windows', location: 'Office' },
-        { id: 2, user: 'Admin User', timestamp: '2025-12-14 10:15 AM', ipAddress: '192.168.1.100', device: 'Safari on macOS', location: 'Office' },
-        { id: 3, user: 'Admin User', timestamp: '2025-12-13 02:45 PM', ipAddress: '192.168.1.105', device: 'Chrome on Windows', location: 'Office' },
-        { id: 4, user: 'Admin User', timestamp: '2025-12-12 09:20 AM', ipAddress: '192.168.1.100', device: 'Chrome on Windows', location: 'Office' }
-    ];
+    // Leave other stores empty until populated by real data
+    AppData.documents = [];
+    AppData.users = [];
+    AppData.consultations = [];
+    AppData.feedback = [];
+    AppData.loginHistory = [];
 }
 
 // Section Management
@@ -321,13 +200,14 @@ function renderDashboard() {
     const approvedDocs = AppData.documents.filter(d => d.status === 'approved').length;
     const pendingDocs = AppData.documents.filter(d => d.status === 'pending').length;
     const activeUsers = AppData.users.filter(u => u.status === 'active').length;
+    const currentUserName = AppData.currentUser && AppData.currentUser.name ? AppData.currentUser.name : 'User';
     
     const html = `
-        <!-- Welcome Banner -->
+        <!-- Welcome Banner - Only shown on dashboard -->
         <div class="bg-gradient-to-r from-red-600 to-red-800 rounded-2xl shadow-xl p-8 mb-6 text-white transform hover:scale-[1.01] transition-all duration-300 animate-fade-in">
             <div class="flex items-center justify-between">
                 <div class="animate-slide-in-left">
-                    <h1 class="text-3xl font-bold mb-2">Welcome back, ${AppData.currentUser.name}! 👋</h1>
+                    <h1 class="text-3xl font-bold mb-2">Welcome back, ${currentUserName}! 👋</h1>
                     <p class="text-red-100 text-lg">Here's what's happening with your legislative records today.</p>
                 </div>
                 <div class="hidden lg:block animate-slide-in-right">

@@ -1,0 +1,202 @@
+<!-- 
+NAVIGATION INTEGRATION GUIDE
+Add these menu items to your main navigation
+-->
+
+<!-- For Admin Portal (system-template-full.php or your admin menu) -->
+<li class="nav-item" style="margin-left: 0;">
+    <a class="nav-link" href="admin-manage-consultations.php" style="color: white; padding: 0.75rem 1rem;">
+        <i class="bi bi-megaphone-fill"></i> Manage Consultations
+    </a>
+</li>
+
+<!-- For User Portal (user-portal.php or public menu) -->
+<li class="nav-item">
+    <a class="nav-link" href="public-consultations.php">
+        <i class="bi bi-megaphone"></i> Public Consultations
+    </a>
+</li>
+
+<!-- Quick Links to add to dashboard cards -->
+<div class="dashboard-card" style="background: linear-gradient(135deg, #C41E3A 0%, #003DA5 100%); color: white; padding: 1.5rem; border-radius: 8px; cursor: pointer;" onclick="window.location.href='admin-manage-consultations.php'">
+    <i class="bi bi-megaphone-fill" style="font-size: 2rem; margin-bottom: 0.5rem; display: block;"></i>
+    <h5 style="margin: 0 0 0.5rem 0;">Manage Consultations</h5>
+    <p style="margin: 0; opacity: 0.9; font-size: 0.9rem;">Create and manage public consultations</p>
+</div>
+
+<!-- For quick access in user portal -->
+<a href="public-consultations.php" class="btn btn-primary" style="margin: 0.5rem;">
+    <i class="bi bi-megaphone"></i> View Public Consultations
+</a>
+
+<!-- ============================================ -->
+<!-- SIDEBAR MENU ITEMS (for admin template) -->
+<!-- ============================================ -->
+
+<div class="sidebar-section">
+    <h6 style="color: #C41E3A; font-weight: 700; margin-bottom: 1rem;">PUBLIC ENGAGEMENT</h6>
+    
+    <a href="admin-manage-consultations.php" class="sidebar-link">
+        <i class="bi bi-megaphone-fill"></i> Manage Consultations
+    </a>
+    
+    <a href="public-consultations.php" class="sidebar-link" target="_blank">
+        <i class="bi bi-globe"></i> View Public Portal
+    </a>
+    
+    <a href="API/consultations_api.php?action=list" class="sidebar-link">
+        <i class="bi bi-api"></i> Consultations API
+    </a>
+</div>
+
+<!-- ============================================ -->
+<!-- DASHBOARD WIDGETS (for admin dashboard) -->
+<!-- ============================================ -->
+
+<div class="widget" style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h5 style="margin: 0; color: #003DA5; font-weight: 700;">Active Consultations</h5>
+        <a href="admin-manage-consultations.php" style="color: #C41E3A; text-decoration: none; font-weight: 600;">Manage →</a>
+    </div>
+    <div id="active-consultations-count" style="font-size: 2.5rem; font-weight: 700; color: #4CAF50;">0</div>
+    <p style="margin: 0.5rem 0 0 0; color: #999; font-size: 0.9rem;">Public consultations currently active</p>
+</div>
+
+<div class="widget" style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h5 style="margin: 0; color: #003DA5; font-weight: 700;">Pending Feedback</h5>
+        <a href="admin-manage-consultations.php" style="color: #C41E3A; text-decoration: none; font-weight: 600;">Review →</a>
+    </div>
+    <div id="pending-feedback-count" style="font-size: 2.5rem; font-weight: 700; color: #FF9800;">0</div>
+    <p style="margin: 0.5rem 0 0 0; color: #999; font-size: 0.9rem;">Feedback awaiting approval</p>
+</div>
+
+<script>
+// Script to load consultation stats (add to your dashboard)
+function loadConsultationStats() {
+    fetch('API/consultations_api.php?action=list')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const active = data.data.filter(c => c.status === 'active').length;
+                document.getElementById('active-consultations-count').textContent = active;
+                
+                // Count pending feedback
+                let pending = 0;
+                data.data.forEach(c => {
+                    fetch(`API/consultation_feedback.php?action=get_feedback&consultation_id=${c.id}`)
+                        .then(r => r.json())
+                        .then(d => {
+                            if (d.success) pending += d.count;
+                            document.getElementById('pending-feedback-count').textContent = pending;
+                        });
+                });
+            }
+        });
+}
+
+// Call on page load
+document.addEventListener('DOMContentLoaded', loadConsultationStats);
+</script>
+
+<!-- ============================================ -->
+<!-- USER PORTAL QUICK ACCESS -->
+<!-- ============================================ -->
+
+<!-- Add to user dashboard -->
+<div style="background: linear-gradient(135deg, #C41E3A 0%, #003DA5 100%); color: white; padding: 2rem; border-radius: 8px; margin-bottom: 2rem; cursor: pointer; transition: all 0.3s ease;" onclick="window.location.href='public-consultations.php'" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+    <h3 style="margin: 0 0 0.5rem 0;">
+        <i class="bi bi-megaphone"></i> Join Public Consultations
+    </h3>
+    <p style="margin: 0; opacity: 0.95;">Be HEARD. Share your feedback on important government initiatives.</p>
+</div>
+
+<!-- ============================================ -->
+<!-- MENU STRUCTURE EXAMPLE -->
+<!-- ============================================ -->
+
+<!--
+Main Navigation Structure:
+
+Admin Dashboard
+├── Dashboard
+├── PUBLIC ENGAGEMENT
+│   ├── Manage Consultations
+│   ├── View Public Portal (external link)
+│   └── Feedback Queue
+├── Documents
+├── Users
+├── Reports
+│   ├── Consultation Analytics
+│   └── Feedback Summary
+└── Settings
+
+User Portal
+├── Dashboard
+├── My Consultations
+├── Public Consultations ⭐
+├── My Feedback
+├── Messages
+└── Profile
+-->
+
+<!-- ============================================ -->
+<!-- QUICK LINKS FOR SYSTEM INTEGRATION -->
+<!-- ============================================ -->
+
+<!-- Add these quick links to your main navigation bar -->
+
+Admin Quick Links:
+- [Manage Consultations](admin-manage-consultations.php)
+- [View Public Feedback](admin-manage-consultations.php#feedback)
+- [Consultation Stats](admin-manage-consultations.php)
+
+User Quick Links:
+- [Public Consultations](public-consultations.php)
+- [Submit Feedback](public-consultations.php)
+- [My Submissions](user-portal.php?section=consultations)
+
+<!-- ============================================ -->
+<!-- CSS CLASSES FOR STYLING -->
+<!-- ============================================ -->
+
+<style>
+    .consultation-badge {
+        background: #C41E3A;
+        color: white;
+        padding: 0.35rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        display: inline-block;
+    }
+
+    .consultation-menu-item {
+        position: relative;
+    }
+
+    .consultation-menu-item::before {
+        content: '';
+        position: absolute;
+        top: -2px;
+        right: -2px;
+        width: 8px;
+        height: 8px;
+        background: #4CAF50;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .consultation-highlight {
+        background: linear-gradient(135deg, rgba(196, 30, 58, 0.1) 0%, rgba(0, 61, 165, 0.1) 100%);
+        border-left: 4px solid #C41E3A;
+        padding: 1rem;
+        border-radius: 4px;
+        margin-bottom: 1rem;
+    }
+</style>
