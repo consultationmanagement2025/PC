@@ -19,7 +19,7 @@
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: 'Poppins', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             color: #1f2937;
             background: #f3f4f6;
             font-weight: 400;
@@ -27,6 +27,18 @@
             line-height: 1.6;
         }
 
+        /* ensure bootstrap icons render correctly */
+        .bi {
+            font-family: 'bootstrap-icons' !important;
+            speak: none;
+            font-style: normal;
+            font-weight: 400;
+            font-variant: normal;
+            text-transform: none;
+            line-height: 1;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
         h1, h2, h3, h4, h5, h6 {
             font-weight: 700;
             letter-spacing: -0.5px;
@@ -233,6 +245,9 @@
             max-width: 640px;
             text-align: left;
             padding-left: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
             /* subtle translucent panel to help text stand out on busy photos */
             background: rgba(0,0,0,0.18);
             padding: 24px 20px;
@@ -240,12 +255,16 @@
         }
 
         @media (max-width: 768px) {
-            .hero-content { text-align: center; padding-left: 0; background: transparent; padding: 0; }
+            .hero-content { text-align: center; padding-left: 0; background: transparent; padding: 0; align-items: center; }
             .hero-content h2 { margin-top: 0.25rem; }
         }
 
         /* center the participate button inside the hero content panel */
-        .hero-content .hero-button-wrap { width: 100%; display: flex; justify-content: center; margin-top: 1.5rem; gap: 1rem; }
+        .hero-content .hero-button-wrap { width: 100%; display: flex; justify-content: flex-start; align-items: center; margin-top: 1.5rem; gap: 1rem; }
+        
+        @media (max-width: 768px) {
+            .hero-content .hero-button-wrap { justify-content: center; }
+        }
 
         .hero h2 {
             font-family: 'Poppins', 'Inter', system-ui;
@@ -300,13 +319,16 @@
             padding: 0.75rem 1.5rem;
             border-radius: 6px;
             font-weight: 600;
-            display: inline-block;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             text-decoration: none;
             color: white;
             transition: all 0.3s ease;
             font-size: 0.95rem;
             white-space: nowrap;
             background: transparent;
+            font-family: 'Poppins', system-ui;
         }
 
         @media (max-width: 480px) {
@@ -428,93 +450,138 @@
 </section>
 
 <!-- ABOUT SECTION -->
-<section id="about" class="py-12 md:py-20 px-4 md:px-8 bg-white full-screen">
+<section id="about" class="py-12 md:py-20 px-4 md:px-8 bg-gradient-to-b from-white to-gray-50 full-screen">
     <div class="max-w-6xl mx-auto">
         <!-- Header -->
-        <div class="text-center mb-8 md:mb-12">
-            <h2 style="font-size: clamp(1.5rem, 6vw, 2.25rem); font-weight: 700; color: #991b1b; margin-bottom: 1rem;">About the Public Consultation Portal</h2>
-            <p style="font-size: clamp(0.9rem, 2vw, 1.125rem); color: #4b5563; max-width: 48rem; margin-left: auto; margin-right: auto; padding: 0 0.5rem;">
+        <div class="text-center mb-8 md:mb-16">
+            <div style="display: inline-block; background: #fee2e2; padding: 0.5rem 1rem; border-radius: 6px; margin-bottom: 1rem;">
+                <p style="color: #991b1b; font-weight: 700; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px; margin: 0;">About Our Platform</p>
+            </div>
+            <h2 style="font-size: clamp(1.5rem, 6vw, 2.5rem); font-weight: 800; color: #1f2937; margin-bottom: 1rem; line-height: 1.2;">About the Public Consultation Portal</h2>
+            <div style="height: 4px; width: 60px; background: linear-gradient(90deg, #991b1b, #7f1d1d); margin: 1.5rem auto; border-radius: 2px;"></div>
+            <p style="font-size: clamp(0.95rem, 2vw, 1.1rem); color: #4b5563; max-width: 48rem; margin-left: auto; margin-right: auto; padding: 0 0.5rem; line-height: 1.7;">
                 Empowering Valenzuelanos to shape the future through meaningful participation in governance
             </p>
         </div>
 
-        <!-- Main Description Card -->
-        <div class="bg-gradient-to-r from-red-50 to-red-100 rounded-lg p-6 md:p-8 mb-8 md:mb-12 shadow-sm">
-            <p style="color: #374151; line-height: 1.6; margin-bottom: 1rem; font-size: clamp(0.9rem, 2vw, 1.125rem);">
-                The Public Consultation Portal is the official digital platform of the Valenzuela City 
-                Government designed to gather citizen insights, preferences, and concerns on proposed 
-                ordinances, programs, and local policies.
-            </p>
-            <p style="color: #374151; line-height: 1.6; font-size: clamp(0.9rem, 2vw, 1.125rem);">
-                It promotes transparency, inclusion, and data-driven governance by allowing every 
-                Valenzuelano to participate in shaping legislation anytime, anywhere.
-            </p>
+        <!-- Main Description Grid -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 3rem; align-items: center;">
+            <div>
+                <h3 style="font-size: clamp(1.1rem, 3vw, 1.3rem); font-weight: 800; color: #1f2937; margin-bottom: 1.5rem;">What We Do</h3>
+                <p style="color: #374151; line-height: 1.8; margin-bottom: 1.5rem; font-size: clamp(0.9rem, 2vw, 1rem);">
+                    The Public Consultation Portal is the official digital platform of the Valenzuela City Government designed to gather citizen insights, preferences, and concerns on proposed ordinances, programs, and local policies.
+                </p>
+                <ul style="color: #374151; line-height: 1.8; font-size: clamp(0.85rem, 2vw, 0.95rem); margin: 0; padding: 0; list-style: none;">
+                    <li style="padding: 0.5rem 0;"><i class="bi bi-check-circle-fill" style="color: #991b1b; margin-right: 0.75rem;"></i>Transparent governance</li>
+                    <li style="padding: 0.5rem 0;"><i class="bi bi-check-circle-fill" style="color: #991b1b; margin-right: 0.75rem;"></i>Inclusive participation</li>
+                    <li style="padding: 0.5rem 0;"><i class="bi bi-check-circle-fill" style="color: #991b1b; margin-right: 0.75rem;"></i>Data-driven decision making</li>
+                    <li style="padding: 0.5rem 0;"><i class="bi bi-check-circle-fill" style="color: #991b1b; margin-right: 0.75rem;"></i>Real-time engagement</li>
+                </ul>
+            </div>
+            <div style="background: linear-gradient(135deg, rgba(153, 27, 27, 0.08), rgba(127, 29, 29, 0.08)); padding: 2.5rem; border-radius: 12px; border-left: 5px solid #991b1b;">
+                <p style="color: #374151; line-height: 1.8; margin-bottom: 1rem; font-size: clamp(0.9rem, 2vw, 1rem);">
+                    It promotes transparency, inclusion, and data-driven governance by allowing every Valenzuelano to participate in shaping legislation anytime, anywhere.
+                </p>
+                <p style="color: #374151; line-height: 1.8; font-size: clamp(0.9rem, 2vw, 1rem); margin: 0;">
+                    Our platform strengthens collaboration between the government and its people through secure and modern digital participation.
+                </p>
+            </div>
         </div>
 
         <!-- Features Grid -->
-        <div class="mb-8 md:mb-12">
-            <h3 style="font-size: clamp(1.25rem, 5vw, 1.5rem); font-weight: 700; color: #1f2937; margin-bottom: 1.5rem; text-align: center;">Key Features</h3>
+        <div class="mb-8 md:mb-16">
+            <h3 style="font-size: clamp(1.25rem, 5vw, 1.5rem); font-weight: 800; color: #1f2937; margin-bottom: 2rem; text-align: center;">Key Features</h3>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                <div class="bg-red-50 p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                     <i class="bi bi-chat-left-dots text-2xl md:text-3xl text-red-900 mb-3"></i>
                     <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.5rem; font-size: clamp(0.95rem, 2vw, 1rem);">Review & Comment</h4>
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem);">Review and comment on draft laws with detailed analysis and insights</p>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0;">Review and comment on draft laws with detailed analysis and insights</p>
                 </div>
 
-                <div class="bg-red-50 p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                     <i class="bi bi-graph-up text-2xl md:text-3xl text-red-900 mb-3"></i>
                     <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.5rem; font-size: clamp(0.95rem, 2vw, 1rem);">Participate in Surveys</h4>
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem);">Take part in digital consultations and surveys shaping our city</p>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0;">Take part in digital consultations and surveys shaping our city</p>
                 </div>
 
-                <div class="bg-red-50 p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                     <i class="bi bi-file-earmark-check text-2xl md:text-3xl text-red-900 mb-3"></i>
                     <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.5rem; font-size: clamp(0.95rem, 2vw, 1rem);">Track Progress</h4>
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem);">Track ordinance status and see how they develop over time</p>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0;">Track ordinance status and see how they develop over time</p>
                 </div>
 
-                <div class="bg-red-50 p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                     <i class="bi bi-shield-check text-2xl md:text-3xl text-red-900 mb-3"></i>
                     <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.5rem; font-size: clamp(0.95rem, 2vw, 1rem);">Verified Information</h4>
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem);">Access verified and official city government information</p>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0;">Access verified and official city government information</p>
                 </div>
 
-                <div class="bg-red-50 p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900">
+                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                     <i class="bi bi-globe text-2xl md:text-3xl text-red-900 mb-3"></i>
                     <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.5rem; font-size: clamp(0.95rem, 2vw, 1rem);">Multilingual</h4>
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem);">Supports multiple languages for inclusive participation</p>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0;">Supports multiple languages for inclusive participation</p>
+                </div>
+
+                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-t-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <i class="bi bi-lightning-fill text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.5rem; font-size: clamp(0.95rem, 2vw, 1rem);">Real-time Notifications</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0;">Stay updated with instant notifications on consultations</p>
                 </div>
             </div>
         </div>
 
         <!-- Commitment Section -->
-        <div class="bg-gradient-to-r from-red-900 to-red-800 text-white rounded-lg p-6 md:p-8 text-center">
-            <h3 style="font-size: clamp(1.25rem, 5vw, 1.5rem); font-weight: 700; margin-bottom: 1rem;">Our Commitment</h3>
-            <p style="font-size: clamp(0.9rem, 2vw, 1.125rem); line-height: 1.6;">
-                Guided by principles of transparency, accountability, and citizen empowerment, this 
-                platform strengthens collaboration between the government and its people through secure 
-                and modern digital participation.
+        <div style="background: linear-gradient(135deg, #991b1b, #7f1d1d); color: white; border-radius: 12px; padding: 3rem 2.5rem; text-align: center; margin-bottom: 3rem; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+            <h3 style="font-size: clamp(1.25rem, 5vw, 1.5rem); font-weight: 800; margin-bottom: 1rem;">Our Commitment to You</h3>
+            <p style="font-size: clamp(0.9rem, 2vw, 1.1rem); line-height: 1.8; max-width: 48rem; margin-left: auto; margin-right: auto;">
+                Guided by principles of transparency, accountability, and citizen empowerment, we are committed to ensuring everyone's voice is heard and valued.
             </p>
         </div>
 
-        <!-- Security (planned / future use) -->
-        <div class="mt-6 mb-12 rounded-lg p-4 bg-white/5" style="backdrop-filter: blur(4px);">
-            <h4 style="font-weight:700; color:#1f2937; margin-bottom:0.5rem;">Security (planned / future use)</h4>
-            <p style="color:#374151; margin-bottom:0.5rem;">Planned security and privacy features for the Public Consultation Portal include:</p>
-            <ul style="color:#374151; line-height:1.6;">
-                <li>• HTTPS / TLS for all traffic</li>
-                <li>• Role-based access control for admin functions</li>
-                <li>• Two-factor authentication / OTP for sensitive actions</li>
-                <li>• Audit logging for content and user actions</li>
-                <li>• Data protection and compliance with local privacy law</li>
-                <li>• Encryption-at-rest for sensitive data (planned)</li>
-            </ul>
+        <!-- Security Features Section -->
+        <div>
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <h3 style="font-size: clamp(1.25rem, 5vw, 1.5rem); font-weight: 800; color: #1f2937; margin-bottom: 0.5rem;">Security & Privacy Commitment</h3>
+                <p style="color: #4b5563; font-size: clamp(0.9rem, 2vw, 1rem);">We prioritize your data protection with industry-leading security measures</p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <i class="bi bi-shield-lock text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">HTTPS/TLS Encryption</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Secure encrypted connections for all data transmission</p>
+                </div>
+
+                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <i class="bi bi-person-check text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Role-Based Access</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Granular permission controls for admin functions</p>
+                </div>
+
+                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <i class="bi bi-safe2 text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Two-Factor Auth</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">OTP verification for sensitive administrative actions</p>
+                </div>
+
+                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <i class="bi bi-file-text text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Audit Logging</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Complete audit trails for all content and user actions</p>
+                </div>
+
+                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <i class="bi bi-lock text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Data Protection</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Compliance with local data privacy regulations</p>
+                </div>
+
+                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <i class="bi bi-key text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Encryption at Rest</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Advanced encryption for sensitive stored data</p>
+                </div>
+            </div>
         </div>
-
-    </div>
-</section>
-
-<!-- Privacy Notice Modal -->
 <div id="privacyModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div class="bg-white rounded-lg shadow-2xl max-w-md w-full max-h-[80vh] overflow-y-auto" style="animation: slideUp 0.3s ease-out;">
         <!-- Modal Header -->

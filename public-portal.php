@@ -1,6 +1,9 @@
 <?php
+require_once 'UTILS/security-headers.php';
+require_once 'UTILS/security.php';
 require_once 'db.php';
 require_once 'DATABASE/consultations.php';
+require_once 'DATABASE/feedback.php';
 
 // --- Social links (official accounts) ---
 $SOCIAL_FB = 'https://www.facebook.com/ValenzuelaCityGov/';
@@ -9,7 +12,7 @@ $SOCIAL_YT = 'https://www.youtube.com/valenzuelagovph';
 
 // Determine section
 $section = isset($_GET['section']) ? $_GET['section'] : 'consultations';
-$allowed_sections = ['consultations', 'detail', 'feedback', 'contact'];
+$allowed_sections = ['consultations', 'detail', 'feedback', 'contact', 'submit-consultation'];
 if (!in_array($section, $allowed_sections)) {
     $section = 'consultations';
 }
@@ -43,11 +46,15 @@ $verification_success = '';
 
 // Generate and send phone OTP
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_phone_otp'])) {
-    $phone = trim($_POST['phone'] ?? '');
-    
-    if (empty($phone)) {
-        $verification_error = 'Phone number is required';
-    } elseif (!preg_match('/^(\+63|0)?[0-9]{10}$/', str_replace(['-', ' '], '', $phone))) {
+    // Verify CSRF token
+    if (!isset($_POST['csrf_token']) || !verifyCSRFToken($_POST['csrf_token'])) {
+        $verification_error = 'Security token invalid. Please try again.';
+    } else {
+        $phone = trim($_POST['phone'] ?? '');
+        
+        if (empty($phone)) {
+            $verification_error = 'Phone number is required';
+        } elseif (!preg_match('/^(\+63|0)?[0-9]{10}$/', str_replace(['-', ' '], '', $phone))) {
         $verification_error = 'Invalid Philippine phone number format';
     } else {
         // Generate 6-digit OTP
@@ -61,11 +68,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_phone_otp']))
         // In production, integrate with SMS gateway like Twilio
         // For now, we log it (you can enable SMS later)
         error_log("SMS OTP to $phone: $otp");
+        // For local development / defense demos, show the OTP on-screen (only on localhost)
+        $host = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? '');
+        if (strpos($host, 'localhost') !== false || $host === '127.0.0.1') {
+            // store debug OTP in session for display in UI (development only)
+            $_SESSION['phone_otp_debug'] = $otp;
+        }
         
         $phone_otp_step = true;
         $verification_success = 'Verification code sent to ' . substr($phone, -4, 4) . '****';
         $_SESSION['form_step'] = 'phone_otp';
     }
+}
 }
 
 // Verify phone OTP
@@ -145,6 +159,85 @@ if (isset($_GET['verify_email'])) {
     }
 }
 
+// ==================== CONSULTATION SUBMISSION ====================
+$consultation_submission_success = false;
+$consultation_submission_message = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_consultation'])) {
+    // Verify CSRF token
+    if (!isset($_POST['csrf_token']) || !verifyCSRFToken($_POST['csrf_token'])) {
+        $consultation_submission_message = 'Security validation failed. Please try again.';
+    } else {
+        $consultation_topic = trim($_POST['consultation_topic'] ?? '');
+        $consultation_description = trim($_POST['consultation_description'] ?? '');
+        $consultation_email = trim($_POST['consultation_email'] ?? '');
+        $consultation_allow_email = isset($_POST['consultation_allow_email']) ? 1 : 0;
+        
+        // Validation
+        $errors = [];
+        if (empty($consultation_topic)) $errors[] = 'Topic is required';
+        if (empty($consultation_description)) $errors[] = 'Description is required';
+        if (empty($consultation_email) || !filter_var($consultation_email, FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'Valid email is required';
+        }
+        
+        if (empty($errors)) {
+            // Check if feedback table has user_submitted_topic column (for tracking user consultations)
+            $checkConsultCol = $conn->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'feedback' AND COLUMN_NAME = 'consultation_topic'");
+            $hasConsultCol = false;
+        if ($checkConsultCol) {
+            while ($r = $checkConsultCol->fetch_assoc()) {
+                if ($r['COLUMN_NAME'] === 'consultation_topic') $hasConsultCol = true;
+            }
+        }
+        if (!$hasConsultCol) {
+            $conn->query("ALTER TABLE feedback ADD COLUMN consultation_topic VARCHAR(255) DEFAULT NULL");
+        }
+        
+        // Save consultation submission to feedback table (store as user_consultation_request)
+        $stmt = $conn->prepare("INSERT INTO feedback (name, email, message, feedback_type, allow_email_notifications, consultation_topic, consultation_id, rating, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())");
+        if ($stmt) {
+            $topic_name = 'User (No Account)'; // Users submit without account
+            $feedback_type = 'user_consultation_request';
+            $consultation_id_val = null;
+            $rating_val = null;
+            $stmt->bind_param("sssssiii", $topic_name, $consultation_email, $consultation_description, $feedback_type, $consultation_allow_email, $consultation_topic, $consultation_id_val, $rating_val);
+            if ($stmt->execute()) {
+                // Send confirmation email
+                $subject = "Valenzuela City - Consultation Request Received";
+                $body = "Hello,\n\n";
+                $body .= "Thank you for submitting your consultation request to the Valenzuela City Government.\n\n";
+                $body .= "Request Details:\n";
+                $body .= "Topic: " . $consultation_topic . "\n";
+                $body .= "Submitted: " . date('F j, Y \\a\\t g:i A') . "\n\n";
+                if ($consultation_allow_email) {
+                    $body .= "✓ You have opted in to receive email updates about this consultation.\n";
+                    $body .= "We will notify you once our team reviews your request and is ready to discuss.\n\n";
+                } else {
+                    $body .= "You will not receive email notifications about this submission.\n";
+                    $body .= "You can check your submission status by visiting our public portal.\n\n";
+                }
+                $body .= "We appreciate your interest in participating in our public consultation process.\n\n";
+                $body .= "Regards,\nValenzuela City Government\nPublic Consultation Office";
+                
+                $headers = "From: noreply@valenzuelacity.gov\r\nContent-Type: text/plain; charset=UTF-8";
+                @mail($consultation_email, $subject, $body, $headers);
+                
+                $consultation_submission_success = true;
+                $consultation_submission_message = 'Thank you! Your consultation request has been received. A confirmation email has been sent to ' . htmlspecialchars($consultation_email) . '.';
+            } else {
+                $consultation_submission_message = 'Error: Could not save your request. Please try again.';
+            }
+            $stmt->close();
+        } else {
+            $consultation_submission_message = 'Error: Database error. Please try again.';
+        }
+    } else {
+        $consultation_submission_message = 'Error: ' . implode(', ', $errors);
+    }
+}
+}
+
 // ==================== FORM SUBMISSION ====================
 $submission_success = false;
 $submission_message = '';
@@ -153,22 +246,52 @@ $submission_message = '';
 $both_verified = isset($_SESSION['verified_phone']) && isset($_SESSION['verified_email']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_feedback']) && $both_verified) {
-    $name = trim($_POST['name'] ?? '');
-    $phone = $_SESSION['verified_phone'];
-    $email = $_SESSION['verified_email'];
-    $message = trim($_POST['message'] ?? '');
-    $feedback_type = trim($_POST['feedback_type'] ?? 'general');
-    
-    // Validation
-    $errors = [];
-    if (empty($name)) $errors[] = 'Name is required';
-    if (empty($message)) $errors[] = 'Message is required';
-    
-    if (empty($errors)) {
-        $stmt = $conn->prepare("INSERT INTO feedback (name, email, phone, message, feedback_type, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
-        if ($stmt) {
-            $stmt->bind_param("sssss", $name, $email, $phone, $message, $feedback_type);
-            if ($stmt->execute()) {
+    // Verify CSRF token
+    if (!isset($_POST['csrf_token']) || !verifyCSRFToken($_POST['csrf_token'])) {
+        $submission_message = 'Security validation failed. Please try again.';
+    } else {
+        $name = trim($_POST['name'] ?? '');
+        $phone = $_SESSION['verified_phone'];
+        $email = $_SESSION['verified_email'];
+        $message = trim($_POST['message'] ?? '');
+        $feedback_type = trim($_POST['feedback_type'] ?? 'general');
+        $allow_email_notifications = isset($_POST['allow_email_notifications']) ? 1 : 0;
+        $consultation_id = isset($_POST['consultation_id']) ? (int)$_POST['consultation_id'] : 0;
+        $rating = isset($_POST['rating']) ? (int)$_POST['rating'] : 0;
+        
+        // Validation
+        $errors = [];
+        if (empty($name)) $errors[] = 'Name is required';
+        if (empty($message)) $errors[] = 'Message is required';
+        
+        if (empty($errors)) {
+            // If the feedback is tied to an existing consultation, require a valid rating
+            if ($consultation_id > 0 && ($rating < 1 || $rating > 5)) {
+                $errors[] = 'Please provide a rating between 1 and 5 for consultation feedback.';
+            }
+
+            $stmt = $conn->prepare("INSERT INTO feedback (name, email, phone, message, feedback_type, allow_email_notifications, consultation_id, rating, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())");
+            if ($stmt) {
+                $stmt->bind_param("sssssiii", $name, $email, $phone, $message, $feedback_type, $allow_email_notifications, $consultation_id, $rating);
+                if ($stmt->execute()) {
+                    // Continue to handle attachment, email and then show confirmation on the feedback section
+                $attachment_path = null;
+                if (!empty($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
+                    $file = $_FILES['attachment'];
+                    $maxSize = 5 * 1024 * 1024; // 5MB
+                    $allowedExt = ['jpg','jpeg','png','gif','pdf','doc','docx','xls','xlsx'];
+                    $origName = basename($file['name']);
+                    $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+                    if ($file['size'] <= $maxSize && in_array($ext, $allowedExt)) {
+                        $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', pathinfo($origName, PATHINFO_FILENAME));
+                        $newName = time() . '_' . bin2hex(random_bytes(6)) . '_' . $safeName . '.' . $ext;
+                        $dest = $uploadDir . DIRECTORY_SEPARATOR . $newName;
+                        if (@move_uploaded_file($file['tmp_name'], $dest)) {
+                            $attachment_path = 'uploads/attachments/' . $newName;
+                        }
+                    }
+                }
+
                 // Send confirmation email
                 $subject = "Public Consultation Portal - Feedback Received";
                 $body = "Dear $name,\n\n";
@@ -176,24 +299,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_feedback']) &&
                 $body .= "Your feedback has been received and will be reviewed by our team.\n\n";
                 $body .= "Details:\n";
                 $body .= "Type: " . ucfirst(str_replace('_', ' ', $feedback_type)) . "\n";
-                $body .= "Submitted: " . date('F j, Y \a\t g:i A') . "\n\n";
+                $body .= "Submitted: " . date('F j, Y \\a\\t g:i A') . "\n\n";
+                if ($attachment_path) $body .= "Attachment: " . $attachment_path . "\n\n";
                 $body .= "We appreciate your input in making Valenzuela City better.\n\n";
+                if ($allow_email_notifications) {
+                    $body .= "You have opted in to receive email notifications and updates about this submission.\n";
+                    $body .= "We will keep you informed of any relevant developments.\n\n";
+                } else {
+                    $body .= "You will not receive further email notifications about this submission.\n\n";
+                }
                 $body .= "Regards,\nValenzuela City Government";
                 
                 $headers = "From: noreply@valenzuelacity.gov\r\nContent-Type: text/plain; charset=UTF-8";
                 @mail($email, $subject, $body, $headers);
-                
+
+                // If attachment was saved, update the record with path
+                if ($attachment_path) {
+                    $lastId = $conn->insert_id;
+                    $escaped = $conn->real_escape_string($attachment_path);
+                    $conn->query("UPDATE feedback SET attachment_path = '$escaped' WHERE id = " . (int)$lastId);
+                }
+
                 $submission_success = true;
                 $submission_message = 'Thank you! Your feedback has been submitted successfully. A confirmation email has been sent.';
-                
-                // Clear session
+                // Persist confirmation message to session and redirect to feedback section so user clearly sees confirmation
+                $_SESSION['feedback_submitted_message'] = $submission_message;
+                // Clear session form state
                 unset($_SESSION['verified_phone'], $_SESSION['verified_email'], $_SESSION['form_step']);
+                header('Location: public-portal.php?section=feedback&submitted=1');
+                exit;
             }
             $stmt->close();
         }
     } else {
         $submission_message = 'Error: ' . implode(', ', $errors);
     }
+}
 }
 
 // Handle contact/meeting request submission
@@ -204,6 +345,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact']) && 
     $contact_subject = trim($_POST['contact_subject'] ?? '');
     $contact_message_text = trim($_POST['contact_message_text'] ?? '');
     $meeting_type = trim($_POST['meeting_type'] ?? 'inquiry');
+    $allow_email_notifications = isset($_POST['allow_email_notifications']) ? 1 : 0;
     
     // Validation
     $errors = [];
@@ -212,12 +354,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact']) && 
     if (empty($contact_message_text)) $errors[] = 'Message is required';
     
     if (empty($errors)) {
-        $stmt = $conn->prepare("INSERT INTO feedback (name, email, phone, message, feedback_type, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
+        $contact_consultation_id = isset($_POST['consultation_id']) ? (int)$_POST['consultation_id'] : 0;
+        $contact_rating = 0;
+        $stmt = $conn->prepare("INSERT INTO feedback (name, email, phone, message, feedback_type, allow_email_notifications, consultation_id, rating, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())");
         if ($stmt) {
             $full_message = "Meeting Type: " . ucfirst($meeting_type) . "\nSubject: " . $contact_subject . "\n\n" . $contact_message_text;
             $feedback_type = 'meeting_request';
-            $stmt->bind_param("sssss", $contact_name, $contact_email, $contact_phone, $full_message, $feedback_type);
+            $stmt->bind_param("sssssiii", $contact_name, $contact_email, $contact_phone, $full_message, $feedback_type, $allow_email_notifications, $contact_consultation_id, $contact_rating);
             if ($stmt->execute()) {
+                // Handle optional file upload for contact request
+                $attachment_path = null;
+                if (!empty($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
+                    $file = $_FILES['attachment'];
+                    $maxSize = 5 * 1024 * 1024; // 5MB
+                    $allowedExt = ['jpg','jpeg','png','gif','pdf','doc','docx','xls','xlsx'];
+                    $origName = basename($file['name']);
+                    $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+                    if ($file['size'] <= $maxSize && in_array($ext, $allowedExt)) {
+                        $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', pathinfo($origName, PATHINFO_FILENAME));
+                        $newName = time() . '_' . bin2hex(random_bytes(6)) . '_' . $safeName . '.' . $ext;
+                        $dest = $uploadDir . DIRECTORY_SEPARATOR . $newName;
+                        if (@move_uploaded_file($file['tmp_name'], $dest)) {
+                            $attachment_path = 'uploads/attachments/' . $newName;
+                        }
+                    }
+                }
+
                 // Send confirmation email
                 $subject = "Valenzuela City - Get In Touch Request Received";
                 $body = "Dear $contact_name,\n\n";
@@ -227,12 +389,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact']) && 
                 $body .= "Subject: " . $contact_subject . "\n";
                 $body .= "Contact: " . $contact_phone . "\n";
                 $body .= "Submitted: " . date('F j, Y \a\t g:i A') . "\n\n";
+                if ($allow_email_notifications) {
+                    $body .= "You have opted in to receive email updates about your request.\n";
+                    $body .= "We will keep you informed of any relevant developments.\n\n";
+                } else {
+                    $body .= "You will not receive further email notifications about this submission.\n\n";
+                }
                 $body .= "We will get back to you within 2-3 business days.\n\n";
                 $body .= "Regards,\nValenzuela City Government\nPublic Consultation Office";
                 
                 $headers = "From: noreply@valenzuelacity.gov\r\nContent-Type: text/plain; charset=UTF-8";
                 @mail($contact_email, $subject, $body, $headers);
                 
+                // Update record with attachment if uploaded
+                if (!empty($attachment_path)) {
+                    $lastId = $conn->insert_id;
+                    $escaped = $conn->real_escape_string($attachment_path);
+                    $conn->query("UPDATE feedback SET attachment_path = '$escaped' WHERE id = " . (int)$lastId);
+                }
+
                 $submission_success = true;
                 $submission_message = 'Thank you! Your request has been submitted. A confirmation email has been sent. We will contact you within 2-3 business days.';
                 
@@ -249,6 +424,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact']) && 
 // Ensure consultations table exists (do not drop/sample data here)
 initializeConsultationsTable();
 
+// Ensure feedback table exists
+initializeFeedbackTable();
+
 // Ensure optional columns exist: image_path, source_url
 $colCheck = $conn->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'consultations' AND COLUMN_NAME IN ('image_path','source_url')");
 $existingCols = [];
@@ -262,6 +440,36 @@ if (!in_array('image_path', $existingCols)) {
 }
 if (!in_array('source_url', $existingCols)) {
     $conn->query("ALTER TABLE consultations ADD COLUMN source_url VARCHAR(255) DEFAULT NULL");
+}
+
+// Ensure feedback table can store attachment path
+$fbColCheck = $conn->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'feedback' AND COLUMN_NAME = 'attachment_path'");
+$hasFbAttachment = false;
+if ($fbColCheck) {
+    while ($r = $fbColCheck->fetch_assoc()) {
+        if ($r['COLUMN_NAME'] === 'attachment_path') $hasFbAttachment = true;
+    }
+}
+if (!$hasFbAttachment) {
+    $conn->query("ALTER TABLE feedback ADD COLUMN attachment_path VARCHAR(255) DEFAULT NULL");
+}
+
+// Ensure feedback table can store email notification preference
+$fbEmailPrefCheck = $conn->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'feedback' AND COLUMN_NAME = 'allow_email_notifications'");
+$hasFbEmailPref = false;
+if ($fbEmailPrefCheck) {
+    while ($r = $fbEmailPrefCheck->fetch_assoc()) {
+        if ($r['COLUMN_NAME'] === 'allow_email_notifications') $hasFbEmailPref = true;
+    }
+}
+if (!$hasFbEmailPref) {
+    $conn->query("ALTER TABLE feedback ADD COLUMN allow_email_notifications TINYINT(1) DEFAULT 1");
+}
+
+// Ensure uploads directory exists
+$uploadDir = __DIR__ . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'attachments';
+if (!is_dir($uploadDir)) {
+    @mkdir($uploadDir, 0755, true);
 }
 
 // Build optional filters from GET params (search + date range)
@@ -310,6 +518,19 @@ if ($end_filter !== '') {
 }
 $past_consultations = $conn->query("SELECT id, title, description, category, start_date, end_date, status, image_path, source_url FROM consultations WHERE $where_past ORDER BY end_date DESC LIMIT 50");
 
+// Ensure feedback table has columns for consultation linking and rating (safe to run repeatedly)
+$checkCols = $conn->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'feedback'");
+$haveCols = [];
+if ($checkCols) {
+    while ($r = $checkCols->fetch_assoc()) { $haveCols[] = $r['COLUMN_NAME']; }
+}
+if (!in_array('consultation_id', $haveCols)) {
+    $conn->query("ALTER TABLE feedback ADD COLUMN consultation_id INT DEFAULT NULL");
+}
+if (!in_array('rating', $haveCols)) {
+    $conn->query("ALTER TABLE feedback ADD COLUMN rating TINYINT DEFAULT NULL");
+}
+
 // Determine current form step for display
 $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
 ?>
@@ -336,6 +557,28 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
             margin: 0;
         }
 
+        /* bootstrap icons font-family fallback to ensure icons render */
+        .bi {
+            font-family: 'bootstrap-icons' !important;
+            speak: none;
+            font-style: normal;
+            font-weight: 400;
+            font-variant: normal;
+            text-transform: none;
+            line-height: 1;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Underlined (underscore) input style */
+        .underscored-input {
+            border: none;
+            border-bottom: 2px solid #d1d5db;
+            padding: 0.5rem 0.25rem;
+            font-size: 0.95rem;
+            width: 100%;
+            background: transparent;
+        }
         /* SECTION DISPLAY */
         .section-active { display: block; }
         .section-hidden { display: none; }
@@ -448,7 +691,9 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
 
         /* BUTTONS */
         .btn {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             padding: 0.85rem 2rem;
             border-radius: 8px;
             font-weight: 700;
@@ -508,7 +753,8 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
             border-radius: 8px;
             font-family: inherit;
             font-size: 1rem;
-            background: white;
+            background: white !important;
+            color: #1f2937 !important;
             transition: all 0.3s ease;
         }
         .form-textarea {
@@ -683,14 +929,21 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
 
         /* OTP INPUT */
         .otp-input {
-            font-size: 2rem;
-            letter-spacing: 1.2rem;
-            text-align: center;
-            font-weight: 900;
-            font-family: 'Courier New', monospace;
-            background: linear-gradient(135deg, #f9fafb, #f3f4f6);
-            padding: 1rem;
-            border-radius: 8px;
+            font-size: 2rem !important;
+            letter-spacing: 1.2rem !important;
+            text-align: center !important;
+            font-weight: 900 !important;
+            font-family: 'Courier New', monospace !important;
+            background: white !important;
+            padding: 1rem !important;
+            border-radius: 8px !important;
+            color: #1f2937 !important;
+            caret-color: #1f2937 !important;
+            -webkit-text-fill-color: #1f2937 !important;
+        }
+
+        .otp-input::placeholder {
+            color: #d1d5db !important;
         }
 
         /* CONTAINER */
@@ -724,8 +977,8 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
         /* Footer follow-us styles */
         .footer-follow { display: flex; flex-direction: column; align-items: center; }
         .social-icons { display: flex; gap: 0.6rem; justify-content: center; }
-        .social-icon { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; background: rgba(255,255,255,0.03); transition: all 0.16s ease; color: #cbd5e1; }
-        .social-icon:hover { background: rgba(255,255,255,0.12); transform: translateY(-3px); color: white; }
+        .social-icon { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; background: rgba(255,255,255,0.1); transition: all 0.16s ease; color: white; font-size: 1.25rem; text-decoration: none; }
+        .social-icon:hover { background: rgba(255,255,255,0.2); transform: translateY(-3px); color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
         .social-caption { margin-top: 6px; color: #9ca3af; font-size: 0.85rem; font-weight: 700; }
     </style>
 </head>
@@ -747,31 +1000,48 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
     </div>
 </header>
 
+<!-- FLASH / NOTIFICATIONS -->
+<?php if (!empty($verification_error) || !empty($consultation_submission_message) || !empty($submission_message) || !empty($_SESSION['phone_otp_debug']) || !empty($_SESSION['feedback_submitted_message'])): ?>
+    <div style="max-width:80rem; margin: 1rem auto; padding: 0 1rem;">
+        <?php if (!empty($verification_error)): ?>
+            <div style="background:#fee2e2; color:#7f1d1d; padding:1rem; border-radius:8px; border:1px solid #fca5a5; margin-bottom:0.75rem; font-weight:700;"><?php echo htmlspecialchars($verification_error); ?></div>
+        <?php endif; ?>
+        <?php if (!empty($consultation_submission_message)): ?>
+            <div style="background:#fef3c7; color:#92400e; padding:1rem; border-radius:8px; border:1px solid #fde68a; margin-bottom:0.75rem; font-weight:700;"><?php echo htmlspecialchars($consultation_submission_message); ?></div>
+        <?php endif; ?>
+        <?php if (!empty($submission_message)): ?>
+            <div style="background:#d1fae5; color:#065f46; padding:1rem; border-radius:8px; border:1px solid #bbf7d0; margin-bottom:0.75rem; font-weight:700;"><?php echo htmlspecialchars($submission_message); ?></div>
+        <?php endif; ?>
+        <?php if (!empty($_SESSION['feedback_submitted_message'])): ?>
+            <div style="background:#d1fae5; color:#065f46; padding:1rem; border-radius:8px; border:1px solid #bbf7d0; margin-bottom:0.75rem; font-weight:700;">
+                <?php echo htmlspecialchars($_SESSION['feedback_submitted_message']); unset($_SESSION['feedback_submitted_message']); ?>
+            </div>
+        <?php endif; ?>
+        <?php if (!empty($_SESSION['phone_otp_debug'])): ?>
+            <div style="background:#eef2ff; color:#1e3a8a; padding:0.75rem; border-radius:8px; border:1px solid #c7d2fe; margin-bottom:0.75rem; font-weight:700;">Development OTP: <?php echo htmlspecialchars($_SESSION['phone_otp_debug']); ?></div>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
+
 <!-- NAVIGATION -->
 <div style="background: white; border-bottom: 2px solid #f0f0f0; position: sticky; top: 0; z-index: 30;">
     <div class="max-w-7xl mx-auto px-4 flex">
-        <button onclick="switchSection('consultations')" class="nav-link active" id="nav-consultations">
+        <button type="button" onclick="switchSection('consultations')" class="nav-link active" id="nav-consultations">
             <i class="bi bi-file-text"></i>Active Consultations
         </button>
-        <button onclick="switchSection('feedback')" class="nav-link" id="nav-feedback">
+        <button type="button" onclick="switchSection('submit-consultation')" class="nav-link" id="nav-submit-consultation">
+            <i class="bi bi-pencil-square"></i>Submit Consultation
+        </button>
+        <button type="button" onclick="switchSection('feedback')" class="nav-link" id="nav-feedback">
             <i class="bi bi-chat-dots"></i>Submit Feedback
         </button>
-        <button onclick="switchSection('contact')" class="nav-link" id="nav-contact">
+        <button type="button" onclick="switchSection('contact')" class="nav-link" id="nav-contact">
             <i class="bi bi-telephone"></i>Get In Touch
         </button>
     </div>
 </div>
 
-<!-- BANNER / HEADLINER -->
-<div style="background: linear-gradient(135deg, #111827, #1f2937);">
-    <div class="max-w-7xl mx-auto px-4 py-6" style="display:flex; align-items:center; justify-content:center;">
-        <?php if (file_exists(__DIR__ . '/images/consultation.png')): ?>
-            <img src="images/consultation.png" alt="Consultation headliner" style="width:100%; max-width:1200px; height:auto; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.25); display:block;">
-        <?php else: ?>
-            <div style="width:100%; max-width:1200px; height:180px; background:#f3f4f6; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#6b7280; font-weight:700;">Consultation Headliner</div>
-        <?php endif; ?>
-    </div>
-</div>
+<!-- BANNER / HEADLINER removed from global header - now rendered inside consultations section only -->
 
 <!-- MAIN CONTENT -->
 <main style="max-width: 80rem; margin: 0 auto; padding: 2rem 1rem;">
@@ -782,13 +1052,24 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
             <p style="color: #6b7280; font-size: 1.1rem; margin: 0;">Review and provide feedback on proposed ordinances, programs, and policies</p>
         </div>
 
+        <!-- SECTION BANNER (only for consultations) -->
+        <div style="background: linear-gradient(135deg, #111827, #1f2937); margin-bottom: 1.5rem; border-radius: 12px; overflow: hidden;">
+            <div class="max-w-7xl mx-auto px-4 py-6" style="display:flex; align-items:center; justify-content:center;">
+                <?php if (file_exists(__DIR__ . '/images/consultation.png')): ?>
+                    <img src="images/consultation.png" alt="Consultation headliner" style="width:100%; max-width:1200px; height:auto; display:block;">
+                <?php else: ?>
+                    <div style="width:100%; max-width:1200px; height:140px; background:#f3f4f6; display:flex; align-items:center; justify-content:center; color:#6b7280; font-weight:700;">Consultation Headliner</div>
+                <?php endif; ?>
+            </div>
+        </div>
+
         <?php if ($section === 'detail' && $consultation_detail): ?>
             <!-- CONSULTATION DETAIL VIEW -->
             <?php if (!empty($detail_error)): ?>
                 <div class="error-message"><?php echo htmlspecialchars($detail_error); ?></div>
             <?php endif; ?>
             <div style="margin-bottom: 2rem;">
-                <button onclick="switchToConsultationsList()" class="btn btn-secondary">
+                <button type="button" onclick="switchToConsultationsList()" class="btn btn-secondary">
                     <i class="bi bi-arrow-left" style="margin-right: 0.5rem;"></i>Back to List
                 </button>
             </div>
@@ -839,7 +1120,7 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                 <div style="background: linear-gradient(135deg, #dbeafe, #f0f9ff); padding: 1.75rem; border-radius: 10px; border-left: 5px solid #3b82f6; margin-bottom: 2rem;">
                     <h3 style="font-weight: 800; color: #1e40af; margin: 0 0 0.75rem 0;">Want to share your thoughts?</h3>
                     <p style="color: #1e40af; font-size: 0.95rem; margin: 0 0 1rem 0;">We value your feedback! Use the "Submit Feedback" form to share your opinions on this consultation.</p>
-                    <button onclick="switchSection('feedback')" class="btn btn-primary">
+                    <button type="button" onclick="switchSection('feedback')" class="btn btn-primary">
                         <i class="bi bi-chat-dots" style="margin-right: 0.5rem;"></i>Submit Feedback Now
                     </button>
                 </div>
@@ -968,9 +1249,9 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                                                     <?php echo date('M d', strtotime($consultation['start_date'])) . ' - ' . date('M d, Y', strtotime($consultation['end_date'])); ?>
                                                 </p>
                                             </div>
-                                            <a href="public-portal.php?section=detail&id=<?php echo $consultation['id']; ?>" class="btn btn-primary" style="margin-left: auto;">
+                                            <button type="button" onclick="viewConsultationDetail(<?php echo $consultation['id']; ?>)" class="btn btn-primary" style="margin-left: auto;">
                                                 View Full Details <i class="bi bi-arrow-right" style="margin-left: 0.5rem;"></i>
-                                            </a>
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -1037,9 +1318,9 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                                                     <?php echo date('M d, Y', strtotime($consultation['end_date'])); ?>
                                                 </p>
                                             </div>
-                                            <a href="public-portal.php?section=detail&id=<?php echo $consultation['id']; ?>" class="btn btn-secondary" style="margin-left: auto;">
+                                            <button type="button" onclick="viewConsultationDetail(<?php echo $consultation['id']; ?>)" class="btn btn-secondary" style="margin-left: auto;">
                                                 View Details <i class="bi bi-arrow-right" style="margin-left: 0.5rem;"></i>
-                                            </a>
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -1058,42 +1339,127 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
         <?php endif; ?>
     </section>
 
+    <!-- SUBMIT CONSULTATION SECTION -->
+    <section id="section-submit-consultation" class="section-hidden">
+        <div style="margin-bottom: 2rem; text-align: center;">
+            <h2 style="font-size: 2.5rem; font-weight: 800; color: #1f2937; margin: 0 0 0.75rem 0;">Submit a Consultation Request</h2>
+            <p style="color: #6b7280; font-size: 1.1rem; margin: 0;">Have a topic you'd like the city to consult the public on? Submit your request here.</p>
+        </div>
+
+        <!-- SUBMIT CONSULTATION SECTION -->
+        <div>
+            <h3 style="font-size: 1.5rem; font-weight: 800; color: #1f2937; margin-bottom: 1.5rem;">
+                <i class="bi bi-pencil-square" style="margin-right: 0.5rem; color: #991b1b;"></i>
+                Submit Your Consultation Request
+            </h3>
+            
+            <?php if ($consultation_submission_success): ?>
+                <div style="background: rgba(16, 185, 129, 0.15); border: 2px solid #10b981; color: #065f46; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+                    <p style="margin: 0; font-weight: 700; font-size: 1rem;">
+                        <i class="bi bi-check-circle" style="margin-right: 0.5rem;"></i>
+                        <?php echo htmlspecialchars($consultation_submission_message); ?>
+                    </p>
+                </div>
+            <?php elseif ($consultation_submission_message && !$consultation_submission_success): ?>
+                <div style="background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; color: #7f1d1d; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+                    <p style="margin: 0; font-weight: 700; font-size: 1rem;">
+                        <i class="bi bi-exclamation-circle" style="margin-right: 0.5rem;"></i>
+                        <?php echo htmlspecialchars($consultation_submission_message); ?>
+                    </p>
+                </div>
+            <?php endif; ?>
+
+            <div style="background: linear-gradient(135deg, rgba(153, 27, 27, 0.08), rgba(127, 29, 29, 0.08)); padding: 2.5rem; border-radius: 12px; border-left: 4px solid #991b1b;">
+                <form method="POST" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                    <!-- CSRF Token -->
+                    <?php outputCSRFField(); ?>
+                    
+                    <div>
+                        <label style="display: block; font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: 0.95rem;">
+                            Topic / Title of Your Consultation *
+                        </label>
+                        <input type="text" name="consultation_topic" placeholder="e.g., Proposed Traffic Management in Barangay X" required style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95rem;">
+                        <p style="font-size: 0.8rem; color: #6b7280; margin-top: 0.5rem;">What is your consultation request about?</p>
+                    </div>
+
+                    <div>
+                        <label style="display:block; font-weight:700; margin-bottom:0.5rem;">Name</label>
+                        <input type="text" name="name" class="underscored-input" placeholder="Your full name" required>
+                    </div>
+
+                    <div>
+                        <label style="display:block; font-weight:700; margin-bottom:0.5rem;">Which barangay of Valenzuela are you from?</label>
+                        <select name="barangay" required style="width:100%; padding:0.6rem; border:1px solid #d1d5db; border-radius:6px; font-size:0.95rem;">
+                            <option value="">Select barangay</option>
+                            <option>Bignay</option>
+                            <option>Bagbaguin</option>
+                            <option>Balangkas</option>
+                            <option>Barangay 162 (Brgy.162)</option>
+                            <option>Canumay</option>
+                            <option>Caruhatan</option>
+                            <option>Dalandanan</option>
+                            <option>Gen. T. de Leon</option>
+                            <option>Karuhatan</option>
+                            <option>Malinta</option>
+                            <option>Maysan</option>
+                            <option>Marulas</option>
+                            <option>Mapulang Lupa</option>
+                            <option>Palasan</option>
+                            <option>Parada</option>
+                            <option>Poblacion</option>
+                            <option>Valenzuela</option>
+                            <option>Veinte Reales</option>
+                            <option>Wawang Pulo</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label style="display: block; font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: 0.95rem;">
+                            Description / Details *
+                        </label>
+                        <textarea name="consultation_description" placeholder="Please provide details about your consultation request..." required style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95rem; resize: vertical; min-height: 120px;"></textarea>
+                    </div>
+
+                    <div>
+                        <label style="display: block; font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: 0.95rem;">
+                            Your Email Address *
+                        </label>
+                        <input type="email" name="consultation_email" placeholder="your.email@example.com" required style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95rem;">
+                        <p style="font-size: 0.8rem; color: #6b7280; margin-top: 0.5rem;">We'll use this to contact you about your consultation.</p>
+                    </div>
+
+                    <div style="background: white; padding: 1.25rem; border-radius: 6px;">
+                        <label style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer; color: #1f2937;">
+                            <input type="checkbox" name="consultation_allow_email" value="1" checked style="width: 20px; height: 20px; margin-top: 0.2rem; cursor: pointer; flex-shrink: 0;">
+                            <div>
+                                <p style="margin: 0; font-weight: 700; color: #1f2937;">Send me email updates about this consultation</p>
+                                <p style="margin: 0.5rem 0 0 0; font-size: 0.85rem; color: #6b7280; line-height: 1.5;">
+                                    Our team will notify you when your consultation is reviewed and scheduled. You can opt out anytime by replying to the email.
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+
+                    <button type="submit" name="submit_consultation" style="width: 100%; background: linear-gradient(135deg, #991b1b, #7f1d1d); color: white; font-weight: 700; padding: 0.9rem; border-radius: 6px; border: none; cursor: pointer; font-size: 1rem; transition: all 0.3s;">
+                        <i class="bi bi-send" style="margin-right: 0.5rem;"></i>
+                        Submit Consultation Request
+                    </button>
+                </form>
+            </div>
+        </div>
+    </section>
+
     <!-- FEEDBACK SECTION -->
     <section id="section-feedback" class="section-hidden">
         <div style="margin-bottom: 2rem; text-align: center;">
             <h2 style="font-size: 2.5rem; font-weight: 800; color: #1f2937; margin: 0 0 0.75rem 0;">Submit Feedback</h2>
-            <p style="color: #6b7280; font-size: 1.1rem; margin: 0;">Share your thoughts, suggestions, or concerns about proposed policies</p>
+            <p style="color: #6b7280; font-size: 1.1rem; margin: 0;">Share your thoughts on active consultations</p>
         </div>
-
-        <?php if ($submission_success): ?>
-            <div class="success-message">
-                <i class="bi bi-check-circle mr-2"></i>
-                <?php echo $submission_message; ?>
-            </div>
-        <?php elseif ($submission_message): ?>
-            <div class="error-message">
-                <i class="bi bi-exclamation-circle mr-2"></i>
-                <?php echo $submission_message; ?>
-            </div>
-        <?php endif; ?>
-
-        <?php if ($verification_success): ?>
-            <div class="success-message">
-                <i class="bi bi-check-circle mr-2"></i>
-                <?php echo $verification_success; ?>
-            </div>
-        <?php elseif ($verification_error): ?>
-            <div class="error-message">
-                <i class="bi bi-exclamation-circle" style="margin-right: 0.5rem;"></i>
-                <?php echo $verification_error; ?>
-            </div>
-        <?php endif; ?>
 
         <!-- TWO-COLUMN LAYOUT -->
         <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 3rem; align-items: start;">
             <!-- LEFT COLUMN - INFO BOXES -->
             <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-                <!-- INFO BOX 1 -->
                 <div class="card" style="background: white; padding: 2rem; margin-bottom: 0;">
                     <h4 style="font-weight: 800; color: #991b1b; margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem;">
                         <i class="bi bi-chat-heart" style="margin-right: 0.5rem;"></i>
@@ -1149,6 +1515,7 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                         <div class="form-group">
                             <label class="form-label" for="phone" style="color: white;">Philippine Phone Number *</label>
                             <input type="tel" id="phone" name="phone" class="form-input" placeholder="09XX XXXX XXX or +63 9XX XXXX XXX" required style="background: white;">
+                            <?php outputCSRFField(); ?>
                             <p style="font-size: 0.85rem; color: rgba(255,255,255,0.8); margin-top: 0.5rem;">We'll send you a 6-digit code via SMS</p>
                         </div>
                         <button type="submit" name="request_phone_otp" class="btn btn-primary" style="width: 100%; background: white; color: #991b1b; border: none;">
@@ -1168,7 +1535,7 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                     <form method="POST">
                         <div class="form-group">
                             <label class="form-label" for="phone_otp_code" style="color: white;">Enter 6-digit Code *</label>
-                            <input type="text" id="phone_otp_code" name="phone_otp_code" class="form-input otp-input" placeholder="000000" maxlength="6" required style="background: white; text-align: center;">
+                            <input type="text" id="phone_otp_code" name="phone_otp_code" class="form-input otp-input" placeholder="000000" maxlength="6" required style="background: white; text-align: center; color: #111; -webkit-text-fill-color: #111;">
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                             <button type="submit" name="verify_phone_otp" class="btn btn-primary" style="background: white; color: #991b1b;">
@@ -1220,6 +1587,9 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                         <i class="bi bi-chat-dots" style="margin-right: 0.5rem;"></i>Share Feedback
                     </h3>
                     <form method="POST" enctype="multipart/form-data">
+                        <!-- CSRF Token -->
+                        <?php outputCSRFField(); ?>
+                        
                         <div class="form-group">
                             <label class="form-label" for="name" style="color: white;">Full Name *</label>
                             <input type="text" id="name" name="name" class="form-input" required placeholder="Your full name" style="background: white;">
@@ -1236,9 +1606,40 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                             </select>
                         </div>
 
+                        <!-- Consultation context (optional) -->
+                        <input type="hidden" name="consultation_id" value="<?php echo intval($_GET['consultation_id'] ?? 0); ?>">
+
+                        <!-- Rating (shown if user is giving feedback about a consultation) -->
+                        <div class="form-group" style="display: <?php echo isset($_GET['consultation_id']) && intval($_GET['consultation_id'])>0 ? 'block' : 'none'; ?>;">
+                            <label class="form-label" for="rating" style="color: white; display:block; margin-bottom:0.5rem;">Rate this consultation</label>
+                            <div style="display:flex; gap:0.5rem; align-items:center;">
+                                <?php for ($i=1;$i<=5;$i++): ?>
+                                    <label style="cursor:pointer; color: #fbbf24; font-size:1.25rem;">
+                                        <input type="radio" name="rating" value="<?php echo $i; ?>" style="display:none;" <?php echo ($i==5?'checked':''); ?>>
+                                        <i class="bi bi-star-fill"></i>
+                                    </label>
+                                <?php endfor; ?>
+                            </div>
+                            <p style="font-size:0.85rem; color: rgba(255,255,255,0.8); margin-top:0.5rem;">Please rate from 1 (lowest) to 5 (highest).</p>
+                        </div>
+
                         <div class="form-group">
                             <label class="form-label" for="message" style="color: white;">Your Feedback *</label>
                             <textarea id="message" name="message" class="form-textarea" required placeholder="Please share your thoughts..." style="background: white;"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="attachment" style="color: white;">Attach Image or Document (optional)</label>
+                            <input type="file" id="attachment" name="attachment" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" class="form-input" style="background: white;" />
+                            <p style="font-size: 0.8rem; color: rgba(255,255,255,0.8); margin-top: 0.5rem;">Max 5MB. Allowed: images, PDF, Word, Excel.</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label style="color: white; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" name="allow_email_notifications" value="1" checked style="width: 18px; height: 18px; cursor: pointer;">
+                                <span>Send me email updates and notifications about this feedback</span>
+                            </label>
+                            <p style="font-size: 0.8rem; color: rgba(255,255,255,0.8); margin-top: 0.5rem;">We'll notify you when your feedback is reviewed or if there are any developments.</p>
                         </div>
 
                         <button type="submit" name="submit_feedback" class="btn btn-primary" style="width: 100%; background: white; color: #991b1b;">
@@ -1358,7 +1759,7 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                     <form method="POST">
                         <div class="form-group">
                             <label class="form-label" for="phone_otp_code" style="color: white;">6-digit Code *</label>
-                            <input type="text" id="phone_otp_code" name="phone_otp_code" class="form-input otp-input" placeholder="000000" maxlength="6" required style="background: white;">
+                            <input type="text" id="phone_otp_code" name="phone_otp_code" class="form-input otp-input" placeholder="000000" maxlength="6" required style="background: white; color: #111; -webkit-text-fill-color: #111;">
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                             <button type="submit" name="verify_phone_otp" class="btn btn-primary" style="background: white; color: #991b1b;">Verify</button>
@@ -1433,6 +1834,20 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                             <textarea id="contact_message_text" name="contact_message_text" class="form-textarea" required placeholder="Tell us more..." style="background: white;"></textarea>
                         </div>
 
+                        <div class="form-group">
+                            <label class="form-label" for="attachment" style="color: white;">Attach Image or Document (optional)</label>
+                            <input type="file" id="attachment" name="attachment" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" class="form-input" style="background: white;" />
+                            <p style="font-size: 0.8rem; color: rgba(255,255,255,0.8); margin-top: 0.5rem;">Max 5MB. Allowed: images, PDF, Word, Excel.</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label style="color: white; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" name="allow_email_notifications" value="1" checked style="width: 18px; height: 18px; cursor: pointer;">
+                                <span>Send me email updates about my request</span>
+                            </label>
+                            <p style="font-size: 0.8rem; color: rgba(255,255,255,0.8); margin-top: 0.5rem;">We'll notify you when your request is processed or if we need more information.</p>
+                        </div>
+
                         <button type="submit" name="submit_contact" class="btn btn-primary" style="width: 100%; background: white; color: #991b1b;">
                             <i class="bi bi-send" style="margin-right: 0.5rem;"></i>Submit Request
                         </button>
@@ -1501,7 +1916,7 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
         <div style="background:white; width:90%; max-width:800px; border-radius:8px; overflow:auto; max-height:90vh; padding:1.25rem;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
                 <h3 style="margin:0;">Privacy Policy</h3>
-                <button onclick="closePolicyModal()" style="background:transparent; border:none; font-size:1.25rem;">&times;</button>
+                <button type="button" onclick="closePolicyModal()" style="background:transparent; border:none; font-size:1.25rem;">&times;</button>
             </div>
             <div id="policyContent" style="color:#374151; line-height:1.6; font-size:0.95rem;">
                 <p style="margin-top:0;"><strong>Official Privacy Policy</strong></p>
@@ -1516,7 +1931,7 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
         <div style="background:white; width:90%; max-width:800px; border-radius:8px; overflow:auto; max-height:90vh; padding:1.25rem;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
                 <h3 style="margin:0;">Terms of Use</h3>
-                <button onclick="closeTermsModal()" style="background:transparent; border:none; font-size:1.25rem;">&times;</button>
+                <button type="button" onclick="closeTermsModal()" style="background:transparent; border:none; font-size:1.25rem;">&times;</button>
             </div>
             <div id="termsContent" style="color:#374151; line-height:1.6; font-size:0.95rem;">
                 <p style="margin-top:0;"><strong>Official Terms of Use</strong></p>
@@ -1548,18 +1963,34 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
     function switchToConsultationsList() {
         window.location.href = '?section=consultations';
     }
+    
+    function viewConsultationDetail(consultationId) {
+        window.location.href = '?section=detail&id=' + consultationId;
+    }
 
-    // Modal controls
-    document.getElementById('openPrivacy').addEventListener('click', function(e){
-        e.preventDefault();
-        document.getElementById('policyModal').style.display = 'flex';
-    });
-    document.getElementById('openTerms').addEventListener('click', function(e){
-        e.preventDefault();
-        document.getElementById('termsModal').style.display = 'flex';
-    });
-    function closePolicyModal(){ document.getElementById('policyModal').style.display = 'none'; }
-    function closeTermsModal(){ document.getElementById('termsModal').style.display = 'none'; }
+    // Modal controls - guarded so missing elements don't break other JS
+    (function(){
+        var openPrivacy = document.getElementById('openPrivacy');
+        if (openPrivacy) {
+            openPrivacy.addEventListener('click', function(e){
+                e.preventDefault();
+                var pm = document.getElementById('policyModal');
+                if (pm) pm.style.display = 'flex';
+            });
+        }
+
+        var openTerms = document.getElementById('openTerms');
+        if (openTerms) {
+            openTerms.addEventListener('click', function(e){
+                e.preventDefault();
+                var tm = document.getElementById('termsModal');
+                if (tm) tm.style.display = 'flex';
+            });
+        }
+
+        window.closePolicyModal = function(){ var pm = document.getElementById('policyModal'); if (pm) pm.style.display = 'none'; };
+        window.closeTermsModal = function(){ var tm = document.getElementById('termsModal'); if (tm) tm.style.display = 'none'; };
+    })();
 </script>
 
 </body>

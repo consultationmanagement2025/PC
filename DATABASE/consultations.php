@@ -17,10 +17,14 @@ function initializeConsultationsTable() {
         expected_posts INT DEFAULT 0,
         views INT DEFAULT 0,
         posts_count INT DEFAULT 0,
+        user_id INT,
+        user_email VARCHAR(255),
+        allow_email_notifications TINYINT(1) DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         image_path VARCHAR(255),
-        FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE SET NULL
+        FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE SET NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
     
     if ($conn->query($sql) === TRUE) {

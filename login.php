@@ -1,48 +1,167 @@
-<?php
+﻿<?php
+// Load security utilities
+require __DIR__ . '/UTILS/security-headers.php';
+require __DIR__ . '/UTILS/security.php';
+require __DIR__ . '/UTILS/totp-2fa.php';
+
+// Harden session cookie params where possible (respect HTTPS during local dev)
+$secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path' => '/',
+    'domain' => '',
+    'secure' => $secure,
+    'httponly' => true,
+    'samesite' => 'Strict'
+]);
 session_start();
-require 'db.php';
-require 'audit-log.php';
+
+// Check session timeout (30 minutes)
+if (!checkSessionTimeout(1800)) {
+    session_unset();
+    session_destroy();
+}
+
+require __DIR__ . '/db.php';
+require __DIR__ . '/database/audit-log.php';
 
 $error = "";
+$show_2fa_form = false;
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $email = trim($_POST['email']);
-    $password = $_POST['password'];
-
-    $stmt = $conn->prepare("SELECT id, fullname, password, role FROM users WHERE email=?");
-    if (!$stmt) {
-        $error = "Database error: " . $conn->error;
+    // Verify CSRF token
+    if (!isset($_POST['csrf_token']) || !verifyCSRFToken($_POST['csrf_token'])) {
+        $error = "Security token invalid. Please try again.";
     } else {
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $result = $stmt->get_result();
-
-        if ($user = $result->fetch_assoc()) {
-            if (password_verify($password, $user['password'])) {
-                $_SESSION['user_id'] = $user['id'];
-                $_SESSION['fullname'] = $user['fullname'];
-                $_SESSION['role'] = $user['role'] ?? 'citizen'; // Default to citizen if role is NULL
-                
-                // Log admin login
-                if (($user['role'] ?? 'citizen') === 'admin') {
-                    logAdminLogin($user['id'], $user['fullname']);
-                }
-                
-                // Redirect based on user role
-                $role = $user['role'] ?? 'citizen';
-                $redirectUrl = ($role === 'admin') ? "system-template-full.php" : "user-portal.php";
-
-                echo "<script>
-                    localStorage.setItem('isLoggedIn', 'true');
-                    localStorage.setItem('role', '" . addslashes($role) . "');
-                    window.location.href = '$redirectUrl';
-                </script>";
-                exit();
-            } else {
-                $error = "Invalid password";
-            }
+        $email = trim($_POST['email'] ?? '');
+        $password = $_POST['password'] ?? '';
+        
+        // Validate input
+        if (empty($email) || empty($password)) {
+            $error = "Email and password are required";
         } else {
-            $error = "Email not found";
+            // Check rate limiting
+            $client_ip = $_SERVER['REMOTE_ADDR'];
+            $rate_limit = checkRateLimit($email, 5, 900);
+            
+            if ($rate_limit['limited']) {
+                $locked_until = isset($rate_limit['locked_until']) ? date('H:i:s', $rate_limit['locked_until']) : 'unknown';
+                $error = "Account locked due to multiple failed attempts. Try again after " . $locked_until;
+            } else {
+                $stmt = $conn->prepare("SELECT id, fullname, password, role, email FROM users WHERE email=?");
+                if (!$stmt) {
+                    $error = "Database error: " . $conn->error;
+                } else {
+                    $stmt->bind_param("s", $email);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
+
+                    if ($user = $result->fetch_assoc()) {
+                        if (password_verify($password, $user['password'])) {
+                            // Check if 2FA is enabled for this admin
+                            if ($user['role'] === 'admin') {
+                                $twofa_status = get2FAStatus($user['id']);
+                                if ($twofa_status['enabled']) {
+                                    // Require 2FA verification
+                                    $_SESSION['pending_2fa_user_id'] = $user['id'];
+                                    $_SESSION['pending_2fa_email'] = $user['email'];
+                                    $_SESSION['pending_2fa_fullname'] = $user['fullname'];
+                                    $_SESSION['pending_2fa_role'] = $user['role'];
+                                    $show_2fa_form = true;
+                                    // Clear rate limit on successful password entry
+                                    clearRateLimit($email);
+                                } else {
+                                    // 2FA not enabled, proceed with login
+                                    $_SESSION['user_id'] = $user['id'];
+                                    $_SESSION['fullname'] = $user['fullname'];
+                                    $_SESSION['role'] = $user['role'];
+                                    $_SESSION['last_activity'] = time();
+                                    
+                                    // Prevent session fixation attacks
+                                    session_regenerate_id(true);
+                                    
+                                    // Log admin login
+                                    logAdminLogin($user['id'], $user['fullname']);
+                                    
+                                    // Clear rate limit
+                                    clearRateLimit($email);
+                                    
+                                    // Redirect
+                                    echo "<script>
+                                        localStorage.setItem('isLoggedIn', 'true');
+                                        localStorage.setItem('role', 'admin');
+                                        window.location.href = 'system-template-full.php';
+                                    </script>";
+                                    exit();
+                                }
+                            } else {
+                                // Regular user login (no 2FA)
+                                $_SESSION['user_id'] = $user['id'];
+                                $_SESSION['fullname'] = $user['fullname'];
+                                $_SESSION['role'] = $user['role'] ?? 'citizen';
+                                $_SESSION['last_activity'] = time();
+                                
+                                session_regenerate_id(true);
+                                clearRateLimit($email);
+                                
+                                echo "<script>
+                                    localStorage.setItem('isLoggedIn', 'true');
+                                    localStorage.setItem('role', '" . addslashes($user['role'] ?? 'citizen') . "');
+                                    window.location.href = 'user-portal.php';
+                                </script>";
+                                exit();
+                            }
+                        } else {
+                            // Invalid password - record failed attempt
+                            recordFailedAttempt($email, 900);
+                            $remaining = checkRateLimit($email, 5, 900)['remaining'];
+                            $error = "Invalid password. Attempts remaining: $remaining";
+                        }
+                    } else {
+                        // Email not found - still record to prevent enumeration attacks
+                        recordFailedAttempt($email, 900);
+                        $error = "Email or password incorrect";
+                    }
+                    $stmt->close();
+                }
+            }
+        }
+    }
+}
+
+// Handle 2FA verification
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['verify_2fa_code'])) {
+    if (!isset($_POST['csrf_token']) || !verifyCSRFToken($_POST['csrf_token'])) {
+        $error = "Security token invalid. Please try again.";
+    } elseif (!isset($_SESSION['pending_2fa_user_id'])) {
+        $error = "2FA session expired. Please login again.";
+    } else {
+        $code = preg_replace('/[^0-9A-Z]/', '', strtoupper($_POST['2fa_code'] ?? ''));
+        
+        if (empty($code)) {
+            $error = "2FA code is required";
+        } elseif (verify2FACode($_SESSION['pending_2fa_user_id'], $code)) {
+            // 2FA verified, complete login
+            $_SESSION['user_id'] = $_SESSION['pending_2fa_user_id'];
+            $_SESSION['fullname'] = $_SESSION['pending_2fa_fullname'];
+            $_SESSION['role'] = $_SESSION['pending_2fa_role'];
+            $_SESSION['last_activity'] = time();
+            
+            // Clean up 2FA session vars
+            unset($_SESSION['pending_2fa_user_id'], $_SESSION['pending_2fa_email'], $_SESSION['pending_2fa_fullname'], $_SESSION['pending_2fa_role']);
+            
+            session_regenerate_id(true);
+            logAdminLogin($_SESSION['user_id'], $_SESSION['fullname']);
+            clearRateLimit($_SESSION['pending_2fa_email'] ?? '');
+            
+            echo "<script>
+                localStorage.setItem('isLoggedIn', 'true');
+                localStorage.setItem('role', 'admin');
+                window.location.href = 'system-template-full.php';
+            </script>";
+            exit();
+        } else {
+            $error = "Invalid 2FA code. Please try again.";
         }
     }
 }
@@ -112,7 +231,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <?php endif; ?>
             
             <!-- Login Form -->
+            <?php if (!$show_2fa_form): ?>
             <form method="POST" action="login.php" class="space-y-4 md:space-y-5">
+                <!-- CSRF Token -->
+                <?php outputCSRFField(); ?>
+                
                 <!-- Email Field -->
                 <div>
                     <label for="email" class="block text-sm font-medium text-gray-700 mb-1.5">
@@ -151,6 +274,47 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     <i class="bi bi-arrow-right ml-2"></i>
                 </button>
             </form>
+            <?php else: ?>
+            <!-- 2FA Verification Form -->
+            <form method="POST" action="login.php" class="space-y-4 md:space-y-5">
+                <!-- CSRF Token -->
+                <?php outputCSRFField(); ?>
+                <input type="hidden" name="verify_2fa_code" value="1">
+                
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4 mb-4">
+                    <div class="flex items-start">
+                        <i class="bi bi-shield-check text-blue-600 text-lg mt-0.5 mr-3 flex-shrink-0"></i>
+                        <div>
+                            <h3 class="text-sm font-semibold text-blue-900">Two-Factor Authentication</h3>
+                            <p class="text-xs text-blue-700 mt-1">Enter the 6-digit code from your authenticator app or use a backup code.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 2FA Code Input -->
+                <div>
+                    <label for="2fa_code" class="block text-sm font-medium text-gray-700 mb-1.5">
+                        <i class="bi bi-phone mr-1.5"></i>Authenticator Code
+                    </label>
+                    <input type="text" id="2fa_code" name="2fa_code" required placeholder="000000"
+                           maxlength="8" pattern="[0-9A-Z]{6,8}"
+                           class="w-full px-3 md:px-4 py-2.5 text-center text-lg tracking-widest border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition text-base font-mono"
+                           autocomplete="off">
+                    <p class="text-xs text-gray-500 mt-1">Backup codes also accepted (8 characters)</p>
+                </div>
+                
+                <!-- Submit Button -->
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 md:py-3 rounded-lg transition duration-200 shadow-md hover:shadow-lg flex items-center justify-center">
+                    <span>Verify Code</span>
+                    <i class="bi bi-check-circle ml-2"></i>
+                </button>
+                
+                <!-- Back to Login -->
+                <button type="button" onclick="window.location.href='login.php'" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2.5 md:py-3 rounded-lg transition duration-200">
+                    <i class="bi bi-arrow-left mr-2"></i>Back to Login
+                </button>
+            </form>
+            <?php endif; ?>
             
             <!-- Divider -->
             <div class="relative my-5 md:my-6">
@@ -162,6 +326,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 </div>
             </div>
             
+            <!-- Guest Access Button -->
+            <a href="public-portal.php" class="w-full flex items-center justify-center px-4 py-2.5 border-2 border-red-600 rounded-lg hover:bg-red-50 transition font-medium text-red-600 mb-3">
+                <i class="bi bi-globe text-lg mr-2"></i>
+                <span class="text-sm">View Public Consultations</span>
+            </a>
+            
             <!-- Alternative Login -->
             <button type="button" class="w-full flex items-center justify-center px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
                 <i class="bi bi-google text-lg mr-2 text-red-500"></i>
@@ -171,8 +341,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <!-- Register Link -->
             <div class="mt-5 md:mt-6 text-center">
                 <p class="text-sm text-gray-600">
-                    Don't have an account? 
-                    <a href="register.php" class="text-red-600 hover:text-red-700 font-semibold transition-colors">Create Account</a>
+                    Looking to submit feedback? 
+                    <a href="public-portal.php" class="text-red-600 hover:text-red-700 font-semibold transition-colors">Use Public Portal</a>
                 </p>
             </div>
         </div>

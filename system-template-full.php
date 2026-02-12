@@ -179,8 +179,16 @@ $totalPages = ceil($totalLogs / $pageSize);
             }
         }
     </style>
+    <style>
+        /* Make wide tables scrollable on small screens */
+        .responsive-table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    </style>
 </head>
 <body class="bg-gray-100 font-sans antialiased">
+    <!-- Mobile open sidebar button -->
+    <button id="open-mobile-sidebar" class="md:hidden fixed top-4 left-4 z-50 p-2 bg-red-700 text-white rounded-lg shadow-lg">
+        <i class="bi bi-list"></i>
+    </button>
     <!-- Mobile Sidebar Overlay -->
     <div id="sidebar-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden opacity-0 pointer-events-none transition-all duration-300 ease-out"></div>
     
@@ -1502,6 +1510,27 @@ $totalPages = ceil($totalLogs / $pageSize);
                 modal.style.display = 'none';
             }
         }
+    </script>
+    <script>
+    // Mobile sidebar open/close handlers
+    (function(){
+      var openBtn = document.getElementById('open-mobile-sidebar');
+      var closeBtn = document.getElementById('close-mobile-sidebar');
+      var mobileSidebar = document.getElementById('mobile-sidebar');
+      var overlay = document.getElementById('sidebar-overlay');
+      if (openBtn) openBtn.addEventListener('click', function(){
+          mobileSidebar.classList.remove('-translate-x-full');
+          overlay.classList.remove('opacity-0','pointer-events-none');
+      });
+      if (closeBtn) closeBtn.addEventListener('click', function(){
+          mobileSidebar.classList.add('-translate-x-full');
+          overlay.classList.add('opacity-0','pointer-events-none');
+      });
+      if (overlay) overlay.addEventListener('click', function(){
+          mobileSidebar.classList.add('-translate-x-full');
+          overlay.classList.add('opacity-0','pointer-events-none');
+      });
+    })();
     </script>
 </body>
 </html>
