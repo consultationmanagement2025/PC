@@ -538,47 +538,47 @@
             </p>
         </div>
 
-        <!-- Security Features Section -->
+        <!-- Security Features Section - User focused only -->
         <div>
             <div style="text-align: center; margin-bottom: 2rem;">
-                <h3 style="font-size: clamp(1.25rem, 5vw, 1.5rem); font-weight: 800; color: #1f2937; margin-bottom: 0.5rem;">Security & Privacy Commitment</h3>
-                <p style="color: #4b5563; font-size: clamp(0.9rem, 2vw, 1rem);">We prioritize your data protection with industry-leading security measures</p>
+                <h3 style="font-size: clamp(1.25rem, 5vw, 1.5rem); font-weight: 800; color: #1f2937; margin-bottom: 0.5rem;">Your Privacy & Security</h3>
+                <p style="color: #4b5563; font-size: clamp(0.9rem, 2vw, 1rem);">We protect your data with industry standards and comply with data protection laws</p>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                 <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                     <i class="bi bi-shield-lock text-2xl md:text-3xl text-red-900 mb-3"></i>
-                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">HTTPS/TLS Encryption</h4>
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Secure encrypted connections for all data transmission</p>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Secure Connection</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">All data transmitted using encrypted HTTPS/TLS connection</p>
                 </div>
 
                 <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                    <i class="bi bi-person-check text-2xl md:text-3xl text-red-900 mb-3"></i>
-                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Role-Based Access</h4>
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Granular permission controls for admin functions</p>
-                </div>
-
-                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                    <i class="bi bi-safe2 text-2xl md:text-3xl text-red-900 mb-3"></i>
-                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Two-Factor Auth</h4>
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">OTP verification for sensitive administrative actions</p>
-                </div>
-
-                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                    <i class="bi bi-file-text text-2xl md:text-3xl text-red-900 mb-3"></i>
-                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Audit Logging</h4>
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Complete audit trails for all content and user actions</p>
+                    <i class="bi bi-file-earmark-shield text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Data Privacy</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Compliance with Republic Act 10173 (Data Privacy Act of 2012)</p>
                 </div>
 
                 <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                     <i class="bi bi-lock text-2xl md:text-3xl text-red-900 mb-3"></i>
-                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Data Protection</h4>
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Compliance with local data privacy regulations</p>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Protected Information</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Your personal data is securely stored and protected from unauthorized access</p>
                 </div>
 
                 <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                    <i class="bi bi-key text-2xl md:text-3xl text-red-900 mb-3"></i>
-                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Encryption at Rest</h4>
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Advanced encryption for sensitive stored data</p>
+                    <i class="bi bi-envelope-check text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Verified Submissions</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Email verification ensures authentic and legitimate public participation</p>
+                </div>
+
+                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <i class="bi bi-eye-slash text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Anonymous Options</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Your feedback is valued regardless of optional personal details</p>
+                </div>
+
+                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <i class="bi bi-info-circle text-2xl md:text-3xl text-red-900 mb-3"></i>
+                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Transparency</h4>
+                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">We're committed to open and honest government engagement</p>
                 </div>
             </div>
         </div>

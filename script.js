@@ -275,66 +275,6 @@ function openModal(modalId) {
     }
 }
 
-// Open Notify Modal and prefill user id
-function openNotifyModal(userId, postId) {
-    const uid = document.getElementById('notify-user-id');
-    const pid = document.getElementById('notify-post-id');
-    const msg = document.getElementById('notify-message');
-    const type = document.getElementById('notify-type');
-    if (uid) uid.value = userId || '';
-    if (pid) pid.value = postId || '';
-    if (type) type.value = 'inappropriate';
-    if (msg) msg.value = 'Dear user, your post has been flagged as inappropriate. Please review our community guidelines.';
-    openModal('notify-modal');
-}
-
-// Quick notify with predefined reason and message
-async function quickNotify(userId, postId, reason) {
-    const templates = {
-        inappropriate: 'Dear user, your post has been flagged as inappropriate. Please review our community guidelines.',
-        untruthful: 'Dear user, your post contains information that appears untruthful. Please provide sources or correct the statement.',
-        unlawful: 'Dear user, your post may contain unlawful content. This has been escalated for further review.'
-    };
-    const message = templates[reason] || 'Dear user, your post has been reviewed by the administration.';
-    const data = new FormData();
-    data.append('user_id', userId);
-    data.append('post_id', postId);
-    data.append('type', reason);
-    data.append('message', message);
-    try {
-        const res = await fetch('send_notification.php', { method: 'POST', body: data });
-        const json = await res.json();
-        if (json.success) {
-            showToast('Notification sent', 'success');
-        } else {
-            showToast(json.error || 'Failed to send notification', 'error');
-        }
-    } catch (err) {
-        console.error(err);
-        showToast('Network error sending notification', 'error');
-    }
-}
-
-async function submitNotification(e) {
-    if (e) e.preventDefault();
-    const form = document.getElementById('notify-form');
-    if (!form) return;
-    const data = new FormData(form);
-    try {
-        const res = await fetch('send_notification.php', { method: 'POST', body: data });
-        const json = await res.json();
-        if (json.success) {
-            showToast('Notification sent', 'success');
-            closeModal('notify-modal');
-        } else {
-            showToast(json.error || 'Failed to send notification', 'error');
-        }
-    } catch (err) {
-        console.error(err);
-        showToast('Network error sending notification', 'error');
-    }
-}
-
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
@@ -389,21 +329,6 @@ async function openAnnouncementDetail(annId) {
             
             likeBtn.onclick = (e) => toggleAnnouncementAction(e, annId, 'like');
             saveBtn.onclick = (e) => toggleAnnouncementAction(e, annId, 'save');
-            
-            // Load user posts
-            const postsRes = await fetch('get_posts.php');
-            const postsJson = await postsRes.json();
-            const postsList = document.getElementById('ann-user-posts');
-            if (postsJson.posts && postsJson.posts.length > 0) {
-                postsList.innerHTML = postsJson.posts.slice(0, 5).map(p => `
-                    <div class="p-2 border rounded text-sm">
-                        <div class="font-medium">${p.author}</div>
-                        <div class="text-gray-600 mt-1">${p.content.substring(0, 150)}...</div>
-                    </div>
-                `).join('');
-            } else {
-                postsList.innerHTML = '<div class="text-gray-500">No user posts yet.</div>';
-            }
             
             openModal('announcement-detail-modal');
         } else {

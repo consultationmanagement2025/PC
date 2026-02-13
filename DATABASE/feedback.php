@@ -7,10 +7,10 @@ function initializeFeedbackTable() {
     
     $sql = "CREATE TABLE IF NOT EXISTS feedback (
         id INT PRIMARY KEY AUTO_INCREMENT,
-        user_id INT,
-        username VARCHAR(100),
+        guest_name VARCHAR(255),
+        guest_email VARCHAR(255),
+        guest_phone VARCHAR(15),
         consultation_id INT,
-        post_id INT,
         rating INT CHECK(rating >= 1 AND rating <= 5),
         category VARCHAR(100),
         message LONGTEXT,
@@ -20,9 +20,7 @@ function initializeFeedbackTable() {
         responded_at TIMESTAMP NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
         FOREIGN KEY (consultation_id) REFERENCES consultations(id) ON DELETE SET NULL,
-        FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE SET NULL,
         FOREIGN KEY (admin_respondent) REFERENCES users(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
     
@@ -35,21 +33,21 @@ function initializeFeedbackTable() {
 }
 
 // Submit feedback
-function submitFeedback($user_id, $username, $consultation_id, $post_id, $rating, $category, $message) {
+function submitFeedback($guest_name, $guest_email, $guest_phone, $consultation_id, $rating, $category, $message) {
     global $conn;
     
     initializeFeedbackTable();
     
-    $user_id = (int)$user_id;
     $consultation_id = (int)$consultation_id;
-    $post_id = (int)$post_id;
     $rating = (int)$rating;
-    $username = $conn->real_escape_string($username);
+    $guest_name = $conn->real_escape_string($guest_name);
+    $guest_email = $conn->real_escape_string($guest_email);
+    $guest_phone = $conn->real_escape_string($guest_phone);
     $category = $conn->real_escape_string($category);
     $message = $conn->real_escape_string($message);
     
-    $sql = "INSERT INTO feedback (user_id, username, consultation_id, post_id, rating, category, message, status)
-            VALUES ($user_id, '$username', $consultation_id, $post_id, $rating, '$category', '$message', 'new')";
+    $sql = "INSERT INTO feedback (guest_name, guest_email, guest_phone, consultation_id, rating, category, message, status)
+            VALUES ('$guest_name', '$guest_email', '$guest_phone', $consultation_id, $rating, '$category', '$message', 'new')";
     
     if ($conn->query($sql) === TRUE) {
         return $conn->insert_id;

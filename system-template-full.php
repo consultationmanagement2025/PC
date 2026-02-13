@@ -5,6 +5,8 @@ require 'DATABASE/user-logs.php';
 require 'announcements.php';
 require 'DATABASE/posts.php';
 require 'DATABASE/notifications.php';
+require 'DATABASE/consultations.php';
+require 'DATABASE/feedback.php';
 // Use strtolower and trim to be safe
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
 if ($current_role !== 'admin') {
@@ -12,26 +14,41 @@ if ($current_role !== 'admin') {
     exit();
 }
 
-// --- Consultation Management Dashboard Stats ---
+// --- Consultation & Feedback Management Dashboard Data ---
 $consult_total = 0;
 $consult_open = 0;
 $consult_scheduled = 0;
 $consultations = [];
+$feedbackList = [];
+
 if (file_exists('db.php')) {
     require_once 'db.php';
-    // Get summary counts
-    $res = $conn->query("SELECT COUNT(*) as total, SUM(status='pending' OR status='approved') as open, SUM(status='approved') as scheduled FROM consultations");
-    if ($res && $row = $res->fetch_assoc()) {
-        $consult_total = (int)$row['total'];
-        $consult_open = (int)$row['open'];
-        $consult_scheduled = (int)$row['scheduled'];
+
+    // Ensure core tables exist
+    if (function_exists('initializeConsultationsTable')) {
+        initializeConsultationsTable();
     }
-    // Get all consultations for management table
-    $res2 = $conn->query("SELECT * FROM consultations ORDER BY created_at DESC");
-    if ($res2) {
-        while ($row = $res2->fetch_assoc()) {
-            $consultations[] = $row;
+    if (function_exists('initializeFeedbackTable')) {
+        initializeFeedbackTable();
+    }
+
+    // Load consultations using helper so stats align with public portal
+    if (function_exists('getConsultations')) {
+        $consultations = getConsultations(null, 100, 0);
+        foreach ($consultations as $c) {
+            $consult_total++;
+            if (($c['status'] ?? '') === 'active') {
+                $consult_open++;
+            }
+            if (($c['status'] ?? '') === 'closed') {
+                $consult_scheduled++;
+            }
         }
+    }
+
+    // Load latest feedback entries for Feedback Management
+    if (function_exists('getFeedback')) {
+        $feedbackList = getFeedback([], 50, 0);
     }
 }
 
@@ -527,45 +544,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                                 </div>
                             </div>
 
-                            <!-- Right: User Posts (admin moderation) -->
-                            <div class="w-1/2 min-w-0 flex flex-col">
-                                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5 flex-1 flex flex-col">
-                                    <div class="mb-4">
-                                        <h2 class="text-lg font-semibold text-gray-900">User Posts</h2>
-                                        <p class="text-xs text-gray-500 mt-1">Review & take action on citizen posts</p>
-                                    </div>
-                                    <div id="admin-posts-list" class="space-y-3 overflow-auto flex-1">
-                                        <?php
-                                            $posts = getPosts(30, 0);
-                                            if (empty($posts)) {
-                                                echo '<div class="text-gray-500">No user posts yet.</div>';
-                                            } else {
-                                                foreach ($posts as $p) {
-                                                    $uid = htmlspecialchars($p['user_id'] ?? 0);
-                                                    $postId = (int)$p['id'];
-                                                    echo '<div class="p-3 border rounded">';
-                                                    echo '<div class="flex items-center justify-between">';
-                                                    echo '<div class="font-medium">' . htmlspecialchars($p['author']) . '</div>';
-                                                    echo '<div class="text-sm text-gray-500">' . date('M d, Y H:i', strtotime($p['created_at'])) . '</div>';
-                                                    echo '</div>';
-                                                    echo '<div class="text-sm text-gray-800 mt-2">' . nl2br(htmlspecialchars(substr($p['content'],0,800))) . '</div>';
-                                                    echo '<div class="mt-3 flex gap-2 items-center flex-wrap">';
-                                                    echo '<button type="button" onclick="openNotifyModal(' . (int)$p['user_id'] . ', ' . $postId . ')" class="btn-secondary px-3 py-1 text-sm">Notify</button>';
-                                                    echo '<button type="button" onclick="quickNotify(' . (int)$p['user_id'] . ', ' . $postId . ', \'inappropriate\')" class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded">Inappropriate</button>';
-                                                    echo '<button type="button" onclick="quickNotify(' . (int)$p['user_id'] . ', ' . $postId . ', \'untruthful\')" class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">Untruthful</button>';
-                                                    echo '<button type="button" onclick="quickNotify(' . (int)$p['user_id'] . ', ' . $postId . ', \'unlawful\')" class="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">Unlawful</button>';
-                                                    echo '<form method="POST" action="system-template-full.php" style="display:inline">';
-                                                    echo '<input type="hidden" name="mark_reviewed_post_id" value="' . $postId . '">';
-                                                    echo '<button type="submit" class="btn-secondary px-3 py-1 text-sm">Mark Reviewed</button>';
-                                                    echo '</form>';
-                                                    echo '</div>';
-                                                    echo '</div>';
-                                                }
-                                            }
-                                        ?>
-                                    </div>
-                                </div>
-                            </div>
+
                         </div>
                     </section>
 
@@ -928,15 +907,15 @@ $totalPages = ceil($totalLogs / $pageSize);
                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 md:mt-0">
                                     <div class="bg-red-100 rounded-lg p-4 text-center">
                                         <div class="text-xs text-gray-600">Total Consultations</div>
-                                        <div class="text-2xl font-bold text-red-800 mt-1"><?= $consult_total ?></div>
+                                        <div class="text-2xl font-bold text-red-800 mt-1"><?= (int)$consult_total ?></div>
                                     </div>
                                     <div class="bg-red-100 rounded-lg p-4 text-center">
-                                        <div class="text-xs text-gray-600">Open Consultations</div>
-                                        <div class="text-2xl font-bold text-red-800 mt-1"><?= $consult_open ?></div>
+                                        <div class="text-xs text-gray-600">Active Consultations</div>
+                                        <div class="text-2xl font-bold text-red-800 mt-1"><?= (int)$consult_open ?></div>
                                     </div>
                                     <div class="bg-red-100 rounded-lg p-4 text-center">
-                                        <div class="text-xs text-gray-600">Scheduled</div>
-                                        <div class="text-2xl font-bold text-red-800 mt-1"><?= $consult_scheduled ?></div>
+                                        <div class="text-xs text-gray-600">Closed Consultations</div>
+                                        <div class="text-2xl font-bold text-red-800 mt-1"><?= (int)$consult_scheduled ?></div>
                                     </div>
                                 </div>
                             </div>
@@ -944,40 +923,31 @@ $totalPages = ceil($totalLogs / $pageSize);
                                 <table class="w-full text-sm">
                                     <thead>
                                         <tr class="bg-gray-50">
-                                            <th class="p-2">Title</th>
-                                            <th class="p-2">Type</th>
-                                            <th class="p-2">Date</th>
-                                            <th class="p-2">Status</th>
-                                            <th class="p-2">Actions</th>
+                                            <th class="p-2 text-left">Title</th>
+                                            <th class="p-2 text-left">Category</th>
+                                            <th class="p-2 text-left">Start</th>
+                                            <th class="p-2 text-left">End</th>
+                                            <th class="p-2 text-left">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <?php if (empty($consultations)): ?>
                                             <tr><td colspan="5" class="text-center text-gray-400">No consultations found.</td></tr>
                                         <?php else: foreach ($consultations as $c): ?>
-                                            <tr>
-                                                <td><?= htmlspecialchars($c['topic']) ?></td>
-                                                <td><?= htmlspecialchars($c['type'] ?? '-') ?></td>
-                                                <td><?= htmlspecialchars($c['preferred_datetime']) ?></td>
-                                                <td><?= htmlspecialchars(ucfirst($c['status'])) ?></td>
-                                                <td>
-                                                    <?php if ($c['status'] === 'pending'): ?>
-                                                        <form method="POST" action="admin_manage_consultations.php" style="display:inline;">
-                                                            <input type="hidden" name="id" value="<?= $c['id'] ?>">
-                                                            <input type="hidden" name="action" value="approve">
-                                                            <input type="datetime-local" name="scheduled_datetime" required>
-                                                            <input type="text" name="admin_note" placeholder="Admin note">
-                                                            <button type="submit" class="text-green-700 font-bold">Approve</button>
-                                                        </form>
-                                                        <form method="POST" action="admin_manage_consultations.php" style="display:inline;">
-                                                            <input type="hidden" name="id" value="<?= $c['id'] ?>">
-                                                            <input type="hidden" name="action" value="disapprove">
-                                                            <input type="text" name="admin_note" placeholder="Reason">
-                                                            <button type="submit" class="text-red-700 font-bold">Disapprove</button>
-                                                        </form>
-                                                    <?php else: ?>
-                                                        <span class="text-gray-500">-</span>
-                                                    <?php endif; ?>
+                                            <tr class="border-b border-gray-100 hover:bg-gray-50">
+                                                <td class="p-2"><?= htmlspecialchars($c['title'] ?? '-') ?></td>
+                                                <td class="p-2"><?= htmlspecialchars($c['category'] ?? '-') ?></td>
+                                                <td class="p-2">
+                                                    <?= !empty($c['start_date']) ? htmlspecialchars(date('M d, Y H:i', strtotime($c['start_date']))) : '-' ?>
+                                                </td>
+                                                <td class="p-2">
+                                                    <?= !empty($c['end_date']) ? htmlspecialchars(date('M d, Y H:i', strtotime($c['end_date']))) : '-' ?>
+                                                </td>
+                                                <td class="p-2">
+                                                    <span class="inline-flex px-2 py-1 rounded-full text-xs font-medium
+                                                        <?= ($c['status'] ?? '') === 'active' ? 'bg-green-100 text-green-800' : ((($c['status'] ?? '') === 'closed') ? 'bg-gray-200 text-gray-800' : 'bg-yellow-100 text-yellow-800') ?>">
+                                                        <?= htmlspecialchars(ucfirst($c['status'] ?? 'draft')) ?>
+                                                    </span>
                                                 </td>
                                             </tr>
                                         <?php endforeach; endif; ?>
@@ -990,15 +960,70 @@ $totalPages = ceil($totalLogs / $pageSize);
                     <!-- FEEDBACK MANAGEMENT SECTION -->
                     <section id="feedback-management-section" class="mb-6" style="display: none;">
                         <div class="bg-white rounded-lg shadow-md p-6">
-                            <div class="flex justify-between items-center mb-6">
+                            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-3">
                                 <div>
                                     <h2 class="text-2xl font-bold text-gray-900">Feedback Management</h2>
                                     <p class="text-gray-600 text-sm mt-1">Review and respond to user feedback</p>
                                 </div>
                             </div>
                             
-                            <div class="space-y-4">
-                                <!-- Feedback list will populate here when real data exists -->
+                            <div class="overflow-x-auto">
+                                <?php if (empty($feedbackList)): ?>
+                                    <div class="text-center text-gray-400 py-8 text-sm">
+                                        No feedback has been submitted yet.
+                                    </div>
+                                <?php else: ?>
+                                    <table class="w-full text-sm">
+                                        <thead class="bg-gray-50 border-b border-gray-200">
+                                            <tr>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-900">Guest</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-900">Consultation ID</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-900">Rating</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-900">Category</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-900">Message</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-900">Status</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-900">Submitted</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-gray-100">
+                                            <?php foreach ($feedbackList as $f): ?>
+                                                <tr class="hover:bg-gray-50">
+                                                    <td class="px-4 py-2">
+                                                        <div class="font-medium text-gray-900">
+                                                            <?= htmlspecialchars($f['guest_name'] ?? 'Guest') ?>
+                                                        </div>
+                                                        <div class="text-xs text-gray-500">
+                                                            <?= htmlspecialchars($f['guest_email'] ?? '') ?>
+                                                        </div>
+                                                    </td>
+                                                    <td class="px-4 py-2 text-gray-700">
+                                                        <?= htmlspecialchars($f['consultation_id'] ?? '-') ?>
+                                                    </td>
+                                                    <td class="px-4 py-2 text-gray-700">
+                                                        <?= htmlspecialchars($f['rating'] !== null ? $f['rating'] . '/5' : '-') ?>
+                                                    </td>
+                                                    <td class="px-4 py-2 text-gray-700">
+                                                        <?= htmlspecialchars($f['category'] ?? '-') ?>
+                                                    </td>
+                                                    <td class="px-4 py-2 text-gray-700 max-w-xs">
+                                                        <span class="line-clamp-2">
+                                                            <?= htmlspecialchars($f['message'] ?? '') ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-4 py-2">
+                                                        <span class="inline-flex px-2 py-1 rounded-full text-xs font-medium
+                                                            <?= ($f['status'] ?? 'new') === 'new' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800' ?>">
+                                                            <?= htmlspecialchars(ucfirst($f['status'] ?? 'new')) ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-4 py-2 text-gray-700 text-xs">
+                                                        <?= !empty($f['created_at']) ? htmlspecialchars(date('M d, Y H:i', strtotime($f['created_at']))) : '-' ?>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </section>
@@ -1178,47 +1203,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                         </button>
                     </div>
                 </div>
-                <!-- User Posts (Right) -->
-                <div>
-                    <h4 class="font-semibold mb-3">User Posts</h4>
-                    <div id="ann-user-posts" class="space-y-3 max-h-96 overflow-y-auto">
-                        <!-- Posts will be loaded here -->
-                    </div>
-                </div>
             </div>
-        </div>
-    </div>
-
-    <!-- Notify User Modal -->
-    <div id="notify-modal" class="modal" style="display: none; align-items: center; justify-content: center;">
-        <div class="modal-content p-6 max-w-2xl">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-xl font-bold text-gray-900">Send Notification to User</h3>
-                <button onclick="closeModal('notify-modal')" class="text-gray-400 hover:text-gray-600">
-                    <i class="bi bi-x-lg text-xl"></i>
-                </button>
-            </div>
-            <form id="notify-form" onsubmit="submitNotification(event)">
-                <input type="hidden" id="notify-user-id" name="user_id" value="">
-                <input type="hidden" id="notify-post-id" name="post_id" value="">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Reason</label>
-                    <select id="notify-type" name="type" class="input-field w-full">
-                        <option value="notice">Notice</option>
-                        <option value="inappropriate">Inappropriate</option>
-                        <option value="untruthful">Untruthful</option>
-                        <option value="unlawful">Unlawful</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Message</label>
-                    <textarea id="notify-message" name="message" rows="4" class="input-field w-full" required>Dear user, your post has been flagged as inappropriate. Please review our community guidelines.</textarea>
-                </div>
-                <div class="flex justify-end mt-4 gap-2">
-                    <button type="button" onclick="closeModal('notify-modal')" class="btn-secondary px-4 py-2">Cancel</button>
-                    <button type="submit" class="btn-primary px-4 py-2">Send Notification</button>
-                </div>
-            </form>
         </div>
     </div>
 

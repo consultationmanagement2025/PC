@@ -748,27 +748,29 @@ foreach ($active_consultations as &$consultation) {
                 return;
             }
 
-            fetch('API/user_submit_consultation.php', {
+            // Submit feedback using the dedicated consultation feedback API
+            fetch('API/consultation_feedback.php?action=submit_feedback', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Content-Type': 'application/json',
                 },
-                body: new URLSearchParams({
-                    topic: 'Feedback for Consultation ' + consultationId,
-                    description: message,
-                    category: category,
+                body: JSON.stringify({
                     consultation_id: consultationId,
-                    preferred_datetime: new Date().toISOString().slice(0, 19).replace('T', ' ')
+                    message: message,
+                    category: category
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Thank you! Your feedback has been submitted successfully.');
-                    bootstrap.Modal.getInstance(document.getElementById('feedbackModal')).hide();
+                    alert(data.message || 'Thank you! Your feedback has been submitted successfully.');
+                    const modalInstance = bootstrap.Modal.getInstance(document.getElementById('feedbackModal'));
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
                     document.getElementById('feedbackForm').reset();
                 } else {
-                    alert('Error submitting feedback: ' + (data.error || data.message));
+                    alert('Error submitting feedback: ' + (data.message || data.error || 'Unknown error'));
                 }
             })
             .catch(err => {
