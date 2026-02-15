@@ -176,7 +176,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['verify_2fa_code'])) {
     <link rel="icon" type="image/webp" href="images/logo.webp">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         * {

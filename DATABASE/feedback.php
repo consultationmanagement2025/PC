@@ -40,21 +40,24 @@ function submitFeedback($guest_name, $guest_email, $guest_phone, $consultation_i
     
     $consultation_id = (int)$consultation_id;
     $rating = (int)$rating;
-    $guest_name = $conn->real_escape_string($guest_name);
-    $guest_email = $conn->real_escape_string($guest_email);
-    $guest_phone = $conn->real_escape_string($guest_phone);
-    $category = $conn->real_escape_string($category);
-    $message = $conn->real_escape_string($message);
-    
-    $sql = "INSERT INTO feedback (guest_name, guest_email, guest_phone, consultation_id, rating, category, message, status)
-            VALUES ('$guest_name', '$guest_email', '$guest_phone', $consultation_id, $rating, '$category', '$message', 'new')";
-    
-    if ($conn->query($sql) === TRUE) {
-        return $conn->insert_id;
-    } else {
-        error_log("Error submitting feedback: " . $conn->error);
+
+    $stmt = $conn->prepare("INSERT INTO feedback (guest_name, guest_email, guest_phone, consultation_id, rating, category, message, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'new')");
+    if (!$stmt) {
+        error_log("Error preparing submitFeedback: " . $conn->error);
         return false;
     }
+
+    $stmt->bind_param('sssisss', $guest_name, $guest_email, $guest_phone, $consultation_id, $rating, $category, $message);
+    if ($stmt->execute()) {
+        $id = $conn->insert_id;
+        $stmt->close();
+        return $id;
+    }
+
+    error_log("Error submitting feedback: " . $stmt->error);
+    $stmt->close();
+    return false;
 }
 
 // Get all feedback
@@ -136,11 +139,19 @@ function updateFeedbackStatus($id, $status) {
     global $conn;
     
     $id = (int)$id;
-    $status = $conn->real_escape_string($status);
-    
-    $sql = "UPDATE feedback SET status = '$status' WHERE id = $id";
-    
-    return $conn->query($sql) === TRUE;
+
+    $stmt = $conn->prepare("UPDATE feedback SET status = ? WHERE id = ?");
+    if (!$stmt) {
+        error_log("Error preparing updateFeedbackStatus: " . $conn->error);
+        return false;
+    }
+    $stmt->bind_param('si', $status, $id);
+    $ok = $stmt->execute();
+    if (!$ok) {
+        error_log("Error updating feedback status: " . $stmt->error);
+    }
+    $stmt->close();
+    return $ok;
 }
 
 // Respond to feedback
@@ -149,16 +160,24 @@ function respondToFeedback($id, $response, $admin_id) {
     
     $id = (int)$id;
     $admin_id = (int)$admin_id;
-    $response = $conn->real_escape_string($response);
-    
-    $sql = "UPDATE feedback 
-            SET admin_response = '$response', 
-                admin_respondent = $admin_id,
+
+    $stmt = $conn->prepare("UPDATE feedback
+            SET admin_response = ?,
+                admin_respondent = ?,
                 status = 'responded',
                 responded_at = NOW()
-            WHERE id = $id";
-    
-    return $conn->query($sql) === TRUE;
+            WHERE id = ?");
+    if (!$stmt) {
+        error_log("Error preparing respondToFeedback: " . $conn->error);
+        return false;
+    }
+    $stmt->bind_param('sii', $response, $admin_id, $id);
+    $ok = $stmt->execute();
+    if (!$ok) {
+        error_log("Error responding to feedback: " . $stmt->error);
+    }
+    $stmt->close();
+    return $ok;
 }
 
 // Get feedback statistics

@@ -218,6 +218,11 @@ function initNotificationsDropdown() {
     const notifDropdown = document.getElementById('notifications-dropdown');
     
     if (notifBtn && notifDropdown) {
+        // If the button already has an inline onclick handler, don't attach another
+        // listener (otherwise it will toggle open then immediately toggle closed).
+        if (notifBtn.getAttribute('onclick')) {
+            return;
+        }
         notifBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             notifDropdown.classList.toggle('hidden');
@@ -256,11 +261,11 @@ function initClickOutside() {
         const notifBtn = document.getElementById('notifications-btn');
         const profileBtn = document.getElementById('profile-btn');
         
-        if (notifDropdown && !notifBtn.contains(e.target)) {
+        if (notifDropdown && !(notifBtn && notifBtn.contains(e.target)) && !notifDropdown.contains(e.target)) {
             notifDropdown.classList.add('hidden');
         }
         
-        if (profileDropdown && !profileBtn.contains(e.target)) {
+        if (profileDropdown && !(profileBtn && profileBtn.contains(e.target)) && !profileDropdown.contains(e.target)) {
             profileDropdown.classList.add('hidden');
         }
     });

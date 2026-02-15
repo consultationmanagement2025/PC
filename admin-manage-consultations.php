@@ -5,7 +5,8 @@ require_once 'DATABASE/consultations.php';
 require_once 'DATABASE/audit-log.php';
 
 // Check if user is admin
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'Administrator') {
+$current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
+if ($current_role !== 'admin' && $current_role !== 'administrator') {
     header('Location: login.php');
     exit();
 }
@@ -79,7 +80,7 @@ $all_consultations = getConsultations(null, 100, 0);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Manage Consultations</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css">
     <style>
         :root {
             --primary-red: #C41E3A;
@@ -524,8 +525,12 @@ $all_consultations = getConsultations(null, 100, 0);
                                         <?php echo ucfirst($consultation['status']); ?>
                                     </span>
                                 </td>
-                                <td><?php echo date('M d, Y', strtotime($consultation['start_date'])); ?></td>
-                                <td><?php echo date('M d, Y', strtotime($consultation['end_date'])); ?></td>
+                                <td>
+                                    <?php echo !empty($consultation['start_date']) ? date('M d, Y', strtotime($consultation['start_date'])) : 'N/A'; ?>
+                                </td>
+                                <td>
+                                    <?php echo !empty($consultation['end_date']) ? date('M d, Y', strtotime($consultation['end_date'])) : 'N/A'; ?>
+                                </td>
                                 <td>
                                     <span style="background: var(--light-blue); color: white; padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.85rem; font-weight: 600;">
                                         <?php echo ($stats['total_posts'] ?? 0); ?>

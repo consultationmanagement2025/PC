@@ -23,13 +23,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             if (password_verify($password, $user['password'])) {
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['fullname'] = $user['fullname'];
-                $_SESSION['role'] = $user['role'] ?? 'citizen'; // Default to citizen if role is NULL
+                $rawRole = (string)($user['role'] ?? 'citizen');
+                $normalizedRole = strtolower(trim($rawRole));
+                if ($normalizedRole === 'administrator') {
+                    $normalizedRole = 'admin';
+                }
+                $_SESSION['role'] = $normalizedRole; // Default to citizen if role is NULL
                 session_regenerate_id(true);
                 
-                $userRole = $user['role'] ?? 'Citizen';
+                $userRole = $rawRole;
+                $isAdmin = ($_SESSION['role'] === 'admin');
                 
                 // Log ADMIN logins to audit log, CITIZEN logins to user activity log
-                if ($userRole === 'Administrator') {
+                if ($isAdmin) {
                     // Admin login - log to audit log
                     logAdminLogin($user['id'], $user['fullname']);
                 } else {
@@ -38,11 +44,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 }
                 
                 // Redirect based on user role
-                $redirectUrl = ($userRole === 'admin') ? "system-template-full.php" : "user-portal.php";
+                $redirectUrl = ($isAdmin) ? "system-template-full.php" : "user-portal.php";
 
                 echo "<script>
                     localStorage.setItem('isLoggedIn', 'true');
-                    localStorage.setItem('role', '" . addslashes($userRole) . "');
+                    localStorage.setItem('role', '" . addslashes($_SESSION['role']) . "');
                     window.location.href = '$redirectUrl';
                 </script>";
                 exit();
@@ -68,7 +74,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <title>Login - PCMP | City of Valenzuela</title>
     <link rel="icon" type="image/webp" href="images/logo.webp">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="../ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css">
     <style>
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
         @keyframes fade-in-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }

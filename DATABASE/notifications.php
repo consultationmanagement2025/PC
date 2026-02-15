@@ -35,14 +35,66 @@ function createNotification($user_id, $message, $type = 'info') {
 function getUserNotifications($user_id, $limit = 20) {
     global $conn;
     initializeNotificationsTable();
-    $stmt = $conn->prepare("SELECT id, message, type, is_read, created_at FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?");
+    $uid = (int)$user_id;
+    $stmt = $conn->prepare("SELECT id, user_id, message, type, is_read, created_at FROM notifications WHERE user_id IN (0, ?) ORDER BY created_at DESC LIMIT ?");
     if (!$stmt) return [];
-    $stmt->bind_param('ii', $user_id, $limit);
+    $stmt->bind_param('ii', $uid, $limit);
     $stmt->execute();
     $result = $stmt->get_result();
     $rows = $result->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
     return $rows;
+}
+
+function markNotificationRead($id, $is_read = 1) {
+    global $conn;
+    initializeNotificationsTable();
+    $nid = (int)$id;
+    $read = (int)($is_read ? 1 : 0);
+    $stmt = $conn->prepare("UPDATE notifications SET is_read = ? WHERE id = ?");
+    if (!$stmt) return false;
+    $stmt->bind_param('ii', $read, $nid);
+    $ok = $stmt->execute();
+    $stmt->close();
+    return $ok;
+}
+
+function markAllNotificationsRead($user_id) {
+    global $conn;
+    initializeNotificationsTable();
+    $uid = (int)$user_id;
+    $stmt = $conn->prepare("UPDATE notifications SET is_read = 1 WHERE user_id IN (0, ?)");
+    if (!$stmt) return false;
+    $stmt->bind_param('i', $uid);
+    $ok = $stmt->execute();
+    $stmt->close();
+    return $ok;
+}
+
+function deleteNotificationById($id) {
+    global $conn;
+    initializeNotificationsTable();
+    $nid = (int)$id;
+    $stmt = $conn->prepare("DELETE FROM notifications WHERE id = ?");
+    if (!$stmt) return false;
+    $stmt->bind_param('i', $nid);
+    $ok = $stmt->execute();
+    $stmt->close();
+    return $ok;
+}
+
+function getUnreadNotificationsCount($user_id) {
+    global $conn;
+    initializeNotificationsTable();
+    $uid = (int)$user_id;
+    $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM notifications WHERE user_id IN (0, ?) AND is_read = 0");
+    if (!$stmt) return 0;
+    $stmt->bind_param('i', $uid);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+    return isset($row['cnt']) ? (int)$row['cnt'] : 0;
 }
 
 ?>

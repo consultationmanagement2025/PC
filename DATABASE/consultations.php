@@ -39,20 +39,28 @@ function createConsultation($title, $description, $category, $start_date, $end_d
     global $conn;
     
     initializeConsultationsTable();
-    
-    $title = $conn->real_escape_string($title);
-    $description = $conn->real_escape_string($description);
-    $category = $conn->real_escape_string($category);
-    
-    $sql = "INSERT INTO consultations (title, description, category, start_date, end_date, admin_id, expected_posts, status)
-            VALUES ('$title', '$description', '$category', '$start_date', '$end_date', $admin_id, $expected_posts, 'active')";
-    
-    if ($conn->query($sql) === TRUE) {
-        return $conn->insert_id;
-    } else {
-        error_log("Error creating consultation: " . $conn->error);
+
+    $admin_id = (int)$admin_id;
+    $expected_posts = (int)$expected_posts;
+
+    $stmt = $conn->prepare("INSERT INTO consultations (title, description, category, start_date, end_date, admin_id, expected_posts, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'active')");
+    if (!$stmt) {
+        error_log("Error preparing createConsultation: " . $conn->error);
         return false;
     }
+
+    $stmt->bind_param('sssssii', $title, $description, $category, $start_date, $end_date, $admin_id, $expected_posts);
+
+    if ($stmt->execute()) {
+        $id = $conn->insert_id;
+        $stmt->close();
+        return $id;
+    }
+
+    error_log("Error creating consultation: " . $stmt->error);
+    $stmt->close();
+    return false;
 }
 
 // Get all consultations
@@ -127,21 +135,27 @@ function updateConsultation($id, $title, $description, $category, $status, $star
     global $conn;
     
     $id = (int)$id;
-    $title = $conn->real_escape_string($title);
-    $description = $conn->real_escape_string($description);
-    $category = $conn->real_escape_string($category);
-    $status = $conn->real_escape_string($status);
-    
-    $sql = "UPDATE consultations 
-            SET title = '$title', 
-                description = '$description', 
-                category = '$category', 
-                status = '$status',
-                start_date = '$start_date',
-                end_date = '$end_date'
-            WHERE id = $id";
-    
-    return $conn->query($sql) === TRUE;
+
+    $stmt = $conn->prepare("UPDATE consultations 
+            SET title = ?,
+                description = ?,
+                category = ?,
+                status = ?,
+                start_date = ?,
+                end_date = ?
+            WHERE id = ?");
+    if (!$stmt) {
+        error_log("Error preparing updateConsultation: " . $conn->error);
+        return false;
+    }
+
+    $stmt->bind_param('ssssssi', $title, $description, $category, $status, $start_date, $end_date, $id);
+    $ok = $stmt->execute();
+    if (!$ok) {
+        error_log("Error updating consultation: " . $stmt->error);
+    }
+    $stmt->close();
+    return $ok;
 }
 
 // Close consultation

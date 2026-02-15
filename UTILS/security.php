@@ -42,6 +42,10 @@ function outputCSRFField() {
  */
 function checkRateLimit($identifier, $max_attempts = 5, $window_seconds = 900) {
     global $conn;
+
+    if (function_exists('dbEnsureConnection')) {
+        dbEnsureConnection();
+    }
     
     // Initialize rate_limits table if needed
     initializeRateLimitsTable();
@@ -50,10 +54,22 @@ function checkRateLimit($identifier, $max_attempts = 5, $window_seconds = 900) {
     $window_start = $current_time - $window_seconds;
     
     // Clean old entries
-    $conn->query("DELETE FROM rate_limits WHERE window_expires < " . $current_time);
+    $ok = $conn->query("DELETE FROM rate_limits WHERE window_expires < " . $current_time);
+    if (!$ok && in_array((int)$conn->errno, [2006, 2013], true) && function_exists('dbEnsureConnection')) {
+        dbEnsureConnection();
+        $ok = $conn->query("DELETE FROM rate_limits WHERE window_expires < " . $current_time);
+    }
     
     // Check if currently locked out
     $stmt = $conn->prepare("SELECT locked_until FROM rate_limits WHERE identifier = ? AND locked_until > ? LIMIT 1");
+    if (!$stmt && in_array((int)$conn->errno, [2006, 2013], true) && function_exists('dbEnsureConnection')) {
+        dbEnsureConnection();
+        $stmt = $conn->prepare("SELECT locked_until FROM rate_limits WHERE identifier = ? AND locked_until > ? LIMIT 1");
+    }
+    if (!$stmt) {
+        error_log('Rate limit prepare failed: ' . $conn->error);
+        return ['limited' => false, 'remaining' => $max_attempts, 'locked_until' => null];
+    }
     $stmt->bind_param("si", $identifier, $current_time);
     $stmt->execute();
     $lock_result = $stmt->get_result();
@@ -70,6 +86,14 @@ function checkRateLimit($identifier, $max_attempts = 5, $window_seconds = 900) {
     
     // Count attempts in window
     $stmt = $conn->prepare("SELECT attempt_count FROM rate_limits WHERE identifier = ? AND window_start = ? LIMIT 1");
+    if (!$stmt && in_array((int)$conn->errno, [2006, 2013], true) && function_exists('dbEnsureConnection')) {
+        dbEnsureConnection();
+        $stmt = $conn->prepare("SELECT attempt_count FROM rate_limits WHERE identifier = ? AND window_start = ? LIMIT 1");
+    }
+    if (!$stmt) {
+        error_log('Rate limit prepare failed: ' . $conn->error);
+        return ['limited' => false, 'remaining' => $max_attempts, 'locked_until' => null];
+    }
     $stmt->bind_param("si", $identifier, $window_start);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -96,6 +120,10 @@ function checkRateLimit($identifier, $max_attempts = 5, $window_seconds = 900) {
  */
 function recordFailedAttempt($identifier, $lockout_duration = 900) {
     global $conn;
+
+    if (function_exists('dbEnsureConnection')) {
+        dbEnsureConnection();
+    }
     
     initializeRateLimitsTable();
     
@@ -357,7 +385,7 @@ function requireAdminRole() {
     }
     
     $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
-    if ($current_role !== 'admin') {
+    if ($current_role !== 'admin' && $current_role !== 'administrator') {
         http_response_code(403);
         echo json_encode(['success' => false, 'message' => 'Unauthorized access']);
         exit;

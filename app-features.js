@@ -13,10 +13,52 @@ const AppData = {
     currentUser: null
 };
 
+if (typeof window !== 'undefined' && window.__CURRENT_USER__ && !AppData.currentUser) {
+    const cu = window.__CURRENT_USER__;
+    AppData.currentUser = {
+        id: cu.id ?? null,
+        name: cu.name || 'User',
+        email: cu.email || '',
+        role: cu.role || '',
+        twoFactorEnabled: false,
+        twoFactorMethod: 'email'
+    };
+}
+
+function savePreferences() {
+    const enableNotifs = !!document.getElementById('pref-notifications')?.checked;
+    const emailSummaries = !!document.getElementById('pref-emails')?.checked;
+
+    const formData = new FormData();
+    formData.append('action', 'save_preferences');
+    formData.append('language', 'en');
+    formData.append('theme', 'light');
+    formData.append('email_notif', emailSummaries ? '1' : '');
+    formData.append('announcement_notif', enableNotifs ? '1' : '');
+    formData.append('feedback_notif', enableNotifs ? '1' : '');
+
+    fetch('API/update_profile.php', {
+        method: 'POST',
+        body: formData
+    })
+        .then(r => r.json())
+        .then(data => {
+            if (!data || !data.success) {
+                throw new Error((data && data.message) ? data.message : 'Failed to save preferences');
+            }
+            showNotification('Preferences saved successfully', 'success');
+        })
+        .catch(err => {
+            console.error(err);
+            showNotification(err && err.message ? String(err.message) : 'Failed to save preferences', 'error');
+        });
+}
+
 // Initialize App
 document.addEventListener('DOMContentLoaded', function() {
     initializeData();
     showSection('public-consultation');
+    updateHeaderUserDisplays();
     
     // Delay notification loading slightly to ensure DOM is ready
     setTimeout(function() {
@@ -45,6 +87,21 @@ document.addEventListener('DOMContentLoaded', function() {
     // Setup drag and drop
     setupDragAndDrop();
 });
+
+function isFeedbackOverdue(feedback, days) {
+    const st = String(feedback && feedback.status ? feedback.status : '').toLowerCase();
+    if (st !== 'new') return false;
+
+    const rawDate = feedback && feedback.date ? feedback.date : null;
+    if (!rawDate) return false;
+
+    const created = new Date(rawDate);
+    if (Number.isNaN(created.getTime())) return false;
+
+    const ms = Date.now() - created.getTime();
+    const threshold = (Number(days) || 0) * 24 * 60 * 60 * 1000;
+    return ms >= threshold;
+}
 
 // Initialize Sample Data
 function initializeData() {
@@ -84,6 +141,80 @@ function initializeData() {
     AppData.consultations = [];
     AppData.feedback = [];
     AppData.loginHistory = [];
+}
+
+function mapDbDocumentToUi(row) {
+    return {
+        id: Number(row.id),
+        reference: String(row.reference || row.ref_no || row.reference_number || ''),
+        title: String(row.title || ''),
+        type: String(row.type || '').toLowerCase(),
+        status: String(row.status || 'draft').toLowerCase(),
+        date: row.document_date || row.date || row.created_at || '',
+        description: String(row.description || ''),
+        uploadedBy: String(row.uploaded_by || row.uploadedBy || row.uploader || ''),
+        uploadedAt: row.created_at || row.uploaded_at || '',
+        fileSize: String(row.file_size || row.fileSize || ''),
+        views: Number(row.views || 0),
+        downloads: Number(row.downloads || 0),
+        tags: Array.isArray(row.tags) ? row.tags : (row.tags ? String(row.tags).split(',').map(s => s.trim()).filter(Boolean) : [])
+    };
+}
+
+async function loadDocumentsFromApi() {
+    const res = await fetch('API/documents_api.php?action=list&limit=200&offset=0', {
+        headers: { 'Accept': 'application/json' }
+    });
+
+    let data = null;
+    try { data = await res.json(); } catch (_) {}
+
+    if (!res.ok) {
+        const msg = (data && data.message)
+            ? data.message
+            : (res.status === 403 ? 'Unauthorized (admin session required)' : `HTTP ${res.status}`);
+        throw new Error(msg);
+    }
+
+    if (!data || !data.success || !Array.isArray(data.data)) {
+        throw new Error((data && data.message) ? data.message : 'Failed to load documents');
+    }
+
+    AppData.documents = data.data.map(mapDbDocumentToUi);
+}
+
+function mapDbUserToUi(row) {
+    return {
+        id: Number(row.id),
+        name: String(row.fullname || row.name || row.username || ''),
+        email: String(row.email || ''),
+        role: String(row.role || 'Viewer'),
+        department: String(row.department || ''),
+        status: String(row.status || 'active').toLowerCase(),
+        lastLogin: row.last_login || row.lastLogin || ''
+    };
+}
+
+async function loadUsersFromApi() {
+    const res = await fetch('API/users_api.php?action=list', {
+        headers: { 'Accept': 'application/json' }
+    });
+
+    let data = null;
+    try { data = await res.json(); } catch (_) {}
+
+    if (!res.ok) {
+        const msg = (data && data.message)
+            ? data.message
+            : (res.status === 403 ? 'Unauthorized (admin session required)' : `HTTP ${res.status}`);
+        throw new Error(msg);
+    }
+
+    if (!data || !data.success || !Array.isArray(data.data)) {
+        throw new Error((data && data.message) ? data.message : 'Failed to load users');
+    }
+
+    AppData.users = data.data.map(mapDbUserToUi);
 }
 
 // Section Management
@@ -190,6 +321,18 @@ function showSection(sectionName) {
             </div>
         `;
     }
+}
+
+function updateHeaderUserDisplays() {
+    const nameEl = document.getElementById('profile-name-display');
+    const roleEl = document.getElementById('profile-role-display');
+    const emailEl = document.getElementById('profile-email-display');
+    const deptEl = document.getElementById('profile-dept-display');
+
+    if (nameEl) nameEl.textContent = AppData.currentUser?.name || nameEl.textContent;
+    if (roleEl) roleEl.textContent = AppData.currentUser?.role || roleEl.textContent;
+    if (emailEl) emailEl.textContent = AppData.currentUser?.email || emailEl.textContent;
+    if (deptEl) deptEl.textContent = AppData.currentUser?.department || deptEl.textContent;
 }
 
 // ==============================
@@ -466,7 +609,20 @@ function renderDocuments() {
     `;
     
     document.getElementById('content-area').innerHTML = html;
-    filterDocuments();
+
+    const tbody = document.getElementById('documentsList');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">Loading documents...</td></tr>';
+    }
+
+    loadDocumentsFromApi()
+        .then(() => filterDocuments())
+        .catch(err => {
+            const msg = String(err && err.message ? err.message : err);
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-red-600">Failed to load documents.<div class="text-xs text-gray-500 mt-2">${msg}</div></td></tr>`;
+            }
+        });
 }
 
 function filterDocuments() {
@@ -916,7 +1072,7 @@ function renderDocumentsByStatusChart() {
 // ==============================
 // USERS MODULE
 // ==============================
-function renderUsers() {
+function renderUsers(skipLoad = false) {
     const pageTitle = document.querySelector('.page-title');
     const breadcrumbCurrent = document.querySelector('.breadcrumb-current');
     
@@ -1098,6 +1254,24 @@ function renderUsers() {
     `;
     
     document.getElementById('content-area').innerHTML = html;
+
+    const tbody = document.getElementById('users-table-body');
+    if (!skipLoad) {
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">Loading users...</td></tr>';
+        }
+
+        loadUsersFromApi()
+            .then(() => renderUsers(true))
+            .catch(err => {
+                const msg = String(err && err.message ? err.message : err);
+                if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-red-600">Failed to load users.<div class="text-xs text-gray-500 mt-2">${msg}</div></td></tr>`;
+                }
+            });
+        return;
+    }
+
     renderUsersTable();
 }
 
@@ -1539,12 +1713,17 @@ function saveAuditLogsToStorage() {
         console.warn('Failed to save audit logs to storage:', e);
     }
 }
-
-// ==============================
-// PROFILE MODULE
-// ==============================
 function renderProfile() {
-    const currentUser = AppData.currentUser;
+    const currentUser = AppData.currentUser || {
+        id: null,
+        name: 'User',
+        email: '',
+        role: '',
+        profilePicture: '',
+        twoFactorEnabled: false,
+        twoFactorMethod: 'email'
+    };
+    if (!AppData.currentUser) AppData.currentUser = currentUser;
     const stats = {
         documents: AppData.documents.filter(d => d.uploadedBy === currentUser.name).length,
         activities: 117,
@@ -1774,34 +1953,39 @@ function handleProfilePictureUpload(event) {
         return;
     }
     
-    // Read and display the image
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        AppData.currentUser.profilePicture = e.target.result;
-        
-        // Update profile image
-        const profileImage = document.getElementById('profileImage');
-        if (profileImage) {
-            if (profileImage.tagName === 'IMG') {
-                profileImage.src = e.target.result;
-            } else {
-                // Replace div with img
-                const img = document.createElement('img');
-                img.id = 'profileImage';
-                img.src = e.target.result;
-                img.alt = 'Profile';
-                img.className = 'w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover';
-                profileImage.parentNode.replaceChild(img, profileImage);
+    const fd = new FormData();
+    fd.append('action', 'upload_photo');
+    fd.append('photo', file);
+
+    fetch('API/update_profile.php', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            if (!data || !data.success) {
+                throw new Error((data && data.message) ? data.message : 'Failed to upload photo');
             }
-        }
-        
-        // Update navbar profile picture
-        updateNavbarProfilePicture(e.target.result);
-        
-        showNotification('Profile picture updated successfully!', 'success');
-        addAuditLog('update', 'Updated profile picture');
-    };
-    reader.readAsDataURL(file);
+
+            const photoPath = data.photo_path ? String(data.photo_path) : '';
+            if (photoPath) {
+                AppData.currentUser.profilePicture = photoPath;
+            }
+
+            const profileImage = document.getElementById('profileImage');
+            if (profileImage && photoPath) {
+                if (profileImage.tagName === 'IMG') {
+                    profileImage.src = photoPath;
+                } else {
+                    profileImage.outerHTML = `<img id="profileImage" src="${photoPath}" alt="Profile" class="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover">`;
+                }
+            }
+
+            if (photoPath) updateNavbarProfilePicture(photoPath);
+            showNotification('Profile picture updated successfully!', 'success');
+            addAuditLog('update', 'Updated profile picture');
+        })
+        .catch(err => {
+            console.error(err);
+            showNotification(err && err.message ? String(err.message) : 'Failed to upload photo', 'error');
+        });
 }
 
 // Quick Documents mini-menu (opened from Quick Links)
@@ -1913,14 +2097,41 @@ function toggleEditMode() {
 
 // Save profile changes
 function saveProfile() {
-    AppData.currentUser.name = document.getElementById('editFullName').value;
-    AppData.currentUser.email = document.getElementById('editEmail').value;
-    
-    showNotification('Profile updated successfully!', 'success');
-    addAuditLog('update', 'Updated profile information');
-    
-    toggleEditMode();
-    renderProfile();
+    const name = document.getElementById('editFullName')?.value || AppData.currentUser.name;
+    const email = document.getElementById('editEmail')?.value || AppData.currentUser.email;
+
+    if (!name || !email) {
+        showNotification('Name and email are required', 'warning');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('action', 'update_profile');
+    formData.append('fullname', name);
+    formData.append('email', email);
+    formData.append('username', AppData.currentUser.name || '');
+
+    fetch('API/update_profile.php', {
+        method: 'POST',
+        body: formData
+    })
+        .then(r => r.json())
+        .then(data => {
+            if (!data || !data.success) {
+                throw new Error((data && data.message) ? data.message : 'Failed to update profile');
+            }
+            AppData.currentUser.name = name;
+            AppData.currentUser.email = email;
+            updateHeaderUserDisplays();
+            showNotification('Profile updated successfully!', 'success');
+            addAuditLog('update', 'Updated profile information');
+            toggleEditMode();
+            renderProfile();
+        })
+        .catch(err => {
+            console.error(err);
+            showNotification(err && err.message ? String(err.message) : 'Failed to update profile', 'error');
+        });
 }
 
 // Open change password modal
@@ -1997,9 +2208,29 @@ function changePassword() {
         return;
     }
     
-    closeChangePasswordModal();
-    showNotification('Password changed successfully!', 'success');
-    addAuditLog('update', 'Changed account password');
+    const formData = new FormData();
+    formData.append('action', 'change_password');
+    formData.append('current_password', current);
+    formData.append('new_password', newPass);
+    formData.append('confirm_password', confirm);
+
+    fetch('API/update_profile.php', {
+        method: 'POST',
+        body: formData
+    })
+        .then(r => r.json())
+        .then(data => {
+            if (!data || !data.success) {
+                throw new Error((data && data.message) ? data.message : 'Failed to change password');
+            }
+            closeChangePasswordModal();
+            showNotification('Password changed successfully!', 'success');
+            addAuditLog('update', 'Changed account password');
+        })
+        .catch(err => {
+            console.error(err);
+            showNotification(err && err.message ? String(err.message) : 'Failed to change password', 'error');
+        });
 }
 
 // Two-Factor Authentication Modal
@@ -2398,79 +2629,124 @@ function closeModal(modalId) {
     }
 }
 
-function loadNotifications() {
+function formatNotifTime(isoOrSqlDate) {
+    if (!isoOrSqlDate) return '';
+    const d = new Date(isoOrSqlDate);
+    if (Number.isNaN(d.getTime())) return String(isoOrSqlDate);
+    return d.toLocaleString();
+}
+
+function mapDbNotificationToUi(row) {
+    const isRead = Number(row.is_read) === 1;
+    const type = String(row.type || 'info').toLowerCase();
+    const title = type === 'consultation'
+        ? 'New consultation received'
+        : (type === 'feedback' ? 'New feedback received' : 'Notification');
+
+    return {
+        id: Number(row.id),
+        title,
+        message: String(row.message || ''),
+        category: type,
+        type,
+        priority: (type === 'consultation' || type === 'feedback') ? 'high' : 'normal',
+        read: isRead,
+        time: formatNotifTime(row.created_at || '')
+    };
+}
+
+async function loadNotifications() {
     const notifsList = document.getElementById('notifications-list');
     if (!notifsList) {
         console.warn('notifications-list element not found');
         return;
     }
 
-    // Update badge
-    const unreadCount = AppData.notifications.filter(n => !n.read).length;
-    const badge = document.getElementById('notification-badge');
-    
-    if (badge) {
-        if (unreadCount > 0) {
-            badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
+    try {
+        const res = await fetch('API/notifications_api.php?action=list&limit=30', {
+            headers: { 'Accept': 'application/json' }
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !data.success) {
+            const msg = (data && data.message) ? data.message : (res.ok ? 'Failed to load notifications' : `HTTP ${res.status}`);
+            throw new Error(msg);
         }
-    }
 
-    // Priority icons for dropdown
-    const priorityIcons = {
-        critical: '🔴',
-        high: '🟠',
-        normal: '🔵',
-        low: '⚪'
-    };
+        const items = Array.isArray(data.data && data.data.items) ? data.data.items : [];
+        AppData.notifications = items.map(mapDbNotificationToUi);
 
-    // Render notifications sorted by priority and unread status
-    const sortedNotifs = [...AppData.notifications].sort((a, b) => {
-        const priorityOrder = { critical: 0, high: 1, normal: 2, low: 3 };
-        const aPriority = priorityOrder[a.priority] || 2;
-        const bPriority = priorityOrder[b.priority] || 2;
-        if (aPriority !== bPriority) return aPriority - bPriority;
-        return a.read === b.read ? 0 : a.read ? 1 : -1;
-    });
+        const unreadCount = typeof data.data.unread === 'number'
+            ? data.data.unread
+            : AppData.notifications.filter(n => !n.read).length;
 
-    notifsList.innerHTML = sortedNotifs.length === 0 ?
-        '<div class="p-6 text-center text-gray-500"><p>🎉 No notifications</p><p class="text-xs mt-2">You\'re all caught up!</p></div>' :
-        sortedNotifs.map(notif => `
-        <div data-id="${notif.id}" class="p-4 border-b border-gray-100 transition hover:bg-gray-50 ${!notif.read ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''}" style="cursor: pointer;">
-            <div class="flex items-start gap-3">
-                <div class="text-2xl flex-shrink-0" title="Priority: ${notif.priority}">
-                    ${priorityIcons[notif.priority] || '🔵'}
-                </div>
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-start justify-between gap-2 mb-1">
-                        <h4 class="text-sm font-semibold text-gray-900">${notif.title}</h4>
-                        <span class="text-xs px-2 py-0.5 bg-gray-200 text-gray-700 rounded-full flex-shrink-0">${notif.category || 'general'}</span>
+        const badge = document.getElementById('notif-badge') || document.getElementById('notification-badge');
+        if (badge) {
+            if (unreadCount > 0) {
+                badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        // Priority icons for dropdown
+        const priorityIcons = {
+            critical: '🔴',
+            high: '🟠',
+            normal: '🔵',
+            low: '⚪'
+        };
+
+        // Render notifications sorted by priority and unread status
+        const sortedNotifs = [...AppData.notifications].sort((a, b) => {
+            const priorityOrder = { critical: 0, high: 1, normal: 2, low: 3 };
+            const aPriority = priorityOrder[a.priority] || 2;
+            const bPriority = priorityOrder[b.priority] || 2;
+            if (aPriority !== bPriority) return aPriority - bPriority;
+            return a.read === b.read ? 0 : a.read ? 1 : -1;
+        });
+
+        notifsList.innerHTML = sortedNotifs.length === 0 ?
+            '<div class="p-6 text-center text-gray-500"><p>🎉 No notifications</p><p class="text-xs mt-2">You\'re all caught up!</p></div>' :
+            sortedNotifs.map(notif => `
+            <div data-id="${notif.id}" class="p-4 border-b border-gray-100 transition hover:bg-gray-50 ${!notif.read ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''}" style="cursor: pointer;">
+                <div class="flex items-start gap-3">
+                    <div class="text-2xl flex-shrink-0" title="Priority: ${notif.priority}">
+                        ${priorityIcons[notif.priority] || '🔵'}
                     </div>
-                    <p class="text-xs text-gray-700 line-clamp-2 mb-2">${notif.message}</p>
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="text-xs text-gray-500">🕐 ${notif.time}</span>
-                        <div class="flex gap-1">
-                            <button onclick="event.stopPropagation(); toggleNotificationRead(${notif.id}); return false;" class="text-xs px-2 py-0.5 text-gray-600 hover:bg-white rounded transition">${notif.read ? 'Unread' : 'Read'}</button>
-                            <button onclick="event.stopPropagation(); deleteNotification(${notif.id}); return false;" class="text-xs px-2 py-0.5 text-red-600 hover:bg-red-50 rounded transition">✕</button>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-start justify-between gap-2 mb-1">
+                            <h4 class="text-sm font-semibold text-gray-900">${escapeHtml(notif.title)}</h4>
+                            <span class="text-xs px-2 py-0.5 bg-gray-200 text-gray-700 rounded-full flex-shrink-0">${escapeHtml(notif.category || 'general')}</span>
+                        </div>
+                        <p class="text-xs text-gray-700 line-clamp-2 mb-2">${escapeHtml(notif.message)}</p>
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-xs text-gray-500">🕐 ${escapeHtml(notif.time)}</span>
+                            <div class="flex gap-1">
+                                <button onclick="event.stopPropagation(); toggleNotificationRead(${notif.id}, ${notif.read ? 0 : 1}); return false;" class="text-xs px-2 py-0.5 text-gray-600 hover:bg-white rounded transition">${notif.read ? 'Unread' : 'Read'}</button>
+                                <button onclick="event.stopPropagation(); deleteNotification(${notif.id}); return false;" class="text-xs px-2 py-0.5 text-red-600 hover:bg-red-50 rounded transition">✕</button>
+                            </div>
                         </div>
                     </div>
+                    <i class="bi bi-chevron-right text-gray-400 flex-shrink-0" style="cursor: pointer;"></i>
                 </div>
-                <i class="bi bi-chevron-right text-gray-400 flex-shrink-0" style="cursor: pointer;"></i>
             </div>
-        </div>
-    `).join('');
-    
-    // Attach click handlers to notification items
-    notifsList.querySelectorAll('[data-id]').forEach(item => {
-        item.addEventListener('click', function(e) {
-            if (!e.target.closest('button')) {
-                const id = parseInt(this.getAttribute('data-id'));
-                viewNotification(id);
-            }
+        `).join('');
+
+        notifsList.querySelectorAll('[data-id]').forEach(item => {
+            item.addEventListener('click', function(e) {
+                if (!e.target.closest('button')) {
+                    const id = parseInt(this.getAttribute('data-id'));
+                    viewNotification(id);
+                }
+            });
         });
-    });
+    } catch (e) {
+        const details = e && e.message ? String(e.message) : 'Unknown error';
+        notifsList.innerHTML = `<div class="p-6 text-center text-red-600 text-sm">Failed to load notifications.<div class="text-xs text-gray-500 mt-2">${escapeHtml(details)}</div></div>`;
+        const badge = document.getElementById('notif-badge') || document.getElementById('notification-badge');
+        if (badge) badge.classList.add('hidden');
+    }
 }
 
 function toggleNotifications() {
@@ -2497,13 +2773,10 @@ function viewNotification(id) {
         return;
     }
 
-    // Mark as read
-    notif.read = true;
-    saveNotificationsToStorage();
-    loadNotifications();
-
-    // Open a detail modal for the notification
-    openNotificationModal(id);
+    // Mark as read (best-effort)
+    toggleNotificationRead(id, 1).finally(() => {
+        openNotificationModal(id);
+    });
 }
 
 function openNotificationModal(id) {
@@ -2604,9 +2877,11 @@ function closeNotificationModal() {
 
 function deleteNotification(id) {
     if (!confirm('Delete this notification?')) return;
-    AppData.notifications = AppData.notifications.filter(n => n.id !== id);
-    saveNotificationsToStorage();
-    loadNotifications();
+    fetch('API/notifications_api.php?action=delete', {
+        method: 'POST',
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+    }).then(() => loadNotifications()).catch(() => loadNotifications());
     // If on notifications page, re-render it
     const current = document.getElementById('breadcrumb-current');
     if (current && current.textContent && current.textContent.toLowerCase().includes('notifications')) {
@@ -2614,35 +2889,24 @@ function deleteNotification(id) {
     }
 }
 
-function toggleNotificationRead(id) {
-    const notif = AppData.notifications.find(n => n.id === id);
-    if (!notif) return;
-    notif.read = !notif.read;
-    saveNotificationsToStorage();
-    loadNotifications();
+function toggleNotificationRead(id, isRead) {
+    return fetch('API/notifications_api.php?action=mark_read', {
+        method: 'POST',
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, is_read: isRead ? 1 : 0 })
+    }).then(() => loadNotifications()).catch(() => loadNotifications());
 }
 
 function markAllNotificationsRead() {
-    AppData.notifications.forEach(n => n.read = true);
-    saveNotificationsToStorage();
-    loadNotifications();
+    fetch('API/notifications_api.php?action=mark_all_read', {
+        method: 'POST',
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    }).then(() => loadNotifications()).catch(() => loadNotifications());
 }
 
 function clearAllNotifications() {
-    if (!confirm('Clear all notifications?')) return;
-    AppData.notifications = [];
-    saveNotificationsToStorage();
-    loadNotifications();
-    const dd = document.getElementById('notifications-dropdown');
-    if (dd) dd.classList.add('hidden');
-}
-
-function saveNotificationsToStorage() {
-    try {
-        localStorage.setItem('llrm_notifications', JSON.stringify(AppData.notifications));
-    } catch (e) {
-        console.warn('Failed to save notifications to storage', e);
-    }
+    showNotification('Clearing all notifications is not enabled for DB-backed notifications.', 'info');
 }
 
 function saveAnnouncementsToStorage() {
@@ -2788,9 +3052,9 @@ function renderPublicConsultation() {
     if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'Public Consultation';
 
     const totalConsults = AppData.consultations.length;
-    const openConsults = AppData.consultations.filter(c => c.status.toLowerCase() === 'open').length;
-    const scheduledConsults = AppData.consultations.filter(c => c.status.toLowerCase() === 'scheduled').length;
-    const closedConsults = AppData.consultations.filter(c => c.status.toLowerCase() === 'closed').length;
+    const draftConsults = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'draft').length;
+    const activeConsults = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'active').length;
+    const closedConsults = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'closed').length;
     const totalFeedback = AppData.feedback.length;
     const avgFeedback = totalConsults > 0 ? Math.round(totalFeedback / totalConsults) : 0;
     const totalDocuments = AppData.consultations.reduce((sum, c) => sum + (c.documentsAttached || 0), 0);
@@ -2823,14 +3087,14 @@ function renderPublicConsultation() {
                     <div class="text-xs text-gray-400 mt-2">All time</div>
                 </div>
                 <div class="bg-white p-5 rounded-lg shadow hover:shadow-md transition border-l-4 border-green-600">
-                    <div class="text-gray-500 text-xs font-semibold uppercase mb-1">Open</div>
-                    <div class="text-3xl font-bold text-green-600">${openConsults}</div>
+                    <div class="text-gray-500 text-xs font-semibold uppercase mb-1">Active</div>
+                    <div class="text-3xl font-bold text-green-600">${activeConsults}</div>
                     <div class="text-xs text-gray-400 mt-2">In progress</div>
                 </div>
                 <div class="bg-white p-5 rounded-lg shadow hover:shadow-md transition border-l-4 border-blue-600">
-                    <div class="text-gray-500 text-xs font-semibold uppercase mb-1">Scheduled</div>
-                    <div class="text-3xl font-bold text-blue-600">${scheduledConsults}</div>
-                    <div class="text-xs text-gray-400 mt-2">Upcoming</div>
+                    <div class="text-gray-500 text-xs font-semibold uppercase mb-1">Draft</div>
+                    <div class="text-3xl font-bold text-blue-600">${draftConsults}</div>
+                    <div class="text-xs text-gray-400 mt-2">User submissions</div>
                 </div>
                 <div class="bg-white p-5 rounded-lg shadow hover:shadow-md transition border-l-4 border-gray-600">
                     <div class="text-gray-500 text-xs font-semibold uppercase mb-1">Closed</div>
@@ -2863,9 +3127,9 @@ function renderPublicConsultation() {
                         <select id="pc-status-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
                             onchange="filterPublicConsultations()">
                             <option value="">All Status</option>
-                            <option value="Open">Open</option>
-                            <option value="Scheduled">Scheduled</option>
-                            <option value="Closed">Closed</option>
+                            <option value="active">Active</option>
+                            <option value="draft">Draft</option>
+                            <option value="closed">Closed</option>
                         </select>
                     </div>
                     <div>
@@ -2873,9 +3137,8 @@ function renderPublicConsultation() {
                         <select id="pc-type-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
                             onchange="filterPublicConsultations()">
                             <option value="">All Types</option>
-                            <option value="In-person">In-person</option>
-                            <option value="Online">Online</option>
-                            <option value="Survey">Survey</option>
+                            <option value="admin">Admin Created</option>
+                            <option value="user">User Submission</option>
                         </select>
                     </div>
                     <div>
@@ -2899,6 +3162,15 @@ function renderPublicConsultation() {
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="consultations-grid">
             </div>
 
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div class="text-sm text-gray-600" id="pc-grid-summary"></div>
+                <div class="flex flex-wrap gap-2 justify-end">
+                    <button id="pc-grid-prev" onclick="pcGridPrevPage()" class="btn-outline px-3 py-2 text-sm">Prev</button>
+                    <button id="pc-grid-next" onclick="pcGridNextPage()" class="btn-outline px-3 py-2 text-sm">Next</button>
+                    <button id="pc-grid-toggle" onclick="pcGridToggleShowAll()" class="btn-primary px-3 py-2 text-sm">Show All</button>
+                </div>
+            </div>
+
             <!-- Recent Activity Section -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Recent Feedback -->
@@ -2911,11 +3183,11 @@ function renderPublicConsultation() {
                     </div>
                 </div>
 
-                <!-- Upcoming Consultations -->
+                <!-- Draft Submissions -->
                 <div class="bg-white rounded-lg shadow p-6">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-bold text-gray-900">Upcoming Events</h3>
-                        <span class="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full">${scheduledConsults} Scheduled</span>
+                        <h3 class="text-lg font-bold text-gray-900">Draft Submissions (Needs Review)</h3>
+                        <span class="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full">${draftConsults} Draft</span>
                     </div>
                     <div class="space-y-3 max-h-80 overflow-y-auto" id="upcoming-list">
                     </div>
@@ -2931,13 +3203,6 @@ function renderPublicConsultation() {
                         <canvas id="pcStatusChart"></canvas>
                     </div>
                 </div>
-
-                <!-- Engagement Metrics -->
-                <div class="bg-white rounded-lg shadow p-6">
-                    <h3 class="text-lg font-bold text-gray-900 mb-4">Top Consultations by Feedback</h3>
-                    <div class="space-y-3" id="top-consultations">
-                    </div>
-                </div>
             </div>
         </div>
     `;
@@ -2948,16 +3213,69 @@ function renderPublicConsultation() {
     renderConsultationsGrid();
     renderRecentFeedbackList();
     renderUpcomingList();
-    renderTopConsultations();
     
     // Render chart
     setTimeout(() => renderPCStatusChart(), 120);
+
+    // Ensure Recent Feedback reflects real DB data
+    try {
+        const list = document.getElementById('recent-feedback-list');
+        if (list) {
+            list.innerHTML = '<p class="text-gray-500 text-sm">Loading feedback...</p>';
+        }
+        loadFeedbackFromApi().then(() => {
+            renderRecentFeedbackList();
+        });
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+function getPCGridState() {
+    if (!window.__pcGridState) {
+        window.__pcGridState = {
+            page: 1,
+            pageSize: 6,
+            showAll: false
+        };
+    }
+    return window.__pcGridState;
+}
+
+function pcGridPrevPage() {
+    const st = getPCGridState();
+    if (st.page > 1) st.page -= 1;
+    renderConsultationsGrid();
+}
+
+function pcGridNextPage() {
+    const st = getPCGridState();
+    st.page += 1;
+    renderConsultationsGrid();
+}
+
+function pcGridToggleShowAll() {
+    const st = getPCGridState();
+    st.showAll = !st.showAll;
+    st.page = 1;
+    renderConsultationsGrid();
 }
 
 // ==============================
 // SETTINGS
 // ==============================
 function renderSettings() {
+    if (!AppData.currentUser) {
+        AppData.currentUser = {
+            id: null,
+            name: 'User',
+            email: '',
+            role: '',
+            profilePicture: '',
+            twoFactorEnabled: false,
+            twoFactorMethod: 'email'
+        };
+    }
     const html = `
         <div class="mb-6">
             <h1 class="text-2xl font-bold text-gray-800">Settings</h1>
@@ -2994,6 +3312,9 @@ function renderSettings() {
                         <span class="text-sm text-gray-700">Receive email summaries</span>
                     </label>
                 </div>
+                <div class="mt-4">
+                    <button onclick="savePreferences()" class="btn-primary">Save Preferences</button>
+                </div>
             </div>
         </div>
     `;
@@ -3026,6 +3347,7 @@ function saveSettings() {
         if (data.success) {
             AppData.currentUser.name = name;
             AppData.currentUser.email = email;
+            updateHeaderUserDisplays();
             showNotification('Settings saved successfully', 'success');
         } else {
             showNotification(data.message || 'Failed to save settings', 'error');
@@ -3252,18 +3574,51 @@ function loadUserPostsForModeration() {
 
 function renderConsultationsGrid() {
     const grid = document.getElementById('consultations-grid');
-    const consultations = getFilteredPublicConsultations();
+    const all = getFilteredPublicConsultations();
+    const st = getPCGridState();
+    const total = all.length;
+
+    let consultations = all;
+    if (!st.showAll) {
+        const start = (st.page - 1) * st.pageSize;
+        consultations = all.slice(start, start + st.pageSize);
+    }
 
     if (consultations.length === 0) {
         grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">No consultations found</div>';
+        const summary = document.getElementById('pc-grid-summary');
+        if (summary) summary.textContent = '';
         return;
     }
 
+    const startIndex = st.showAll ? 1 : ((st.page - 1) * st.pageSize + 1);
+    const endIndex = st.showAll ? total : Math.min((st.page - 1) * st.pageSize + consultations.length, total);
+
+    const summary = document.getElementById('pc-grid-summary');
+    if (summary) {
+        summary.textContent = `Showing ${startIndex}-${endIndex} of ${total} consultations`;
+    }
+
+    const prevBtn = document.getElementById('pc-grid-prev');
+    const nextBtn = document.getElementById('pc-grid-next');
+    const toggleBtn = document.getElementById('pc-grid-toggle');
+
+    const totalPages = st.pageSize > 0 ? Math.ceil(total / st.pageSize) : 1;
+    if (prevBtn) prevBtn.disabled = st.showAll || st.page <= 1;
+    if (nextBtn) nextBtn.disabled = st.showAll || st.page >= totalPages;
+    if (toggleBtn) toggleBtn.textContent = st.showAll ? 'Show Less' : 'Show All';
+
     grid.innerHTML = consultations.map(c => {
-        const statusColor = c.status === 'Open' ? 'bg-green-100 text-green-800' : 
-                           c.status === 'Scheduled' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800';
-        const typeIcon = c.type === 'In-person' ? 'bi-person' : 
-                        c.type === 'Online' ? 'bi-globe' : 'bi-clipboard';
+        const stRaw = String(c.status || '').toLowerCase();
+        const statusLabel = stRaw === 'active' ? 'Active' : (stRaw === 'draft' ? 'Draft' : (stRaw === 'closed' ? 'Closed' : stRaw));
+        const statusColor = stRaw === 'active' ? 'bg-green-100 text-green-800' :
+                           stRaw === 'draft' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800';
+
+        const srcType = String(c.type || '').toLowerCase();
+        const typeIcon = srcType === 'user' ? 'bi-person-badge' : 'bi-building';
+        const typeLabel = srcType === 'user' ? 'User Submission' : 'Admin Created';
+
+        const dateText = c.date ? new Date(c.date).toLocaleDateString() : '-';
 
         return `
             <div class="bg-white rounded-lg shadow hover:shadow-lg transition border border-gray-200 overflow-hidden">
@@ -3272,14 +3627,14 @@ function renderConsultationsGrid() {
                     <div class="flex justify-between items-start mb-2">
                         <h4 class="font-bold text-gray-900 flex-1">${c.title}</h4>
                         <span class="px-2 py-1 rounded text-xs font-semibold ${statusColor}">
-                            ${c.status}
+                            ${statusLabel}
                         </span>
                     </div>
                     <div class="flex items-center gap-2 text-sm text-gray-600 mb-3">
                         <i class="bi ${typeIcon}"></i>
-                        <span>${c.type}</span>
+                        <span>${typeLabel}</span>
                         <span>•</span>
-                        <span>${new Date(c.date).toLocaleDateString()}</span>
+                        <span>${dateText}</span>
                     </div>
                     <div class="grid grid-cols-2 gap-2 mb-4">
                         <div class="bg-gray-50 p-2 rounded">
@@ -3291,13 +3646,26 @@ function renderConsultationsGrid() {
                             <div class="text-lg font-bold text-blue-600">${c.documentsAttached || 0}</div>
                         </div>
                     </div>
-                    <button onclick="viewConsultationDetails(${c.id})" class="w-full text-center text-red-600 hover:text-red-700 font-semibold text-sm">
+                    <button onclick="openConsultationDetailsFromDashboard(${c.id})" class="w-full text-center text-red-600 hover:text-red-700 font-semibold text-sm">
                         View Details →
                     </button>
                 </div>
             </div>
         `;
     }).join('');
+}
+
+function openConsultationDetailsFromDashboard(id) {
+    // The Public Consultation dashboard doesn't include the details modal markup.
+    // Route to Consultation Management, then open the details modal there.
+    showSection('consultation-management');
+    setTimeout(() => {
+        try {
+            viewConsultationDetails(id);
+        } catch (e) {
+            console.error(e);
+        }
+    }, 200);
 }
 
 function renderRecentFeedbackList() {
@@ -3324,7 +3692,7 @@ function renderRecentFeedbackList() {
 
 function renderUpcomingList() {
     const list = document.getElementById('upcoming-list');
-    const upcoming = AppData.consultations.filter(c => c.status.toLowerCase() === 'scheduled').slice(0, 5);
+    const upcoming = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'draft').slice(0, 5);
 
     if (upcoming.length === 0) {
         list.innerHTML = '<p class="text-gray-500 text-sm">No upcoming consultations</p>';
@@ -3381,15 +3749,15 @@ function getFilteredPublicConsultations() {
     const sortBy = document.getElementById('pc-sort')?.value || 'date-desc';
 
     if (searchTerm) {
-        filtered = filtered.filter(c => c.title.toLowerCase().includes(searchTerm));
+        filtered = filtered.filter(c => (c.title || '').toLowerCase().includes(searchTerm));
     }
     
     if (statusFilter) {
-        filtered = filtered.filter(c => c.status === statusFilter);
+        filtered = filtered.filter(c => String(c.status || '').toLowerCase() === String(statusFilter).toLowerCase());
     }
     
     if (typeFilter) {
-        filtered = filtered.filter(c => c.type === typeFilter);
+        filtered = filtered.filter(c => String(c.type || '').toLowerCase() === String(typeFilter).toLowerCase());
     }
 
     // Sort
@@ -3424,16 +3792,49 @@ function renderPCStatusChart() {
     const ctx = document.getElementById('pcStatusChart');
     if (!ctx) return;
 
-    const open = AppData.consultations.filter(c => c.status === 'Open').length;
-    const scheduled = AppData.consultations.filter(c => c.status === 'Scheduled').length;
-    const closed = AppData.consultations.filter(c => c.status === 'Closed').length;
+    const active = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'active').length;
+    const draft = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'draft').length;
+    const closed = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'closed').length;
 
-    new Chart(ctx, {
+    const labelPlugin = {
+        id: 'pcDoughnutLabels',
+        afterDatasetsDraw(chart) {
+            const { ctx } = chart;
+            const dataset = chart.data.datasets && chart.data.datasets[0] ? chart.data.datasets[0] : null;
+            if (!dataset || !dataset.data) return;
+            const meta = chart.getDatasetMeta(0);
+            const data = dataset.data.map(v => Number(v) || 0);
+            const total = data.reduce((a, b) => a + b, 0);
+
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#111827';
+
+            meta.data.forEach((arc, i) => {
+                const v = data[i] || 0;
+                if (!v || !arc) return;
+                const pos = arc.tooltipPosition();
+                const pct = total > 0 ? Math.round((v / total) * 100) : 0;
+                const text = `${v} (${pct}%)`;
+                ctx.font = '600 12px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+                ctx.fillText(text, pos.x, pos.y);
+            });
+
+            ctx.restore();
+        }
+    };
+
+    if (window.pcStatusChart) {
+        try { window.pcStatusChart.destroy(); } catch (e) {}
+    }
+
+    window.pcStatusChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['Open', 'Scheduled', 'Closed'],
+            labels: ['Active', 'Draft', 'Closed'],
             datasets: [{
-                data: [open, scheduled, closed],
+                data: [active, draft, closed],
                 backgroundColor: ['#22c55e', '#3b82f6', '#9ca3af'],
                 borderColor: '#fff',
                 borderWidth: 2
@@ -3444,11 +3845,22 @@ function renderPCStatusChart() {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    position: 'bottom',
-                    labels: { padding: 20, font: { size: 12, weight: 'bold' } }
+                    position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.parsed || 0;
+                            const total = Array.isArray(context.dataset?.data) ? context.dataset.data.reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0) : 0;
+                            const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
                 }
             }
-        }
+        },
+        plugins: [labelPlugin]
     });
 }
 
@@ -3498,8 +3910,8 @@ function renderConsultationManagement() {
     if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'Consultation Management';
 
     const totalConsultations = AppData.consultations.length;
-    const openConsultations = AppData.consultations.filter(c => c.status.toLowerCase() === 'open').length;
-    const scheduledConsultations = AppData.consultations.filter(c => c.status.toLowerCase() === 'scheduled').length;
+    const openConsultations = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'active').length;
+    const scheduledConsultations = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'closed').length;
 
     contentArea.innerHTML = `
         <div class="space-y-6">
@@ -3519,15 +3931,15 @@ function renderConsultationManagement() {
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
                         <div class="text-red-100 text-sm font-semibold mb-1">Total Consultations</div>
-                        <div class="text-3xl font-bold">${totalConsultations}</div>
+                        <div class="text-3xl font-bold" id="cm-stat-total">${totalConsultations}</div>
                     </div>
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
                         <div class="text-red-100 text-sm font-semibold mb-1">Open Consultations</div>
-                        <div class="text-3xl font-bold">${openConsultations}</div>
+                        <div class="text-3xl font-bold" id="cm-stat-open">${openConsultations}</div>
                     </div>
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
                         <div class="text-red-100 text-sm font-semibold mb-1">Scheduled</div>
-                        <div class="text-3xl font-bold">${scheduledConsultations}</div>
+                        <div class="text-3xl font-bold" id="cm-stat-scheduled">${scheduledConsultations}</div>
                     </div>
                 </div>
             </div>
@@ -3546,9 +3958,9 @@ function renderConsultationManagement() {
                         <select id="consultation-status-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
                             onchange="filterConsultations()">
                             <option value="">All Status</option>
-                            <option value="Open">Open</option>
-                            <option value="Scheduled">Scheduled</option>
-                            <option value="Closed">Closed</option>
+                            <option value="draft">Draft (User Submission)</option>
+                            <option value="active">Active</option>
+                            <option value="closed">Closed</option>
                         </select>
                     </div>
                     <div>
@@ -3556,9 +3968,8 @@ function renderConsultationManagement() {
                         <select id="consultation-type-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
                             onchange="filterConsultations()">
                             <option value="">All Types</option>
-                            <option value="In-person">In-person</option>
-                            <option value="Online">Online</option>
-                            <option value="Survey">Survey</option>
+                            <option value="admin">Admin Created</option>
+                            <option value="user">User Submission</option>
                         </select>
                     </div>
                     <div>
@@ -3572,16 +3983,21 @@ function renderConsultationManagement() {
                         </select>
                     </div>
                 </div>
+
+                <div class="flex flex-wrap gap-2 mt-4">
+                    <button onclick="cmQuickType('')" class="btn-outline px-3 py-2 text-sm">All</button>
+                    <button onclick="cmQuickType('admin')" class="btn-outline px-3 py-2 text-sm">Admin Created</button>
+                    <button onclick="cmQuickType('user')" class="btn-outline px-3 py-2 text-sm">User Submissions</button>
+                </div>
             </div>
 
             <!-- Consultations Table -->
             <div class="bg-white rounded-lg shadow overflow-hidden">
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto max-h-[60vh] overflow-y-auto">
                     <table class="w-full text-sm">
                         <thead class="bg-gray-100 border-b-2 border-gray-300">
                             <tr>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Title</th>
-                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Type</th>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Date</th>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Status</th>
                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Feedback</th>
@@ -3661,7 +4077,159 @@ function renderConsultationManagement() {
         </div>
     `;
 
-    renderConsultationsTable();
+    const tbody = document.getElementById('consultations-table-body');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">Loading consultations...</td></tr>';
+    }
+
+    loadConsultationsFromApi();
+}
+
+function cmQuickType(type) {
+    const sel = document.getElementById('consultation-type-filter');
+    if (!sel) return;
+    sel.value = type;
+    filterConsultations();
+}
+
+function mapDbConsultationToUi(row) {
+    const statusRaw = String(row.status || '').toLowerCase();
+    const createdAt = row.created_at || null;
+    const startDate = row.start_date || null;
+    const endDate = row.end_date || null;
+    const effectiveDate = startDate || createdAt || endDate || null;
+
+    const sourceType = statusRaw === 'draft' ? 'user' : 'admin';
+    const title = row.title || '';
+
+    return {
+        id: Number(row.id),
+        title,
+        type: sourceType,
+        date: effectiveDate,
+        status: statusRaw || 'draft',
+        description: row.description || '',
+        category: row.category || '',
+        user_name: row.user_name || '',
+        user_email: row.user_email || '',
+        feedbackCount: Number(row.posts_count || 0),
+        documentsAttached: 0
+    };
+}
+
+async function loadConsultationsFromApi() {
+    try {
+        const res = await fetch('API/consultations_api.php?action=list&limit=200&offset=0', {
+            headers: { 'Accept': 'application/json' }
+        });
+
+        let data;
+        try {
+            data = await res.json();
+        } catch (_) {
+            data = null;
+        }
+
+        if (!res.ok) {
+            const msg = (data && data.message) ? data.message : (res.status === 403 ? 'Unauthorized (admin session required)' : `HTTP ${res.status}`);
+            throw new Error(msg);
+        }
+
+        if (!data || !data.success || !Array.isArray(data.data)) {
+            throw new Error((data && data.message) ? data.message : 'Failed to load consultations');
+        }
+
+        window.__last_consultations_api__ = data;
+
+        AppData.consultations = data.data.map(mapDbConsultationToUi);
+        recomputeConsultationFeedbackCounts();
+        updateConsultationStatsUI();
+        renderConsultationsTable();
+
+        if (data.data.length === 0) {
+            const tbody = document.getElementById('consultations-table-body');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No consultations returned by API. Checking connection...</td></tr>';
+            }
+            try {
+                const dbgRes = await fetch('API/consultations_api.php?action=debug', { headers: { 'Accept': 'application/json' } });
+                const dbg = await dbgRes.json();
+                window.__last_consultations_debug__ = dbg;
+                const dbName = dbg?.data?.db?.database ?? 'unknown';
+                const cnt = dbg?.data?.db?.consultations_count;
+                const role = dbg?.data?.session?.role_normalized ?? dbg?.data?.session?.role ?? 'unknown';
+                if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-red-600">API returned 0 rows, but debug says DB has <b>${escapeHtml(String(cnt))}</b> consultations (DB: <b>${escapeHtml(String(dbName))}</b>, role: <b>${escapeHtml(String(role))}</b>).<div class="text-xs text-gray-500 mt-2">This means the list query is not returning rows as expected. Next step is to inspect the SQL query output.</div></td></tr>`;
+                }
+            } catch (_) {
+            }
+        }
+    } catch (e) {
+        const tbody = document.getElementById('consultations-table-body');
+        if (tbody) {
+            const details = e && e.message ? String(e.message) : 'Unknown error';
+            const hint = details.toLowerCase().includes('unauthorized') || details.toLowerCase().includes('403')
+                ? 'Please log in as Admin and refresh the page.'
+                : 'Check database connection and server logs.';
+            tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-red-600">Failed to load consultations from database.<div class="text-xs text-gray-500 mt-2">${escapeHtml(details)}<br>${escapeHtml(hint)}</div></td></tr>`;
+        }
+        updateConsultationStatsUI();
+        console.error(e);
+    }
+}
+
+function recomputeConsultationFeedbackCounts() {
+    if (!Array.isArray(AppData.consultations) || AppData.consultations.length === 0) return;
+
+    const counts = new Map();
+    if (Array.isArray(AppData.feedback)) {
+        for (const f of AppData.feedback) {
+            const cid = f && f.consultationId !== undefined && f.consultationId !== null ? Number(f.consultationId) : null;
+            if (!cid) continue;
+            counts.set(cid, (counts.get(cid) || 0) + 1);
+        }
+    }
+
+    for (const c of AppData.consultations) {
+        const cid = c && c.id !== undefined && c.id !== null ? Number(c.id) : null;
+        if (!cid) continue;
+        c.feedbackCount = counts.get(cid) || 0;
+    }
+
+    // Refresh any visible UI that displays feedback counts
+    try {
+        if (document.getElementById('consultations-table-body')) {
+            renderConsultationsTable();
+        }
+        if (document.getElementById('consultations-grid')) {
+            renderConsultationsGrid();
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+function updateConsultationStatsUI() {
+    const totalEl = document.getElementById('cm-stat-total');
+    const openEl = document.getElementById('cm-stat-open');
+    const schedEl = document.getElementById('cm-stat-scheduled');
+
+    const total = AppData.consultations.length;
+    const open = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'active').length;
+    const closed = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'closed').length;
+
+    if (totalEl) totalEl.textContent = String(total);
+    if (openEl) openEl.textContent = String(open);
+    if (schedEl) schedEl.textContent = String(closed);
 }
 
 function renderConsultationsTable() {
@@ -3669,29 +4237,35 @@ function renderConsultationsTable() {
     const consultations = getFilteredConsultations();
 
     if (consultations.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No consultations found</td></tr>`;
+        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">No consultations found</td></tr>';
         return;
     }
 
     tbody.innerHTML = consultations.map(consultation => {
-        const statusColor = consultation.status === 'Open' ? 'bg-green-100 text-green-800' : 
-                           consultation.status === 'Scheduled' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800';
-        const typeIcon = consultation.type === 'In-person' ? 'bi-person' : 
-                        consultation.type === 'Online' ? 'bi-globe' : 'bi-clipboard';
+        const st = String(consultation.status || '').toLowerCase();
+        const statusColor = st === 'active' ? 'bg-green-100 text-green-800' : (st === 'closed' ? 'bg-gray-100 text-gray-800' : 'bg-yellow-100 text-yellow-800');
+
+        const srcType = String(consultation.type || '').toLowerCase();
+        const dateText = consultation.date ? new Date(consultation.date).toLocaleDateString() : '-';
+
+        const isUserSubmission = srcType === 'user';
+        const userEmail = String(consultation.userEmail || '').trim();
+        const mailtoSubject = encodeURIComponent('Regarding your Public Consultation submission');
+        const mailtoBody = encodeURIComponent(
+            `Hello ${String(consultation.userName || 'there')},\n\n` +
+            `We received your consultation submission titled: ${String(consultation.title || '')}\n` +
+            `Reference ID: ${String(consultation.id || '')}\n\n` +
+            `Message:\n`
+        );
+        const mailtoHref = userEmail ? `mailto:${encodeURIComponent(userEmail)}?subject=${mailtoSubject}&body=${mailtoBody}` : '';
 
         return `
             <tr class="border-b hover:bg-gray-50 transition">
                 <td class="px-6 py-4 font-semibold text-gray-900">${consultation.title}</td>
-                <td class="px-6 py-4">
-                    <span class="flex items-center gap-2">
-                        <i class="bi ${typeIcon}"></i>
-                        ${consultation.type}
-                    </span>
-                </td>
-                <td class="px-6 py-4 text-gray-600">${new Date(consultation.date).toLocaleDateString()}</td>
+                <td class="px-6 py-4 text-gray-600">${dateText}</td>
                 <td class="px-6 py-4">
                     <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColor}">
-                        ${consultation.status}
+                        ${st ? (st.charAt(0).toUpperCase() + st.slice(1)) : 'Draft'}
                     </span>
                 </td>
                 <td class="px-6 py-4 text-center">
@@ -3710,12 +4284,16 @@ function renderConsultationsTable() {
                         <button onclick="viewConsultationDetails(${consultation.id})" class="text-blue-600 hover:text-blue-800" title="View">
                             <i class="bi bi-eye"></i>
                         </button>
-                        <button onclick="editConsultation(${consultation.id})" class="text-yellow-600 hover:text-yellow-800" title="Edit">
-                            <i class="bi bi-pencil"></i>
-                        </button>
-                        <button onclick="deleteConsultation(${consultation.id})" class="text-red-600 hover:text-red-800" title="Delete">
-                            <i class="bi bi-trash"></i>
-                        </button>
+                        ${isUserSubmission && mailtoHref ? `
+                            <a href="${mailtoHref}" class="text-green-600 hover:text-green-800" title="Email User">
+                                <i class="bi bi-envelope"></i>
+                            </a>
+                        ` : ''}
+                        ${isUserSubmission ? '' : `
+                            <button onclick="editConsultation(${consultation.id})" class="text-yellow-600 hover:text-yellow-800" title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                        `}
                     </div>
                 </td>
             </tr>
@@ -3740,21 +4318,21 @@ function getFilteredConsultations() {
     }
     
     if (typeFilter) {
-        filtered = filtered.filter(c => c.type === typeFilter);
+        filtered = filtered.filter(c => String(c.type || '').toLowerCase() === String(typeFilter).toLowerCase());
     }
 
     // Sort
     filtered.sort((a, b) => {
         switch(sortBy) {
             case 'date-asc':
-                return new Date(a.date) - new Date(b.date);
+                return new Date(a.date || 0) - new Date(b.date || 0);
             case 'feedback':
                 return (b.feedbackCount || 0) - (a.feedbackCount || 0);
             case 'title':
                 return a.title.localeCompare(b.title);
             case 'date-desc':
             default:
-                return new Date(b.date) - new Date(a.date);
+                return new Date(b.date || 0) - new Date(a.date || 0);
         }
     });
 
@@ -3783,6 +4361,11 @@ function closeConsultationModal() {
 function editConsultation(id) {
     const consultation = AppData.consultations.find(c => c.id === id);
     if (!consultation) return;
+
+    if (String(consultation.type || '').toLowerCase() === 'user') {
+        showNotification('User-submitted consultations cannot be edited by admin.', 'error');
+        return;
+    }
 
     document.getElementById('consultation-id').value = id;
     document.getElementById('modal-title').textContent = 'Edit Consultation';
@@ -3842,19 +4425,24 @@ function saveConsultation() {
 }
 
 function deleteConsultation(id) {
-    if (!confirm('Are you sure you want to delete this consultation?')) return;
-
-    const index = AppData.consultations.findIndex(c => c.id === id);
-    if (index !== -1) {
-        AppData.consultations.splice(index, 1);
-        showNotification('Consultation deleted successfully', 'success');
-        renderConsultationsTable();
-    }
+    showNotification('Delete is disabled to prevent data loss.', 'error');
 }
 
 function viewConsultationDetails(id) {
     const consultation = AppData.consultations.find(c => c.id === id);
     if (!consultation) return;
+
+    const titleEl = document.getElementById('details-modal-title');
+    const contentEl = document.getElementById('details-modal-content');
+    const modalEl = document.getElementById('consultation-details-modal');
+    if (!titleEl || !contentEl || !modalEl) {
+        showNotification('Details view is not available on this screen. Opening Consultation Management...', 'info');
+        showSection('consultation-management');
+        setTimeout(() => {
+            try { viewConsultationDetails(id); } catch (e) { console.error(e); }
+        }, 200);
+        return;
+    }
 
     const relatedFeedback = AppData.feedback.filter(f => f.consultationId === id);
     const feedbackHTML = relatedFeedback.length > 0 
@@ -3867,11 +4455,23 @@ function viewConsultationDetails(id) {
         `).join('')
         : '<p class="text-gray-500">No feedback yet</p>';
 
-    const statusColor = consultation.status === 'Open' ? 'bg-green-100 text-green-800' : 
-                       consultation.status === 'Scheduled' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800';
+    const st = String(consultation.status || '').toLowerCase();
+    const statusColor = st === 'active' ? 'bg-green-100 text-green-800' : (st === 'draft' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800');
+    const statusLabel = st ? (st.charAt(0).toUpperCase() + st.slice(1)) : 'Draft';
 
-    document.getElementById('details-modal-title').textContent = consultation.title;
-    document.getElementById('details-modal-content').innerHTML = `
+    const isUserSubmission = String(consultation.type || '').toLowerCase() === 'user';
+    const userEmail = String(consultation.userEmail || '').trim();
+    const mailtoSubject = encodeURIComponent('Regarding your Public Consultation submission');
+    const mailtoBody = encodeURIComponent(
+        `Hello ${String(consultation.userName || 'there')},\n\n` +
+        `We received your consultation submission titled: ${String(consultation.title || '')}\n` +
+        `Reference ID: ${String(consultation.id || '')}\n\n` +
+        `Message:\n`
+    );
+    const mailtoHref = userEmail ? `mailto:${encodeURIComponent(userEmail)}?subject=${mailtoSubject}&body=${mailtoBody}` : '';
+
+    titleEl.textContent = consultation.title;
+    contentEl.innerHTML = `
         <div class="grid grid-cols-2 gap-4">
             <div>
                 <label class="text-xs font-semibold text-gray-500 uppercase">Type</label>
@@ -3883,7 +4483,7 @@ function viewConsultationDetails(id) {
             </div>
             <div>
                 <label class="text-xs font-semibold text-gray-500 uppercase">Status</label>
-                <p class="mt-1"><span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColor}">${consultation.status}</span></p>
+                <p class="mt-1"><span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColor}">${statusLabel}</span></p>
             </div>
             <div>
                 <label class="text-xs font-semibold text-gray-500 uppercase">Feedback Count</label>
@@ -3904,11 +4504,12 @@ function viewConsultationDetails(id) {
         </div>
 
         <div class="flex gap-2 pt-4 border-t">
-            <button onclick="editConsultation(${consultation.id}); closeDetailsModal()" class="flex-1 btn-primary">Edit</button>
+            ${isUserSubmission ? '' : `<button onclick="editConsultation(${consultation.id}); closeDetailsModal()" class="flex-1 btn-primary">Edit</button>`}
+            ${isUserSubmission && mailtoHref ? `<a href="${mailtoHref}" class="flex-1 btn-primary text-center">Email User</a>` : ''}
             <button onclick="closeDetailsModal()" class="flex-1 btn-secondary">Close</button>
         </div>
     `;
-    document.getElementById('consultation-details-modal').classList.remove('hidden');
+    modalEl.classList.remove('hidden');
 }
 
 function closeDetailsModal() {
@@ -3940,24 +4541,21 @@ function renderFeedbackCollection() {
                         <h1 class="text-3xl font-bold mb-2">Feedback Collection</h1>
                         <p class="text-red-100">Collect, manage, and analyze public feedback from consultations</p>
                     </div>
-                    <button onclick="openAddFeedbackModal()" class="btn-primary flex items-center gap-2 bg-white text-red-600 hover:bg-red-50">
-                        <i class="bi bi-plus-lg"></i> New Feedback
-                    </button>
                 </div>
                 
                 <!-- Stats Cards -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
                         <div class="text-red-100 text-sm font-semibold mb-1">Total Feedback</div>
-                        <div class="text-3xl font-bold">${totalFeedback}</div>
+                        <div class="text-3xl font-bold" id="fb-stat-total">${totalFeedback}</div>
                     </div>
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
                         <div class="text-red-100 text-sm font-semibold mb-1">This Week</div>
-                        <div class="text-3xl font-bold">${recentFeedback}</div>
+                        <div class="text-3xl font-bold" id="fb-stat-week">${recentFeedback}</div>
                     </div>
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
                         <div class="text-red-100 text-sm font-semibold mb-1">Avg. per Consultation</div>
-                        <div class="text-3xl font-bold">${AppData.consultations.length > 0 ? Math.round(totalFeedback / AppData.consultations.length) : 0}</div>
+                        <div class="text-3xl font-bold" id="fb-stat-avg">${AppData.consultations.length > 0 ? Math.round(totalFeedback / AppData.consultations.length) : 0}</div>
                     </div>
                 </div>
             </div>
@@ -4016,53 +4614,144 @@ function renderFeedbackCollection() {
             </div>
         </div>
 
-        <!-- Add/Edit Feedback Modal -->
-        <div id="feedback-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-96 overflow-y-auto">
+        <div id="feedback-details-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[85vh] overflow-y-auto">
                 <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-6 flex justify-between items-center">
-                    <h2 id="feedback-modal-title" class="text-2xl font-bold">Add New Feedback</h2>
-                    <button onclick="closeFeedbackModal()" class="text-white hover:text-red-100 text-2xl">&times;</button>
+                    <h2 class="text-2xl font-bold">Feedback Details</h2>
+                    <button onclick="closeFeedbackDetailsModal()" class="text-white hover:text-red-100 text-2xl">&times;</button>
                 </div>
-                <div class="p-6 space-y-4">
-                    <input type="hidden" id="feedback-id">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Author Name *</label>
-                            <input type="text" id="feedback-author" placeholder="Full name" 
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Consultation *</label>
-                            <select id="feedback-consultation" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500">
-                                <option value="">Select Consultation</option>
-                                ${AppData.consultations.map(c => `<option value="${c.id}">${c.title}</option>`).join('')}
-                            </select>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Feedback Message *</label>
-                        <textarea id="feedback-message" placeholder="Enter feedback message..." rows="4"
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"></textarea>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Date</label>
-                        <input type="date" id="feedback-date" 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
-                    </div>
-                    <div class="flex gap-3 pt-4">
-                        <button onclick="saveFeedback()" class="flex-1 btn-primary">Save Feedback</button>
-                        <button onclick="closeFeedbackModal()" class="flex-1 btn-secondary">Cancel</button>
-                    </div>
-                </div>
+                <div id="feedback-details-modal-content" class="p-6 space-y-4"></div>
             </div>
         </div>
     `;
 
-    renderFeedbackTable();
+    const tbody = document.getElementById('feedback-table-body');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Loading feedback...</td></tr>';
+    }
+
+    loadFeedbackFromApi();
+}
+
+function mapDbFeedbackToUi(row) {
+    const createdAt = row.created_at || null;
+    const consultationId = row.consultation_id !== null && row.consultation_id !== undefined ? Number(row.consultation_id) : null;
+
+    return {
+        id: Number(row.id),
+        author: row.guest_name || 'Guest',
+        authorEmail: row.guest_email || '',
+        consultationId,
+        message: row.message || '',
+        date: createdAt,
+        status: String(row.status || 'new').toLowerCase(),
+        rating: row.rating !== null && row.rating !== undefined ? Number(row.rating) : null,
+        category: row.category || ''
+    };
+}
+
+async function loadFeedbackFromApi() {
+    try {
+        const res = await fetch('API/feedback_api.php?action=list&limit=200&offset=0', {
+            headers: { 'Accept': 'application/json' }
+        });
+
+        let data;
+        try {
+            data = await res.json();
+        } catch (_) {
+            data = null;
+        }
+
+        if (!res.ok) {
+            const msg = (data && data.message)
+                ? data.message
+                : (res.status === 403 ? 'Unauthorized (admin session required)' : `HTTP ${res.status}`);
+            throw new Error(msg);
+        }
+
+        if (!data || !data.success || !Array.isArray(data.data)) {
+            throw new Error((data && data.message) ? data.message : 'Failed to load feedback');
+        }
+
+        window.__last_feedback_api__ = data;
+
+        AppData.feedback = data.data.map(mapDbFeedbackToUi);
+        recomputeConsultationFeedbackCounts();
+        updateFeedbackStatsUI();
+        refreshFeedbackConsultationDropdowns();
+        renderFeedbackTable();
+
+        if (data.data.length === 0) {
+            const tbody = document.getElementById('feedback-table-body');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No feedback returned by API. Checking connection...</td></tr>';
+            }
+            try {
+                const dbgRes = await fetch('API/feedback_api.php?action=debug', { headers: { 'Accept': 'application/json' } });
+                const dbg = await dbgRes.json();
+                window.__last_feedback_debug__ = dbg;
+                const dbName = dbg?.data?.db?.database ?? 'unknown';
+                const cnt = dbg?.data?.db?.feedback_count;
+                const role = dbg?.data?.session?.role_normalized ?? dbg?.data?.session?.role ?? 'unknown';
+                if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-red-600">API returned 0 rows, but debug says DB has <b>${escapeHtml(String(cnt))}</b> feedback (DB: <b>${escapeHtml(String(dbName))}</b>, role: <b>${escapeHtml(String(role))}</b>).<div class="text-xs text-gray-500 mt-2">This means the list query is not returning rows as expected.</div></td></tr>`;
+                }
+            } catch (_) {
+            }
+        }
+    } catch (e) {
+        const tbody = document.getElementById('feedback-table-body');
+        if (tbody) {
+            const details = e && e.message ? String(e.message) : 'Unknown error';
+            const hint = details.toLowerCase().includes('unauthorized') || details.toLowerCase().includes('403')
+                ? 'Please log in as Admin and refresh the page.'
+                : 'Check database connection and server logs.';
+            tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-red-600">Failed to load feedback from database.<div class="text-xs text-gray-500 mt-2">${escapeHtml(details)}<br>${escapeHtml(hint)}</div></td></tr>`;
+        }
+        updateFeedbackStatsUI();
+        console.error(e);
+    }
+}
+
+function updateFeedbackStatsUI() {
+    const totalEl = document.getElementById('fb-stat-total');
+    const weekEl = document.getElementById('fb-stat-week');
+    const avgEl = document.getElementById('fb-stat-avg');
+
+    const total = AppData.feedback.length;
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const recent = AppData.feedback.filter(f => {
+        const d = f.date ? new Date(f.date) : null;
+        return d && d >= weekAgo;
+    }).length;
+    const avg = AppData.consultations.length > 0 ? Math.round(total / AppData.consultations.length) : 0;
+
+    if (totalEl) totalEl.textContent = String(total);
+    if (weekEl) weekEl.textContent = String(recent);
+    if (avgEl) avgEl.textContent = String(avg);
+}
+
+function refreshFeedbackConsultationDropdowns() {
+    const filterSel = document.getElementById('feedback-consultation-filter');
+    const modalSel = document.getElementById('feedback-consultation');
+
+    const opts = AppData.consultations.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
+    if (filterSel) {
+        const cur = filterSel.value;
+        filterSel.innerHTML = `<option value="">All Consultations</option>${opts}`;
+        filterSel.value = cur;
+    }
+    if (modalSel) {
+        const cur = modalSel.value;
+        modalSel.innerHTML = `<option value="">Select Consultation</option>${opts}`;
+        modalSel.value = cur;
+    }
 }
 
 function renderFeedbackTable() {
     const tbody = document.getElementById('feedback-table-body');
+    if (!tbody) return;
     const feedbackList = getFilteredFeedback();
 
     if (feedbackList.length === 0) {
@@ -4073,26 +4762,159 @@ function renderFeedbackTable() {
     tbody.innerHTML = feedbackList.map(feedback => {
         const consultation = AppData.consultations.find(c => c.id === feedback.consultationId);
         const consultationTitle = consultation ? consultation.title : 'Unknown Consultation';
+        const isOverdue = isFeedbackOverdue(feedback, 3);
+        const rowClass = isOverdue ? 'bg-red-50' : '';
+        const dateText = feedback.date ? new Date(feedback.date).toLocaleDateString() : '-';
 
         return `
-            <tr class="border-b hover:bg-gray-50 transition">
+            <tr class="border-b hover:bg-gray-50 transition ${rowClass}">
                 <td class="px-6 py-4 font-semibold text-gray-900">${feedback.author}</td>
                 <td class="px-6 py-4 text-gray-700 max-w-xs truncate" title="${feedback.message}">${feedback.message}</td>
                 <td class="px-6 py-4 text-gray-600 text-sm">${consultationTitle}</td>
-                <td class="px-6 py-4 text-gray-600">${new Date(feedback.date).toLocaleDateString()}</td>
+                <td class="px-6 py-4 text-gray-600">
+                    <div class="flex items-center justify-between gap-2">
+                        <span>${dateText}</span>
+                        ${isOverdue ? '<span class="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">Overdue</span>' : ''}
+                    </div>
+                </td>
                 <td class="px-6 py-4 text-center">
                     <div class="flex gap-2 justify-center">
-                        <button onclick="editFeedback(${feedback.id})" class="text-yellow-600 hover:text-yellow-800" title="Edit">
-                            <i class="bi bi-pencil"></i>
-                        </button>
-                        <button onclick="deleteFeedback(${feedback.id})" class="text-red-600 hover:text-red-800" title="Delete">
-                            <i class="bi bi-trash"></i>
+                        <button onclick="viewFeedbackDetails(${feedback.id})" class="text-blue-600 hover:text-blue-800" title="View">
+                            <i class="bi bi-eye"></i>
                         </button>
                     </div>
                 </td>
             </tr>
         `;
     }).join('');
+}
+
+function closeFeedbackDetailsModal() {
+    const modal = document.getElementById('feedback-details-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function viewFeedbackDetails(id) {
+    const modal = document.getElementById('feedback-details-modal');
+    const content = document.getElementById('feedback-details-modal-content');
+    if (!modal || !content) return;
+
+    const f = AppData.feedback.find(x => x.id === id);
+    if (!f) return;
+
+    const consultation = AppData.consultations.find(c => c.id === f.consultationId);
+    const consultationTitle = consultation ? consultation.title : 'Unknown Consultation';
+    const email = String(f.authorEmail || '').trim();
+
+    const st = String(f.status || 'new').toLowerCase();
+    const isOverdue = isFeedbackOverdue(f, 3);
+    const statusColor = st === 'responded'
+        ? 'bg-green-100 text-green-800'
+        : (st === 'in_review' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800');
+
+    const mailtoSubject = encodeURIComponent('Regarding your feedback submission');
+    const mailtoBody = encodeURIComponent(
+        `Hello ${String(f.author || 'there')},\n\n` +
+        `Thanks for your feedback regarding: ${String(consultationTitle)}\n` +
+        `Feedback ID: ${String(f.id)}\n\n` +
+        `Message:\n`
+    );
+    const mailtoHref = email ? `mailto:${encodeURIComponent(email)}?subject=${mailtoSubject}&body=${mailtoBody}` : '';
+
+    content.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="text-xs font-semibold text-gray-500 uppercase">Author</label>
+                <p class="text-gray-900 font-semibold mt-1">${escapeHtml(String(f.author || 'Guest'))}</p>
+                ${email ? `<p class="text-sm text-gray-600 mt-1">${escapeHtml(email)}</p>` : ''}
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-500 uppercase">Consultation</label>
+                <p class="text-gray-900 font-semibold mt-1">${escapeHtml(String(consultationTitle))}</p>
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-500 uppercase">Rating</label>
+                <p class="text-gray-900 font-semibold mt-1">${f.rating !== null && f.rating !== undefined ? escapeHtml(String(f.rating)) + '/5' : '-'}</p>
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-500 uppercase">Category</label>
+                <p class="text-gray-900 font-semibold mt-1">${escapeHtml(String(f.category || '-'))}</p>
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-500 uppercase">Submitted</label>
+                <p class="text-gray-900 font-semibold mt-1">${f.date ? escapeHtml(new Date(f.date).toLocaleString()) : '-'}</p>
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-500 uppercase">Current Status</label>
+                <div class="flex items-center gap-2 mt-2">
+                    <span class="inline-flex px-2 py-1 rounded-full text-xs font-medium ${statusColor}">${escapeHtml(st)}</span>
+                    ${isOverdue ? '<span class="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">Overdue (3 days)</span>' : ''}
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <label class="text-xs font-semibold text-gray-500 uppercase">Message</label>
+            <div class="mt-2 p-3 bg-gray-50 rounded text-gray-800 whitespace-pre-wrap">${escapeHtml(String(f.message || ''))}</div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="text-xs font-semibold text-gray-500 uppercase">Update Status</label>
+                <select id="fb-status-select" class="w-full mt-2 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500">
+                    <option value="new" ${st === 'new' ? 'selected' : ''}>new</option>
+                    <option value="in_review" ${st === 'in_review' ? 'selected' : ''}>in_review</option>
+                    <option value="responded" ${st === 'responded' ? 'selected' : ''}>responded</option>
+                    <option value="resolved" ${st === 'resolved' ? 'selected' : ''}>resolved</option>
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button onclick="updateFeedbackStatus(${f.id})" class="w-full btn-primary">Save Status</button>
+            </div>
+        </div>
+
+        <div class="flex gap-2 pt-4 border-t">
+            ${mailtoHref ? `<a href="${mailtoHref}" class="flex-1 btn-primary text-center">Email User</a>` : ''}
+            <button onclick="closeFeedbackDetailsModal()" class="flex-1 btn-secondary">Close</button>
+        </div>
+    `;
+
+    modal.classList.remove('hidden');
+}
+
+async function updateFeedbackStatus(id) {
+    const sel = document.getElementById('fb-status-select');
+    const status = sel ? String(sel.value || '').trim() : '';
+    if (!status) {
+        showNotification('Please select a status', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch('API/feedback_api.php?action=update_status', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ id, status })
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !data.success) {
+            const msg = (data && data.message) ? data.message : (res.ok ? 'Failed to update status' : `HTTP ${res.status}`);
+            throw new Error(msg);
+        }
+
+        const f = AppData.feedback.find(x => x.id === id);
+        if (f) f.status = status;
+        renderFeedbackTable();
+        showNotification('Feedback status updated', 'success');
+        closeFeedbackDetailsModal();
+    } catch (e) {
+        const details = e && e.message ? String(e.message) : 'Unknown error';
+        showNotification(`Failed to update status: ${details}`, 'error');
+    }
 }
 
 function getFilteredFeedback() {
@@ -4214,22 +5036,7 @@ function saveFeedback() {
 }
 
 function deleteFeedback(id) {
-    if (!confirm('Are you sure you want to delete this feedback?')) return;
-
-    const feedback = AppData.feedback.find(f => f.id === id);
-    if (feedback) {
-        const index = AppData.feedback.indexOf(feedback);
-        AppData.feedback.splice(index, 1);
-        
-        // Update consultation feedback count
-        const consultation = AppData.consultations.find(c => c.id === feedback.consultationId);
-        if (consultation && consultation.feedbackCount > 0) {
-            consultation.feedbackCount--;
-        }
-        
-        showNotification('Feedback deleted successfully', 'success');
-        renderFeedbackTable();
-    }
+    showNotification('Delete is disabled to prevent data loss.', 'error');
 }
 
 function renderPCDocuments() {

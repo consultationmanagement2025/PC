@@ -14,7 +14,7 @@ header('X-Content-Type-Options: nosniff', true);
 header('X-XSS-Protection: 1; mode=block', true);
 
 // Content Security Policy - restrict resource loading
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://accounts.google.com; frame-src 'self' https://accounts.google.com;", true);
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; connect-src 'self' https://accounts.google.com; frame-src 'self' https://accounts.google.com;", true);
 
 // Referrer Policy - limit referrer information
 header('Referrer-Policy: strict-origin-when-cross-origin', true);

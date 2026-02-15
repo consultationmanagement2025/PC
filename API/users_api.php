@@ -1,9 +1,11 @@
 <?php
 header('Content-Type: application/json');
+session_start();
 require_once '../db.php';
 
 // Check admin role
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'Administrator') {
+$current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
+if ($current_role !== 'admin' && $current_role !== 'administrator') {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit;

@@ -670,6 +670,8 @@
     border: 1px solid #d1d5db;
     border-radius: 0.5rem;
     transition: all 0.2s;
+    cursor: text;
+    caret-color: #111827;
 }
 
 .input-field:focus {
@@ -765,6 +767,8 @@
     background-color: #404040 !important;
     border-color: #555555 !important;
     color: #e5e5e5 !important;
+    cursor: text;
+    caret-color: #e5e7eb;
 }
 
 .dark .input-field:focus {

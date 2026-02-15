@@ -1,9 +1,10 @@
 <?php
 // user_submit_consultation.php
-require 'db.php';
-require_once __DIR__ . '/../DATABASE/user-logs.php';
 session_start();
 header('Content-Type: application/json');
+
+require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../DATABASE/user-logs.php';
 
 if (!isset($_SESSION['user_id'])) {
     echo json_encode(['error' => 'Not logged in']);
@@ -28,8 +29,21 @@ if (!$topic || !$preferred_datetime) {
     exit();
 }
 
-$stmt = $conn->prepare("INSERT INTO consultations (user_id, user_email, topic, description, preferred_datetime, allow_email_notifications) VALUES (?, ?, ?, ?, ?, ?)");
-$stmt->bind_param('issssi', $user_id, $user_email, $topic, $description, $preferred_datetime, $allow_email_notifications);
+// Store user-submitted consultation requests into the existing consultations table
+// (admin publishes official consultations by setting status to 'active')
+$user_name = trim($_SESSION['fullname'] ?? '');
+if ($user_name === '') {
+    $user_name = 'Citizen';
+}
+
+$full_description = "Preferred Date/Time: " . $preferred_datetime . "\n\n" . $description;
+
+$stmt = $conn->prepare("INSERT INTO consultations (title, description, user_name, user_email, allow_email_notifications, status, created_at) VALUES (?, ?, ?, ?, ?, 'draft', NOW())");
+if (!$stmt) {
+    echo json_encode(['error' => 'Database error']);
+    exit();
+}
+$stmt->bind_param('ssssi', $topic, $full_description, $user_name, $user_email, $allow_email_notifications);
 
 if ($stmt->execute()) {
     // Log user action
@@ -69,3 +83,5 @@ if ($stmt->execute()) {
 } else {
     echo json_encode(['error' => 'Failed to submit consultation']);
 }
+
+$stmt->close();

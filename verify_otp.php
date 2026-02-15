@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Verify OTP - PCMP</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     <style>body{font-family:Inter,Arial,Helvetica,sans-serif;background:#f7fafc;padding:30px} .box{max-width:420px;margin:0 auto;background:#fff;padding:24px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}</style>
 </head>
 <body>

@@ -2,14 +2,14 @@
 session_start();
 require 'DATABASE/audit-log.php';
 require 'DATABASE/user-logs.php';
-require 'announcements.php';
 require 'DATABASE/posts.php';
 require 'DATABASE/notifications.php';
 require 'DATABASE/consultations.php';
 require 'DATABASE/feedback.php';
 // Use strtolower and trim to be safe
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
-if ($current_role !== 'admin') {
+$is_admin = ($current_role === 'admin' || $current_role === 'administrator');
+if (!$is_admin) {
     header('Location: login.php');
     exit();
 }
@@ -102,23 +102,24 @@ $totalPages = ceil($totalLogs / $pageSize);
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="format-detection" content="telephone=no">
     <title>PCMP - Public Consultation Management Portal | City of Valenzuela</title>
-    <meta name="description" content="Legislative Records Management System - City Government of Valenzuela, Metropolitan Manila">
-    <meta name="keywords" content="LRMS, Valenzuela, Legislative Records, Document Management">
+    <meta name="description" content="Public Consultation Management Portal - City Government of Valenzuela, Metropolitan Manila">
+    <meta name="keywords" content="PCMP, Valenzuela, Public Consultation, Consultation Management">
     <link rel="icon" type="image/png" href="images/logo.webp">
     <link rel="apple-touch-icon" href="images/logo.webp">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- Prevent dark mode flicker - must run before page renders -->
     <script>
+        window.__SESSION_LOGGED_IN__ = true;
         if (localStorage.getItem('theme') === 'dark') {
             document.documentElement.classList.add('dark');
         }
         
         // Check if user is logged in (for demo purposes)
         // In production, this would check actual session/token
-        if (!localStorage.getItem('isLoggedIn') && !sessionStorage.getItem('isLoggedIn')) {
+        if (!window.__SESSION_LOGGED_IN__ && !localStorage.getItem('isLoggedIn') && !sessionStorage.getItem('isLoggedIn')) {
             // Redirect to login if not logged in
             window.location.href = 'login.php';
         }
@@ -261,10 +262,6 @@ $totalPages = ceil($totalLogs / $pageSize);
                 <i class="bi bi-people mr-3 text-lg"></i>
                 <span>User Management</span>
             </a>
-            <a href="#" onclick="showSection('announcements')" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
-                <i class="bi bi-megaphone mr-3 text-lg"></i>
-                <span>Announcements</span>
-            </a>
             <a href="#" onclick="showSection('audit')" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
                 <i class="bi bi-shield-check mr-3 text-lg"></i>
                 <span>Audit Log</span>
@@ -345,10 +342,6 @@ $totalPages = ceil($totalLogs / $pageSize);
                     <a href="#" onclick="showSection('users')" class="nav-item" data-section="users">
                         <i class="bi bi-people"></i>
                         <span class="sidebar-text">User Management</span>
-                    </a>
-                    <a href="#" onclick="showSection('announcements')" class="nav-item" data-section="announcements">
-                        <i class="bi bi-megaphone"></i>
-                        <span class="sidebar-text">Announcements</span>
                     </a>
                     <a href="#" onclick="showSection('audit')" class="nav-item" data-section="audit">
                         <i class="bi bi-shield-check"></i>
@@ -453,8 +446,8 @@ $totalPages = ceil($totalLogs / $pageSize);
                                         <i class="bi bi-person-fill"></i>
                                     </div>
                                     <div class="hidden sm:block text-left">
-                                        <p class="text-sm font-medium text-gray-800 truncate max-w-[120px] md:max-w-none">Admin User</p>
-                                        <p class="text-xs text-gray-500">Administrator</p>
+                                        <p id="profile-name-display" class="text-sm font-medium text-gray-800 truncate max-w-[120px] md:max-w-none"><?php echo htmlspecialchars($_SESSION['fullname'] ?? ($_SESSION['username'] ?? 'User')); ?></p>
+                                        <p id="profile-role-display" class="text-xs text-gray-500"><?php echo htmlspecialchars($_SESSION['role'] ?? ''); ?></p>
                                     </div>
                                     <i class="bi bi-chevron-down text-gray-600 text-xs hidden sm:inline"></i>
                                 </button>
@@ -462,8 +455,8 @@ $totalPages = ceil($totalLogs / $pageSize);
                                 <!-- Profile Dropdown -->
                                 <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-50 animate-fade-in-up" style="background-color: white;">
                                     <div class="p-4 border-b border-gray-200">
-                                        <p class="text-sm font-medium text-gray-800">admin@lgu.gov.ph</p>
-                                        <p class="text-xs text-gray-500 mt-1">Legislative Office</p>
+                                        <p id="profile-email-display" class="text-sm font-medium text-gray-800"><?php echo htmlspecialchars($_SESSION['email'] ?? ''); ?></p>
+                                        <p id="profile-dept-display" class="text-xs text-gray-500 mt-1"><?php echo htmlspecialchars($_SESSION['department'] ?? ''); ?></p>
                                     </div>
                                     <div class="py-2">
                                         <a href="#" onclick="showSection('profile'); return false;" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
@@ -492,62 +485,6 @@ $totalPages = ceil($totalLogs / $pageSize);
             <main class="flex-1 overflow-y-auto bg-gray-100 p-3 sm:p-4 lg:p-6">
                 <!-- Content sections will be loaded here -->
                 <div id="content-area">
-                    <!-- ANNOUNCEMENTS (Admin) -->
-                    <section id="announcements-section" class="mb-6">
-                        <div class="flex gap-6 h-[70vh] items-start">
-                            <!-- Left: Announcements (Posting & Recent) -->
-                            <div class="w-1/2 min-w-0 flex flex-col gap-4">
-                                <!-- Publisher Card (Compact Modern Style) -->
-                                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-                                    <form id="announcement-form" onsubmit="submitAnnouncement(event)" class="space-y-3">
-                                        <input type="text" id="announcement_title" name="announcement_title" required class="input-field w-full text-sm font-medium border-0 border-b border-gray-300 focus:border-red-500 focus:ring-0 p-0 mb-2" placeholder="Announcement title...">
-                                        <textarea id="announcement_content" name="announcement_content" rows="3" required class="input-field w-full text-sm border-0 focus:ring-0 p-0 resize-none" placeholder="Write your announcement message..."></textarea>
-                                        <div class="flex justify-end gap-2 pt-2">
-                                            <button type="button" onclick="document.getElementById('announcement-form').reset()" class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded transition">Clear</button>
-                                            <button type="submit" class="btn-primary px-4 py-1.5 text-sm">Publish</button>
-                                        </div>
-                                    </form>
-                                </div>
-
-                                <!-- Recent Announcements List -->
-                                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex-1 flex flex-col">
-                                    <h3 class="text-sm font-semibold text-gray-900 mb-3">Recent Announcements</h3>
-                                    <div id="admin-announcements-list" class="space-y-2 overflow-auto flex-1">
-                                        <?php
-                                            $adminAnns = getAnnouncements(6, 0);
-                                            if (empty($adminAnns)) {
-                                                echo '<div class="text-xs text-gray-400 text-center py-4">No announcements yet.</div>';
-                                            } else {
-                                                foreach ($adminAnns as $a) {
-                                                    $annId = (int)$a['id'];
-                                                    $likes = json_decode($a['liked_by'] ?? '[]', true) ?? [];
-                                                    $saves = json_decode($a['saved_by'] ?? '[]', true) ?? [];
-                                                    $allow_comments = $a['allow_comments'] ?? true;
-                                                    $userLiked = in_array($_SESSION['user_id'] ?? null, $likes) ? 'text-red-600' : 'text-gray-400';
-                                                    $userSaved = in_array($_SESSION['user_id'] ?? null, $saves) ? 'text-blue-600' : 'text-gray-400';
-                                                    echo '<div class="p-2.5 border border-gray-200 rounded hover:bg-gray-50 transition text-xs">';
-                                                    echo '<div class="font-semibold text-gray-800 text-sm">' . htmlspecialchars(substr($a['title'], 0, 60)) . '</div>';
-                                                    echo '<div class="text-gray-500 text-xs mt-0.5">' . date('M d, H:i', strtotime($a['created_at'])) . '</div>';
-                                                    echo '<div class="mt-1.5 flex gap-2 text-xs flex-wrap">';
-                                                    echo '<button type="button" onclick="toggleAnnouncementAction(event, ' . $annId . ', \'like\')" class="flex items-center gap-0.5 ' . $userLiked . ' hover:text-red-600 transition">';
-                                                    echo '<i class="bi bi-heart-fill text-xs"></i><span>' . count($likes) . '</span></button>';
-                                                    echo '<button type="button" onclick="toggleAnnouncementAction(event, ' . $annId . ', \'save\')" class="flex items-center gap-0.5 ' . $userSaved . ' hover:text-blue-600 transition">';
-                                                    echo '<i class="bi bi-bookmark-fill text-xs"></i><span>' . count($saves) . '</span></button>';
-                                                    echo '<button type="button" onclick="toggleAllowComments(event, ' . $annId . ')" class="flex items-center gap-0.5 ' . ($allow_comments ? 'text-green-600' : 'text-gray-400') . ' hover:text-green-700 transition" title="' . ($allow_comments ? 'Comments Allowed' : 'Comments Disabled') . '">';
-                                                    echo '<i class="bi bi-chat-dots text-xs"></i><span>' . ($allow_comments ? 'On' : 'Off') . '</span></button>';
-                                                    echo '</div>';
-                                                    echo '</div>';
-                                                }
-                                            }
-                                        ?>
-                                    </div>
-                                </div>
-                            </div>
-
-
-                        </div>
-                    </section>
-
                     <!-- AUDIT LOG SECTION -->
                     <section id="audit-section" class="audit-section">
                         <div class="bg-white rounded-lg shadow-md p-6">
@@ -797,7 +734,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
                     <!-- DASHBOARD SECTION -->
                     <section id="dashboard-section" class="mb-6" style="display: none;">
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                             <!-- Stats Cards -->
                             <div class="bg-white rounded-lg shadow-sm p-6 border-l-4 border-red-600">
                                 <div class="text-gray-600 text-sm font-medium">Total Users</div>
@@ -808,11 +745,6 @@ $totalPages = ceil($totalLogs / $pageSize);
                                 <div class="text-gray-600 text-sm font-medium">User Posts</div>
                                 <div class="text-3xl font-bold text-gray-900 mt-2"><?php echo isset($allPosts) ? count($allPosts) : 0; ?></div>
                                 <div class="text-gray-500 text-xs mt-2">Total concerns submitted</div>
-                            </div>
-                            <div class="bg-white rounded-lg shadow-sm p-6 border-l-4 border-green-600">
-                                <div class="text-gray-600 text-sm font-medium">Announcements</div>
-                                <div class="text-3xl font-bold text-gray-900 mt-2"><?php echo isset($allAnnouncements) ? count($allAnnouncements) : 0; ?></div>
-                                <div class="text-gray-500 text-xs mt-2">Active announcements</div>
                             </div>
                             <div class="bg-white rounded-lg shadow-sm p-6 border-l-4 border-yellow-600">
                                 <div class="text-gray-600 text-sm font-medium">Audit Logs</div>
@@ -1038,7 +970,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                         <div class="flex items-center space-x-3">
                             <img src="images/logo.webp" alt="Valenzuela" class="w-10 h-10 object-contain">
                             <div class="text-sm text-gray-600">
-                                &copy; 2025 City Government of Valenzuela - LRMS. All rights reserved.
+                                &copy; 2025 City Government of Valenzuela - PCMP. All rights reserved.
                             </div>
                         </div>
                         <div class="flex items-center space-x-6">
@@ -1052,7 +984,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                     <div class="md:hidden text-center">
                         <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 6px;">
                             <img src="images/logo.webp" alt="Valenzuela" style="width: 24px; height: 24px; object-fit: contain;">
-                            <span class="text-xs text-gray-600">&copy; 2025 LRMS</span>
+                            <span class="text-xs text-gray-600">&copy; 2025 PCMP</span>
                         </div>
                         <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
                             <a href="#" class="text-xs text-gray-500 hover:text-red-600">Privacy</a>
@@ -1208,7 +1140,15 @@ $totalPages = ceil($totalLogs / $pageSize);
     </div>
 
     <script src="script.js"></script>
-    <script src="app-features.js"></script>
+    <script>
+        window.__CURRENT_USER__ = {
+            id: <?php echo json_encode($_SESSION['user_id'] ?? null); ?>,
+            name: <?php echo json_encode($_SESSION['fullname'] ?? ($_SESSION['username'] ?? '')); ?>,
+            email: <?php echo json_encode($_SESSION['email'] ?? ''); ?>,
+            role: <?php echo json_encode($_SESSION['role'] ?? ''); ?>
+        };
+    </script>
+    <script src="app-features.js?v=<?php echo urlencode((string)@filemtime(__DIR__ . '/app-features.js')); ?>"></script>
     
     <!-- Desktop Sidebar Toggle Functionality - Must run after DOM is ready -->
     <script>

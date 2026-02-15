@@ -1266,17 +1266,7 @@ function toggleUserStatus(userId, currentStatus) {
 function editUser(userId) {
     showNotification('User editing not yet implemented', 'info');
 }
-                    <button onclick="closeUserDetailsModal()" class="text-white hover:text-red-100 text-2xl">&times;</button>
-                </div>
-                <div id="user-details-content" class="p-6 space-y-4">
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.getElementById('content-area').innerHTML = html;
-    renderUsersTable();
-}
+
 
 function renderUsersTable() {
     const tbody = document.getElementById('users-table-body');
@@ -3925,10 +3915,27 @@ function renderConsultationManagement() {
     
     // Fetch real consultation data
     fetch('API/consultations_api.php?action=list')
-        .then(response => response.json())
+        .then(async response => {
+            let payload = null;
+            try {
+                payload = await response.json();
+            } catch (_) {
+                payload = null;
+            }
+
+            if (!response.ok) {
+                const msg = (payload && payload.message)
+                    ? payload.message
+                    : (response.status === 403 ? 'Unauthorized (admin session required)' : `HTTP ${response.status}`);
+                throw new Error(msg);
+            }
+
+            return payload;
+        })
         .then(result => {
-            if (!result.success) {
-                contentArea.innerHTML = '<div class="text-red-600">Error loading consultations</div>';
+            if (!result || !result.success) {
+                const msg = (result && result.message) ? result.message : 'Error loading consultations';
+                contentArea.innerHTML = `<div class="text-red-600">${msg}</div>`;
                 return;
             }
             
@@ -4033,14 +4040,26 @@ function renderConsultationManagement() {
             </div>
         </div>
             `;
-            
-            contentArea.innerHTML = html;
+
             renderConsultationsTableFromData(consultations);
         })
         .catch(err => {
             console.error('Error fetching consultations:', err);
-            contentArea.innerHTML = '<div class="text-red-600">Error loading consultations</div>';
+            const details = err && err.message ? String(err.message) : 'Unknown error';
+            const hint = details.toLowerCase().includes('unauthorized') || details.toLowerCase().includes('403')
+                ? 'Please log in as Admin and refresh the page.'
+                : 'Check database connection and server logs.';
+            contentArea.innerHTML = `<div class="text-red-600">Error loading consultations<div class="text-xs text-gray-500 mt-2">${escapeHtml(details)}<br>${escapeHtml(hint)}</div></div>`;
         });
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
 }
 
 function renderConsultationsTableFromData(consultations) {
@@ -4056,9 +4075,9 @@ function renderConsultationsTableFromData(consultations) {
     tbody.innerHTML = consultations.map(consultation => {
         const statusColor = consultation.status === 'active' ? 'bg-green-100 text-green-800' : 
                            consultation.status === 'draft' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800';
-        
-        const startDate = new Date(consultation.start_date).toLocaleDateString();
-        const endDate = consultation.end_date ? new Date(consultation.end_date).toLocaleDateString() : 'TBD';
+
+        const startDate = consultation.start_date ? new Date(consultation.start_date).toLocaleDateString() : '-';
+        const endDate = consultation.end_date ? new Date(consultation.end_date).toLocaleDateString() : '-';
 
         return `
             <tr class="border-b hover:bg-gray-50 transition">
