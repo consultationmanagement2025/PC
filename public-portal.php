@@ -8,6 +8,33 @@ require_once 'db.php';
 require_once 'DATABASE/consultations.php';
 require_once 'DATABASE/feedback.php';
 
+// #region agent log - PHP email diagnostics
+if (!function_exists('agent_debug_log_php')) {
+    function agent_debug_log_php($hypothesisId, $message, $data = []) {
+        $endpoint = 'http://127.0.0.1:7242/ingest/f5bbc3d9-0d5a-4d69-abdf-32e19fe441a1';
+        $payload = [
+            'id' => 'log_' . uniqid(),
+            'timestamp' => round(microtime(true) * 1000),
+            'location' => 'public-portal.php',
+            'message' => $message,
+            'data' => $data,
+            'runId' => 'feedback-email',
+            'hypothesisId' => $hypothesisId,
+        ];
+        $context = stream_context_create([
+            'http' => [
+                'method'  => 'POST',
+                'header'  => "Content-Type: application/json\r\n",
+                'content' => json_encode($payload),
+                'timeout' => 0.5,
+            ],
+        ]);
+        // Suppress any network/logging errors so they never break the page
+        @file_get_contents($endpoint, false, $context);
+    }
+}
+// #endregion agent log - PHP email diagnostics
+
 // --- Social links (official accounts) ---
 $SOCIAL_FB = 'https://www.facebook.com/ValenzuelaCityGov/';
 $SOCIAL_IG = 'https://www.instagram.com/valenzuelacitygov/';
@@ -18,6 +45,20 @@ $section = isset($_GET['section']) ? $_GET['section'] : 'consultations';
 $allowed_sections = ['consultations', 'detail', 'feedback', 'contact', 'submit-consultation'];
 if (!in_array($section, $allowed_sections)) {
     $section = 'consultations';
+}
+
+// Determine which UI section/tab should be active on initial load
+$initial_section = 'consultations';
+if (in_array($section, ['consultations', 'detail', 'feedback', 'submit-consultation'], true)) {
+    // Map server "section" to a UI section where possible
+    $initial_section = $section === 'detail' ? 'consultations' : $section;
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['submit_consultation'])) {
+        $initial_section = 'submit-consultation';
+    } elseif (isset($_POST['submit_feedback'])) {
+        $initial_section = 'feedback';
+    }
 }
 
 // Get consultation ID if viewing detail
@@ -105,19 +146,28 @@ $consultation_submission_success = false;
 $consultation_submission_message = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_consultation'])) {
-    $consultation_name = trim($_POST['consultation_name'] ?? '');
+    $consultation_name = trim($_POST['consultation_name'] ?? ($_POST['name'] ?? ''));
     $consultation_email = trim($_POST['consultation_email'] ?? '');
-    $consultation_age = trim($_POST['consultation_age'] ?? '');
-    $consultation_gender = trim($_POST['consultation_gender'] ?? '');
-    $consultation_address = trim($_POST['consultation_address'] ?? '');
-    $consultation_barangay = trim($_POST['consultation_barangay'] ?? '');
+    $consultation_age = trim($_POST['consultation_age'] ?? ($_POST['age'] ?? ''));
+    $consultation_gender = trim($_POST['consultation_gender'] ?? ($_POST['gender'] ?? ''));
+    $consultation_address = trim($_POST['consultation_address'] ?? ($_POST['address'] ?? ''));
+    $consultation_barangay = trim($_POST['consultation_barangay'] ?? ($_POST['barangay'] ?? ''));
     $consultation_topic = trim($_POST['consultation_topic'] ?? '');
     $consultation_description = trim($_POST['consultation_description'] ?? '');
     $consultation_allow_email = isset($_POST['consultation_allow_email']) ? 1 : 0;
 
+    // Log basic submission shape (no PII)
+    agent_debug_log_php('C1', 'consultation submit POST received', [
+        'has_name' => $consultation_name !== '',
+        'has_email' => $consultation_email !== '',
+        'has_topic' => $consultation_topic !== '',
+        'has_description' => $consultation_description !== '',
+    ]);
+
     // Validate CSRF token
     if (!isset($_POST['csrf_token']) || !verifyCSRFToken($_POST['csrf_token'])) {
         $consultation_submission_message = 'Security validation failed. Please try again.';
+        agent_debug_log_php('C2', 'consultation CSRF failed', []);
     } else {
         $errors = [];
         if (empty($consultation_name)) $errors[] = 'Name is required';
@@ -143,6 +193,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_consultation']
                 $stmt->bind_param("ssssi", $title_val, $desc_val, $name_val, $email_val, $allow_val);
                 
                 if ($stmt->execute()) {
+                    agent_debug_log_php('C3', 'consultation saved successfully', [
+                        'allow_email_notifications' => (bool)$consultation_allow_email,
+                    ]);
                     // Send confirmation email to submitter
                     $subject = "Valenzuela City - Consultation Request Received";
                     $body = "Hello,\n\n";
@@ -167,13 +220,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_consultation']
                     $consultation_submission_message = 'Thank you! Your consultation request has been received. A confirmation email has been sent to ' . htmlspecialchars($consultation_email) . '.';
                 } else {
                     $consultation_submission_message = 'Error: Could not save your request. Please try again.';
+                    agent_debug_log_php('C4', 'consultation DB execute failed', [
+                        'mysqli_error' => $conn->error ?? null,
+                    ]);
                 }
                 $stmt->close();
             } else {
                 $consultation_submission_message = 'Error: Database error. Please try again.';
+                agent_debug_log_php('C5', 'consultation DB prepare failed', [
+                    'mysqli_error' => $conn->error ?? null,
+                ]);
             }
         } else {
             $consultation_submission_message = 'Error: ' . implode(', ', $errors);
+            agent_debug_log_php('C6', 'consultation validation errors', [
+                'error_count' => count($errors),
+            ]);
         }
     }
 }
@@ -227,6 +289,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_feedback'])) {
                 );
 
                 if ($feedback_id) {
+                    agent_debug_log_php('H2', 'feedback saved to DB', [
+                        'feedback_id' => (int)$feedback_id,
+                        'email' => $email,
+                        'allow_email_notifications' => (bool)$allow_email_notifications,
+                    ]);
                     // Persist notification preference when supported
                     if ($allow_email_notifications === 0) {
                         $conn->query("UPDATE feedback SET allow_email_notifications = 0 WHERE id = " . (int)$feedback_id);
@@ -250,7 +317,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_feedback'])) {
                     $body .= "Regards,\nValenzuela City Government";
 
                     $headers = "From: noreply@valenzuelacity.gov\r\nContent-Type: text/plain; charset=UTF-8";
-                    @mail($email, $subject, $body, $headers);
+                    $mailResult = @mail($email, $subject, $body, $headers);
+                    agent_debug_log_php('H1', 'feedback mail() result (simple path)', [
+                        'email' => $email,
+                        'allow_email_notifications' => (bool)$allow_email_notifications,
+                        'mailResult' => $mailResult,
+                    ]);
 
                     $submission_success = true;
                     $submission_message = 'Thank you! Your feedback has been submitted successfully. A confirmation email has been sent.';
@@ -347,7 +419,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_feedback'])) {
                         $body .= "Regards,\nValenzuela City Government";
                         
                         $headers = "From: noreply@valenzuelacity.gov\r\nContent-Type: text/plain; charset=UTF-8";
-                        @mail($email, $subject, $body, $headers);
+                        $mailResult = @mail($email, $subject, $body, $headers);
+                        agent_debug_log_php('H1', 'feedback mail() result (attachment path)', [
+                            'email' => $email,
+                            'allow_email_notifications' => (bool)$allow_email_notifications,
+                            'attachment_path' => $attachment_path,
+                            'mailResult' => $mailResult,
+                        ]);
 
                         // If attachment was saved, update the record with path
                         if ($attachment_path) {
@@ -1173,16 +1251,18 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
             <p style="color: #6b7280; font-size: 1.1rem; margin: 0;">Review and provide feedback on proposed ordinances, programs, and policies</p>
         </div>
 
-        <!-- SECTION BANNER (only for consultations) -->
-        <div style="background: linear-gradient(135deg, #111827, #1f2937); margin-bottom: 1.5rem; border-radius: 12px; overflow: hidden;">
-            <div class="max-w-7xl mx-auto px-4 py-6" style="display:flex; align-items:center; justify-content:center;">
-                <?php if (file_exists(__DIR__ . '/images/consultation.png')): ?>
-                    <img src="images/consultation.png" alt="Consultation headliner" style="width:100%; max-width:1200px; height:auto; display:block;">
-                <?php else: ?>
-                    <div style="width:100%; max-width:1200px; height:140px; background:#f3f4f6; display:flex; align-items:center; justify-content:center; color:#6b7280; font-weight:700;">Consultation Headliner</div>
-                <?php endif; ?>
+        <!-- SECTION BANNER (only for consultations list, hidden on detail/feedback) -->
+        <?php if ($section === 'consultations'): ?>
+            <div style="background: linear-gradient(135deg, #111827, #1f2937); margin-bottom: 1.5rem; border-radius: 12px; overflow: hidden;">
+                <div class="max-w-7xl mx-auto px-4 py-6" style="display:flex; align-items:center; justify-content:center;">
+                    <?php if (file_exists(__DIR__ . '/images/consultation.png')): ?>
+                        <img src="images/consultation.png" alt="Consultation headliner" style="width:100%; max-width:1200px; height:auto; display:block;">
+                    <?php else: ?>
+                        <div style="width:100%; max-width:1200px; height:140px; background:#f3f4f6; display:flex; align-items:center; justify-content:center; color:#6b7280; font-weight:700;">Consultation Headliner</div>
+                    <?php endif; ?>
+                </div>
             </div>
-        </div>
+        <?php endif; ?>
 
         <?php if ($section === 'detail' && $consultation_detail): ?>
             <!-- CONSULTATION DETAIL VIEW -->
@@ -1573,7 +1653,12 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                                                 </p>
                                             </div>
                                             <button type="button" onclick="viewConsultationDetail(<?php echo $consultation['id']; ?>)" class="btn btn-secondary" style="margin-left: auto;">
-                                                View Details <i class="bi bi-arrow-right" style="margin-left: 0.5rem;"></i>
+                                                View Details
+                                                <span aria-hidden="true" style="margin-left: 0.5rem; display: inline-flex; align-items: center;">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                                        <path fill-rule="evenodd" d="M1 8a.75.75 0 0 1 .75-.75h10.19L8.22 3.53a.75.75 0 1 1 1.06-1.06l4.75 4.75a.75.75 0 0 1 0 1.06l-4.75 4.75a.75.75 0 0 1-1.06-1.06l3.72-3.72H1.75A.75.75 0 0 1 1 8"/>
+                                                    </svg>
+                                                </span>
                                             </button>
                                         </div>
                                     </div>
@@ -1911,17 +1996,25 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                     <div class="social-icons">
                         <?php if (!empty($SOCIAL_FB)): ?>
                             <a class="social-icon" href="<?php echo htmlspecialchars($SOCIAL_FB); ?>" target="_blank" rel="noopener noreferrer nofollow" aria-label="Valenzuela on Facebook">
-                                <i class="bi bi-facebook" aria-hidden="true"></i>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                    <path d="M16 8.049c0-4.446-3.582-8.05-8-8.05C3.58 0-.002 3.603-.002 8.05c0 4.017 2.926 7.347 6.75 7.951v-5.625H4.72V8.05h2.03V6.275c0-2.007 1.195-3.118 3.027-3.118.876 0 1.791.157 1.791.157v1.98h-1.01c-.995 0-1.304.621-1.304 1.258v1.497h2.218l-.354 2.326H9.254V16c3.824-.604 6.75-3.934 6.75-7.951"/>
+                                </svg>
                             </a>
                         <?php endif; ?>
                         <?php if (!empty($SOCIAL_IG)): ?>
                             <a class="social-icon" href="<?php echo htmlspecialchars($SOCIAL_IG); ?>" target="_blank" rel="noopener noreferrer nofollow" aria-label="Valenzuela on Instagram">
-                                <i class="bi bi-instagram" aria-hidden="true"></i>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                    <path d="M8 5a3 3 0 1 0 0 6 3 3 0 0 0 0-6m0-1a4 4 0 1 1 0 8A4 4 0 0 1 8 4"/>
+                                    <path d="M12.5 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/>
+                                    <path d="M3 0a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V3a3 3 0 0 0-3-3zm0 1h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2"/>
+                                </svg>
                             </a>
                         <?php endif; ?>
                         <?php if (!empty($SOCIAL_YT)): ?>
                             <a class="social-icon" href="<?php echo htmlspecialchars($SOCIAL_YT); ?>" target="_blank" rel="noopener noreferrer nofollow" aria-label="Valenzuela on YouTube">
-                                <i class="bi bi-youtube" aria-hidden="true"></i>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                                    <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.41l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.01 2.01 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.01 2.01 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31 31 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.527.119-1.03.22-1.41a2.01 2.01 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A99 99 0 0 1 7.858 2zM6.4 5.209v4.818l4.157-2.408z"/>
+                                </svg>
                             </a>
                         <?php endif; ?>
                     </div>
@@ -2016,6 +2109,72 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
         window.closePolicyModal = function(){ var pm = document.getElementById('policyModal'); if (pm) pm.style.display = 'none'; };
         window.closeTermsModal = function(){ var tm = document.getElementById('termsModal'); if (tm) tm.style.display = 'none'; };
     })();
+</script>
+
+<script>
+// #region agent log - icon diagnostics
+(function() {
+    function agentLog(hypothesisId, message, data) {
+        try {
+            fetch('http://127.0.0.1:7242/ingest/f5bbc3d9-0d5a-4d69-abdf-32e19fe441a1', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    runId: 'pre-fix',
+                    hypothesisId: hypothesisId,
+                    location: 'public-portal.php:icons',
+                    message: message,
+                    data: data || {},
+                    timestamp: Date.now()
+                })
+            }).catch(function() {});
+        } catch (e) {
+            // Swallow logging errors
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // H1: Bootstrap Icons stylesheet might not be loading
+        var biSheet = null;
+        try {
+            var sheets = Array.prototype.slice.call(document.styleSheets || []);
+            for (var i = 0; i < sheets.length; i++) {
+                var href = sheets[i].href || '';
+                if (href.indexOf('bootstrap-icons') !== -1) {
+                    biSheet = sheets[i];
+                    break;
+                }
+            }
+        } catch (e) {
+            // Access to styleSheets can throw in some CSP contexts
+        }
+        agentLog('H1', 'bootstrap-icons stylesheet presence', {
+            hasSheet: !!biSheet,
+            href: biSheet && biSheet.href ? biSheet.href : null
+        });
+
+        // H2/H3: Icon elements exist but their glyph/content may be missing/overridden
+        var icon = document.querySelector('.footer-follow .bi, .btn .bi');
+        if (!icon) {
+            agentLog('H2', 'no icon element found in footer/button', {});
+            return;
+        }
+
+        var computed = window.getComputedStyle ? window.getComputedStyle(icon) : null;
+        var before = window.getComputedStyle ? window.getComputedStyle(icon, '::before') : null;
+
+        agentLog('H3', 'icon computed styles', {
+            tagName: icon.tagName,
+            classes: icon.className,
+            fontFamily: computed ? computed.fontFamily : null,
+            color: computed ? computed.color : null,
+            beforeContent: before ? before.content : null
+        });
+    });
+})();
+// #endregion agent log - icon diagnostics
 </script>
 
 </body>
