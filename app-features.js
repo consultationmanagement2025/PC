@@ -60,10 +60,27 @@ document.addEventListener('DOMContentLoaded', function() {
     showSection('public-consultation');
     updateHeaderUserDisplays();
     
+    // Pre-fetch consultations and feedback so dashboard stats are populated on first visit
+    Promise.all([
+        loadConsultationsFromApi().catch(e => console.warn('Initial consultations load:', e)),
+        loadFeedbackFromApi().catch(e => console.warn('Initial feedback load:', e))
+    ]).then(() => {
+        // Re-render dashboard if still on the public-consultation section
+        const breadcrumb = document.querySelector('.breadcrumb-current');
+        if (breadcrumb && breadcrumb.textContent === 'Public Consultation') {
+            renderPublicConsultation();
+        }
+    });
+    
     // Delay notification loading slightly to ensure DOM is ready
     setTimeout(function() {
         loadNotifications();
     }, 100);
+    
+    // Poll for new notifications every 20 seconds (real-time updates)
+    setInterval(function() {
+        loadNotifications();
+    }, 20000);
     
     // Close notifications dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -188,10 +205,10 @@ function mapDbUserToUi(row) {
         id: Number(row.id),
         name: String(row.fullname || row.name || row.username || ''),
         email: String(row.email || ''),
-        role: String(row.role || 'Viewer'),
-        department: String(row.department || ''),
+        role: String(row.role || 'viewer'),
         status: String(row.status || 'active').toLowerCase(),
-        lastLogin: row.last_login || row.lastLogin || ''
+        lastLogin: row.last_login || row.lastLogin || '',
+        createdAt: row.created_at || row.createdAt || ''
     };
 }
 
@@ -442,7 +459,7 @@ function renderDashboard() {
                         <i class="bi bi-bar-chart mr-2"></i>View Reports
                     </button>
                     <button onclick="showSection('users')" class="btn-outline w-full flex items-center justify-center">
-                        <i class="bi bi-people mr-2"></i>Manage Users
+                        <i class="bi bi-people mr-2"></i>User Management
                     </button>
                 </div>
             </div>
@@ -1070,8 +1087,11 @@ function renderDocumentsByStatusChart() {
 }
 
 // ==============================
-// USERS MODULE
+// USERS MODULE (User Management — Citizens + Staff)
 // ==============================
+var _userMgmtTab = 'citizens'; // 'citizens' or 'staff'
+var _citizenData = [];
+
 function renderUsers(skipLoad = false) {
     const pageTitle = document.querySelector('.page-title');
     const breadcrumbCurrent = document.querySelector('.breadcrumb-current');
@@ -1079,46 +1099,104 @@ function renderUsers(skipLoad = false) {
     if (pageTitle) pageTitle.textContent = 'User Management';
     if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'User Management';
 
-    const totalUsers = AppData.users.length;
-    const activeUsers = AppData.users.filter(u => u.status === 'active').length;
-    const adminUsers = AppData.users.filter(u => u.role === 'Administrator').length;
+    const totalStaff = AppData.users.length;
+    const totalCitizens = _citizenData.length;
+    const totalConsultations = _citizenData.reduce((s, c) => s + (c.consultation_count || 0), 0);
+    const totalFeedbacks = _citizenData.reduce((s, c) => s + (c.feedback_count || 0), 0);
+
+    const citizenTabActive = _userMgmtTab === 'citizens';
+    const staffTabActive = _userMgmtTab === 'staff';
 
     const html = `
         <div class="space-y-6">
-            <!-- Header with Statistics -->
+            <!-- Header -->
             <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-8 rounded-lg shadow-lg">
                 <div class="flex justify-between items-start mb-6">
                     <div>
                         <h1 class="text-3xl font-bold mb-2">User Management</h1>
-                        <p class="text-red-100">Manage user accounts, roles, departments, and permissions</p>
+                        <p class="text-red-100">Manage citizen submitters and staff accounts</p>
                     </div>
-                    <button onclick="openAddUserModal()" class="btn-primary flex items-center gap-2 bg-white text-red-600 hover:bg-red-50">
-                        <i class="bi bi-person-plus"></i> Add New User
-                    </button>
+                    ${staffTabActive ? `<button onclick="openAddUserModal()" class="btn-primary flex items-center gap-2 bg-white text-red-600 hover:bg-red-50">
+                        <i class="bi bi-person-plus"></i> Add Staff Account
+                    </button>` : ''}
                 </div>
                 
                 <!-- Stats Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
-                        <div class="text-red-100 text-sm font-semibold mb-1">Total Users</div>
-                        <div class="text-3xl font-bold">${totalUsers}</div>
+                        <div class="text-red-100 text-sm font-semibold mb-1">Citizen Submitters</div>
+                        <div class="text-3xl font-bold">${totalCitizens}</div>
                     </div>
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
-                        <div class="text-red-100 text-sm font-semibold mb-1">Active Users</div>
-                        <div class="text-3xl font-bold">${activeUsers}</div>
+                        <div class="text-red-100 text-sm font-semibold mb-1">Total Consultations</div>
+                        <div class="text-3xl font-bold">${totalConsultations}</div>
                     </div>
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
-                        <div class="text-red-100 text-sm font-semibold mb-1">Administrators</div>
-                        <div class="text-3xl font-bold">${adminUsers}</div>
+                        <div class="text-red-100 text-sm font-semibold mb-1">Total Feedback</div>
+                        <div class="text-3xl font-bold">${totalFeedbacks}</div>
+                    </div>
+                    <div class="bg-white bg-opacity-20 rounded-lg p-4">
+                        <div class="text-red-100 text-sm font-semibold mb-1">Staff Accounts</div>
+                        <div class="text-3xl font-bold">${totalStaff}</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Filter and Search -->
+            <!-- Tab Switcher -->
+            <div class="bg-white rounded-lg shadow p-1 flex gap-1">
+                <button onclick="_userMgmtTab='citizens'; renderUsers(true);" class="flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${citizenTabActive ? 'bg-red-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}">
+                    <i class="bi bi-people"></i> Citizen Submitters <span class="ml-1 px-2 py-0.5 rounded-full text-xs ${citizenTabActive ? 'bg-white bg-opacity-20' : 'bg-gray-200'}">${totalCitizens}</span>
+                </button>
+                <button onclick="_userMgmtTab='staff'; renderUsers(true);" class="flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${staffTabActive ? 'bg-red-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}">
+                    <i class="bi bi-shield-lock"></i> Staff Accounts <span class="ml-1 px-2 py-0.5 rounded-full text-xs ${staffTabActive ? 'bg-white bg-opacity-20' : 'bg-gray-200'}">${totalStaff}</span>
+                </button>
+            </div>
+
+            ${citizenTabActive ? `
+            <!-- CITIZEN SUBMITTERS TAB -->
             <div class="bg-white p-6 rounded-lg shadow">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Search Users</label>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Search Citizens</label>
+                        <input type="text" id="citizen-search" placeholder="Search by name or email..." 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                            onkeyup="renderCitizensTable()">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Sort By</label>
+                        <select id="citizen-sort" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                            onchange="renderCitizensTable()">
+                            <option value="recent">Most Recent Activity</option>
+                            <option value="submissions">Most Submissions</option>
+                            <option value="name">Name (A-Z)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-100 border-b-2 border-gray-300">
+                            <tr>
+                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Citizen</th>
+                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Email</th>
+                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Consultations</th>
+                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Feedback</th>
+                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Total</th>
+                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Last Activity</th>
+                            </tr>
+                        </thead>
+                        <tbody id="citizens-table-body">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            ` : `
+            <!-- STAFF ACCOUNTS TAB -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Search Staff</label>
                         <input type="text" id="user-search" placeholder="Search by name or email..." 
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                             onkeyup="filterUsers()">
@@ -1128,10 +1206,9 @@ function renderUsers(skipLoad = false) {
                         <select id="user-role-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
                             onchange="filterUsers()">
                             <option value="">All Roles</option>
-                            <option value="Administrator">Administrator</option>
-                            <option value="Officer">Officer</option>
-                            <option value="Staff">Staff</option>
-                            <option value="Viewer">Viewer</option>
+                            <option value="admin">Admin</option>
+                            <option value="staff">Staff</option>
+                            <option value="viewer">Viewer</option>
                         </select>
                     </div>
                     <div>
@@ -1143,21 +1220,8 @@ function renderUsers(skipLoad = false) {
                             <option value="inactive">Inactive</option>
                         </select>
                     </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Department</label>
-                        <select id="user-dept-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
-                            onchange="filterUsers()">
-                            <option value="">All Departments</option>
-                            <option value="IT Department">IT Department</option>
-                            <option value="Legislative">Legislative</option>
-                            <option value="Records">Records</option>
-                            <option value="Public">Public</option>
-                        </select>
-                    </div>
                 </div>
             </div>
-
-            <!-- Users Table -->
             <div class="bg-white rounded-lg shadow overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
@@ -1166,9 +1230,9 @@ function renderUsers(skipLoad = false) {
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Name</th>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Email</th>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Role</th>
-                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Department</th>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Status</th>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Last Login</th>
+                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Created</th>
                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Actions</th>
                             </tr>
                         </thead>
@@ -1177,46 +1241,42 @@ function renderUsers(skipLoad = false) {
                     </table>
                 </div>
             </div>
+            `}
         </div>
 
         <!-- Add/Edit User Modal -->
         <div id="user-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-96 overflow-y-auto">
+            <div class="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
                 <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-6 flex justify-between items-center">
-                    <h2 id="user-modal-title" class="text-2xl font-bold">Add New User</h2>
+                    <h2 id="user-modal-title" class="text-2xl font-bold">Add Staff Account</h2>
                     <button onclick="closeUserModal()" class="text-white hover:text-red-100 text-2xl">&times;</button>
                 </div>
                 <div class="p-6 space-y-4">
                     <input type="hidden" id="user-id">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Full Name *</label>
-                            <input type="text" id="user-name" placeholder="Full name" 
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Email *</label>
-                            <input type="email" id="user-email" placeholder="user@lgu.gov.ph" 
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
-                        </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Full Name *</label>
+                        <input type="text" id="user-name" placeholder="e.g. Juan Dela Cruz" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Email *</label>
+                        <input type="email" id="user-email" placeholder="official@valenzuela.gov.ph" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                    </div>
+                    <div id="user-password-group">
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Password *</label>
+                        <input type="password" id="user-password" placeholder="Min 12 chars, uppercase, lowercase, number, symbol" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                        <p class="text-xs text-gray-500 mt-1">Required for new accounts. Leave blank when editing to keep current password.</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-semibold text-gray-700 mb-2">Role *</label>
                             <select id="user-role" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500">
                                 <option value="">Select Role</option>
-                                <option value="Administrator">Administrator</option>
-                                <option value="Officer">Officer</option>
-                                <option value="Staff">Staff</option>
-                                <option value="Viewer">Viewer</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Department *</label>
-                            <select id="user-department" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500">
-                                <option value="">Select Department</option>
-                                <option value="IT Department">IT Department</option>
-                                <option value="Legislative">Legislative</option>
-                                <option value="Records">Records</option>
-                                <option value="Public">Public</option>
+                                <option value="admin">Admin</option>
+                                <option value="staff">Staff</option>
+                                <option value="viewer">Viewer</option>
                             </select>
                         </div>
                         <div>
@@ -1226,14 +1286,9 @@ function renderUsers(skipLoad = false) {
                                 <option value="inactive">Inactive</option>
                             </select>
                         </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Last Login</label>
-                            <input type="datetime-local" id="user-lastlogin" 
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
-                        </div>
                     </div>
                     <div class="flex gap-3 pt-4">
-                        <button onclick="saveUser()" class="flex-1 btn-primary">Save User</button>
+                        <button onclick="saveUser()" class="flex-1 btn-primary">Save Account</button>
                         <button onclick="closeUserModal()" class="flex-1 btn-secondary">Cancel</button>
                     </div>
                 </div>
@@ -1242,9 +1297,9 @@ function renderUsers(skipLoad = false) {
 
         <!-- User Details Modal -->
         <div id="user-details-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-96 overflow-y-auto">
+            <div class="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
                 <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-6 flex justify-between items-center">
-                    <h2 id="user-details-title" class="text-2xl font-bold">User Details</h2>
+                    <h2 id="user-details-title" class="text-2xl font-bold">Details</h2>
                     <button onclick="closeUserDetailsModal()" class="text-white hover:text-red-100 text-2xl">&times;</button>
                 </div>
                 <div id="user-details-content" class="p-6 space-y-4">
@@ -1255,24 +1310,107 @@ function renderUsers(skipLoad = false) {
     
     document.getElementById('content-area').innerHTML = html;
 
-    const tbody = document.getElementById('users-table-body');
     if (!skipLoad) {
-        if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">Loading users...</td></tr>';
-        }
-
-        loadUsersFromApi()
+        // Load both citizens and staff data
+        const citizenPromise = loadCitizensFromApi();
+        const staffPromise = loadUsersFromApi();
+        
+        Promise.all([citizenPromise, staffPromise])
             .then(() => renderUsers(true))
             .catch(err => {
-                const msg = String(err && err.message ? err.message : err);
-                if (tbody) {
-                    tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-red-600">Failed to load users.<div class="text-xs text-gray-500 mt-2">${msg}</div></td></tr>`;
-                }
+                console.error('User management load error:', err);
+                renderUsers(true);
             });
         return;
     }
 
-    renderUsersTable();
+    if (_userMgmtTab === 'citizens') {
+        renderCitizensTable();
+    } else {
+        renderUsersTable();
+    }
+}
+
+// ── Load citizen submitters from API ──
+async function loadCitizensFromApi() {
+    try {
+        const res = await fetch('API/citizens_api.php?action=list');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) {
+            _citizenData = data.data;
+        }
+    } catch (err) {
+        console.error('Failed to load citizens:', err);
+    }
+}
+
+// ── Render citizens table ──
+function renderCitizensTable() {
+    const tbody = document.getElementById('citizens-table-body');
+    if (!tbody) return;
+
+    let citizens = [..._citizenData];
+    
+    // Search filter
+    const search = (document.getElementById('citizen-search')?.value || '').toLowerCase();
+    if (search) {
+        citizens = citizens.filter(c => 
+            (c.name || '').toLowerCase().includes(search) || 
+            (c.email || '').toLowerCase().includes(search)
+        );
+    }
+
+    // Sort
+    const sort = document.getElementById('citizen-sort')?.value || 'recent';
+    if (sort === 'recent') {
+        citizens.sort((a, b) => new Date(b.last_activity || 0) - new Date(a.last_activity || 0));
+    } else if (sort === 'submissions') {
+        citizens.sort((a, b) => (b.total_submissions || 0) - (a.total_submissions || 0));
+    } else if (sort === 'name') {
+        citizens.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    }
+
+    if (citizens.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">${search ? 'No citizens match your search' : 'No citizen submissions recorded yet'}</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = citizens.map(c => {
+        const lastAct = c.last_activity ? new Date(c.last_activity).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
+        const initials = (c.name || 'U').split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+        return `
+            <tr class="border-b hover:bg-gray-50 transition">
+                <td class="px-6 py-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <span class="text-blue-600 font-bold text-sm">${initials}</span>
+                        </div>
+                        <div>
+                            <div class="font-semibold text-gray-900">${escapeHtml(c.name || 'Unknown')}</div>
+                            <div class="text-xs text-gray-500">Citizen Submitter</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-6 py-4 text-gray-700">${escapeHtml(c.email)}</td>
+                <td class="px-6 py-4 text-center">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${c.consultation_count > 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'}">
+                        <i class="bi bi-chat-square-text"></i> ${c.consultation_count || 0}
+                    </span>
+                </td>
+                <td class="px-6 py-4 text-center">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${c.feedback_count > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'}">
+                        <i class="bi bi-chat-heart"></i> ${c.feedback_count || 0}
+                    </span>
+                </td>
+                <td class="px-6 py-4 text-center">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">
+                        ${c.total_submissions || 0}
+                    </span>
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-600">${lastAct}</td>
+            </tr>
+        `;
+    }).join('');
 }
 
 function renderUsersTable() {
@@ -1280,15 +1418,20 @@ function renderUsersTable() {
     const users = getFilteredUsers();
 
     if (users.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No users found</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No staff accounts found</td></tr>`;
         return;
     }
 
     tbody.innerHTML = users.map(user => {
         const statusColor = user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
-        const roleIcon = user.role === 'Administrator' ? 'bi-shield-lock' : 
-                        user.role === 'Officer' ? 'bi-briefcase' : 
-                        user.role === 'Staff' ? 'bi-person-fill' : 'bi-eye';
+        const roleLower = String(user.role).toLowerCase();
+        const roleIcon = (roleLower === 'admin' || roleLower === 'administrator') ? 'bi-shield-lock' : 
+                        roleLower === 'staff' ? 'bi-person-fill' : 'bi-eye';
+        const roleBadge = (roleLower === 'admin' || roleLower === 'administrator') ? 'bg-red-100 text-red-800' :
+                         roleLower === 'staff' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700';
+        const roleLabel = (roleLower === 'admin' || roleLower === 'administrator') ? 'Admin' :
+                         roleLower === 'staff' ? 'Staff' : 'Viewer';
+        const createdAt = user.createdAt || 'N/A';
 
         return `
             <tr class="border-b hover:bg-gray-50 transition">
@@ -1298,24 +1441,24 @@ function renderUsersTable() {
                             <span class="text-red-600 font-bold text-sm">${getInitials(user.name)}</span>
                         </div>
                         <div>
-                            <div class="font-semibold text-gray-900">${user.name}</div>
+                            <div class="font-semibold text-gray-900">${escapeHtml(user.name)}</div>
                         </div>
                     </div>
                 </td>
-                <td class="px-6 py-4 text-gray-700">${user.email}</td>
+                <td class="px-6 py-4 text-gray-700">${escapeHtml(user.email)}</td>
                 <td class="px-6 py-4">
-                    <span class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${roleBadge}">
                         <i class="bi ${roleIcon}"></i>
-                        ${user.role}
+                        ${roleLabel}
                     </span>
                 </td>
-                <td class="px-6 py-4 text-gray-700">${user.department}</td>
                 <td class="px-6 py-4">
                     <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColor}">
                         ${user.status.charAt(0).toUpperCase() + user.status.slice(1)}
                     </span>
                 </td>
-                <td class="px-6 py-4 text-sm text-gray-600">${user.lastLogin}</td>
+                <td class="px-6 py-4 text-sm text-gray-600">${user.lastLogin || 'Never'}</td>
+                <td class="px-6 py-4 text-sm text-gray-600">${createdAt}</td>
                 <td class="px-6 py-4 text-center">
                     <div class="flex gap-2 justify-center">
                         <button onclick="viewUserDetails(${user.id})" class="text-blue-600 hover:text-blue-800" title="View">
@@ -1343,7 +1486,6 @@ function getFilteredUsers() {
     const searchTerm = document.getElementById('user-search')?.value.toLowerCase() || '';
     const roleFilter = document.getElementById('user-role-filter')?.value || '';
     const statusFilter = document.getElementById('user-status-filter')?.value || '';
-    const deptFilter = document.getElementById('user-dept-filter')?.value || '';
 
     if (searchTerm) {
         filtered = filtered.filter(u => 
@@ -1353,15 +1495,11 @@ function getFilteredUsers() {
     }
     
     if (roleFilter) {
-        filtered = filtered.filter(u => u.role === roleFilter);
+        filtered = filtered.filter(u => String(u.role).toLowerCase() === roleFilter.toLowerCase());
     }
     
     if (statusFilter) {
         filtered = filtered.filter(u => u.status === statusFilter);
-    }
-    
-    if (deptFilter) {
-        filtered = filtered.filter(u => u.department === deptFilter);
     }
 
     return filtered;
@@ -1373,13 +1511,15 @@ function filterUsers() {
 
 function openAddUserModal() {
     document.getElementById('user-id').value = '';
-    document.getElementById('user-modal-title').textContent = 'Add New User';
+    document.getElementById('user-modal-title').textContent = 'Add Staff Account';
     document.getElementById('user-name').value = '';
     document.getElementById('user-email').value = '';
+    const pwGroup = document.getElementById('user-password-group');
+    if (pwGroup) pwGroup.style.display = '';
+    const pwInput = document.getElementById('user-password');
+    if (pwInput) pwInput.value = '';
     document.getElementById('user-role').value = '';
-    document.getElementById('user-department').value = '';
     document.getElementById('user-status').value = 'active';
-    document.getElementById('user-lastlogin').value = '';
     document.getElementById('user-modal').classList.remove('hidden');
 }
 
@@ -1392,61 +1532,57 @@ function editUserForm(id) {
     if (!user) return;
 
     document.getElementById('user-id').value = id;
-    document.getElementById('user-modal-title').textContent = 'Edit User';
+    document.getElementById('user-modal-title').textContent = 'Edit Staff Account';
     document.getElementById('user-name').value = user.name;
     document.getElementById('user-email').value = user.email;
-    document.getElementById('user-role').value = user.role;
-    document.getElementById('user-department').value = user.department;
+    const pwInput = document.getElementById('user-password');
+    if (pwInput) pwInput.value = '';
+    document.getElementById('user-role').value = String(user.role).toLowerCase();
     document.getElementById('user-status').value = user.status;
-    document.getElementById('user-lastlogin').value = user.lastLogin ? user.lastLogin.replace(' ', 'T') : '';
     document.getElementById('user-modal').classList.remove('hidden');
 }
 
-function saveUser() {
+async function saveUser() {
     const id = document.getElementById('user-id').value;
     const name = document.getElementById('user-name').value.trim();
     const email = document.getElementById('user-email').value.trim();
     const role = document.getElementById('user-role').value;
-    const department = document.getElementById('user-department').value;
     const status = document.getElementById('user-status').value;
-    const lastLogin = document.getElementById('user-lastlogin').value;
+    const password = document.getElementById('user-password')?.value || '';
 
-    if (!name || !email || !role || !department) {
+    if (!name || !email || !role) {
         showNotification('Please fill in all required fields', 'error');
         return;
     }
 
-    if (id) {
-        // Update existing
-        const user = AppData.users.find(u => u.id === parseInt(id));
-        if (user) {
-            user.name = name;
-            user.email = email;
-            user.role = role;
-            user.department = department;
-            user.status = status;
-            if (lastLogin) user.lastLogin = new Date(lastLogin).toLocaleString();
-            showNotification('User updated successfully', 'success');
-            addAuditLog('update', `Updated user ${name}`);
-        }
-    } else {
-        // Create new
-        const newUser = {
-            id: Math.max(...AppData.users.map(u => u.id), 0) + 1,
-            name,
-            email,
-            role,
-            department,
-            status,
-            lastLogin: new Date().toLocaleString()
-        };
-        AppData.users.push(newUser);
-        showNotification('User created successfully', 'success');
-        addAuditLog('create', `Created new user ${name}`);
+    if (!id && !password) {
+        showNotification('Password is required for new accounts', 'error');
+        return;
     }
 
-    closeUserModal();
-    renderUsers();
+    try {
+        const payload = { name, email, role, status };
+        if (password) payload.password = password;
+        if (id) payload.id = parseInt(id);
+
+        const action = id ? 'update' : 'create';
+        const res = await fetch(`API/users_api.php?action=${action}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !data.success) {
+            throw new Error((data && data.message) || 'Failed to save account');
+        }
+
+        showNotification(id ? 'Account updated successfully' : 'Staff account created successfully', 'success');
+        closeUserModal();
+        renderUsers();
+    } catch (err) {
+        showNotification(String(err.message || err), 'error');
+    }
 }
 
 function viewUserDetails(id) {
@@ -1454,33 +1590,36 @@ function viewUserDetails(id) {
     if (!user) return;
 
     const statusColor = user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
+    const roleLower = String(user.role).toLowerCase();
+    const roleLabel = (roleLower === 'admin' || roleLower === 'administrator') ? 'Admin' :
+                     roleLower === 'staff' ? 'Staff' : 'Viewer';
 
     document.getElementById('user-details-title').textContent = user.name;
     document.getElementById('user-details-content').innerHTML = `
         <div class="grid grid-cols-2 gap-4">
             <div>
                 <label class="text-xs font-semibold text-gray-500 uppercase">Email</label>
-                <p class="text-gray-900 font-semibold mt-1">${user.email}</p>
+                <p class="text-gray-900 font-semibold mt-1">${escapeHtml(user.email)}</p>
             </div>
             <div>
                 <label class="text-xs font-semibold text-gray-500 uppercase">Role</label>
-                <p class="text-gray-900 font-semibold mt-1">${user.role}</p>
-            </div>
-            <div>
-                <label class="text-xs font-semibold text-gray-500 uppercase">Department</label>
-                <p class="text-gray-900 font-semibold mt-1">${user.department}</p>
+                <p class="text-gray-900 font-semibold mt-1">${roleLabel}</p>
             </div>
             <div>
                 <label class="text-xs font-semibold text-gray-500 uppercase">Status</label>
                 <p class="mt-1"><span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColor}">${user.status.charAt(0).toUpperCase() + user.status.slice(1)}</span></p>
             </div>
             <div>
-                <label class="text-xs font-semibold text-gray-500 uppercase">Last Login</label>
-                <p class="text-gray-900 font-semibold mt-1">${user.lastLogin}</p>
+                <label class="text-xs font-semibold text-gray-500 uppercase">Account ID</label>
+                <p class="text-gray-900 font-semibold mt-1">#${user.id}</p>
             </div>
             <div>
-                <label class="text-xs font-semibold text-gray-500 uppercase">User ID</label>
-                <p class="text-gray-900 font-semibold mt-1">#${user.id}</p>
+                <label class="text-xs font-semibold text-gray-500 uppercase">Last Login</label>
+                <p class="text-gray-900 font-semibold mt-1">${user.lastLogin || 'Never'}</p>
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-500 uppercase">Created</label>
+                <p class="text-gray-900 font-semibold mt-1">${user.createdAt || 'N/A'}</p>
             </div>
         </div>
 
@@ -1489,9 +1628,6 @@ function viewUserDetails(id) {
             <div class="space-y-2">
                 <button onclick="resetUserPassword(${user.id})" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold">
                     <i class="bi bi-key mr-2"></i> Reset Password
-                </button>
-                <button onclick="sendUserEmail(${user.id})" class="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold">
-                    <i class="bi bi-envelope mr-2"></i> Send Email
                 </button>
             </div>
         </div>
@@ -1508,26 +1644,38 @@ function closeUserDetailsModal() {
     document.getElementById('user-details-modal').classList.add('hidden');
 }
 
-function toggleUserStatus(id) {
+async function toggleUserStatus(id) {
     const user = AppData.users.find(u => u.id === id);
     if (!user) return;
     
-    user.status = user.status === 'active' ? 'inactive' : 'active';
-    renderUsers();
-    showNotification(`User ${user.name} is now ${user.status}`, 'success');
-    addAuditLog('update', `Changed status of user ${user.name} to ${user.status}`);
+    const newStatus = user.status === 'active' ? 'inactive' : 'active';
+    try {
+        const res = await fetch('API/users_api.php?action=update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ id: user.id, status: newStatus })
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !data.success) {
+            throw new Error((data && data.message) || 'Failed to update status');
+        }
+        user.status = newStatus;
+        renderUsers(true);
+        showNotification(`${user.name} is now ${newStatus}`, 'success');
+    } catch (err) {
+        showNotification(String(err.message || err), 'error');
+    }
 }
 
 function deleteUser(id) {
-    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
+    if (!confirm('Are you sure you want to delete this staff account? This action cannot be undone.')) return;
     
     const user = AppData.users.find(u => u.id === id);
     const index = AppData.users.findIndex(u => u.id === id);
     if (index > -1) {
         AppData.users.splice(index, 1);
-        renderUsers();
-        showNotification(`User ${user.name} deleted successfully`, 'success');
-        addAuditLog('delete', `Deleted user ${user.name}`);
+        renderUsers(true);
+        showNotification(`Account for ${user.name} deleted`, 'success');
     }
 }
 
@@ -1535,16 +1683,26 @@ function resetUserPassword(id) {
     const user = AppData.users.find(u => u.id === id);
     if (!user) return;
     
-    showNotification(`Password reset link sent to ${user.email}`, 'success');
-    addAuditLog('security', `Reset password for user ${user.name}`);
-}
-
-function sendUserEmail(id) {
-    const user = AppData.users.find(u => u.id === id);
-    if (!user) return;
+    const newPw = prompt('Enter new password for ' + user.name + ' (min 12 chars):');
+    if (!newPw || newPw.length < 12) {
+        if (newPw !== null) showNotification('Password must be at least 12 characters', 'error');
+        return;
+    }
     
-    showNotification(`Email sent to ${user.email}`, 'success');
-    addAuditLog('communication', `Sent email to user ${user.name}`);
+    fetch('API/users_api.php?action=update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ id: user.id, password: newPw })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(`Password reset for ${user.name}`, 'success');
+        } else {
+            showNotification(data.message || 'Failed to reset password', 'error');
+        }
+    })
+    .catch(err => showNotification(String(err), 'error'));
 }
 
 // ==============================
@@ -3171,35 +3329,32 @@ function renderPublicConsultation() {
                 </div>
             </div>
 
-            <!-- Recent Activity Section -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Recent Activity + Analytics Section (3 columns) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <!-- Recent Feedback -->
-                <div class="bg-white rounded-lg shadow p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-bold text-gray-900">Recent Feedback</h3>
-                        <span class="text-xs bg-red-100 text-red-800 px-3 py-1 rounded-full">${totalFeedback} Total</span>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-sm font-bold text-gray-900">Recent Feedback</h3>
+                        <span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full">${totalFeedback} Total</span>
                     </div>
-                    <div class="space-y-3 max-h-80 overflow-y-auto" id="recent-feedback-list">
+                    <div class="space-y-2 max-h-64 overflow-y-auto" id="recent-feedback-list">
                     </div>
                 </div>
 
                 <!-- Draft Submissions -->
-                <div class="bg-white rounded-lg shadow p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-bold text-gray-900">Draft Submissions (Needs Review)</h3>
-                        <span class="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full">${draftConsults} Draft</span>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-sm font-bold text-gray-900">Draft Submissions</h3>
+                        <span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">${draftConsults} Draft</span>
                     </div>
-                    <div class="space-y-3 max-h-80 overflow-y-auto" id="upcoming-list">
+                    <div class="space-y-2 max-h-64 overflow-y-auto" id="upcoming-list">
                     </div>
                 </div>
-            </div>
 
-            <!-- Analytics Section -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Feedback Chart -->
-                <div class="bg-white rounded-lg shadow p-6">
-                    <h3 class="text-lg font-bold text-gray-900 mb-4">Consultation Status Distribution</h3>
-                    <div style="height: 300px;">
+                <!-- Consultation Status Chart -->
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h3 class="text-sm font-bold text-gray-900 mb-3">Status Distribution</h3>
+                    <div style="height: 240px;">
                         <canvas id="pcStatusChart"></canvas>
                     </div>
                 </div>
@@ -3379,7 +3534,7 @@ function renderHelp() {
                     </div>
                     <div>
                         <p class="font-medium">How do I manage users?</p>
-                        <p class="text-sm text-gray-600 mt-1">Go to Users → Manage Users to add or edit accounts.</p>
+                        <p class="text-sm text-gray-600 mt-1">Go to Administration → User Management to view citizen submitters and manage staff accounts.</p>
                     </div>
                     <div>
                         <p class="font-medium">Where can I view consultation feedback?</p>
@@ -4541,6 +4696,9 @@ function renderFeedbackCollection() {
                         <h1 class="text-3xl font-bold mb-2">Feedback Collection</h1>
                         <p class="text-red-100">Collect, manage, and analyze public feedback from consultations</p>
                     </div>
+                    <button onclick="runBatchSentimentAnalysis()" class="btn-primary flex items-center gap-2 bg-white text-red-600 hover:bg-red-50 text-sm">
+                        <i class="bi bi-cpu"></i> Analyze All Sentiment
+                    </button>
                 </div>
                 
                 <!-- Stats Cards -->
@@ -4602,6 +4760,7 @@ function renderFeedbackCollection() {
                             <tr>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Author</th>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Message</th>
+                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Sentiment</th>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Consultation</th>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Date</th>
                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Actions</th>
@@ -4646,7 +4805,9 @@ function mapDbFeedbackToUi(row) {
         date: createdAt,
         status: String(row.status || 'new').toLowerCase(),
         rating: row.rating !== null && row.rating !== undefined ? Number(row.rating) : null,
-        category: row.category || ''
+        category: row.category || '',
+        sentimentTag: row.sentiment_tag || '',
+        sentimentScore: row.sentiment_score !== null && row.sentiment_score !== undefined ? Number(row.sentiment_score) : null
     };
 }
 
@@ -4755,7 +4916,7 @@ function renderFeedbackTable() {
     const feedbackList = getFilteredFeedback();
 
     if (feedbackList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No feedback found</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">No feedback found</td></tr>`;
         return;
     }
 
@@ -4766,11 +4927,23 @@ function renderFeedbackTable() {
         const rowClass = isOverdue ? 'bg-red-50' : '';
         const dateText = feedback.date ? new Date(feedback.date).toLocaleDateString() : '-';
 
+        // Sentiment badge
+        const sent = feedback.sentimentTag || '';
+        let sentimentBadge = '<span class="text-xs text-gray-400 italic">Not analyzed</span>';
+        if (sent === 'positive') {
+            sentimentBadge = '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800"><i class="bi bi-emoji-smile"></i> Positive</span>';
+        } else if (sent === 'negative') {
+            sentimentBadge = '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800"><i class="bi bi-emoji-frown"></i> Negative</span>';
+        } else if (sent === 'neutral') {
+            sentimentBadge = '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700"><i class="bi bi-emoji-neutral"></i> Neutral</span>';
+        }
+
         return `
             <tr class="border-b hover:bg-gray-50 transition ${rowClass}">
-                <td class="px-6 py-4 font-semibold text-gray-900">${feedback.author}</td>
-                <td class="px-6 py-4 text-gray-700 max-w-xs truncate" title="${feedback.message}">${feedback.message}</td>
-                <td class="px-6 py-4 text-gray-600 text-sm">${consultationTitle}</td>
+                <td class="px-6 py-4 font-semibold text-gray-900">${escapeHtml(feedback.author)}</td>
+                <td class="px-6 py-4 text-gray-700 max-w-xs truncate" title="${escapeHtml(feedback.message)}">${escapeHtml(feedback.message)}</td>
+                <td class="px-6 py-4">${sentimentBadge}</td>
+                <td class="px-6 py-4 text-gray-600 text-sm">${escapeHtml(consultationTitle)}</td>
                 <td class="px-6 py-4 text-gray-600">
                     <div class="flex items-center justify-between gap-2">
                         <span>${dateText}</span>
@@ -4781,6 +4954,9 @@ function renderFeedbackTable() {
                     <div class="flex gap-2 justify-center">
                         <button onclick="viewFeedbackDetails(${feedback.id})" class="text-blue-600 hover:text-blue-800" title="View">
                             <i class="bi bi-eye"></i>
+                        </button>
+                        <button onclick="analyzeSingleFeedback(${feedback.id})" class="text-purple-600 hover:text-purple-800" title="Analyze Sentiment">
+                            <i class="bi bi-cpu"></i>
                         </button>
                     </div>
                 </td>
@@ -4856,6 +5032,34 @@ function viewFeedbackDetails(id) {
         <div>
             <label class="text-xs font-semibold text-gray-500 uppercase">Message</label>
             <div class="mt-2 p-3 bg-gray-50 rounded text-gray-800 whitespace-pre-wrap">${escapeHtml(String(f.message || ''))}</div>
+        </div>
+
+        <!-- Sentiment Analysis Section -->
+        <div class="border-t pt-4">
+            <div class="flex items-center justify-between mb-3">
+                <label class="text-xs font-semibold text-gray-500 uppercase flex items-center gap-2">
+                    <i class="bi bi-cpu text-purple-600"></i> AI Sentiment Analysis
+                </label>
+                <button onclick="analyzeSingleFeedback(${f.id}, true)" class="text-xs px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold">
+                    <i class="bi bi-arrow-repeat mr-1"></i> Analyze
+                </button>
+            </div>
+            <div id="sentiment-result-${f.id}" class="p-3 bg-purple-50 rounded-lg border border-purple-100">
+                ${f.sentimentTag
+                    ? `<div class="flex items-center gap-3">
+                        <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold ${
+                            f.sentimentTag === 'positive' ? 'bg-green-100 text-green-800' :
+                            f.sentimentTag === 'negative' ? 'bg-red-100 text-red-800' :
+                            'bg-gray-100 text-gray-700'
+                        }">
+                            <i class="bi ${f.sentimentTag === 'positive' ? 'bi-emoji-smile' : f.sentimentTag === 'negative' ? 'bi-emoji-frown' : 'bi-emoji-neutral'}"></i>
+                            ${f.sentimentTag.charAt(0).toUpperCase() + f.sentimentTag.slice(1)}
+                        </span>
+                        ${f.sentimentScore !== null ? '<span class="text-xs text-gray-500">Score: ' + f.sentimentScore + '</span>' : ''}
+                    </div>`
+                    : '<p class="text-sm text-purple-700 italic">Click "Analyze" to run sentiment analysis on this feedback.</p>'
+                }
+            </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -4960,6 +5164,143 @@ function clearFeedbackFilters() {
     document.getElementById('feedback-consultation-filter').value = '';
     document.getElementById('feedback-sort').value = 'date-desc';
     renderFeedbackTable();
+}
+
+// ── Sentiment Analysis Functions ──
+
+async function analyzeSingleFeedback(id, showInModal = false) {
+    const f = AppData.feedback.find(x => x.id === id);
+    if (!f) return;
+
+    // Show loading in modal result area if open
+    const resultEl = document.getElementById('sentiment-result-' + id);
+    if (resultEl) {
+        resultEl.innerHTML = '<p class="text-sm text-purple-600 animate-pulse"><i class="bi bi-hourglass-split mr-1"></i> Analyzing sentiment...</p>';
+    }
+
+    try {
+        const res = await fetch('API/sentiment_api.php?action=analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ text: f.message })
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !data.success) {
+            throw new Error((data && data.message) || 'Analysis failed');
+        }
+
+        const result = data.data;
+        f.sentimentTag = result.sentiment;
+        f.sentimentScore = result.score;
+
+        // Save to DB
+        fetch('API/sentiment_api.php?action=save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ feedback_id: id, sentiment: result.sentiment, score: result.score })
+        }).catch(() => {});
+
+        // Update modal result area
+        if (resultEl) {
+            const badgeClass = result.sentiment === 'positive' ? 'bg-green-100 text-green-800' :
+                              result.sentiment === 'negative' ? 'bg-red-100 text-red-800' :
+                              'bg-gray-100 text-gray-700';
+            const icon = result.sentiment === 'positive' ? 'bi-emoji-smile' :
+                        result.sentiment === 'negative' ? 'bi-emoji-frown' : 'bi-emoji-neutral';
+
+            let keywordsHtml = '';
+            if (result.keywords && result.keywords.length > 0) {
+                keywordsHtml = '<div class="mt-2 flex flex-wrap gap-1">' +
+                    result.keywords.map(k => {
+                        const kwClass = k.score > 0 ? 'bg-green-50 text-green-700 border-green-200' :
+                                       k.score < 0 ? 'bg-red-50 text-red-700 border-red-200' :
+                                       'bg-gray-50 text-gray-600 border-gray-200';
+                        return `<span class="text-xs px-2 py-0.5 rounded border ${kwClass}">${escapeHtml(k.word)} (${k.score > 0 ? '+' : ''}${k.score})</span>`;
+                    }).join('') +
+                    '</div>';
+            }
+
+            resultEl.innerHTML = `
+                <div class="flex items-center gap-3 mb-2">
+                    <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold ${badgeClass}">
+                        <i class="bi ${icon}"></i>
+                        ${result.sentiment.charAt(0).toUpperCase() + result.sentiment.slice(1)}
+                    </span>
+                    <span class="text-xs text-gray-500">Score: ${result.score}</span>
+                    <span class="text-xs text-gray-500">Confidence: ${Math.round(result.confidence * 100)}%</span>
+                </div>
+                ${keywordsHtml ? '<label class="text-xs font-semibold text-gray-500">Detected Keywords:</label>' + keywordsHtml : ''}
+            `;
+        }
+
+        // Refresh table row
+        renderFeedbackTable();
+
+        if (!showInModal) {
+            showNotification(`Sentiment: ${result.sentiment} (score: ${result.score})`, 'success');
+        }
+
+    } catch (err) {
+        if (resultEl) {
+            resultEl.innerHTML = `<p class="text-sm text-red-600"><i class="bi bi-exclamation-triangle mr-1"></i> ${escapeHtml(String(err.message || err))}</p>`;
+        }
+        showNotification('Sentiment analysis failed: ' + String(err.message || err), 'error');
+    }
+}
+
+async function runBatchSentimentAnalysis() {
+    if (!AppData.feedback.length) {
+        showNotification('No feedback to analyze', 'error');
+        return;
+    }
+
+    showNotification('Running sentiment analysis on all feedback...', 'info');
+
+    try {
+        const ids = AppData.feedback.map(f => f.id);
+        const res = await fetch('API/sentiment_api.php?action=batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ ids })
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !data.success) {
+            throw new Error((data && data.message) || 'Batch analysis failed');
+        }
+
+        // Update local data and save each to DB
+        let savePromises = [];
+        for (const result of data.data) {
+            const f = AppData.feedback.find(x => x.id === result.id);
+            if (f) {
+                f.sentimentTag = result.sentiment;
+                f.sentimentScore = result.score;
+            }
+            savePromises.push(
+                fetch('API/sentiment_api.php?action=save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ feedback_id: result.id, sentiment: result.sentiment, score: result.score })
+                }).catch(() => {})
+            );
+        }
+
+        // Wait for all saves
+        await Promise.all(savePromises);
+
+        // Refresh table
+        renderFeedbackTable();
+
+        // Show summary
+        const s = data.summary;
+        showNotification(
+            `Analysis complete: ${s.positive} positive, ${s.neutral} neutral, ${s.negative} negative (avg score: ${s.average_score})`,
+            'success'
+        );
+
+    } catch (err) {
+        showNotification('Batch analysis failed: ' + String(err.message || err), 'error');
+    }
 }
 
 function openAddFeedbackModal() {

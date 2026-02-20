@@ -422,7 +422,6 @@
     </nav>
 
     <div class="header-buttons">
-        <a href="login.php"><button class="signin-btn">ADMIN LOGIN</button></a>
         <a href="public-portal.php"><button class="signup-btn">PARTICIPATE</button></a>
     </div>
 </header>

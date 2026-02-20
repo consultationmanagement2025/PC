@@ -16,11 +16,11 @@ $action = $_GET['action'] ?? 'list';
 try {
     switch ($action) {
         case 'list':
-            $sql = "SELECT id, username, email, role, status, last_login, created_at FROM users ORDER BY created_at DESC";
+            $sql = "SELECT id, fullname, username, email, role, status, last_login, created_at FROM users ORDER BY created_at DESC";
             $result = $conn->query($sql);
             $users = [];
             
-            if ($result->num_rows > 0) {
+            if ($result && $result->num_rows > 0) {
                 while ($row = $result->fetch_assoc()) {
                     $users[] = $row;
                 }
@@ -37,8 +37,10 @@ try {
                 exit;
             }
             
-            $sql = "SELECT id, username, email, role, status, last_login, created_at FROM users WHERE id = $id";
-            $result = $conn->query($sql);
+            $stmt = $conn->prepare("SELECT id, fullname, username, email, role, status, last_login, created_at FROM users WHERE id = ?");
+            $stmt->bind_param('i', $id);
+            $stmt->execute();
+            $result = $stmt->get_result();
             
             if ($result->num_rows > 0) {
                 echo json_encode(['success' => true, 'data' => $result->fetch_assoc()]);
@@ -46,6 +48,66 @@ try {
                 http_response_code(404);
                 echo json_encode(['success' => false, 'message' => 'User not found']);
             }
+            $stmt->close();
+            break;
+            
+        case 'create':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $name = trim($data['name'] ?? '');
+            $email = trim($data['email'] ?? '');
+            $password = $data['password'] ?? '';
+            $role = trim($data['role'] ?? 'staff');
+            $status = trim($data['status'] ?? 'active');
+            
+            if (!$name || !$email || !$password) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Name, email, and password are required']);
+                exit;
+            }
+            
+            if (strlen($password) < 12) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Password must be at least 12 characters']);
+                exit;
+            }
+            
+            // Check duplicate email
+            $chk = $conn->prepare("SELECT id FROM users WHERE email = ?");
+            $chk->bind_param('s', $email);
+            $chk->execute();
+            if ($chk->get_result()->num_rows > 0) {
+                http_response_code(409);
+                echo json_encode(['success' => false, 'message' => 'Email already exists']);
+                $chk->close();
+                exit;
+            }
+            $chk->close();
+            
+            $hashed = password_hash($password, PASSWORD_BCRYPT);
+            $username = explode('@', $email)[0];
+            
+            $stmt = $conn->prepare("INSERT INTO users (fullname, username, email, password, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+            $stmt->bind_param('ssssss', $name, $username, $email, $hashed, $role, $status);
+            
+            if ($stmt->execute()) {
+                require_once '../DATABASE/audit-log.php';
+                logAction(
+                    $_SESSION['user_id'],
+                    $_SESSION['fullname'] ?? $_SESSION['username'] ?? 'admin',
+                    'create_user',
+                    'user',
+                    $stmt->insert_id,
+                    null,
+                    json_encode(['name' => $name, 'email' => $email, 'role' => $role]),
+                    'success',
+                    'Created staff account: ' . $name . ' (' . $email . ')'
+                );
+                echo json_encode(['success' => true, 'id' => $stmt->insert_id]);
+            } else {
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Failed to create account: ' . $stmt->error]);
+            }
+            $stmt->close();
             break;
             
         case 'update':
@@ -59,15 +121,42 @@ try {
             }
             
             $updatable_fields = [];
+            $params = [];
+            $types = '';
+            
+            if (isset($data['name']) && trim($data['name']) !== '') {
+                $updatable_fields[] = 'fullname = ?';
+                $params[] = trim($data['name']);
+                $types .= 's';
+            }
+            
+            if (isset($data['email']) && trim($data['email']) !== '') {
+                $updatable_fields[] = 'email = ?';
+                $params[] = trim($data['email']);
+                $types .= 's';
+            }
             
             if (isset($data['role'])) {
-                $role = $conn->real_escape_string($data['role']);
-                $updatable_fields[] = "role = '$role'";
+                $updatable_fields[] = 'role = ?';
+                $params[] = $data['role'];
+                $types .= 's';
             }
             
             if (isset($data['status'])) {
-                $status = $conn->real_escape_string($data['status']);
-                $updatable_fields[] = "status = '$status'";
+                $updatable_fields[] = 'status = ?';
+                $params[] = $data['status'];
+                $types .= 's';
+            }
+            
+            if (isset($data['password']) && $data['password'] !== '') {
+                if (strlen($data['password']) < 12) {
+                    http_response_code(400);
+                    echo json_encode(['success' => false, 'message' => 'Password must be at least 12 characters']);
+                    exit;
+                }
+                $updatable_fields[] = 'password = ?';
+                $params[] = password_hash($data['password'], PASSWORD_BCRYPT);
+                $types .= 's';
             }
             
             if (empty($updatable_fields)) {
@@ -77,26 +166,26 @@ try {
             }
             
             $set_clause = implode(', ', $updatable_fields);
-            $sql = "UPDATE users SET $set_clause WHERE id = $id";
+            $params[] = $id;
+            $types .= 'i';
             
-            if ($conn->query($sql) === TRUE) {
-                // Log admin action to AUDIT LOG (not user activity log)
+            $stmt = $conn->prepare("UPDATE users SET $set_clause WHERE id = ?");
+            $stmt->bind_param($types, ...$params);
+            
+            if ($stmt->execute()) {
                 require_once '../DATABASE/audit-log.php';
-                $change_description = 'Updated user #' . $id;
-                if (isset($data['role'])) {
-                    $change_description .= ' - Role changed to: ' . $data['role'];
-                }
-                if (isset($data['status'])) {
-                    $change_description .= ' - Status changed to: ' . $data['status'];
-                }
+                $change_description = 'Updated staff account #' . $id;
+                if (isset($data['role'])) $change_description .= ' - Role: ' . $data['role'];
+                if (isset($data['status'])) $change_description .= ' - Status: ' . $data['status'];
+                if (isset($data['password']) && $data['password'] !== '') $change_description .= ' - Password reset';
                 logAction(
                     $_SESSION['user_id'],
-                    $_SESSION['username'],
+                    $_SESSION['fullname'] ?? $_SESSION['username'] ?? 'admin',
                     'modify_user',
                     'user',
                     $id,
                     null,
-                    json_encode($data),
+                    json_encode(array_diff_key($data, ['password' => 1])),
                     'success',
                     $change_description
                 );
@@ -104,8 +193,9 @@ try {
                 echo json_encode(['success' => true]);
             } else {
                 http_response_code(500);
-                echo json_encode(['success' => false, 'message' => 'Failed to update user']);
+                echo json_encode(['success' => false, 'message' => 'Failed to update: ' . $stmt->error]);
             }
+            $stmt->close();
             break;
             
         case 'stats':

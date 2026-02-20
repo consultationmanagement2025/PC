@@ -206,6 +206,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_consultation']
                         $tokStmt->close();
                     }
 
+                    // Generate edit token (valid for 7 days)
+                    $edit_token = bin2hex(random_bytes(32));
+                    $edit_token_expires = date('Y-m-d H:i:s', time() + 7 * 24 * 60 * 60);
+                    // Ensure edit_token column exists
+                    $colChk = $conn->query("SHOW COLUMNS FROM consultations LIKE 'edit_token'");
+                    if ($colChk && $colChk->num_rows === 0) {
+                        $conn->query("ALTER TABLE consultations ADD COLUMN edit_token VARCHAR(64) DEFAULT NULL");
+                        $conn->query("ALTER TABLE consultations ADD COLUMN edit_token_expires DATETIME DEFAULT NULL");
+                    }
+                    $etStmt = $conn->prepare("UPDATE consultations SET edit_token = ?, edit_token_expires = ? WHERE id = ?");
+                    if ($etStmt) {
+                        $etStmt->bind_param('ssi', $edit_token, $edit_token_expires, $new_consultation_id);
+                        $etStmt->execute();
+                        $etStmt->close();
+                    }
+
                     $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost');
                     $summary_link = $baseUrl . '/CAP101/PC/download-consultation.php?id=' . $new_consultation_id . '&t=' . urlencode($summary_token);
 
@@ -238,6 +254,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_consultation']
                     }
                     $body .= "Your submission summary is available here (download/print):\n";
                     $body .= $summary_link . "\n\n";
+                    $edit_link = $baseUrl . '/CAP101/PC/edit-submission.php?type=consultation&id=' . $new_consultation_id . '&token=' . urlencode($edit_token);
+                    $body .= "Need to make changes? Edit your submission here (valid for 7 days):\n";
+                    $body .= $edit_link . "\n\n";
                     $body .= "We appreciate your interest in participating in our public consultation process.\n\n";
                     $body .= "Regards,\nValenzuela City Government\nPublic Consultation Office";
 
@@ -263,10 +282,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_consultation']
                     $mail_ok = mail($consultation_email, $subject, $message, $headers);
                     
                     $consultation_submission_success = true;
+                    $edit_msg = ' You can edit your submission within 7 days using this link: ' . $edit_link;
                     if ($mail_ok) {
-                        $consultation_submission_message = 'Thank you! Your consultation request has been received. A confirmation email has been sent to ' . htmlspecialchars($consultation_email) . '.';
+                        $consultation_submission_message = 'Thank you! Your consultation request has been received. A confirmation email with your edit link has been sent to ' . htmlspecialchars($consultation_email) . '.' . $edit_msg;
                     } else {
-                        $consultation_submission_message = 'Thank you! Your consultation request has been received. However, we could not send a confirmation email at this time.';
+                        $consultation_submission_message = 'Thank you! Your consultation request has been received. However, we could not send a confirmation email at this time. Please save this edit link:' . $edit_msg;
                     }
 
                     $consultation_form_values = [
@@ -349,6 +369,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_feedback'])) {
                             @createNotification(0, $nm, 'feedback');
                         }
 
+                        // Generate edit token for feedback (valid for 7 days)
+                        $fb_edit_token = bin2hex(random_bytes(32));
+                        $fb_edit_expires = date('Y-m-d H:i:s', time() + 7 * 24 * 60 * 60);
+                        $fbColChk = $conn->query("SHOW COLUMNS FROM feedback LIKE 'edit_token'");
+                        if ($fbColChk && $fbColChk->num_rows === 0) {
+                            $conn->query("ALTER TABLE feedback ADD COLUMN edit_token VARCHAR(64) DEFAULT NULL");
+                            $conn->query("ALTER TABLE feedback ADD COLUMN edit_token_expires DATETIME DEFAULT NULL");
+                        }
+                        $fbEtStmt = $conn->prepare("UPDATE feedback SET edit_token = ?, edit_token_expires = ? WHERE id = ?");
+                        if ($fbEtStmt) {
+                            $fbEtStmt->bind_param('ssi', $fb_edit_token, $fb_edit_expires, $new_feedback_id);
+                            $fbEtStmt->execute();
+                            $fbEtStmt->close();
+                        }
+                        $fb_baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+                        $fb_edit_link = $fb_baseUrl . '/CAP101/PC/edit-submission.php?type=feedback&id=' . $new_feedback_id . '&token=' . urlencode($fb_edit_token);
+
                         // Continue to handle attachment, email and then show confirmation on the feedback section
                         $attachment_path = null;
                         if (!empty($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
@@ -383,6 +420,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_feedback'])) {
                         } else {
                             $body .= "You will not receive further email notifications about this submission.\n\n";
                         }
+                        $body .= "Need to make changes? Edit your feedback here (valid for 7 days):\n";
+                        $body .= $fb_edit_link . "\n\n";
                         $body .= "Regards,\nValenzuela City Government";
                         
                         // If attachment was saved, update the record with path
@@ -393,12 +432,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_feedback'])) {
                         }
 
                         $submission_success = true;
-                        $submission_message = 'Thank you! Your feedback has been submitted successfully. A confirmation email has been sent.';
+                        $fb_edit_msg = ' You can edit your feedback within 7 days using this link: ' . $fb_edit_link;
 
                         $headers = "From: noreply@valenzuelacity.gov\r\nContent-Type: text/plain; charset=UTF-8";
                         $mail_ok = mail($email, $subject, $body, $headers);
-                        if (!$mail_ok) {
-                            $submission_message .= ' (Note: confirmation email could not be sent at this time.)';
+                        if ($mail_ok) {
+                            $submission_message = 'Thank you! Your feedback has been submitted successfully. A confirmation email with your edit link has been sent.' . $fb_edit_msg;
+                        } else {
+                            $submission_message = 'Thank you! Your feedback has been submitted successfully. (Note: confirmation email could not be sent.) Please save this edit link:' . $fb_edit_msg;
                         }
 
                         // Clear session form state
@@ -650,6 +691,12 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css">
+    <!-- Prevent dark mode flicker -->
+    <script>
+        if (localStorage.getItem('portal-theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
     <style>
         * {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -1177,6 +1224,69 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
         .social-icon { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; background: rgba(255,255,255,0.1); transition: all 0.16s ease; color: white; font-size: 1.25rem; text-decoration: none; }
         .social-icon:hover { background: rgba(255,255,255,0.2); transform: translateY(-3px); color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
         .social-caption { margin-top: 6px; color: #9ca3af; font-size: 0.85rem; font-weight: 700; }
+
+        /* ===================== DARK MODE ===================== */
+        .dark body, .dark { background: #111827 !important; color: #e5e7eb !important; }
+        .dark header { background: #1f2937 !important; box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important; }
+        .dark header h1 { color: #fca5a5 !important; }
+        .dark header p { color: #9ca3af !important; }
+        .dark header a:first-child { color: #fca5a5 !important; border-color: #fca5a5 !important; }
+        .dark header a:first-child:hover { background: rgba(252,165,165,0.1) !important; }
+        .dark .nav-link { color: #9ca3af !important; }
+        .dark .nav-link.active { color: #fca5a5 !important; border-bottom-color: #fca5a5 !important; background: rgba(252,165,165,0.05) !important; }
+        .dark .nav-link:hover { color: #fca5a5 !important; background: rgba(252,165,165,0.05) !important; }
+        .dark div[style*="background: white"][style*="border-bottom"] { background: #1f2937 !important; border-color: #374151 !important; }
+        .dark main { background: #111827 !important; }
+        .dark .card, .dark .consultation-card, .dark .form-table { background: #1f2937 !important; border-color: #374151 !important; color: #e5e7eb !important; }
+        .dark .card:hover, .dark .consultation-card:hover { box-shadow: 0 16px 40px rgba(0,0,0,0.4) !important; }
+        .dark .consultation-card-body { background: #1f2937 !important; }
+        .dark .consultation-card-body p, .dark .consultation-card p { color: #9ca3af !important; }
+        .dark .consultation-meta { border-color: #374151 !important; color: #6b7280 !important; }
+        .dark h2, .dark h3, .dark h4 { color: #f3f4f6 !important; }
+        .dark p { color: #d1d5db !important; }
+        .dark .form-input, .dark .form-textarea, .dark .form-select, .dark input[type="text"], .dark input[type="email"], .dark input[type="number"], .dark select, .dark textarea {
+            background: #374151 !important; border-color: #4b5563 !important; color: #e5e7eb !important;
+        }
+        .dark .form-input:focus, .dark .form-textarea:focus, .dark .form-select:focus { border-color: #fca5a5 !important; box-shadow: 0 0 0 4px rgba(252,165,165,0.15) !important; background: #1f2937 !important; }
+        .dark .form-input::placeholder, .dark .form-textarea::placeholder, .dark input::placeholder, .dark textarea::placeholder { color: #6b7280 !important; }
+        .dark .form-label, .dark .form-label-cell, .dark label { color: #d1d5db !important; }
+        .dark .form-row { border-color: #374151 !important; }
+        .dark .underscored-input { border-bottom-color: #4b5563 !important; color: #e5e7eb !important; }
+        .dark .btn-secondary { background: #374151 !important; color: #e5e7eb !important; border-color: #4b5563 !important; }
+        .dark .btn-secondary:hover { border-color: #fca5a5 !important; color: #fca5a5 !important; background: rgba(252,165,165,0.1) !important; }
+        .dark .success-message { background: linear-gradient(135deg, #064e3b, #065f46) !important; color: #a7f3d0 !important; border-left-color: #10b981 !important; }
+        .dark .error-message { background: linear-gradient(135deg, #7f1d1d, #991b1b) !important; color: #fecaca !important; border-left-color: #ef4444 !important; }
+        .dark .info-message { background: linear-gradient(135deg, #1e3a5f, #1e40af) !important; color: #bfdbfe !important; border-left-color: #3b82f6 !important; }
+        .dark .step-indicator { background: linear-gradient(135deg, #1f2937, #374151) !important; border-color: #374151 !important; }
+        .dark .badge-verified { background: rgba(59,130,246,0.2) !important; color: #93c5fd !important; }
+        .dark footer { background: linear-gradient(135deg, #0f172a, #1e293b) !important; }
+        .dark .social-icon { background: rgba(255,255,255,0.08) !important; }
+        .dark .social-icon:hover { background: rgba(255,255,255,0.15) !important; }
+        .dark #app-modal > div { background: #1f2937 !important; }
+        .dark #app-modal [role="dialog"] { background: #1f2937 !important; color: #e5e7eb !important; }
+        .dark #app-modal [role="dialog"] div[style*="border-bottom"] { border-color: #374151 !important; }
+        .dark #app-modal [role="dialog"] [id="app-modal-title"] { color: #f3f4f6 !important; }
+        .dark #app-modal [role="dialog"] div[style*="color:#374151"] { color: #d1d5db !important; }
+        /* Dark chatbot */
+        .dark #chatbot-window { background: #1f2937 !important; }
+        .dark #chatbot-messages { background: #111827 !important; }
+        .dark .chat-msg.bot div { background: #374151 !important; border-color: #4b5563 !important; color: #e5e7eb !important; }
+        .dark #chatbot-window div[style*="border-top:1px solid #e5e7eb"] { border-color: #374151 !important; background: #1f2937 !important; }
+        .dark #chatbot-input { background: #374151 !important; border-color: #4b5563 !important; color: #e5e7eb !important; }
+        .dark #chatbot-quick { background: #111827 !important; border-color: #374151 !important; }
+        .dark #chatbot-quick button { background: #374151 !important; border-color: #4b5563 !important; color: #fca5a5 !important; }
+
+        /* ===================== TOOLBAR BUTTONS ===================== */
+        .portal-toolbar { display: flex; align-items: center; gap: 0.5rem; }
+        .toolbar-btn {
+            width: 38px; height: 38px; border-radius: 8px; border: 1.5px solid #e5e7eb; background: white;
+            display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s;
+            color: #6b7280; font-size: 1.1rem;
+        }
+        .toolbar-btn:hover { border-color: #991b1b; color: #991b1b; background: #fef2f2; }
+        .dark .toolbar-btn { background: #374151 !important; border-color: #4b5563 !important; color: #9ca3af !important; }
+        .dark .toolbar-btn:hover { border-color: #fca5a5 !important; color: #fca5a5 !important; background: rgba(252,165,165,0.1) !important; }
+        .lang-btn { width: auto; padding: 0 10px; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.5px; }
     </style>
 </head>
 <body>
@@ -1196,7 +1306,12 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                 <?php endif; ?>
                 <div style="min-width:0; flex:1;">
                     <div id="app-modal-title" style="font-weight:900; color:#111827; font-size:1.1rem; line-height:1.2;"><?php echo htmlspecialchars($modal_title ?: 'Notice'); ?></div>
-                    <div style="margin-top:0.35rem; color:#374151; font-weight:600; line-height:1.5; word-wrap:break-word;"><?php echo htmlspecialchars($modal_message); ?></div>
+                    <div style="margin-top:0.35rem; color:#374151; font-weight:600; line-height:1.5; word-wrap:break-word;"><?php
+                        // Auto-link URLs in the modal message so edit links are clickable
+                        $safe_msg = htmlspecialchars($modal_message);
+                        $safe_msg = preg_replace('/(https?:\/\/[^\s&<]+)/', '<a href="$1" target="_blank" style="color:#991b1b; text-decoration:underline; word-break:break-all;">$1</a>', $safe_msg);
+                        echo $safe_msg;
+                    ?></div>
                 </div>
                 <button type="button" aria-label="Close" onclick="closeAppModal()" style="border:none; background:transparent; color:#6b7280; font-size:1.25rem; cursor:pointer; padding:0.25rem; line-height:1;">&times;</button>
             </div>
@@ -1213,13 +1328,22 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
         <div class="logo-section">
             <img src="images/logo.webp" alt="Logo">
             <div>
-                <h1>Public Consultation</h1>
-                <p>Valenzuela City Government</p>
+                <h1 data-i18n="header_title">Public Consultation</h1>
+                <p data-i18n="header_subtitle">Valenzuela City Government</p>
             </div>
         </div>
-        <div class="header-buttons">
-            <a href="index.php">Back Home</a>
-            <a href="login.php">Admin Login</a>
+        <div class="header-buttons" style="display:flex; align-items:center; gap:0.5rem;">
+            <div class="portal-toolbar">
+                <button onclick="startPortalTour()" class="toolbar-btn" id="tour-btn" title="Take a guided tour">
+                    <i class="bi bi-question-circle-fill"></i>
+                </button>
+                <button onclick="togglePortalLang()" class="toolbar-btn lang-btn" id="lang-toggle" title="Switch to Tagalog">EN</button>
+                <button onclick="togglePortalTheme()" class="toolbar-btn" id="theme-toggle-portal" title="Toggle dark mode">
+                    <i class="bi bi-moon-fill" id="portal-dark-icon"></i>
+                    <i class="bi bi-sun-fill" id="portal-light-icon" style="display:none;"></i>
+                </button>
+            </div>
+            <a href="index.php" data-i18n="back_home">Back Home</a>
         </div>
     </div>
 </header>
@@ -1234,18 +1358,17 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
 <?php endif; ?>
 
 <!-- NAVIGATION -->
-<div style="background: white; border-bottom: 2px solid #f0f0f0; position: sticky; top: 0; z-index: 30;">
+<div style="background: white; border-bottom: 2px solid #f0f0f0; position: sticky; top: 0; z-index: 30;" class="portal-nav-bar">
     <div class="max-w-7xl mx-auto px-4 flex public-nav-scroll">
         <button type="button" onclick="switchSection('consultations')" class="nav-link active" id="nav-consultations">
-            <i class="bi bi-file-text"></i>Active Consultations
+            <i class="bi bi-file-text"></i><span data-i18n="nav_consultations">Active Consultations</span>
         </button>
         <button type="button" onclick="switchSection('submit-consultation')" class="nav-link" id="nav-submit-consultation">
-            <i class="bi bi-pencil-square"></i>Submit Consultation
+            <i class="bi bi-pencil-square"></i><span data-i18n="nav_submit">Submit Consultation</span>
         </button>
         <button type="button" onclick="switchSection('feedback')" class="nav-link" id="nav-feedback">
-            <i class="bi bi-chat-dots"></i>Submit Feedback
+            <i class="bi bi-chat-dots"></i><span data-i18n="nav_feedback">Submit Feedback</span>
         </button>
-        <!-- Contact tab removed (duplicate of Submit Consultation) -->
     </div>
 </div>
 
@@ -1258,8 +1381,8 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
 
         <?php if ($section !== 'detail'): ?>
             <div style="margin-bottom: 2rem; text-align: center;">
-                <h2 style="font-size: 2.5rem; font-weight: 800; color: #1f2937; margin: 0 0 0.75rem 0;">Active Consultations</h2>
-                <p style="color: #6b7280; font-size: 1.1rem; margin: 0;">Review and provide feedback on proposed ordinances, programs, and policies</p>
+                <h2 style="font-size: 2.5rem; font-weight: 800; color: #1f2937; margin: 0 0 0.75rem 0;" data-i18n="consultations_title">Active Consultations</h2>
+                <p style="color: #6b7280; font-size: 1.1rem; margin: 0;" data-i18n="consultations_subtitle">Review and provide feedback on proposed ordinances, programs, and policies</p>
             </div>
 
             <!-- SECTION BANNER (only for consultations) -->
@@ -1272,6 +1395,45 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                     <?php endif; ?>
                 </div>
             </div>
+            <!-- FEATURE HIGHLIGHTS -->
+            <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:1rem; margin-bottom:2rem;" id="portal-features">
+                <div style="background:white; border-radius:10px; padding:1.25rem; box-shadow:0 1px 3px rgba(0,0,0,0.08); border-top:3px solid #991b1b; text-align:center;">
+                    <div style="width:48px; height:48px; border-radius:50%; background:#fef2f2; display:flex; align-items:center; justify-content:center; margin:0 auto 0.75rem;">
+                        <i class="bi bi-megaphone-fill" style="font-size:1.25rem; color:#991b1b;"></i>
+                    </div>
+                    <h4 style="font-weight:800; color:#1f2937; margin:0 0 0.4rem; font-size:0.95rem;" data-i18n="feat_consultations">Public Consultations</h4>
+                    <p style="color:#6b7280; font-size:0.8rem; margin:0; line-height:1.4;" data-i18n="feat_consultations_desc">Browse and participate in active government consultations on policies and programs.</p>
+                </div>
+                <div style="background:white; border-radius:10px; padding:1.25rem; box-shadow:0 1px 3px rgba(0,0,0,0.08); border-top:3px solid #059669; text-align:center;">
+                    <div style="width:48px; height:48px; border-radius:50%; background:#ecfdf5; display:flex; align-items:center; justify-content:center; margin:0 auto 0.75rem;">
+                        <i class="bi bi-chat-dots-fill" style="font-size:1.25rem; color:#059669;"></i>
+                    </div>
+                    <h4 style="font-weight:800; color:#1f2937; margin:0 0 0.4rem; font-size:0.95rem;" data-i18n="feat_feedback">Submit Feedback</h4>
+                    <p style="color:#6b7280; font-size:0.8rem; margin:0; line-height:1.4;" data-i18n="feat_feedback_desc">Share your thoughts, suggestions, and concerns directly with city officials.</p>
+                </div>
+                <div style="background:white; border-radius:10px; padding:1.25rem; box-shadow:0 1px 3px rgba(0,0,0,0.08); border-top:3px solid #2563eb; text-align:center;">
+                    <div style="width:48px; height:48px; border-radius:50%; background:#eff6ff; display:flex; align-items:center; justify-content:center; margin:0 auto 0.75rem;">
+                        <i class="bi bi-robot" style="font-size:1.25rem; color:#2563eb;"></i>
+                    </div>
+                    <h4 style="font-weight:800; color:#1f2937; margin:0 0 0.4rem; font-size:0.95rem;" data-i18n="feat_chatbot">AI Assistant</h4>
+                    <p style="color:#6b7280; font-size:0.8rem; margin:0; line-height:1.4;" data-i18n="feat_chatbot_desc">Need help? Click the chat icon at the bottom-right to ask our AI assistant anything.</p>
+                </div>
+                <div style="background:white; border-radius:10px; padding:1.25rem; box-shadow:0 1px 3px rgba(0,0,0,0.08); border-top:3px solid #7c3aed; text-align:center;">
+                    <div style="width:48px; height:48px; border-radius:50%; background:#f5f3ff; display:flex; align-items:center; justify-content:center; margin:0 auto 0.75rem;">
+                        <i class="bi bi-shield-lock-fill" style="font-size:1.25rem; color:#7c3aed;"></i>
+                    </div>
+                    <h4 style="font-weight:800; color:#1f2937; margin:0 0 0.4rem; font-size:0.95rem;" data-i18n="feat_secure">Secure & Private</h4>
+                    <p style="color:#6b7280; font-size:0.8rem; margin:0; line-height:1.4;" data-i18n="feat_secure_desc">Your data is protected under the Data Privacy Act. All submissions are encrypted.</p>
+                </div>
+            </div>
+            <style>
+                @media (max-width: 768px) {
+                    #portal-features { grid-template-columns: repeat(2, 1fr) !important; }
+                }
+                @media (max-width: 480px) {
+                    #portal-features { grid-template-columns: 1fr !important; }
+                }
+            </style>
         <?php endif; ?>
 
         <?php if ($section === 'detail' && $consultation_detail): ?>
@@ -1391,6 +1553,12 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                                 <input type="checkbox" id="allow_notifications" name="allow_email_notifications" value="1" checked style="width: 18px; height: 18px; cursor: pointer;">
                                 <label for="allow_notifications" style="cursor: pointer; color: #065f46; font-weight: 600; margin: 0;">Send me updates about this consultation</label>
                             </div>
+
+                            <!-- Agreement Checkbox -->
+                            <label style="display:flex; align-items:flex-start; gap:0.5rem; cursor:pointer; font-size:0.9rem; color:#065f46; line-height:1.5;">
+                                <input type="checkbox" required style="margin-top:4px; accent-color:#10b981; width:16px; height:16px; flex-shrink:0; cursor:pointer;">
+                                <span>I have read and agree to the <a href="#" onclick="event.preventDefault(); event.stopPropagation(); var pm=document.getElementById('policyModal'); if(pm) pm.style.display='flex';" style="color:#991b1b; font-weight:600; text-decoration:underline;">Privacy Policy</a> and <a href="#" onclick="event.preventDefault(); event.stopPropagation(); var tm=document.getElementById('termsModal'); if(tm) tm.style.display='flex';" style="color:#991b1b; font-weight:600; text-decoration:underline;">Terms of Use</a>.</span>
+                            </label>
 
                             <!-- Submit Button -->
                             <button type="submit" class="btn btn-primary" style="background: #10b981; color: white; font-weight: 700; padding: 0.75rem 1.5rem; border-radius: 6px; border: none; cursor: pointer; font-size: 1rem; transition: all 0.3s;">
@@ -1694,15 +1862,15 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
     <!-- SUBMIT CONSULTATION SECTION -->
     <section id="section-submit-consultation" class="section-hidden">
         <div style="margin-bottom: 2rem; text-align: center;">
-            <h2 style="font-size: 2.5rem; font-weight: 800; color: #1f2937; margin: 0 0 0.75rem 0;">Submit a Consultation Request</h2>
-            <p style="color: #6b7280; font-size: 1.1rem; margin: 0;">Have a topic you'd like the city to consult the public on? Submit your request here.</p>
+            <h2 style="font-size: 2.5rem; font-weight: 800; color: #1f2937; margin: 0 0 0.75rem 0;" data-i18n="submit_title">Submit a Consultation Request</h2>
+            <p style="color: #6b7280; font-size: 1.1rem; margin: 0;" data-i18n="submit_subtitle">Have a topic you'd like the city to consult the public on? Submit your request here.</p>
         </div>
 
         <!-- SUBMIT CONSULTATION SECTION -->
         <div>
             <h3 style="font-size: 1.5rem; font-weight: 800; color: #1f2937; margin-bottom: 1.5rem;">
                 <i class="bi bi-pencil-square" style="margin-right: 0.5rem; color: #991b1b;"></i>
-                Submit Your Consultation Request
+                <span data-i18n="submit_form_title">Submit Your Consultation Request</span>
             </h3>
             
             <div style="background: linear-gradient(135deg, rgba(153, 27, 27, 0.08), rgba(127, 29, 29, 0.08)); padding: 2.5rem; border-radius: 12px; border-left: 4px solid #991b1b;">
@@ -1712,7 +1880,7 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
 
                     <div class="form-table" role="presentation">
                         <div class="form-row">
-                            <div class="form-label-cell">Name</div>
+                            <div class="form-label-cell" data-i18n="form_name">Name</div>
                             <div class="form-field-cell" style="display:flex; gap:0.75rem; align-items:center;">
                                 <input type="text" name="name" placeholder="Your full name" required value="<?php echo htmlspecialchars($consultation_form_values['name']); ?>" style="flex:1; <?php echo isset($consultation_field_errors['name']) ? 'border:2px solid #ef4444; outline:none;' : ''; ?>">
                                 <input type="number" name="age" placeholder="Age" min="0" max="120" value="<?php echo htmlspecialchars($consultation_form_values['age']); ?>" style="width:100px; padding:0.55rem 0.75rem; border:1px solid #d1d5db; border-radius:6px;">
@@ -1727,7 +1895,7 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                         </div>
 
                         <div class="form-row">
-                            <div class="form-label-cell">Topic / Title *</div>
+                            <div class="form-label-cell" data-i18n="form_topic">Topic / Title *</div>
                             <div class="form-field-cell">
                                 <input type="text" name="consultation_topic" placeholder="e.g., Proposed Traffic Management in Barangay X" required value="<?php echo htmlspecialchars($consultation_form_values['consultation_topic']); ?>" style="<?php echo isset($consultation_field_errors['consultation_topic']) ? 'border:2px solid #ef4444; outline:none;' : ''; ?>">
                                 <p style="font-size: 0.8rem; color: #6b7280; margin-top: 0.5rem;">What is your consultation request about?</p>
@@ -1735,14 +1903,14 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                         </div>
 
                         <div class="form-row">
-                            <div class="form-label-cell">Address</div>
+                            <div class="form-label-cell" data-i18n="form_address">Address</div>
                             <div class="form-field-cell">
                                 <textarea name="address" placeholder="House number, street, barangay, city"><?php echo htmlspecialchars($consultation_form_values['address']); ?></textarea>
                             </div>
                         </div>
 
                         <div class="form-row">
-                            <div class="form-label-cell">Barangay</div>
+                            <div class="form-label-cell" data-i18n="form_barangay">Barangay</div>
                             <div class="form-field-cell">
                                 <select name="barangay">
                                     <option value="">Select barangay</option>
@@ -1770,14 +1938,14 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                         </div>
 
                         <div class="form-row">
-                            <div class="form-label-cell">Description / Details *</div>
+                            <div class="form-label-cell" data-i18n="form_description">Description / Details *</div>
                             <div class="form-field-cell">
                                 <textarea name="consultation_description" placeholder="Please provide details about your consultation request..." required style="<?php echo isset($consultation_field_errors['consultation_description']) ? 'border:2px solid #ef4444; outline:none;' : ''; ?>"><?php echo htmlspecialchars($consultation_form_values['consultation_description']); ?></textarea>
                             </div>
                         </div>
 
                         <div class="form-row">
-                            <div class="form-label-cell">Your Email Address *</div>
+                            <div class="form-label-cell" data-i18n="form_email">Your Email Address *</div>
                             <div class="form-field-cell">
                                 <input type="email" name="consultation_email" placeholder="your.email@example.com" required value="<?php echo htmlspecialchars($consultation_form_values['consultation_email']); ?>" style="<?php echo isset($consultation_field_errors['consultation_email']) ? 'border:2px solid #ef4444; outline:none;' : ''; ?>">
                                 <p style="font-size: 0.8rem; color: #6b7280; margin-top: 0.5rem;">We'll use this to contact you about your consultation.</p>
@@ -1785,12 +1953,12 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                         </div>
 
                         <div class="form-row">
-                            <div class="form-label-cell">Notifications</div>
+                            <div class="form-label-cell" data-i18n="form_notifications">Notifications</div>
                             <div class="form-field-cell">
                                 <label style="display:flex; gap:0.75rem; align-items:flex-start;">
                                     <input type="checkbox" name="consultation_allow_email" value="1" <?php echo !empty($consultation_form_values['consultation_allow_email']) ? 'checked' : ''; ?> style="width:18px; height:18px;">
                                     <div>
-                                        <div style="font-weight:700; color:#111;">Send me email updates about this consultation</div>
+                                        <div style="font-weight:700; color:#111;" data-i18n="form_email_updates">Send me email updates about this consultation</div>
                                         <div style="font-size:0.85rem; color:#6b7280; margin-top:0.25rem;">Our team will notify you when your consultation is reviewed and scheduled. You can opt out anytime by replying to the email.</div>
                                     </div>
                                 </label>
@@ -1800,8 +1968,12 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                         <div class="form-row">
                             <div class="form-label-cell"></div>
                             <div class="form-field-cell">
-                                <button type="submit" name="submit_consultation" style="background: linear-gradient(135deg, #991b1b, #7f1d1d); color: white; font-weight:700; padding:0.9rem 1.25rem; border-radius:6px; border:none; cursor:pointer; font-size:1rem;">
-                                    <i class="bi bi-send" style="margin-right:0.5rem; vertical-align:middle;"></i> Submit Consultation Request
+                                <label style="display:flex; align-items:flex-start; gap:0.5rem; cursor:pointer; margin-bottom:1rem; font-size:0.9rem; color:#374151; line-height:1.5;">
+                                    <input type="checkbox" id="consultation-agree" required style="margin-top:4px; accent-color:#991b1b; width:16px; height:16px; flex-shrink:0;">
+                                    <span data-i18n="agree_terms_consultation">I have read and agree to the <a href="#" onclick="event.preventDefault(); event.stopPropagation(); var pm=document.getElementById('policyModal'); if(pm) pm.style.display='flex';" style="color:#991b1b; font-weight:600; text-decoration:underline;">Privacy Policy</a> and <a href="#" onclick="event.preventDefault(); event.stopPropagation(); var tm=document.getElementById('termsModal'); if(tm) tm.style.display='flex';" style="color:#991b1b; font-weight:600; text-decoration:underline;">Terms of Use</a> of the Public Consultation Portal.</span>
+                                </label>
+                                <button type="submit" name="submit_consultation" id="btn-submit-consultation" style="background: linear-gradient(135deg, #991b1b, #7f1d1d); color: white; font-weight:700; padding:0.9rem 1.25rem; border-radius:6px; border:none; cursor:pointer; font-size:1rem;">
+                                    <i class="bi bi-send" style="margin-right:0.5rem; vertical-align:middle;"></i> <span data-i18n="btn_submit_consultation">Submit Consultation Request</span>
                                 </button>
                             </div>
                         </div>
@@ -1814,8 +1986,8 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
     <!-- FEEDBACK SECTION -->
     <section id="section-feedback" class="section-hidden">
         <div style="margin-bottom: 2rem; text-align: center;">
-            <h2 style="font-size: 2.5rem; font-weight: 800; color: #1f2937; margin: 0 0 0.75rem 0;">Submit Feedback</h2>
-            <p style="color: #6b7280; font-size: 1.1rem; margin: 0;">Share your thoughts on active consultations</p>
+            <h2 style="font-size: 2.5rem; font-weight: 800; color: #1f2937; margin: 0 0 0.75rem 0;" data-i18n="feedback_title">Submit Feedback</h2>
+            <p style="color: #6b7280; font-size: 1.1rem; margin: 0;" data-i18n="feedback_subtitle">Share your thoughts on active consultations</p>
         </div>
 
         <!-- TWO-COLUMN LAYOUT -->
@@ -1825,27 +1997,27 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                 <div class="card" style="background: white; padding: 2rem; margin-bottom: 0;">
                     <h4 style="font-weight: 800; color: #991b1b; margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem;">
                         <i class="bi bi-chat-heart" style="margin-right: 0.5rem;"></i>
-                        Share Your Views
+                        <span data-i18n="fb_info1_title">Share Your Views</span>
                     </h4>
-                    <p style="color: #6b7280; margin: 0; font-size: 0.95rem; line-height: 1.6;">Help shape better policies by sharing your feedback on proposed ordinances and programs.</p>
+                    <p style="color: #6b7280; margin: 0; font-size: 0.95rem; line-height: 1.6;" data-i18n="fb_info1_desc">Help shape better policies by sharing your feedback on proposed ordinances and programs.</p>
                 </div>
 
                 <!-- INFO BOX 2 -->
                 <div class="card" style="background: white; padding: 2rem; margin-bottom: 0;">
                     <h4 style="font-weight: 800; color: #991b1b; margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem;">
                         <i class="bi bi-shield-check" style="margin-right: 0.5rem;"></i>
-                        Secure & Verified
+                        <span data-i18n="fb_info2_title">Secure & Verified</span>
                     </h4>
-                    <p style="color: #6b7280; margin: 0; font-size: 0.95rem; line-height: 1.6;">Your phone and email are verified to ensure legitimate submissions only.</p>
+                    <p style="color: #6b7280; margin: 0; font-size: 0.95rem; line-height: 1.6;" data-i18n="fb_info2_desc">Your phone and email are verified to ensure legitimate submissions only.</p>
                 </div>
 
                 <!-- INFO BOX 3 -->
                 <div class="card" style="background: white; padding: 2rem; margin-bottom: 0;">
                     <h4 style="font-weight: 800; color: #991b1b; margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem;">
                         <i class="bi bi-check-circle" style="margin-right: 0.5rem;"></i>
-                        Reviewed Carefully
+                        <span data-i18n="fb_info3_title">Reviewed Carefully</span>
                     </h4>
-                    <p style="color: #6b7280; margin: 0; font-size: 0.95rem; line-height: 1.6;">Every submission is reviewed and considered by our city officials.</p>
+                    <p style="color: #6b7280; margin: 0; font-size: 0.95rem; line-height: 1.6;" data-i18n="fb_info3_desc">Every submission is reviewed and considered by our city officials.</p>
                 </div>
             </div>
 
@@ -1869,11 +2041,11 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                 <?php if (!isset($_SESSION['verified_email'])): ?>
                 <div style="margin-bottom: 1.5rem;">
                     <h3 style="font-size: 1.3rem; font-weight: 800; color: white; margin: 1.5rem 0 1rem 0;">
-                        <i class="bi bi-envelope-check" style="margin-right: 0.5rem;"></i>Verify Email
+                        <i class="bi bi-envelope-check" style="margin-right: 0.5rem;"></i><span data-i18n="verify_email">Verify Email</span>
                     </h3>
                     <form method="POST">
                         <div class="form-group">
-                            <label class="form-label" for="email" style="color: white;">Email Address *</label>
+                            <label class="form-label" for="email" style="color: white;" data-i18n="form_email_label">Email Address *</label>
                             <input type="email" id="email" name="email" class="form-input" placeholder="your@email.com" required style="background: white;">
                             <p style="font-size: 0.85rem; color: rgba(255,255,255,0.8); margin-top: 0.5rem;">We'll send a verification link</p>
                         </div>
@@ -1895,19 +2067,19 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                 <?php if ($both_verified): ?>
                 <div>
                     <h3 style="font-size: 1.3rem; font-weight: 800; color: white; margin: 1.5rem 0 1rem 0;">
-                        <i class="bi bi-chat-dots" style="margin-right: 0.5rem;"></i>Share Feedback
+                        <i class="bi bi-chat-dots" style="margin-right: 0.5rem;"></i><span data-i18n="share_feedback">Share Feedback</span>
                     </h3>
                     <form method="POST" enctype="multipart/form-data">
                         <!-- CSRF Token -->
                         <?php outputCSRFField(); ?>
                         
                         <div class="form-group">
-                            <label class="form-label" for="name" style="color: white;">Full Name *</label>
+                            <label class="form-label" for="name" style="color: white;" data-i18n="form_fullname">Full Name *</label>
                             <input type="text" id="name" name="name" class="form-input" required placeholder="Your full name" style="background: white;">
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label" for="feedback_type" style="color: white;">Type *</label>
+                            <label class="form-label" for="feedback_type" style="color: white;" data-i18n="form_type">Type *</label>
                             <select id="feedback_type" name="feedback_type" class="form-select" required style="background: white;">
                                 <option value="general">General Feedback</option>
                                 <option value="support">Support/Agreement</option>
@@ -1935,12 +2107,12 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label" for="message" style="color: white;">Your Feedback *</label>
+                            <label class="form-label" for="message" style="color: white;" data-i18n="form_your_feedback">Your Feedback *</label>
                             <textarea id="message" name="message" class="form-textarea" required placeholder="Please share your thoughts..." style="background: white;"></textarea>
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label" for="attachment" style="color: white;">Attach Image or Document (optional)</label>
+                            <label class="form-label" for="attachment" style="color: white;" data-i18n="form_attachment">Attach Image or Document (optional)</label>
                             <input type="file" id="attachment" name="attachment" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" class="form-input" style="background: white;" />
                             <p style="font-size: 0.8rem; color: rgba(255,255,255,0.8); margin-top: 0.5rem;">Max 5MB. Allowed: images, PDF, Word, Excel.</p>
                         </div>
@@ -1953,10 +2125,17 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                             <p style="font-size: 0.8rem; color: rgba(255,255,255,0.8); margin-top: 0.5rem;">We'll notify you when your feedback is reviewed or if there are any developments.</p>
                         </div>
 
+                        <div class="form-group" style="margin-bottom:1rem;">
+                            <label style="display:flex; align-items:flex-start; gap:0.5rem; cursor:pointer; font-size:0.9rem; color:rgba(255,255,255,0.95); line-height:1.5;">
+                                <input type="checkbox" id="feedback-agree" required style="margin-top:4px; accent-color:#fff; width:16px; height:16px; flex-shrink:0; cursor:pointer;">
+                                <span data-i18n="agree_terms_feedback">I have read and agree to the <a href="#" onclick="event.preventDefault(); event.stopPropagation(); var pm=document.getElementById('policyModal'); if(pm) pm.style.display='flex';" style="color:#fecaca; font-weight:600; text-decoration:underline;">Privacy Policy</a> and <a href="#" onclick="event.preventDefault(); event.stopPropagation(); var tm=document.getElementById('termsModal'); if(tm) tm.style.display='flex';" style="color:#fecaca; font-weight:600; text-decoration:underline;">Terms of Use</a> of the Public Consultation Portal.</span>
+                            </label>
+                        </div>
+
                         <button type="submit" name="submit_feedback" class="btn btn-primary" style="width: 100%; background: white; color: #991b1b;">
-                            <i class="bi bi-send" style="margin-right: 0.5rem;"></i>Submit Feedback
+                            <i class="bi bi-send" style="margin-right: 0.5rem;"></i><span data-i18n="btn_submit_feedback">Submit Feedback</span>
                         </button>
-                        <p style="font-size: 0.85rem; color: rgba(255,255,255,0.8); margin-top: 1rem;">Your verified feedback will be reviewed by our team.</p>
+                        <p style="font-size: 0.85rem; color: rgba(255,255,255,0.8); margin-top: 1rem;" data-i18n="fb_reviewed_note">Your verified feedback will be reviewed by our team.</p>
                     </form>
                 </div>
                 <?php endif; ?>
@@ -1972,11 +2151,11 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
     <div style="max-width: 80rem; margin: 0 auto; padding: 0 1rem;">
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; align-items: start;">
             <div>
-                <h4 style="font-weight: 800; margin-bottom: 1rem; color: white;">About</h4>
-                <p style="color: #9ca3af; font-size: 0.9rem; margin: 0;">Public Consultation Portal of Valenzuela City Government</p>
+                <h4 style="font-weight: 800; margin-bottom: 1rem; color: white;" data-i18n="footer_about">About</h4>
+                <p style="color: #9ca3af; font-size: 0.9rem; margin: 0;" data-i18n="footer_about_desc">Public Consultation Portal of Valenzuela City Government</p>
             </div>
             <div>
-                <h4 style="font-weight: 800; margin-bottom: 1rem; color: white;">Quick Links</h4>
+                <h4 style="font-weight: 800; margin-bottom: 1rem; color: white;" data-i18n="footer_links">Quick Links</h4>
                 <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem;">
                     <li><a href="index.php" style="color: #9ca3af; text-decoration: none; font-size: 0.9rem;">Home</a></li>
                     <li><a href="#" id="openPrivacy" style="color: #9ca3af; text-decoration: none; font-size: 0.9rem; cursor:pointer;">Privacy Policy</a></li>
@@ -1984,11 +2163,11 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
                 </ul>
             </div>
             <div>
-                <h4 style="font-weight: 800; margin-bottom: 1rem; color: white;">Contact</h4>
+                <h4 style="font-weight: 800; margin-bottom: 1rem; color: white;" data-i18n="footer_contact">Contact</h4>
                 <p style="color: #9ca3af; font-size: 0.9rem; margin: 0;">Valenzuela City Government<br>City Hall, Valenzuela City</p>
             </div>
             <div>
-                <h4 style="font-weight: 800; margin-bottom: 1rem; color: white;">Follow Us</h4>
+                <h4 style="font-weight: 800; margin-bottom: 1rem; color: white;" data-i18n="footer_follow">Follow Us</h4>
                 <div class="footer-follow">
                     <div class="social-icons">
                         <?php if (!empty($SOCIAL_FB)): ?>
@@ -2023,38 +2202,249 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
             </div>
         </div>
         <div style="border-top: 1px solid #374151; padding-top: 2rem; text-align: center; color: #9ca3af; font-size: 0.9rem;">
-            <p style="margin: 0;">&copy; 2026 Valenzuela City Government. All rights reserved.</p>
+            <p style="margin: 0;" data-i18n="footer_rights">&copy; 2026 Valenzuela City Government. All rights reserved.</p>
         </div>
     </div>
 </footer>
 
-    <!-- Modals for Privacy and Terms -->
-    <div id="policyModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:60; align-items:center; justify-content:center;">
-        <div style="background:white; width:90%; max-width:800px; border-radius:8px; overflow:auto; max-height:90vh; padding:1.25rem;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                <h3 style="margin:0;">Privacy Policy</h3>
-                <button type="button" onclick="closePolicyModal()" style="background:transparent; border:none; font-size:1.25rem;">&times;</button>
+    <!-- ==================== PRIVACY POLICY MODAL ==================== -->
+    <div id="policyModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:60; align-items:center; justify-content:center;">
+        <div style="background:white; width:94%; max-width:720px; border-radius:16px; overflow:hidden; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 25px 60px rgba(0,0,0,0.3);">
+            <!-- Header -->
+            <div style="background:linear-gradient(135deg,#991b1b,#7f1d1d); color:white; padding:1.5rem 2rem; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                <div>
+                    <h2 style="margin:0; font-size:1.4rem; font-weight:800;">Privacy Policy</h2>
+                    <p style="margin:0.25rem 0 0; font-size:0.8rem; opacity:0.8;">Valenzuela City Government &mdash; Public Consultation Management Portal</p>
+                </div>
+                <button type="button" onclick="closePolicyModal()" style="background:rgba(255,255,255,0.15); border:none; color:white; font-size:1.5rem; width:36px; height:36px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center;">&times;</button>
             </div>
-            <div id="policyContent" style="color:#374151; line-height:1.6; font-size:0.95rem;">
-                <p style="margin-top:0;"><strong>Official Privacy Policy</strong></p>
-                <p>This modal is intended to display the official Privacy Policy of the Valenzuela City Government. Replace this placeholder with the authoritative policy text from your records (you can paste the HTML here or load `privacy.php` if you add it to the site).</p>
-                <p style="margin-top:0.5rem; font-weight:700;">Assurance:</p>
-                <p style="margin:0;">This portal links to and displays official Valenzuela City Government content only. For the full legal document, please consult the City Hall records or the official accounts linked in the footer.</p>
+            <!-- Scrollable Content -->
+            <div id="policyContent" style="overflow-y:auto; padding:2rem; color:#374151; line-height:1.8; font-size:0.92rem; flex:1;">
+                <p style="color:#6b7280; font-size:0.8rem; margin-top:0;">Last Updated: February 2026</p>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">1. Introduction</h3>
+                <p>The Valenzuela City Government ("we," "us," or "our") is committed to protecting the privacy and personal information of all citizens, residents, and users ("you" or "your") who access and use the Public Consultation Management Portal (the "Portal"). This Privacy Policy explains how we collect, use, store, protect, and share your personal information in accordance with the <strong>Republic Act No. 10173</strong>, also known as the <strong>Data Privacy Act of 2012</strong>, and its Implementing Rules and Regulations.</p>
+                <p>By accessing or using this Portal, you acknowledge that you have read, understood, and agree to be bound by this Privacy Policy. If you do not agree with any part of this policy, please do not use the Portal.</p>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">2. Information We Collect</h3>
+                <p>We may collect the following types of personal information when you use the Portal:</p>
+                <p><strong>2.1 Information You Provide Directly:</strong></p>
+                <ul style="margin:0.5rem 0; padding-left:1.5rem;">
+                    <li><strong>Full Name</strong> &mdash; Used to identify you as a participant in public consultations and feedback submissions.</li>
+                    <li><strong>Email Address</strong> &mdash; Used to send confirmation receipts, edit links, status updates, and other Portal-related communications.</li>
+                    <li><strong>Phone Number</strong> (optional) &mdash; Used for follow-up communications if you choose to provide it.</li>
+                    <li><strong>Consultation Content</strong> &mdash; The subject, description, and any details you include in your consultation submissions.</li>
+                    <li><strong>Feedback Content</strong> &mdash; The type, message, and any details you include in your feedback submissions.</li>
+                    <li><strong>File Attachments</strong> &mdash; Any documents, images, or files you upload to support your submissions.</li>
+                </ul>
+                <p><strong>2.2 Information Collected Automatically:</strong></p>
+                <ul style="margin:0.5rem 0; padding-left:1.5rem;">
+                    <li><strong>Browser Type and Version</strong> &mdash; For compatibility and troubleshooting purposes.</li>
+                    <li><strong>IP Address</strong> &mdash; For security monitoring and abuse prevention.</li>
+                    <li><strong>Access Timestamps</strong> &mdash; Date and time of your visits and submissions.</li>
+                    <li><strong>Cookies and Local Storage</strong> &mdash; Used to remember your language preference (English/Tagalog) and theme preference (light/dark mode).</li>
+                </ul>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">3. How We Use Your Information</h3>
+                <p>Your personal information is used solely for the following purposes:</p>
+                <ul style="margin:0.5rem 0; padding-left:1.5rem;">
+                    <li><strong>Processing Submissions</strong> &mdash; To receive, review, and respond to your consultation requests and feedback.</li>
+                    <li><strong>Communication</strong> &mdash; To send you confirmation emails, edit links for your submissions, status updates, and responses to your inquiries.</li>
+                    <li><strong>Service Improvement</strong> &mdash; To analyze aggregated, anonymized data to improve public services and the Portal experience.</li>
+                    <li><strong>Legal Compliance</strong> &mdash; To comply with applicable laws, regulations, and legal processes.</li>
+                    <li><strong>Security</strong> &mdash; To detect, prevent, and address fraud, abuse, security issues, and technical problems.</li>
+                </ul>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">4. Data Storage and Security</h3>
+                <p>We implement appropriate technical and organizational security measures to protect your personal information against unauthorized access, alteration, disclosure, or destruction. These measures include:</p>
+                <ul style="margin:0.5rem 0; padding-left:1.5rem;">
+                    <li>Secure server infrastructure maintained by the Valenzuela City Government IT Department.</li>
+                    <li>Encrypted data transmission using HTTPS/SSL protocols.</li>
+                    <li>Password hashing for all administrative accounts.</li>
+                    <li>CSRF (Cross-Site Request Forgery) protection on all forms.</li>
+                    <li>Time-limited edit tokens for submission modifications (valid for 7 days).</li>
+                    <li>Regular security audits and access logging.</li>
+                    <li>Role-based access control for administrative personnel.</li>
+                </ul>
+                <p>Your data is stored on secure servers within the Philippines. We retain your personal information only for as long as necessary to fulfill the purposes outlined in this policy, or as required by law.</p>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">5. Data Sharing and Disclosure</h3>
+                <p>We do <strong>not</strong> sell, trade, or rent your personal information to third parties. Your information may be shared only in the following circumstances:</p>
+                <ul style="margin:0.5rem 0; padding-left:1.5rem;">
+                    <li><strong>Within the LGU</strong> &mdash; With authorized Valenzuela City Government officials and staff who need access to process and respond to your submissions.</li>
+                    <li><strong>Legal Requirements</strong> &mdash; When required by law, court order, or government regulation.</li>
+                    <li><strong>Public Interest</strong> &mdash; When necessary to protect the rights, safety, or property of the Valenzuela City Government or the public.</li>
+                    <li><strong>Anonymized Data</strong> &mdash; Aggregated, non-identifiable data may be used for statistical analysis and public reporting.</li>
+                </ul>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">6. Your Rights Under the Data Privacy Act</h3>
+                <p>Under the Data Privacy Act of 2012, you have the following rights:</p>
+                <ul style="margin:0.5rem 0; padding-left:1.5rem;">
+                    <li><strong>Right to Be Informed</strong> &mdash; You have the right to know how your personal data is being collected and processed.</li>
+                    <li><strong>Right to Access</strong> &mdash; You may request access to your personal data held by us.</li>
+                    <li><strong>Right to Rectification</strong> &mdash; You may request correction of inaccurate or incomplete personal data. You can also use the edit link provided after submission to modify your entries within 7 days.</li>
+                    <li><strong>Right to Erasure</strong> &mdash; You may request deletion of your personal data, subject to legal retention requirements.</li>
+                    <li><strong>Right to Object</strong> &mdash; You may object to the processing of your personal data under certain circumstances.</li>
+                    <li><strong>Right to Data Portability</strong> &mdash; You may request a copy of your personal data in a structured, commonly used format.</li>
+                    <li><strong>Right to File a Complaint</strong> &mdash; You may file a complaint with the National Privacy Commission if you believe your data privacy rights have been violated.</li>
+                </ul>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">7. Cookies and Local Storage</h3>
+                <p>The Portal uses cookies and browser local storage for the following purposes only:</p>
+                <ul style="margin:0.5rem 0; padding-left:1.5rem;">
+                    <li><strong>Theme Preference</strong> &mdash; Remembers your light/dark mode selection.</li>
+                    <li><strong>Language Preference</strong> &mdash; Remembers your English/Tagalog language selection.</li>
+                    <li><strong>Session Management</strong> &mdash; Maintains your browsing session for security purposes.</li>
+                </ul>
+                <p>We do <strong>not</strong> use tracking cookies, advertising cookies, or any third-party analytics cookies.</p>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">8. Children's Privacy</h3>
+                <p>The Portal is not intended for use by individuals under the age of 18. We do not knowingly collect personal information from minors. If you are under 18, please use this Portal only with the guidance and consent of a parent or legal guardian.</p>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">9. Changes to This Privacy Policy</h3>
+                <p>We reserve the right to update or modify this Privacy Policy at any time. Any changes will be posted on this page with an updated "Last Updated" date. We encourage you to review this policy periodically. Continued use of the Portal after any changes constitutes your acceptance of the updated policy.</p>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">10. Contact Information</h3>
+                <p>If you have any questions, concerns, or requests regarding this Privacy Policy or the handling of your personal data, please contact:</p>
+                <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:1rem; margin:0.75rem 0;">
+                    <p style="margin:0;"><strong>Data Protection Officer</strong></p>
+                    <p style="margin:0.25rem 0 0;">Valenzuela City Government</p>
+                    <p style="margin:0.25rem 0 0;">City Hall, MacArthur Highway, Karuhatan, Valenzuela City</p>
+                    <p style="margin:0.25rem 0 0;">Email: <a href="mailto:dpo@valenzuela.gov.ph" style="color:#991b1b;">dpo@valenzuela.gov.ph</a></p>
+                    <p style="margin:0.25rem 0 0;">Phone: (02) 8443-8444</p>
+                </div>
+                <p>You may also file a complaint with the <strong>National Privacy Commission</strong> at <a href="https://www.privacy.gov.ph" target="_blank" style="color:#991b1b;">www.privacy.gov.ph</a>.</p>
+
+                <div style="border-top:2px solid #e5e7eb; margin-top:2rem; padding-top:1rem;">
+                    <p style="color:#6b7280; font-size:0.8rem; margin:0; text-align:center;">&copy; 2026 Valenzuela City Government. All rights reserved.<br>This Privacy Policy is governed by the laws of the Republic of the Philippines.</p>
+                </div>
             </div>
         </div>
     </div>
 
-    <div id="termsModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:60; align-items:center; justify-content:center;">
-        <div style="background:white; width:90%; max-width:800px; border-radius:8px; overflow:auto; max-height:90vh; padding:1.25rem;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                <h3 style="margin:0;">Terms of Use</h3>
-                <button type="button" onclick="closeTermsModal()" style="background:transparent; border:none; font-size:1.25rem;">&times;</button>
+    <!-- ==================== TERMS OF USE MODAL ==================== -->
+    <div id="termsModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:60; align-items:center; justify-content:center;">
+        <div style="background:white; width:94%; max-width:720px; border-radius:16px; overflow:hidden; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 25px 60px rgba(0,0,0,0.3);">
+            <!-- Header -->
+            <div style="background:linear-gradient(135deg,#991b1b,#7f1d1d); color:white; padding:1.5rem 2rem; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                <div>
+                    <h2 style="margin:0; font-size:1.4rem; font-weight:800;">Terms of Use</h2>
+                    <p style="margin:0.25rem 0 0; font-size:0.8rem; opacity:0.8;">Valenzuela City Government &mdash; Public Consultation Management Portal</p>
+                </div>
+                <button type="button" onclick="closeTermsModal()" style="background:rgba(255,255,255,0.15); border:none; color:white; font-size:1.5rem; width:36px; height:36px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center;">&times;</button>
             </div>
-            <div id="termsContent" style="color:#374151; line-height:1.6; font-size:0.95rem;">
-                <p style="margin-top:0;"><strong>Official Terms of Use</strong></p>
-                <p>This modal is intended to display the official Terms of Use of the Valenzuela City Government web services. Replace this placeholder with the authoritative terms text from your legal team (you can paste the HTML here or load `terms.php` if you add it to the site).</p>
-                <p style="margin-top:0.5rem; font-weight:700;">Assurance:</p>
-                <p style="margin:0;">Content presented on this portal is maintained under the City's authority. Users should rely on the official documents provided here and via the City's official social accounts for verified information.</p>
+            <!-- Scrollable Content -->
+            <div id="termsContent" style="overflow-y:auto; padding:2rem; color:#374151; line-height:1.8; font-size:0.92rem; flex:1;">
+                <p style="color:#6b7280; font-size:0.8rem; margin-top:0;">Last Updated: February 2026</p>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">1. Acceptance of Terms</h3>
+                <p>By accessing, browsing, or using the Public Consultation Management Portal (the "Portal") operated by the Valenzuela City Government (the "City"), you acknowledge that you have read, understood, and agree to be bound by these Terms of Use ("Terms"). If you do not agree to these Terms, you must immediately discontinue use of the Portal.</p>
+                <p>These Terms constitute a legally binding agreement between you and the Valenzuela City Government. The City reserves the right to modify these Terms at any time, and your continued use of the Portal following any changes constitutes acceptance of the revised Terms.</p>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">2. Purpose of the Portal</h3>
+                <p>The Portal is an official digital platform of the Valenzuela City Government designed to:</p>
+                <ul style="margin:0.5rem 0; padding-left:1.5rem;">
+                    <li>Facilitate public consultations between citizens and the local government.</li>
+                    <li>Collect citizen feedback on government services, programs, and policies.</li>
+                    <li>Promote transparency, accountability, and citizen participation in local governance.</li>
+                    <li>Provide a secure and accessible channel for civic engagement.</li>
+                </ul>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">3. User Eligibility</h3>
+                <p>The Portal is available to all citizens, residents, and stakeholders of Valenzuela City. By using the Portal, you represent and warrant that:</p>
+                <ul style="margin:0.5rem 0; padding-left:1.5rem;">
+                    <li>You are at least 18 years of age, or are using the Portal with the consent and supervision of a parent or legal guardian.</li>
+                    <li>You have the legal capacity to enter into a binding agreement.</li>
+                    <li>The information you provide is accurate, truthful, and complete.</li>
+                    <li>You will use the Portal only for lawful purposes and in accordance with these Terms.</li>
+                </ul>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">4. User Conduct and Responsibilities</h3>
+                <p>When using the Portal, you agree to the following:</p>
+                <p><strong>4.1 You SHALL:</strong></p>
+                <ul style="margin:0.5rem 0; padding-left:1.5rem;">
+                    <li>Provide accurate and truthful information in all submissions.</li>
+                    <li>Use respectful and appropriate language in all communications.</li>
+                    <li>Respect the rights and privacy of other users and government personnel.</li>
+                    <li>Report any security vulnerabilities or technical issues you discover.</li>
+                </ul>
+                <p><strong>4.2 You SHALL NOT:</strong></p>
+                <ul style="margin:0.5rem 0; padding-left:1.5rem;">
+                    <li>Submit false, misleading, or fraudulent information.</li>
+                    <li>Use the Portal to harass, threaten, defame, or intimidate any person.</li>
+                    <li>Upload malicious software, viruses, or any harmful code.</li>
+                    <li>Attempt to gain unauthorized access to the Portal's systems, servers, or databases.</li>
+                    <li>Use automated tools, bots, or scripts to interact with the Portal without authorization.</li>
+                    <li>Impersonate any person or entity, or misrepresent your affiliation with any person or entity.</li>
+                    <li>Submit content that is obscene, offensive, discriminatory, or violates any applicable law.</li>
+                    <li>Interfere with or disrupt the Portal's functionality or the experience of other users.</li>
+                    <li>Use the Portal for any commercial purpose or personal gain.</li>
+                </ul>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">5. Submissions and Content</h3>
+                <p><strong>5.1 Ownership:</strong> You retain ownership of the content you submit through the Portal. However, by submitting content, you grant the Valenzuela City Government a non-exclusive, royalty-free, perpetual license to use, reproduce, and display your submissions for the purposes of public consultation, governance, and service improvement.</p>
+                <p><strong>5.2 Review and Moderation:</strong> The City reserves the right to review, moderate, edit, or remove any submission that violates these Terms, applicable laws, or is deemed inappropriate. Submissions may be reviewed by authorized government personnel before being made publicly visible.</p>
+                <p><strong>5.3 Editing Submissions:</strong> After submitting a consultation or feedback, you will receive a secure edit link valid for 7 days. You may use this link to modify your submission within the allowed timeframe. After expiration, modifications must be requested through official channels.</p>
+                <p><strong>5.4 File Attachments:</strong> You may upload supporting documents and images with your submissions. You are responsible for ensuring that any files you upload do not contain malicious content, do not violate any copyright or intellectual property rights, and are relevant to your submission.</p>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">6. Privacy and Data Protection</h3>
+                <p>Your use of the Portal is also governed by our <a href="#" onclick="closeTermsModal(); setTimeout(function(){ var pm=document.getElementById('policyModal'); if(pm) pm.style.display='flex'; },300);" style="color:#991b1b; font-weight:600;">Privacy Policy</a>, which describes how we collect, use, and protect your personal information. By using the Portal, you consent to the collection and use of your information as described in the Privacy Policy, in compliance with the Data Privacy Act of 2012 (RA 10173).</p>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">7. Intellectual Property</h3>
+                <p>All content, design, graphics, logos, icons, and software on the Portal are the property of the Valenzuela City Government or its licensors and are protected by Philippine intellectual property laws. You may not reproduce, distribute, modify, or create derivative works from any Portal content without prior written consent from the City.</p>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">8. Disclaimer of Warranties</h3>
+                <p>The Portal is provided on an <strong>"as is"</strong> and <strong>"as available"</strong> basis. The Valenzuela City Government makes no warranties, express or implied, regarding:</p>
+                <ul style="margin:0.5rem 0; padding-left:1.5rem;">
+                    <li>The accuracy, completeness, or reliability of any information on the Portal.</li>
+                    <li>The uninterrupted, error-free, or secure operation of the Portal.</li>
+                    <li>The fitness of the Portal for any particular purpose.</li>
+                    <li>The absence of viruses or other harmful components.</li>
+                </ul>
+                <p>The City shall make reasonable efforts to maintain the Portal's availability and accuracy but does not guarantee continuous, uninterrupted access.</p>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">9. Limitation of Liability</h3>
+                <p>To the maximum extent permitted by Philippine law, the Valenzuela City Government, its officials, employees, and agents shall not be liable for any direct, indirect, incidental, consequential, or punitive damages arising from:</p>
+                <ul style="margin:0.5rem 0; padding-left:1.5rem;">
+                    <li>Your use of or inability to use the Portal.</li>
+                    <li>Any errors, omissions, or inaccuracies in the Portal's content.</li>
+                    <li>Unauthorized access to or alteration of your data.</li>
+                    <li>Any third-party conduct or content on the Portal.</li>
+                </ul>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">10. Termination and Suspension</h3>
+                <p>The City reserves the right to suspend or terminate your access to the Portal at any time, without prior notice, if:</p>
+                <ul style="margin:0.5rem 0; padding-left:1.5rem;">
+                    <li>You violate any provision of these Terms.</li>
+                    <li>Your use poses a security risk to the Portal or other users.</li>
+                    <li>Required by law or government regulation.</li>
+                    <li>The Portal is discontinued or undergoes significant changes.</li>
+                </ul>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">11. Governing Law and Dispute Resolution</h3>
+                <p>These Terms shall be governed by and construed in accordance with the laws of the Republic of the Philippines. Any disputes arising from or relating to these Terms or your use of the Portal shall be resolved through:</p>
+                <ol style="margin:0.5rem 0; padding-left:1.5rem;">
+                    <li><strong>Amicable Settlement</strong> &mdash; The parties shall first attempt to resolve disputes through good-faith negotiation.</li>
+                    <li><strong>Mediation</strong> &mdash; If negotiation fails, disputes shall be submitted to mediation under the rules of the Philippine Mediation Center.</li>
+                    <li><strong>Litigation</strong> &mdash; If mediation fails, disputes shall be submitted to the exclusive jurisdiction of the courts of Valenzuela City.</li>
+                </ol>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">12. Severability</h3>
+                <p>If any provision of these Terms is found to be invalid, illegal, or unenforceable, the remaining provisions shall continue in full force and effect. The invalid provision shall be modified to the minimum extent necessary to make it valid and enforceable.</p>
+
+                <h3 style="color:#991b1b; margin-top:1.5rem; font-size:1.1rem;">13. Contact Information</h3>
+                <p>For questions or concerns regarding these Terms of Use, please contact:</p>
+                <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:1rem; margin:0.75rem 0;">
+                    <p style="margin:0;"><strong>Office of the City Administrator</strong></p>
+                    <p style="margin:0.25rem 0 0;">Valenzuela City Government</p>
+                    <p style="margin:0.25rem 0 0;">City Hall, MacArthur Highway, Karuhatan, Valenzuela City</p>
+                    <p style="margin:0.25rem 0 0;">Email: <a href="mailto:admin@valenzuela.gov.ph" style="color:#991b1b;">admin@valenzuela.gov.ph</a></p>
+                    <p style="margin:0.25rem 0 0;">Phone: (02) 8443-8444</p>
+                </div>
+
+                <div style="border-top:2px solid #e5e7eb; margin-top:2rem; padding-top:1rem;">
+                    <p style="color:#6b7280; font-size:0.8rem; margin:0; text-align:center;">&copy; 2026 Valenzuela City Government. All rights reserved.<br>These Terms of Use are governed by the laws of the Republic of the Philippines.</p>
+                </div>
             </div>
         </div>
     </div>
@@ -2127,5 +2517,728 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
     })();
 </script>
 
+<!-- AI CHATBOT WIDGET -->
+<div id="chatbot-widget" style="position:fixed; bottom:24px; right:24px; z-index:9999; font-family:'Segoe UI',system-ui,-apple-system,sans-serif;">
+    <!-- Chat Toggle Button -->
+    <button id="chatbot-toggle" onclick="toggleChatbot()" style="width:60px; height:60px; border-radius:50%; background:linear-gradient(135deg,#dc2626,#991b1b); color:#fff; border:none; cursor:pointer; box-shadow:0 4px 20px rgba(220,38,38,0.4); display:flex; align-items:center; justify-content:center; transition:transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+        <svg id="chatbot-icon-open" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        <svg id="chatbot-icon-close" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:none;"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+
+    <!-- Chat Window -->
+    <div id="chatbot-window" style="display:none; position:absolute; bottom:72px; right:0; width:380px; max-width:calc(100vw - 32px); background:#fff; border-radius:16px; box-shadow:0 8px 40px rgba(0,0,0,0.18); overflow:hidden; animation:chatSlideUp 0.3s ease;">
+        <!-- Header -->
+        <div style="background:linear-gradient(135deg,#dc2626,#991b1b); color:#fff; padding:16px 20px; display:flex; align-items:center; gap:12px;">
+            <div style="width:40px; height:40px; background:rgba(255,255,255,0.2); border-radius:50%; display:flex; align-items:center; justify-content:center;">
+                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            </div>
+            <div>
+                <div style="font-weight:700; font-size:15px;">PCMP Assistant</div>
+                <div style="font-size:11px; opacity:0.85;">Public Consultation Help</div>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div id="chatbot-messages" style="height:340px; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; background:#f9fafb;">
+            <!-- Welcome message -->
+            <div class="chat-msg bot">
+                <div style="background:#fff; border:1px solid #e5e7eb; border-radius:12px 12px 12px 2px; padding:12px 14px; max-width:85%; font-size:13px; line-height:1.5; color:#374151; box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+                    Hello! I'm the <strong>PCMP Assistant</strong>. I can help you with questions about the Public Consultation Portal — submitting consultations, feedback, privacy, and more.<br><br>How can I help you today?
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div id="chatbot-quick" style="padding:8px 16px; background:#f9fafb; border-top:1px solid #f0f0f0; display:flex; gap:6px; flex-wrap:wrap;">
+            <button onclick="sendChatbotQuick('How do I submit a consultation?')" style="font-size:11px; padding:5px 10px; border-radius:20px; border:1px solid #e5e7eb; background:#fff; color:#dc2626; cursor:pointer; white-space:nowrap; font-weight:600;">Submit Consultation</button>
+            <button onclick="sendChatbotQuick('How do I submit feedback?')" style="font-size:11px; padding:5px 10px; border-radius:20px; border:1px solid #e5e7eb; background:#fff; color:#dc2626; cursor:pointer; white-space:nowrap; font-weight:600;">Give Feedback</button>
+            <button onclick="sendChatbotQuick('What topics can I consult about?')" style="font-size:11px; padding:5px 10px; border-radius:20px; border:1px solid #e5e7eb; background:#fff; color:#dc2626; cursor:pointer; white-space:nowrap; font-weight:600;">Topics</button>
+            <button onclick="sendChatbotQuick('Is my data safe?')" style="font-size:11px; padding:5px 10px; border-radius:20px; border:1px solid #e5e7eb; background:#fff; color:#dc2626; cursor:pointer; white-space:nowrap; font-weight:600;">Privacy</button>
+        </div>
+
+        <!-- Input -->
+        <div style="padding:12px 16px; border-top:1px solid #e5e7eb; display:flex; gap:8px; align-items:flex-end; background:#fff;">
+            <textarea id="chatbot-input" placeholder="Type your question..." rows="2"
+                style="flex:1; padding:10px 14px; border:1px solid #d1d5db; border-radius:16px; font-size:13px; outline:none; transition:border-color 0.2s; resize:none; font-family:inherit; line-height:1.4; max-height:100px; overflow-y:auto;"
+                onfocus="this.style.borderColor='#dc2626'" onblur="this.style.borderColor='#d1d5db'"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatbotMessage();}"></textarea>
+            <button onclick="sendChatbotMessage()" style="width:40px; height:40px; border-radius:50%; background:#dc2626; color:#fff; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background 0.2s; margin-bottom:2px;" onmouseover="this.style.background='#991b1b'" onmouseout="this.style.background='#dc2626'">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes chatSlideUp {
+    from { opacity:0; transform:translateY(16px); }
+    to { opacity:1; transform:translateY(0); }
+}
+.chat-msg.bot { align-self:flex-start; max-width:88%; }
+.chat-msg.user { align-self:flex-end; max-width:80%; }
+.chat-msg.bot div { white-space:pre-line; }
+#chatbot-messages::-webkit-scrollbar { width:4px; }
+#chatbot-messages::-webkit-scrollbar-thumb { background:#d1d5db; border-radius:4px; }
+.chatbot-typing span {
+    display:inline-block; width:7px; height:7px; background:#9ca3af; border-radius:50%; margin:0 2px;
+    animation:chatTyping 1.2s infinite;
+}
+.chatbot-typing span:nth-child(2) { animation-delay:0.2s; }
+.chatbot-typing span:nth-child(3) { animation-delay:0.4s; }
+@keyframes chatTyping {
+    0%,60%,100% { transform:translateY(0); opacity:0.4; }
+    30% { transform:translateY(-6px); opacity:1; }
+}
+</style>
+
+<script>
+var chatbotOpen = false;
+
+function toggleChatbot() {
+    chatbotOpen = !chatbotOpen;
+    document.getElementById('chatbot-window').style.display = chatbotOpen ? 'block' : 'none';
+    document.getElementById('chatbot-icon-open').style.display = chatbotOpen ? 'none' : 'block';
+    document.getElementById('chatbot-icon-close').style.display = chatbotOpen ? 'block' : 'none';
+    if (chatbotOpen) {
+        document.getElementById('chatbot-input').focus();
+    }
+}
+
+function sendChatbotQuick(text) {
+    document.getElementById('chatbot-input').value = text;
+    sendChatbotMessage();
+    // Hide quick actions after first use
+    var qa = document.getElementById('chatbot-quick');
+    if (qa) qa.style.display = 'none';
+}
+
+function appendChatMessage(text, sender) {
+    var container = document.getElementById('chatbot-messages');
+    var div = document.createElement('div');
+    div.className = 'chat-msg ' + sender;
+
+    if (sender === 'user') {
+        div.innerHTML = '<div style="background:#dc2626; color:#fff; border-radius:12px 12px 2px 12px; padding:10px 14px; font-size:13px; line-height:1.5;">' + escapeChat(text) + '</div>';
+    } else {
+        // Parse basic markdown bold
+        var formatted = escapeChat(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        // Parse bullet points
+        formatted = formatted.replace(/^• /gm, '<span style="color:#dc2626;">•</span> ');
+        div.innerHTML = '<div style="background:#fff; border:1px solid #e5e7eb; border-radius:12px 12px 12px 2px; padding:12px 14px; max-width:100%; font-size:13px; line-height:1.6; color:#374151; box-shadow:0 1px 3px rgba(0,0,0,0.06);">' + formatted + '</div>';
+    }
+
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    return div;
+}
+
+function showTypingIndicator() {
+    var container = document.getElementById('chatbot-messages');
+    var div = document.createElement('div');
+    div.className = 'chat-msg bot';
+    div.id = 'chatbot-typing';
+    div.innerHTML = '<div class="chatbot-typing" style="background:#fff; border:1px solid #e5e7eb; border-radius:12px 12px 12px 2px; padding:12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);"><span></span><span></span><span></span></div>';
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+function removeTypingIndicator() {
+    var el = document.getElementById('chatbot-typing');
+    if (el) el.remove();
+}
+
+function escapeChat(str) {
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(str));
+    return d.innerHTML;
+}
+
+function sendChatbotMessage() {
+    var input = document.getElementById('chatbot-input');
+    var text = input.value.trim();
+    if (!text) return;
+
+    input.value = '';
+    appendChatMessage(text, 'user');
+    showTypingIndicator();
+
+    // Hide quick actions
+    var qa = document.getElementById('chatbot-quick');
+    if (qa) qa.style.display = 'none';
+
+    fetch('API/chatbot_api.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+        removeTypingIndicator();
+        if (data.success && data.reply) {
+            appendChatMessage(data.reply, 'bot');
+        } else {
+            appendChatMessage('Sorry, I encountered an error. Please try again.', 'bot');
+        }
+    })
+    .catch(function() {
+        removeTypingIndicator();
+        appendChatMessage('Sorry, I\'m unable to connect right now. Please try again later.', 'bot');
+    });
+}
+</script>
+
+<!-- ===================== DARK MODE & LANGUAGE SYSTEM ===================== -->
+<script>
+// ── Dark Mode Toggle ──
+function togglePortalTheme() {
+    var html = document.documentElement;
+    html.classList.toggle('dark');
+    var isDark = html.classList.contains('dark');
+    localStorage.setItem('portal-theme', isDark ? 'dark' : 'light');
+    document.getElementById('portal-dark-icon').style.display = isDark ? 'none' : '';
+    document.getElementById('portal-light-icon').style.display = isDark ? '' : 'none';
+    // Update nav bar background
+    var navBar = document.querySelector('.portal-nav-bar');
+    if (navBar) {
+        navBar.style.background = isDark ? '#1f2937' : 'white';
+        navBar.style.borderColor = isDark ? '#374151' : '#f0f0f0';
+    }
+}
+
+// Initialize theme on load
+(function() {
+    var isDark = localStorage.getItem('portal-theme') === 'dark';
+    if (isDark) {
+        document.getElementById('portal-dark-icon').style.display = 'none';
+        document.getElementById('portal-light-icon').style.display = '';
+        var navBar = document.querySelector('.portal-nav-bar');
+        if (navBar) {
+            navBar.style.background = '#1f2937';
+            navBar.style.borderColor = '#374151';
+        }
+    }
+})();
+
+// ── Translation System ──
+var portalLang = localStorage.getItem('portal-lang') || 'en';
+
+var translations = {
+    tl: {
+        // Header
+        header_title: 'Pampublikong Konsultasyon',
+        header_subtitle: 'Pamahalaang Lungsod ng Valenzuela',
+        back_home: 'Bumalik sa Home',
+
+        // Navigation
+        nav_consultations: 'Mga Aktibong Konsultasyon',
+        nav_submit: 'Magsumite ng Konsultasyon',
+        nav_feedback: 'Magsumite ng Feedback',
+
+        // Consultations section
+        consultations_title: 'Mga Aktibong Konsultasyon',
+        consultations_subtitle: 'Suriin at magbigay ng puna sa mga iminungkahing ordinansa, programa, at patakaran',
+
+        // Feature cards
+        feat_consultations: 'Pampublikong Konsultasyon',
+        feat_consultations_desc: 'Mag-browse at lumahok sa mga aktibong konsultasyon ng gobyerno tungkol sa mga patakaran at programa.',
+        feat_feedback: 'Magsumite ng Feedback',
+        feat_feedback_desc: 'Ibahagi ang iyong mga saloobin, mungkahi, at alalahanin nang direkta sa mga opisyal ng lungsod.',
+        feat_chatbot: 'AI Assistant',
+        feat_chatbot_desc: 'Kailangan ng tulong? I-click ang chat icon sa ibaba-kanan para magtanong sa aming AI assistant.',
+        feat_secure: 'Ligtas at Pribado',
+        feat_secure_desc: 'Ang iyong data ay protektado sa ilalim ng Data Privacy Act. Lahat ng submission ay naka-encrypt.',
+
+        // Submit consultation section
+        submit_title: 'Magsumite ng Kahilingan para sa Konsultasyon',
+        submit_subtitle: 'May paksa ba na gusto mong ikonsulta ng lungsod sa publiko? Isumite ang iyong kahilingan dito.',
+        submit_form_title: 'Isumite ang Iyong Kahilingan para sa Konsultasyon',
+
+        // Form labels
+        form_name: 'Pangalan',
+        form_topic: 'Paksa / Pamagat *',
+        form_address: 'Tirahan',
+        form_barangay: 'Barangay',
+        form_description: 'Paglalarawan / Detalye *',
+        form_email: 'Iyong Email Address *',
+        form_notifications: 'Mga Abiso',
+        form_email_updates: 'Padalhan ako ng mga update sa email tungkol sa konsultasyong ito',
+        btn_submit_consultation: 'Isumite ang Kahilingan para sa Konsultasyon',
+        agree_terms_consultation: 'Nabasa ko at sumasang-ayon ako sa <a href="#" onclick="event.preventDefault(); event.stopPropagation(); var pm=document.getElementById(\'policyModal\'); if(pm) pm.style.display=\'flex\';" style="color:#991b1b; font-weight:600; text-decoration:underline;">Patakaran sa Privacy</a> at <a href="#" onclick="event.preventDefault(); event.stopPropagation(); var tm=document.getElementById(\'termsModal\'); if(tm) tm.style.display=\'flex\';" style="color:#991b1b; font-weight:600; text-decoration:underline;">Mga Tuntunin ng Paggamit</a> ng Public Consultation Portal.',
+
+        // Feedback section
+        feedback_title: 'Magsumite ng Feedback',
+        feedback_subtitle: 'Ibahagi ang iyong mga saloobin sa mga aktibong konsultasyon',
+
+        // Feedback info boxes
+        fb_info1_title: 'Ibahagi ang Iyong Pananaw',
+        fb_info1_desc: 'Tumulong sa pagbuo ng mas magandang patakaran sa pamamagitan ng pagbabahagi ng iyong feedback sa mga iminungkahing ordinansa at programa.',
+        fb_info2_title: 'Ligtas at Na-verify',
+        fb_info2_desc: 'Ang iyong telepono at email ay na-verify upang matiyak na lehitimo lamang ang mga isinumite.',
+        fb_info3_title: 'Maingat na Sinusuri',
+        fb_info3_desc: 'Bawat isinumite ay sinusuri at isinasaalang-alang ng aming mga opisyal ng lungsod.',
+
+        // Feedback form
+        verify_email: 'I-verify ang Email',
+        form_email_label: 'Email Address *',
+        share_feedback: 'Ibahagi ang Feedback',
+        form_fullname: 'Buong Pangalan *',
+        form_type: 'Uri *',
+        form_your_feedback: 'Ang Iyong Feedback *',
+        form_attachment: 'Mag-attach ng Larawan o Dokumento (opsyonal)',
+        btn_submit_feedback: 'Isumite ang Feedback',
+        agree_terms_feedback: 'Nabasa ko at sumasang-ayon ako sa <a href="#" onclick="event.preventDefault(); event.stopPropagation(); var pm=document.getElementById(\'policyModal\'); if(pm) pm.style.display=\'flex\';" style="color:#fecaca; font-weight:600; text-decoration:underline;">Patakaran sa Privacy</a> at <a href="#" onclick="event.preventDefault(); event.stopPropagation(); var tm=document.getElementById(\'termsModal\'); if(tm) tm.style.display=\'flex\';" style="color:#fecaca; font-weight:600; text-decoration:underline;">Mga Tuntunin ng Paggamit</a> ng Public Consultation Portal.',
+        fb_reviewed_note: 'Ang iyong na-verify na feedback ay susuriin ng aming koponan.',
+
+        // Footer
+        footer_about: 'Tungkol',
+        footer_about_desc: 'Portal ng Pampublikong Konsultasyon ng Pamahalaang Lungsod ng Valenzuela',
+        footer_links: 'Mga Mabilisang Link',
+        footer_contact: 'Makipag-ugnayan',
+        footer_follow: 'Sundan Kami',
+        footer_rights: '\u00A9 2026 Pamahalaang Lungsod ng Valenzuela. Lahat ng karapatan ay nakalaan.',
+
+        // Consultation cards
+        view_details: 'Tingnan ang Detalye',
+        read_more: 'Magbasa pa',
+        status_active: 'Aktibo',
+        status_closed: 'Sarado',
+        no_consultations: 'Wala pang aktibong konsultasyon sa ngayon.',
+        past_consultations: 'Mga Nakaraang Konsultasyon',
+
+        // Chatbot
+        chatbot_title: 'PCMP Assistant',
+        chatbot_subtitle: 'Tulong sa Pampublikong Konsultasyon',
+        chatbot_placeholder: 'I-type ang iyong tanong...',
+        chatbot_welcome: 'Kumusta! Ako ang PCMP Assistant. Makakatulong ako sa mga tanong tungkol sa Portal ng Pampublikong Konsultasyon — pagsusumite ng konsultasyon, feedback, privacy, at iba pa.\n\nPaano kita matutulungan ngayon?',
+        chatbot_quick_submit: 'Magsumite ng Konsultasyon',
+        chatbot_quick_feedback: 'Magbigay ng Feedback',
+        chatbot_quick_topics: 'Mga Paksa',
+        chatbot_quick_privacy: 'Privacy'
+    },
+    en: {
+        header_title: 'Public Consultation',
+        header_subtitle: 'Valenzuela City Government',
+        back_home: 'Back Home',
+        nav_consultations: 'Active Consultations',
+        nav_submit: 'Submit Consultation',
+        nav_feedback: 'Submit Feedback',
+        consultations_title: 'Active Consultations',
+        consultations_subtitle: 'Review and provide feedback on proposed ordinances, programs, and policies',
+        feat_consultations: 'Public Consultations',
+        feat_consultations_desc: 'Browse and participate in active government consultations on policies and programs.',
+        feat_feedback: 'Submit Feedback',
+        feat_feedback_desc: 'Share your thoughts, suggestions, and concerns directly with city officials.',
+        feat_chatbot: 'AI Assistant',
+        feat_chatbot_desc: 'Need help? Click the chat icon at the bottom-right to ask our AI assistant anything.',
+        feat_secure: 'Secure & Private',
+        feat_secure_desc: 'Your data is protected under the Data Privacy Act. All submissions are encrypted.',
+        submit_title: 'Submit a Consultation Request',
+        submit_subtitle: "Have a topic you'd like the city to consult the public on? Submit your request here.",
+        submit_form_title: 'Submit Your Consultation Request',
+        form_name: 'Name',
+        form_topic: 'Topic / Title *',
+        form_address: 'Address',
+        form_barangay: 'Barangay',
+        form_description: 'Description / Details *',
+        form_email: 'Your Email Address *',
+        form_notifications: 'Notifications',
+        form_email_updates: 'Send me email updates about this consultation',
+        btn_submit_consultation: 'Submit Consultation Request',
+        agree_terms_consultation: 'I have read and agree to the <a href="#" onclick="event.preventDefault(); event.stopPropagation(); var pm=document.getElementById(\'policyModal\'); if(pm) pm.style.display=\'flex\';" style="color:#991b1b; font-weight:600; text-decoration:underline;">Privacy Policy</a> and <a href="#" onclick="event.preventDefault(); event.stopPropagation(); var tm=document.getElementById(\'termsModal\'); if(tm) tm.style.display=\'flex\';" style="color:#991b1b; font-weight:600; text-decoration:underline;">Terms of Use</a> of the Public Consultation Portal.',
+        feedback_title: 'Submit Feedback',
+        feedback_subtitle: 'Share your thoughts on active consultations',
+        fb_info1_title: 'Share Your Views',
+        fb_info1_desc: 'Help shape better policies by sharing your feedback on proposed ordinances and programs.',
+        fb_info2_title: 'Secure & Verified',
+        fb_info2_desc: 'Your phone and email are verified to ensure legitimate submissions only.',
+        fb_info3_title: 'Reviewed Carefully',
+        fb_info3_desc: 'Every submission is reviewed and considered by our city officials.',
+        verify_email: 'Verify Email',
+        form_email_label: 'Email Address *',
+        share_feedback: 'Share Feedback',
+        form_fullname: 'Full Name *',
+        form_type: 'Type *',
+        form_your_feedback: 'Your Feedback *',
+        form_attachment: 'Attach Image or Document (optional)',
+        btn_submit_feedback: 'Submit Feedback',
+        agree_terms_feedback: 'I have read and agree to the <a href="#" onclick="event.preventDefault(); event.stopPropagation(); var pm=document.getElementById(\'policyModal\'); if(pm) pm.style.display=\'flex\';" style="color:#fecaca; font-weight:600; text-decoration:underline;">Privacy Policy</a> and <a href="#" onclick="event.preventDefault(); event.stopPropagation(); var tm=document.getElementById(\'termsModal\'); if(tm) tm.style.display=\'flex\';" style="color:#fecaca; font-weight:600; text-decoration:underline;">Terms of Use</a> of the Public Consultation Portal.',
+        fb_reviewed_note: 'Your verified feedback will be reviewed by our team.',
+        footer_about: 'About',
+        footer_about_desc: 'Public Consultation Portal of Valenzuela City Government',
+        footer_links: 'Quick Links',
+        footer_contact: 'Contact',
+        footer_follow: 'Follow Us',
+        footer_rights: '\u00A9 2026 Valenzuela City Government. All rights reserved.',
+        view_details: 'View Details',
+        read_more: 'Read More',
+        status_active: 'Active',
+        status_closed: 'Closed',
+        no_consultations: 'No active consultations at this time.',
+        past_consultations: 'Past Consultations',
+        chatbot_title: 'PCMP Assistant',
+        chatbot_subtitle: 'Public Consultation Help',
+        chatbot_placeholder: 'Type your question...',
+        chatbot_welcome: "Hello! I'm the PCMP Assistant. I can help you with questions about the Public Consultation Portal — submitting consultations, feedback, privacy, and more.\n\nHow can I help you today?",
+        chatbot_quick_submit: 'Submit Consultation',
+        chatbot_quick_feedback: 'Give Feedback',
+        chatbot_quick_topics: 'Topics',
+        chatbot_quick_privacy: 'Privacy'
+    }
+};
+
+function applyTranslations(lang) {
+    var dict = translations[lang];
+    if (!dict) return;
+
+    // Keys that contain HTML (links, etc.) — use innerHTML instead of textContent
+    var htmlKeys = ['agree_terms_consultation', 'agree_terms_feedback'];
+
+    // Update all elements with data-i18n attribute
+    var els = document.querySelectorAll('[data-i18n]');
+    for (var i = 0; i < els.length; i++) {
+        var key = els[i].getAttribute('data-i18n');
+        if (dict[key] !== undefined) {
+            if (htmlKeys.indexOf(key) !== -1) {
+                els[i].innerHTML = dict[key];
+            } else {
+                els[i].textContent = dict[key];
+            }
+        }
+    }
+
+    // Update placeholders
+    var placeholders = {
+        'chatbot-input': lang === 'tl' ? 'I-type ang iyong tanong...' : 'Type your question...'
+    };
+    for (var id in placeholders) {
+        var el = document.getElementById(id);
+        if (el) el.placeholder = placeholders[id];
+    }
+
+    // Update input placeholders based on language
+    if (lang === 'tl') {
+        setPlaceholders({
+            'name': 'Iyong buong pangalan',
+            'consultation_topic': 'hal., Iminungkahing Pamamahala ng Trapiko sa Barangay X',
+            'address': 'Numero ng bahay, kalye, barangay, lungsod',
+            'consultation_description': 'Mangyaring magbigay ng detalye tungkol sa iyong kahilingan...',
+            'consultation_email': 'iyong.email@halimbawa.com',
+            'email': 'iyong@email.com',
+            'message': 'Mangyaring ibahagi ang iyong mga saloobin...'
+        });
+    } else {
+        setPlaceholders({
+            'name': 'Your full name',
+            'consultation_topic': 'e.g., Proposed Traffic Management in Barangay X',
+            'address': 'House number, street, barangay, city',
+            'consultation_description': 'Please provide details about your consultation request...',
+            'consultation_email': 'your.email@example.com',
+            'email': 'your@email.com',
+            'message': 'Please share your thoughts...'
+        });
+    }
+
+    // Update chatbot quick action buttons
+    var quickBtns = document.querySelectorAll('#chatbot-quick button');
+    var quickKeys = ['chatbot_quick_submit', 'chatbot_quick_feedback', 'chatbot_quick_topics', 'chatbot_quick_privacy'];
+    for (var j = 0; j < quickBtns.length && j < quickKeys.length; j++) {
+        if (dict[quickKeys[j]]) quickBtns[j].textContent = dict[quickKeys[j]];
+    }
+
+    // Update chatbot header
+    var chatTitle = document.querySelector('#chatbot-window div div:nth-child(2) div:first-child');
+    var chatSub = document.querySelector('#chatbot-window div div:nth-child(2) div:last-child');
+    if (chatTitle && dict.chatbot_title) chatTitle.textContent = dict.chatbot_title;
+    if (chatSub && dict.chatbot_subtitle) chatSub.textContent = dict.chatbot_subtitle;
+
+    // Update select option text for gender
+    var genderSelect = document.querySelector('select[name="gender"]');
+    if (genderSelect) {
+        var gOpts = genderSelect.options;
+        if (lang === 'tl') {
+            if (gOpts[0]) gOpts[0].text = 'Kasarian';
+            if (gOpts[1]) gOpts[1].text = 'Babae';
+            if (gOpts[2]) gOpts[2].text = 'Lalaki';
+            if (gOpts[3]) gOpts[3].text = 'Iba pa';
+            if (gOpts[4]) gOpts[4].text = 'Ayaw sabihin';
+        } else {
+            if (gOpts[0]) gOpts[0].text = 'Gender';
+            if (gOpts[1]) gOpts[1].text = 'Female';
+            if (gOpts[2]) gOpts[2].text = 'Male';
+            if (gOpts[3]) gOpts[3].text = 'Other';
+            if (gOpts[4]) gOpts[4].text = 'Prefer not to say';
+        }
+    }
+
+    // Update barangay select first option
+    var brgySelect = document.querySelector('select[name="barangay"]');
+    if (brgySelect && brgySelect.options[0]) {
+        brgySelect.options[0].text = lang === 'tl' ? 'Pumili ng barangay' : 'Select barangay';
+    }
+
+    // Update feedback type select
+    var fbTypeSelect = document.getElementById('feedback_type');
+    if (fbTypeSelect) {
+        var fOpts = fbTypeSelect.options;
+        if (lang === 'tl') {
+            if (fOpts[0]) fOpts[0].text = 'Pangkalahatang Feedback';
+            if (fOpts[1]) fOpts[1].text = 'Suporta/Pagsang-ayon';
+            if (fOpts[2]) fOpts[2].text = 'Alalahanin/Pagtutol';
+            if (fOpts[3]) fOpts[3].text = 'Mungkahi';
+            if (fOpts[4]) fOpts[4].text = 'Tanong';
+        } else {
+            if (fOpts[0]) fOpts[0].text = 'General Feedback';
+            if (fOpts[1]) fOpts[1].text = 'Support/Agreement';
+            if (fOpts[2]) fOpts[2].text = 'Concern/Objection';
+            if (fOpts[3]) fOpts[3].text = 'Suggestion';
+            if (fOpts[4]) fOpts[4].text = 'Question';
+        }
+    }
+
+    // Update page title
+    document.title = lang === 'tl'
+        ? 'Portal ng Pampublikong Konsultasyon - Lungsod ng Valenzuela'
+        : 'Public Consultation Portal - Valenzuela City';
+}
+
+function setPlaceholders(map) {
+    for (var name in map) {
+        var els = document.querySelectorAll('[name="' + name + '"], #' + name);
+        for (var i = 0; i < els.length; i++) {
+            if (els[i].placeholder !== undefined) els[i].placeholder = map[name];
+        }
+    }
+}
+
+function togglePortalLang() {
+    portalLang = (portalLang === 'en') ? 'tl' : 'en';
+    localStorage.setItem('portal-lang', portalLang);
+    var btn = document.getElementById('lang-toggle');
+    btn.textContent = portalLang === 'en' ? 'EN' : 'TL';
+    btn.title = portalLang === 'en' ? 'Switch to Tagalog' : 'Lumipat sa English';
+    applyTranslations(portalLang);
+}
+
+// Initialize language on load
+(function() {
+    var btn = document.getElementById('lang-toggle');
+    if (portalLang === 'tl') {
+        btn.textContent = 'TL';
+        btn.title = 'Lumipat sa English';
+        applyTranslations('tl');
+    } else {
+        btn.textContent = 'EN';
+        btn.title = 'Switch to Tagalog';
+    }
+})();
+</script>
+
+<!-- ==================== GUIDED TOUR / WALKTHROUGH ==================== -->
+<style>
+    .tour-overlay { position:fixed; inset:0; z-index:9990; pointer-events:none; transition:opacity 0.3s; }
+    .tour-overlay.active { pointer-events:auto; }
+    .tour-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9991; transition:opacity 0.3s; }
+    .tour-highlight-ring { position:fixed; z-index:9993; border-radius:8px; box-shadow:0 0 0 4px #dc2626, 0 0 0 9999px rgba(0,0,0,0.55); transition:all 0.4s ease; pointer-events:none; }
+    .tour-tooltip { position:fixed; z-index:9994; background:white; border-radius:14px; box-shadow:0 20px 50px rgba(0,0,0,0.25); max-width:360px; width:90vw; overflow:hidden; animation:tourFadeIn 0.3s ease; }
+    .tour-tooltip-header { background:linear-gradient(135deg,#991b1b,#7f1d1d); color:white; padding:1rem 1.25rem; display:flex; justify-content:space-between; align-items:center; }
+    .tour-tooltip-header h4 { margin:0; font-size:1rem; font-weight:800; }
+    .tour-tooltip-header .tour-step-badge { background:rgba(255,255,255,0.2); padding:2px 10px; border-radius:20px; font-size:0.75rem; font-weight:700; }
+    .tour-tooltip-body { padding:1.25rem; }
+    .tour-tooltip-body p { margin:0 0 1rem; color:#374151; font-size:0.9rem; line-height:1.6; }
+    .tour-tooltip-actions { display:flex; gap:0.5rem; justify-content:flex-end; }
+    .tour-btn-skip { background:none; border:1px solid #d1d5db; color:#6b7280; padding:0.5rem 1rem; border-radius:8px; font-size:0.85rem; cursor:pointer; font-weight:600; }
+    .tour-btn-skip:hover { background:#f3f4f6; }
+    .tour-btn-next { background:#991b1b; color:white; border:none; padding:0.5rem 1.25rem; border-radius:8px; font-size:0.85rem; cursor:pointer; font-weight:700; }
+    .tour-btn-next:hover { background:#7f1d1d; }
+    .tour-btn-prev { background:none; border:1px solid #d1d5db; color:#374151; padding:0.5rem 1rem; border-radius:8px; font-size:0.85rem; cursor:pointer; font-weight:600; }
+    .tour-btn-prev:hover { background:#f3f4f6; }
+    .tour-progress { display:flex; gap:4px; justify-content:center; margin-bottom:0.75rem; }
+    .tour-progress-dot { width:8px; height:8px; border-radius:50%; background:#e5e7eb; transition:background 0.2s; }
+    .tour-progress-dot.active { background:#991b1b; }
+    .tour-progress-dot.done { background:#fca5a5; }
+    @keyframes tourFadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    .dark .tour-tooltip { background:#1f2937 !important; }
+    .dark .tour-tooltip-body p { color:#d1d5db !important; }
+    .dark .tour-btn-skip { border-color:#4b5563 !important; color:#9ca3af !important; }
+    .dark .tour-btn-skip:hover { background:#374151 !important; }
+    .dark .tour-btn-prev { border-color:#4b5563 !important; color:#d1d5db !important; }
+    .dark .tour-btn-prev:hover { background:#374151 !important; }
+</style>
+
+<div id="tour-overlay" class="tour-overlay" style="display:none;">
+    <div class="tour-highlight-ring" id="tour-ring"></div>
+    <div class="tour-tooltip" id="tour-tooltip"></div>
+</div>
+
+<script>
+(function() {
+    var tourSteps = [
+        {
+            target: '.logo-section',
+            title: 'Welcome!',
+            text: 'Welcome to the <strong>Public Consultation Management Portal</strong> of Valenzuela City! This quick tour will show you around. You can skip anytime.',
+            position: 'bottom'
+        },
+        {
+            target: '#nav-consultations',
+            title: 'Active Consultations',
+            text: 'View all <strong>active public consultations</strong> here. These are proposed ordinances, programs, and policies open for citizen input.',
+            position: 'bottom'
+        },
+        {
+            target: '#nav-submit-consultation',
+            title: 'Submit a Consultation',
+            text: 'Have a topic you want the city to address? Click here to <strong>submit your own consultation request</strong>. Fill in the details and our team will review it.',
+            position: 'bottom'
+        },
+        {
+            target: '#nav-feedback',
+            title: 'Submit Feedback',
+            text: 'Share your <strong>thoughts, suggestions, or concerns</strong> about any active consultation. Your feedback helps shape better policies!',
+            position: 'bottom'
+        },
+        {
+            target: '#portal-features',
+            title: 'Portal Features',
+            text: 'These cards highlight the <strong>key features</strong> of the portal — consultations, feedback, AI assistant, and data security.',
+            position: 'top'
+        },
+        {
+            target: '#tour-btn',
+            title: 'Replay This Tour',
+            text: 'Want to see this tour again? Click the <strong>? button</strong> anytime to restart the guided walkthrough.',
+            position: 'bottom'
+        },
+        {
+            target: '#lang-toggle',
+            title: 'Language Toggle',
+            text: 'Switch between <strong>English</strong> and <strong>Tagalog</strong> with one click. The entire portal translates instantly.',
+            position: 'bottom'
+        },
+        {
+            target: '#theme-toggle-portal',
+            title: 'Dark Mode',
+            text: 'Prefer a darker look? Toggle <strong>dark mode</strong> on or off here. Your preference is saved automatically.',
+            position: 'bottom'
+        },
+        {
+            target: '#chatbot-toggle',
+            title: 'AI Chatbot Assistant',
+            text: 'Need help? Click this button to open the <strong>AI Chatbot</strong>. Ask it anything about the portal — how to submit, what topics are available, privacy info, and more!',
+            position: 'top'
+        }
+    ];
+
+    var currentStep = 0;
+    var tourActive = false;
+
+    window.startPortalTour = function() {
+        currentStep = 0;
+        tourActive = true;
+        document.getElementById('tour-overlay').style.display = 'block';
+        document.getElementById('tour-overlay').classList.add('active');
+        document.body.style.overflow = 'hidden';
+        showTourStep(currentStep);
+    };
+
+    function endTour() {
+        tourActive = false;
+        document.getElementById('tour-overlay').style.display = 'none';
+        document.getElementById('tour-overlay').classList.remove('active');
+        document.body.style.overflow = '';
+        localStorage.setItem('portal-tour-done', '1');
+    }
+
+    function showTourStep(idx) {
+        if (idx < 0 || idx >= tourSteps.length) { endTour(); return; }
+        currentStep = idx;
+        var step = tourSteps[idx];
+        var el = document.querySelector(step.target);
+        var ring = document.getElementById('tour-ring');
+        var tooltip = document.getElementById('tour-tooltip');
+
+        // If target not found, skip to next
+        if (!el) { showTourStep(idx + 1); return; }
+
+        // Scroll element into view
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        setTimeout(function() {
+            var rect = el.getBoundingClientRect();
+            var pad = 6;
+
+            // Position highlight ring
+            ring.style.top = (rect.top - pad) + 'px';
+            ring.style.left = (rect.left - pad) + 'px';
+            ring.style.width = (rect.width + pad * 2) + 'px';
+            ring.style.height = (rect.height + pad * 2) + 'px';
+
+            // Build progress dots
+            var dots = '';
+            for (var i = 0; i < tourSteps.length; i++) {
+                var cls = i < idx ? 'done' : (i === idx ? 'active' : '');
+                dots += '<div class="tour-progress-dot ' + cls + '"></div>';
+            }
+
+            // Build tooltip HTML
+            var isFirst = idx === 0;
+            var isLast = idx === tourSteps.length - 1;
+            tooltip.innerHTML = '' +
+                '<div class="tour-tooltip-header">' +
+                    '<h4>' + step.title + '</h4>' +
+                    '<span class="tour-step-badge">' + (idx + 1) + ' / ' + tourSteps.length + '</span>' +
+                '</div>' +
+                '<div class="tour-tooltip-body">' +
+                    '<div class="tour-progress">' + dots + '</div>' +
+                    '<p>' + step.text + '</p>' +
+                    '<div class="tour-tooltip-actions">' +
+                        '<button class="tour-btn-skip" onclick="endPortalTour()">Skip Tour</button>' +
+                        (!isFirst ? '<button class="tour-btn-prev" onclick="tourPrev()">Back</button>' : '') +
+                        '<button class="tour-btn-next" onclick="tourNext()">' + (isLast ? 'Finish' : 'Next') + '</button>' +
+                    '</div>' +
+                '</div>';
+
+            // Position tooltip
+            var tw = Math.min(360, window.innerWidth * 0.9);
+            var ttop, tleft;
+
+            if (step.position === 'bottom') {
+                ttop = rect.bottom + 14;
+                tleft = rect.left + rect.width / 2 - tw / 2;
+            } else {
+                ttop = rect.top - 14;
+                tleft = rect.left + rect.width / 2 - tw / 2;
+            }
+
+            // Keep within viewport
+            if (tleft < 10) tleft = 10;
+            if (tleft + tw > window.innerWidth - 10) tleft = window.innerWidth - tw - 10;
+
+            if (step.position === 'top') {
+                tooltip.style.top = 'auto';
+                tooltip.style.bottom = (window.innerHeight - rect.top + 14) + 'px';
+            } else {
+                tooltip.style.top = ttop + 'px';
+                tooltip.style.bottom = 'auto';
+            }
+            tooltip.style.left = tleft + 'px';
+            tooltip.style.width = tw + 'px';
+        }, 350);
+    }
+
+    window.tourNext = function() { showTourStep(currentStep + 1); };
+    window.tourPrev = function() { showTourStep(currentStep - 1); };
+    window.endPortalTour = endTour;
+
+    // Auto-start tour on first visit
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!localStorage.getItem('portal-tour-done')) {
+            setTimeout(function() { startPortalTour(); }, 800);
+        }
+    });
+})();
+</script>
+
 </body>
 </html>
+
