@@ -1,0 +1,53 @@
+body { font-family: 'Inter', sans-serif; background-color: #f8fafc; animation: fadeIn 0.6s ease-out; }
+/* Smooth scrolling for anchor links */
+html { scroll-behavior: smooth; }
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #f1f1f1; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+/* Glassmorphism utility */
+.glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+
+/* Page Transitions */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+nav { animation: slideUp 0.5s ease-out; }
+main { animation: fadeIn 0.6s ease-out 0.1s both; }
+section { animation: fadeIn 0.6s ease-out; }
+header { animation: slideUp 0.6s ease-out; }
+
+button, a { transition: all 0.3s ease; }
+input, textarea, select { transition: all 0.3s ease; }
+.group { transition: all 0.3s ease; }
+
+/* Sticky Header Scroll Effect */
+nav {
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+nav.scrolled {
+    background: rgba(255, 255, 255, 0.98) !important;
+    border-bottom-color: rgba(0, 51, 160, 0.1) !important;
+    backdrop-filter: blur(15px) !important;
+}
