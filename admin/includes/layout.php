@@ -13,7 +13,7 @@ function renderAdminHead(string $title, string $activePage): void
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="assets/css/admin.css">
+    <link rel="stylesheet" href="../assets/css/admin.css">
 </head>
 <body class="admin-body<?php echo ''; ?>">
 <div class="admin-layout">
@@ -110,7 +110,7 @@ function renderAdminTopbar(): void
                             <div class="admin-profile-role"><?php echo ucfirst(htmlspecialchars($user['role'])); ?></div>
                         </div>
                     </div>
-                    <a href="../sign-out.php" class="admin-dropdown-link">
+                    <a href="../public/sign-out.php" class="admin-dropdown-link">
                         <i class="fa-solid fa-right-from-bracket"></i> Sign Out
                     </a>
                 </div>
@@ -127,7 +127,7 @@ function renderAdminFoot(): void
     </div>
 </div>
 <div id="admin-toast-container" class="admin-toast-container" aria-live="polite" aria-atomic="true"></div>
-<script src="assets/js/admin.js"></script>
+<script src="../assets/js/admin.js"></script>
 </body>
 </html>
     <?php
