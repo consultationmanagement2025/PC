@@ -12,9 +12,9 @@
  */
 
 // Google OAuth Configuration
-define('GOOGLE_CLIENT_ID', '483330697347-snf4hu7n502f9ko2l20snan49j6c72ba.apps.googleusercontent.com');
-define('GOOGLE_CLIENT_SECRET', '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');
-define('GOOGLE_REDIRECT_URI', 'http://localhost/CAP101/PC/google_oauth_callback.php');
+define('GOOGLE_CLIENT_ID', function_exists('app_env') ? app_env('GOOGLE_CLIENT_ID', '') : (getenv('GOOGLE_CLIENT_ID') ?: ''));
+define('GOOGLE_CLIENT_SECRET', function_exists('app_env') ? app_env('GOOGLE_CLIENT_SECRET', '') : (getenv('GOOGLE_CLIENT_SECRET') ?: ''));
+define('GOOGLE_REDIRECT_URI', function_exists('app_env') ? app_env('GOOGLE_REDIRECT_URI', 'http://localhost/CAP101/PC/google_oauth_callback.php') : (getenv('GOOGLE_REDIRECT_URI') ?: 'http://localhost/CAP101/PC/google_oauth_callback.php'));
 
 // Google OAuth endpoints
 define('GOOGLE_AUTH_URL', 'https://accounts.google.com/o/oauth2/auth');
