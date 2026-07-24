@@ -1,0 +1,708 @@
+/* LRMS System Styles - Updated with All Latest Changes */
+
+/* =====================
+   CUSTOM ANIMATIONS
+   ===================== */
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes fade-in-up {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slide-in-left {
+    from {
+        opacity: 0;
+        transform: translateX(-30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slide-in-right {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes bounce-in {
+    0% {
+        opacity: 0;
+        transform: scale(0.3);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.05);
+    }
+    70% {
+        transform: scale(0.9);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.animate-fade-in {
+    animation: fade-in 0.6s ease-out;
+}
+
+.animate-fade-in-up {
+    animation: fade-in-up 0.6s ease-out;
+}
+
+.animate-slide-in-left {
+    animation: slide-in-left 0.6s ease-out;
+}
+
+.animate-slide-in-right {
+    animation: slide-in-right 0.6s ease-out;
+}
+
+.animate-bounce-in {
+    animation: bounce-in 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* Animation delays for staggered effects */
+.animation-delay-100 { animation-delay: 100ms; }
+.animation-delay-200 { animation-delay: 200ms; }
+.animation-delay-300 { animation-delay: 300ms; }
+.animation-delay-400 { animation-delay: 400ms; }
+.animation-delay-500 { animation-delay: 500ms; }
+.animation-delay-600 { animation-delay: 600ms; }
+
+/* =====================
+   SIDEBAR STYLES
+   ===================== */
+
+/* Sidebar collapsed state */
+.sidebar.collapsed {
+    width: 80px !important;
+}
+
+.sidebar.collapsed .sidebar-text {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.sidebar.collapsed .nav-item {
+    justify-content: center;
+    padding: 0.75rem;
+}
+
+.sidebar.collapsed .nav-item i {
+    margin-right: 0;
+}
+
+.sidebar.collapsed .nav-item span {
+    display: none;
+}
+
+/* Main content expanded when sidebar collapsed */
+#main-content.expanded {
+    margin-left: 0;
+}
+
+/* =====================
+   BUTTON STYLES
+   ===================== */
+
+.btn-primary {
+    background-color: #dc2626;
+    color: white;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.2s ease-in-out;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transform: translateY(0);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+.btn-primary:hover {
+    background-color: #b91c1c;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-outline {
+    border: 2px solid #dc2626;
+    color: #dc2626;
+    background-color: transparent;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    transform: translateY(0);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+.btn-outline:hover {
+    background-color: #dc2626;
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.btn-outline:active {
+    transform: translateY(0);
+}
+
+/* =====================
+   NAVIGATION ITEMS
+   ===================== */
+.nav-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    color: #e0e7ff;
+    border-radius: 0.5rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    text-decoration: none;
+    font-size: 0.875rem;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    position: relative;
+    overflow: hidden;
+}
+
+.nav-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 3px;
+    background: white;
+    transform: scaleY(0);
+    transition: transform 0.3s ease;
+}
+
+.nav-item:hover::before {
+    transform: scaleY(1);
+}
+
+.nav-item:hover {
+    background-color: rgba(220, 38, 38, 0.4);
+    color: white;
+    transform: translateX(4px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.nav-item i {
+    margin-right: 0.75rem;
+    font-size: 1.125rem;
+    width: 1.5rem;
+    text-align: center;
+    transition: transform 0.3s ease;
+}
+
+.nav-item:hover i {
+    transform: scale(1.15) rotate(5deg);
+}
+
+.nav-item.active {
+    background-color: rgba(220, 38, 38, 0.5);
+    color: white;
+    font-weight: 600;
+}
+
+.nav-item.active::before {
+    transform: scaleY(1);
+}
+
+/* =====================
+   FILTER CHECKBOX LABELS
+   ===================== */
+
+.filter-checkbox-label {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.375rem 0.5rem;
+    margin: 0 -0.5rem;
+    border-radius: 0.375rem;
+    transition: background-color 0.15s;
+}
+
+.filter-checkbox-label:hover {
+    background-color: #f9fafb;
+}
+
+.filter-checkbox-label input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+
+.filter-checkbox-label .filter-label {
+    font-size: 0.875rem;
+    color: #374151;
+}
+
+.filter-checkbox-label .filter-count {
+    font-size: 0.75rem;
+    color: #9ca3af;
+}
+
+/* File type filter with icon */
+.filter-checkbox-label-icon {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.375rem 0.5rem;
+    margin: 0 -0.5rem;
+    border-radius: 0.375rem;
+    transition: background-color 0.15s;
+}
+
+.filter-checkbox-label-icon:hover {
+    background-color: #f9fafb;
+}
+
+/* =====================
+   DRAG SCROLL
+   ===================== */
+
+.drag-scroll {
+    cursor: grab;
+    user-select: none;
+}
+
+.drag-scroll:active {
+    cursor: grabbing;
+}
+
+/* =====================
+   CUSTOM SCROLLBAR
+   ===================== */
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+    cursor: grab;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+::-webkit-scrollbar-thumb:active {
+    cursor: grabbing;
+    background: #888;
+}
+
+/* Firefox scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #c1c1c1 #f1f1f1;
+}
+
+/* =====================
+   MODAL STYLES
+   ===================== */
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 50;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+.modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background-color: white;
+    border-radius: 1rem;
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: fade-in-up 0.3s ease-out;
+}
+
+/* =====================
+   BADGE STYLES
+   ===================== */
+
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 9999px;
+}
+
+.badge-success {
+    background-color: #dcfce7;
+    color: #166534;
+}
+
+.badge-warning {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.badge-danger {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.badge-info {
+    background-color: #dbeafe;
+    color: #1e40af;
+}
+
+.badge-primary {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+/* =====================
+   INPUT STYLES
+   ===================== */
+
+.input-field {
+    width: 100%;
+    padding: 0.5rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.input-field:focus {
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
+/* =====================
+   TOAST NOTIFICATION
+   ===================== */
+
+.toast {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    background-color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    z-index: 60;
+    min-width: 300px;
+    animation: slide-in-right 0.3s ease-out;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.toast.success {
+    border-left: 4px solid #10b981;
+}
+
+.toast.error {
+    border-left: 4px solid #dc2626;
+}
+
+.toast.warning {
+    border-left: 4px solid #f59e0b;
+}
+
+.toast.info {
+    border-left: 4px solid #3b82f6;
+}
+
+/* =====================
+   DARK MODE STYLES
+   ===================== */
+
+.dark {
+    background-color: #1a1a1a;
+    color: #e5e5e5;
+}
+
+.dark body {
+    background-color: #1a1a1a !important;
+}
+
+.dark main,
+.dark .main-content {
+    background-color: #1a1a1a !important;
+}
+
+.dark nav {
+    background-color: #2d2d2d !important;
+}
+
+.dark nav h2,
+.dark nav p,
+.dark nav span,
+.dark nav a {
+    color: #e5e5e5 !important;
+}
+
+.dark nav button {
+    color: #e5e5e5 !important;
+}
+
+.dark nav button:hover {
+    background-color: #404040 !important;
+}
+
+.dark nav input {
+    background-color: #404040 !important;
+    border-color: #555555 !important;
+    color: #e5e5e5 !important;
+}
+
+.dark nav input::placeholder {
+    color: #999999 !important;
+}
+
+/* Dark Mode - Sidebar */
+.dark aside,
+.dark .sidebar,
+.dark aside#sidebar {
+    background: linear-gradient(180deg, #7f1d1d 0%, #450a0a 100%) !important;
+    border-color: #450a0a !important;
+}
+
+.dark aside nav,
+.dark .sidebar nav {
+    background-color: transparent !important;
+}
+
+.dark aside a,
+.dark .sidebar a,
+.dark aside button,
+.dark .sidebar button {
+    color: #e5e5e5 !important;
+}
+
+.dark aside a:hover,
+.dark .sidebar a:hover,
+.dark aside button:hover,
+.dark .sidebar button:hover {
+    background-color: rgba(220, 38, 38, 0.3) !important;
+}
+
+.dark aside a.active,
+.dark .sidebar a.active {
+    background-color: rgba(220, 38, 38, 0.5) !important;
+    color: #ffffff !important;
+}
+
+/* Dark Mode - Cards & Containers */
+.dark .bg-white {
+    background-color: #2d2d2d !important;
+}
+
+.dark .bg-gray-50 {
+    background-color: #1a1a1a !important;
+}
+
+.dark .bg-gray-100 {
+    background-color: #2d2d2d !important;
+}
+
+.dark .text-gray-800,
+.dark .text-gray-900 {
+    color: #e5e5e5 !important;
+}
+
+.dark .text-gray-700 {
+    color: #d4d4d4 !important;
+}
+
+.dark .text-gray-600 {
+    color: #a3a3a3 !important;
+}
+
+.dark .text-gray-500 {
+    color: #999999 !important;
+}
+
+.dark .border-gray-200,
+.dark .border-gray-100 {
+    border-color: #404040 !important;
+}
+
+/* Dark Mode - Filter Labels */
+.dark .filter-checkbox-label .filter-label {
+    color: #e5e5e5 !important;
+}
+
+.dark .filter-checkbox-label .filter-count {
+    color: #a3a3a3 !important;
+}
+
+.dark .filter-checkbox-label:hover {
+    background-color: #3d3d3d !important;
+}
+
+/* Dark Mode - Date Input Fields */
+.dark input[type="date"] {
+    background-color: #3d3d3d !important;
+    border-color: #525252 !important;
+    color: #e5e5e5 !important;
+}
+
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+}
+
+/* Dark Mode - Modal */
+.dark .modal-content {
+    background-color: #2d2d2d !important;
+}
+
+/* Dark Mode - Input Fields */
+.dark .input-field {
+    background-color: #404040 !important;
+    border-color: #555555 !important;
+    color: #e5e5e5 !important;
+}
+
+.dark .input-field:focus {
+    border-color: #dc2626 !important;
+    background-color: #4d4d4d !important;
+}
+
+/* Dark Mode - Table */
+.dark table {
+    background-color: #2d2d2d !important;
+}
+
+.dark table thead {
+    background-color: #404040 !important;
+}
+
+.dark table th,
+.dark table td {
+    border-color: #404040 !important;
+    color: #e5e5e5 !important;
+}
+
+.dark table tbody tr:hover {
+    background-color: #3a3a3a !important;
+}
+
+/* Dark Mode - Dropdown */
+.dark #notifications-dropdown,
+.dark #profile-dropdown {
+    background-color: #2d2d2d !important;
+    border-color: #404040 !important;
+}
+
+/* Dark Mode - Toast */
+.dark .toast {
+    background-color: #2d2d2d !important;
+    color: #e5e5e5 !important;
+}
+
+/* Dark Mode - Scrollbar */
+.dark ::-webkit-scrollbar-track {
+    background: #2d2d2d;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: #555;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: #666;
+}
+
+/* =====================
+   RESPONSIVE UTILITIES
+   ===================== */
+
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+        position: fixed;
+        z-index: 40;
+        height: 100vh;
+    }
+    
+    .sidebar.show {
+        transform: translateX(0);
+    }
+}
+
+/* =====================
+   SMOOTH TRANSITIONS
+   ===================== */
+
+* {
+    transition-property: color, background-color, border-color;
+    transition-duration: 200ms;
+}
+
+button, a, input, select, textarea {
+    transition-property: all;
+    transition-duration: 200ms;
+}

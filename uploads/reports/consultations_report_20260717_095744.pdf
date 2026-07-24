@@ -1,0 +1,57 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 0 >>
+stream
+BT
+/F1 12 Tf
+50 770 Td
+(Consultation Module Report) Tj
+0 -15 Td
+(Generated: 2026-07-17 09:57:44) Tj
+0 -15 Td
+(Module: Consultations) Tj
+0 -15 Td
+(Total Consultations: 2) Tj
+0 -15 Td
+(Pending Review: 1) Tj
+0 -15 Td
+(Survey Responses: 0) Tj
+0 -15 Td
+(Feedback Entries: 0) Tj
+0 -15 Td
+(Average Rating: 0.0) Tj
+0 -15 Td
+(Participation Score: 2) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Sentiment Summary: Positive: 0, Neutral: 0, Negative: 0) Tj
+ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000722 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+792
+%%EOF

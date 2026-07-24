@@ -34,133 +34,21 @@ function outputCSRFField() {
 
 // ==================== RATE LIMITING & BRUTE FORCE PROTECTION ====================
 /**
- * Check if IP/user is rate limited
- * @param string $identifier IP address or username
- * @param int $max_attempts Maximum attempts allowed
- * @param int $window_seconds Time window for attempts
- * @return array ['limited' => bool, 'remaining' => int, 'lockout_until' => timestamp or null]
+ * Check if IP/user is rate limited (Disabled by admin)
  */
 function checkRateLimit($identifier, $max_attempts = 5, $window_seconds = 900) {
-    global $conn;
-
-    if (function_exists('dbEnsureConnection')) {
-        dbEnsureConnection();
-    }
-    
-    // Initialize rate_limits table if needed
-    initializeRateLimitsTable();
-    
-    $current_time = time();
-    $window_start = $current_time - $window_seconds;
-    
-    // Clean old entries
-    $ok = $conn->query("DELETE FROM rate_limits WHERE window_expires < " . $current_time);
-    if (!$ok && in_array((int)$conn->errno, [2006, 2013], true) && function_exists('dbEnsureConnection')) {
-        dbEnsureConnection();
-        $ok = $conn->query("DELETE FROM rate_limits WHERE window_expires < " . $current_time);
-    }
-    
-    // Check if currently locked out
-    $stmt = $conn->prepare("SELECT locked_until FROM rate_limits WHERE identifier = ? AND locked_until > ? LIMIT 1");
-    if (!$stmt && in_array((int)$conn->errno, [2006, 2013], true) && function_exists('dbEnsureConnection')) {
-        dbEnsureConnection();
-        $stmt = $conn->prepare("SELECT locked_until FROM rate_limits WHERE identifier = ? AND locked_until > ? LIMIT 1");
-    }
-    if (!$stmt) {
-        error_log('Rate limit prepare failed: ' . $conn->error);
-        return ['limited' => false, 'remaining' => $max_attempts, 'locked_until' => null];
-    }
-    $stmt->bind_param("si", $identifier, $current_time);
-    $stmt->execute();
-    $lock_result = $stmt->get_result();
-    
-    if ($lock_result->num_rows > 0) {
-        $row = $lock_result->fetch_assoc();
-        return [
-            'limited' => true,
-            'remaining' => 0,
-            'locked_until' => $row['locked_until']
-        ];
-    }
-    $stmt->close();
-    
-    // Count attempts in window (find any non-expired record for this identifier)
-    $stmt = $conn->prepare("SELECT attempt_count FROM rate_limits WHERE identifier = ? AND window_expires > ? LIMIT 1");
-    if (!$stmt && in_array((int)$conn->errno, [2006, 2013], true) && function_exists('dbEnsureConnection')) {
-        dbEnsureConnection();
-        $stmt = $conn->prepare("SELECT attempt_count FROM rate_limits WHERE identifier = ? AND window_expires > ? LIMIT 1");
-    }
-    if (!$stmt) {
-        error_log('Rate limit prepare failed: ' . $conn->error);
-        return ['limited' => false, 'remaining' => $max_attempts, 'locked_until' => null];
-    }
-    $stmt->bind_param("si", $identifier, $current_time);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    $attempt_count = 0;
-    if ($result->num_rows > 0) {
-        $row = $result->fetch_assoc();
-        $attempt_count = $row['attempt_count'];
-    }
-    $stmt->close();
-    
-    $remaining = max(0, $max_attempts - $attempt_count);
-    $is_limited = $attempt_count >= $max_attempts;
-    
     return [
-        'limited' => $is_limited,
-        'remaining' => $remaining,
+        'limited' => false,
+        'remaining' => 999,
         'locked_until' => null
     ];
 }
 
 /**
- * Record failed login attempt and apply lockout if needed
+ * Record failed login attempt and apply lockout if needed (Disabled by admin)
  */
 function recordFailedAttempt($identifier, $lockout_duration = 900) {
-    global $conn;
-
-    if (function_exists('dbEnsureConnection')) {
-        dbEnsureConnection();
-    }
-    
-    initializeRateLimitsTable();
-    
-    $current_time = time();
-    $window_start = $current_time - 900; // 15 min window
-    
-    // Get or create rate limit record (find any non-expired record)
-    $stmt = $conn->prepare("SELECT id, attempt_count FROM rate_limits WHERE identifier = ? AND window_expires > ? LIMIT 1");
-    $stmt->bind_param("si", $identifier, $current_time);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result->num_rows > 0) {
-        // Increment existing
-        $row = $result->fetch_assoc();
-        $new_count = $row['attempt_count'] + 1;
-        $stmt = $conn->prepare("UPDATE rate_limits SET attempt_count = ? WHERE id = ?");
-        $stmt->bind_param("ii", $new_count, $row['id']);
-        $stmt->execute();
-        $stmt->close();
-        
-        // If max attempts reached, apply lockout
-        if ($new_count >= 5) {
-            $locked_until = $current_time + $lockout_duration;
-            $stmt = $conn->prepare("UPDATE rate_limits SET locked_until = ? WHERE id = ?");
-            $stmt->bind_param("ii", $locked_until, $row['id']);
-            $stmt->execute();
-            $stmt->close();
-        }
-    } else {
-        // Create new entry
-        $window_expires = $current_time + 900;
-        $stmt = $conn->prepare("INSERT INTO rate_limits (identifier, window_start, window_expires, attempt_count) VALUES (?, ?, ?, 1)");
-        $stmt->bind_param("sii", $identifier, $window_start, $window_expires);
-        $stmt->execute();
-        $stmt->close();
-    }
+    return true;
 }
 
 /**

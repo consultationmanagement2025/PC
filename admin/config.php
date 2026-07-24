@@ -1,6 +1,10 @@
 <?php
 // Environment Configuration for public release
-$serverHost = strtolower(trim((string)($_SERVER['HTTP_HOST'] ?? 'localhost')));
+$mainConfig = dirname(__DIR__) . '/config.php';
+if (file_exists($mainConfig)) {
+    require_once $mainConfig;
+}
+$serverHost = strtolower(trim((string)($_SERVER['HTTP_HOST'] ?? 'login.php')));
 $serverHost = $serverHost === '' ? 'localhost' : $serverHost;
 
 define('APP_HOST', $serverHost);

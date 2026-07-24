@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Forgot Password API</title>
+</head>
+<body>
+    <h1>Test Forgot Password API</h1>
+    <button onclick="testAPI()">Test API</button>
+    <pre id="result"></pre>
+    
+    <script>
+    function testAPI() {
+        fetch('./AUTH/forgot_password.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: 'action=forgot_password&email=admin@valenzuela.gov.ph'
+        })
+        .then(r => r.text())
+        .then(text => {
+            document.getElementById('result').textContent = text;
+        })
+        .catch(e => {
+            document.getElementById('result').textContent = 'Error: ' + e.message;
+        });
+    }
+    </script>
+</body>
+</html>

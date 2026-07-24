@@ -1,0 +1,37 @@
+# Environment variables - NEVER commit these!
+.env
+.env.local
+.env.production
+
+# Debug files - remove before production
+debug_login.php
+simple_login_test.php
+test_login_verification.php
+check_user_role.php
+test_production_config.php
+
+# Logs
+*.log
+error.log
+access.log
+
+# PHP errors
+error_reporting.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup

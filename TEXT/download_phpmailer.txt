@@ -1,0 +1,9 @@
+Download PHPMailer from: https://github.com/PHPMailer/PHPMailer/archive/refs/heads/master.zip
+
+Steps:
+1. Download the ZIP file
+2. Extract to: c:\xampp\htdocs\CAP101\PC\PHPMailer\
+3. Make sure you have these files:
+   - c:\xampp\htdocs\CAP101\PC\PHPMailer\src\Exception.php
+   - c:\xampp\htdocs\CAP101\PC\PHPMailer\src\PHPMailer.php
+   - c:\xampp\htdocs\CAP101\PC\PHPMailer\src\SMTP.php

@@ -1,0 +1,4 @@
+Applying modal edit visibility improvements: add createdAt mapping and 7-day edit window.
+Files modified:
+- app-features.js
+- ASSETS/js/app-features.js

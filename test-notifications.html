@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Test Notifications</title>
+    <link rel="stylesheet" href="ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css">
+    <style>
+        .notifications-dropdown.hidden {
+            display: none !important;
+        }
+        .notifications-dropdown:not(.hidden) {
+            display: block !important;
+            position: absolute !important;
+            z-index: 9999 !important;
+        }
+    </style>
+</head>
+<body>
+    <div style="padding: 20px;">
+        <h1>Test Notifications Dropdown</h1>
+        
+        <div class="relative" style="display: inline-block;">
+            <button onclick="testToggle()" class="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition" title="Notifications" style="cursor:pointer;">
+                <i class="bi bi-bell text-lg"></i>
+                <span class="hidden absolute top-1 right-1 bg-red-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">0</span>
+            </button>
+            
+            <div id="notifications-dropdown" class="hidden absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-80 flex flex-col" style="z-index: 9999 !important;">
+                <div class="p-3 border-b border-gray-200">
+                    <h3 class="font-semibold text-gray-900 text-sm">Notifications</h3>
+                </div>
+                <div class="overflow-y-auto space-y-1 p-2" style="max-height: 240px;">
+                    <div class="text-xs text-gray-500 text-center py-3">No notifications yet</div>
+                </div>
+            </div>
+        </div>
+        
+        <p>Check the console for messages.</p>
+    </div>
+
+    <script>
+        function testToggle() {
+            console.log('Test toggle clicked!');
+            var dd = document.getElementById('notifications-dropdown');
+            if (dd) {
+                if (dd.classList.contains('hidden')) {
+                    dd.classList.remove('hidden');
+                    dd.style.display = 'block';
+                    dd.style.position = 'absolute';
+                    dd.style.zIndex = '9999';
+                    console.log('Opened');
+                } else {
+                    dd.classList.add('hidden');
+                    dd.style.display = 'none';
+                    console.log('Closed');
+                }
+            } else {
+                console.log('Dropdown not found');
+            }
+        }
+        
+        // Also test with event listener
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded');
+            var btn = document.querySelector('button[onclick="testToggle()"]');
+            var dd = document.getElementById('notifications-dropdown');
+            
+            if (btn && dd) {
+                console.log('Found button and dropdown');
+                btn.addEventListener('click', function(e) {
+                    console.log('Event listener also fired!');
+                });
+            } else {
+                console.log('Button or dropdown not found', {btn: !!btn, dd: !!dd});
+            }
+        });
+    </script>
+</body>
+</html>
