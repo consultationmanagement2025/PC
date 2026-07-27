@@ -4286,6 +4286,5157 @@ function filterConsultations() {
                 renderConsultationsTableFromData(result.data);
             }
         });
+<<<<<<< Updated upstream
+=======
+
+
+        // Priority icons for dropdown
+
+
+        const priorityIcons = {
+
+
+            critical: '🔴',
+
+
+            high: '🟠',
+
+
+            normal: '🔵',
+
+
+            low: '⚪'
+
+
+        };
+
+
+
+
+        // Render notifications sorted by priority and unread status
+
+
+        const sortedNotifs = [...AppData.notifications].sort((a, b) => {
+
+
+            const priorityOrder = { critical: 0, high: 1, normal: 2, low: 3 };
+
+
+            const aPriority = priorityOrder[a.priority] || 2;
+
+
+            const bPriority = priorityOrder[b.priority] || 2;
+
+
+            if (aPriority !== bPriority) return aPriority - bPriority;
+
+
+            return a.read === b.read ? 0 : a.read ? 1 : -1;
+
+
+        });
+
+
+
+
+        notifsList.innerHTML = sortedNotifs.length === 0 ?
+
+
+            '<div class="p-4 text-center text-gray-500"><p>No notifications</p><p class="text-xs mt-1">You\'re all caught up!</p></div>' :
+
+
+            sortedNotifs.map(notif => `
+
+
+            <div data-id="${notif.id}" class="p-3 border-b border-gray-100 transition hover:bg-gray-50 ${!notif.read ? 'bg-blue-50 border-l-3 border-l-blue-500' : 'bg-white'}" style="cursor: pointer;">
+
+
+                <div class="flex items-start gap-2">
+
+
+                    <div class="text-lg flex-shrink-0 mt-0.5" title="Priority: ${notif.priority}">
+
+
+                        ${priorityIcons[notif.priority] || '🔵'}
+
+
+                    </div>
+
+
+                    <div class="flex-1 min-w-0">
+
+
+                        <div class="flex items-start justify-between gap-2 mb-1">
+
+
+                            <h4 class="text-xs font-semibold text-gray-900 leading-tight">${escapeHtml(notif.title)}</h4>
+
+
+                            <span class="text-xs px-1.5 py-0.5 bg-gray-200 text-gray-700 rounded flex-shrink-0">${escapeHtml(notif.category || 'general')}</span>
+
+
+                        </div>
+
+
+                        <p class="text-xs text-gray-600 line-clamp-1 mb-1">${escapeHtml(notif.message)}</p>
+
+
+                        <div class="flex items-center justify-between gap-2">
+
+
+                            <span class="text-xs text-gray-400">🕐 ${escapeHtml(notif.time)}</span>
+
+
+                        </div>
+
+
+                    </div>
+
+
+                    <i class="bi bi-chevron-right text-gray-400 text-xs flex-shrink-0 mt-1" style="cursor: pointer;"></i>
+
+
+                </div>
+
+
+            </div>
+
+
+        `).join('');
+
+
+
+
+        notifsList.querySelectorAll('[data-id]').forEach(item => {
+
+
+            item.addEventListener('click', function() {
+
+
+                const id = parseInt(this.getAttribute('data-id'));
+
+
+                viewNotification(id);
+
+
+            });
+
+
+        });
+
+
+    } catch (e) {
+
+
+        const details = e && e.message ? String(e.message) : 'Unknown error';
+
+
+        notifsList.innerHTML = `<div class="p-6 text-center text-red-600 text-sm">Failed to load notifications.<div class="text-xs text-gray-500 mt-2">${escapeHtml(details)}</div></div>`;
+
+
+        const badge = document.getElementById('notif-badge') || document.getElementById('notification-badge');
+
+
+        if (badge) badge.classList.add('hidden');
+
+
+    }
+
+
+}
+
+
+
+
+// Toggle notifications dropdown
+
+function toggleNotifications() {
+
+    const dropdown = document.getElementById('notifications-dropdown');
+
+    if (dropdown) {
+
+        dropdown.classList.toggle('hidden');
+
+        if (!dropdown.classList.contains('hidden')) {
+
+            loadNotifications();
+
+        }
+
+    }
+
+}
+
+
+
+
+function viewNotification(id) {
+
+
+    const notif = AppData.notifications.find(n => n.id === id);
+
+
+    if (!notif) {
+
+
+        console.error('Notification not found:', id);
+
+
+        return;
+
+
+    }
+
+
+
+
+    // Mark as read (best-effort)
+
+
+    toggleNotificationRead(id, 1).finally(() => {
+
+
+        openNotificationModal(id);
+
+
+    });
+
+
+}
+
+
+
+
+function openNotificationModal(id) {
+
+
+    const notif = AppData.notifications.find(n => n.id === id);
+
+
+    if (!notif) return;
+
+
+
+
+    // Create modal container if not present
+
+
+    let modal = document.getElementById('notif-detail-modal');
+
+
+    if (!modal) {
+
+
+        modal = document.createElement('div');
+
+
+        modal.id = 'notif-detail-modal';
+
+
+        modal.className = 'fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden';
+
+
+        modal.innerHTML = `
+
+
+            <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 p-6 relative overflow-hidden">
+
+
+                <!-- Navigation Buttons -->
+
+                <button id="notif-detail-prev" class="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white bg-opacity-90 hover:bg-opacity-100 rounded-full p-2 shadow-md transition-all duration-200 z-10 opacity-0 pointer-events-none">
+
+                    <i class="bi bi-chevron-left text-gray-600"></i>
+
+                </button>
+
+                <button id="notif-detail-next" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white bg-opacity-90 hover:bg-opacity-100 rounded-full p-2 shadow-md transition-all duration-200 z-10 opacity-0 pointer-events-none">
+
+                    <i class="bi bi-chevron-right text-gray-600"></i>
+
+                </button>
+
+
+                <!-- Content Container -->
+
+                <div id="notif-content-container" class="transition-transform duration-300 ease-in-out">
+
+
+                    <div class="flex items-start justify-between mb-4">
+
+
+                        <div class="flex-1">
+
+
+                            <div class="flex items-center gap-3 mb-2">
+
+
+                                <h3 id="notif-detail-title" class="text-lg font-bold text-gray-800"></h3>
+
+
+                                <span id="notif-priority-badge" class="inline-block px-2 py-1 text-xs font-semibold rounded-full"></span>
+
+
+                            </div>
+
+
+                            <p id="notif-detail-time" class="text-xs text-gray-500"></p>
+
+
+                            <p id="notif-detail-category" class="text-xs text-gray-400 mt-1"></p>
+
+
+                        </div>
+
+
+                        <button id="notif-detail-close" class="text-gray-500 hover:text-gray-800 text-2xl">✕</button>
+
+
+                    </div>
+
+
+                    <div class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+
+
+                        <p id="notif-detail-message" class="text-gray-700 leading-relaxed"></p>
+
+
+                    </div>
+
+
+                    <div class="mt-6 flex justify-between items-center">
+
+
+                        <div class="text-sm text-gray-500">
+
+                            <span id="notif-counter"></span>
+
+                        </div>
+
+
+                        <div class="flex gap-3">
+
+
+                            <button id="notif-detail-action" class="btn-primary hidden"></button>
+
+
+                            <button id="notif-detail-open" class="btn-primary">Open Related Page</button>
+
+
+                            <button id="notif-detail-dismiss" class="btn-outline">Close</button>
+
+
+                        </div>
+
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+        `;
+
+
+        document.body.appendChild(modal);
+
+
+
+
+        // Close handlers
+
+
+        modal.querySelector('#notif-detail-close').addEventListener('click', () => closeNotificationModal());
+
+
+        modal.querySelector('#notif-detail-dismiss').addEventListener('click', () => closeNotificationModal());
+
+
+
+
+        // Navigation handlers
+
+
+        modal.querySelector('#notif-detail-prev').addEventListener('click', () => navigateNotification(-1));
+
+
+        modal.querySelector('#notif-detail-next').addEventListener('click', () => navigateNotification(1));
+
+
+    }
+
+
+
+
+    // Priority badge colors
+
+
+    const priorityColors = {
+
+
+        critical: 'bg-red-100 text-red-800',
+
+
+        high: 'bg-orange-100 text-orange-800',
+
+
+        normal: 'bg-blue-100 text-blue-800',
+
+
+        low: 'bg-gray-100 text-gray-800'
+
+
+    };
+
+
+
+
+    // Fill content
+
+
+    document.getElementById('notif-detail-title').textContent = notif.title;
+
+
+    document.getElementById('notif-detail-time').textContent = '📅 ' + notif.time;
+
+
+    document.getElementById('notif-detail-category').textContent = '📁 Category: ' + (notif.category || 'general').toUpperCase();
+
+
+    document.getElementById('notif-detail-message').textContent = notif.message;
+
+
+
+
+    // Priority badge
+
+
+    const badge = document.getElementById('notif-priority-badge');
+
+
+    badge.textContent = (notif.priority || 'normal').toUpperCase();
+
+
+    badge.className = 'inline-block px-2 py-1 text-xs font-semibold rounded-full ' + (priorityColors[notif.priority] || priorityColors.normal);
+
+
+
+
+    // Action button
+
+
+    const actionBtn = document.getElementById('notif-detail-action');
+
+
+    if (notif.action) {
+
+
+        actionBtn.textContent = notif.action;
+
+
+        actionBtn.classList.remove('hidden');
+
+
+        actionBtn.onclick = function() {
+
+
+            closeNotificationModal();
+
+
+            if (notif.category === 'documents') showSection('documents');
+
+
+            else if (notif.category === 'feedback') showSection('public-feedback-queue');
+
+
+            else if (notif.category === 'users') showSection('users');
+
+
+            else if (notif.category === 'system') showSection('audit');
+
+
+            else showSection('public-consultation');
+
+
+        };
+
+
+    } else {
+
+
+        actionBtn.classList.add('hidden');
+
+
+    }
+
+
+
+
+    // Open action
+
+
+    const openBtn = document.getElementById('notif-detail-open');
+
+
+    openBtn.onclick = function() {
+
+
+        closeNotificationModal();
+
+
+        if (notif.type === 'document' || notif.type === 'approval') showSection('documents');
+
+
+        else if (notif.type === 'user') showSection('users');
+
+
+        else if (notif.type === 'feedback') showSection('public-feedback-queue');
+
+
+        else if (notif.type === 'alert' || notif.type === 'system') showSection('audit');
+
+
+        else showSection('public-consultation');
+
+
+    };
+
+
+
+
+    // Update navigation state and counter
+
+
+    updateNavigationState(id);
+
+
+
+
+    // Show modal
+
+
+    modal.classList.remove('hidden');
+
+
+}
+
+
+
+
+// Track current notification index for navigation
+
+
+let currentNotificationIndex = -1;
+
+
+
+
+function updateNavigationState(currentId) {
+
+
+    const sortedNotifs = [...AppData.notifications].sort((a, b) => {
+
+
+        const priorityOrder = { critical: 0, high: 1, normal: 2, low: 3 };
+
+
+        const aPriority = priorityOrder[a.priority] || 2;
+
+
+        const bPriority = priorityOrder[b.priority] || 2;
+
+
+        if (aPriority !== bPriority) return aPriority - bPriority;
+
+
+        return a.read === b.read ? 0 : a.read ? 1 : -1;
+
+
+    });
+
+
+
+
+    currentNotificationIndex = sortedNotifs.findIndex(n => n.id === currentId);
+
+
+
+
+    const prevBtn = document.getElementById('notif-detail-prev');
+
+
+    const nextBtn = document.getElementById('notif-detail-next');
+
+
+    const counter = document.getElementById('notif-counter');
+
+
+
+
+    if (sortedNotifs.length <= 1) {
+
+
+        // Hide navigation if only one notification
+
+
+        if (prevBtn) {
+
+
+            prevBtn.style.opacity = '0';
+
+
+            prevBtn.style.pointerEvents = 'none';
+
+
+        }
+
+
+        if (nextBtn) {
+
+
+            nextBtn.style.opacity = '0';
+
+
+            nextBtn.style.pointerEvents = 'none';
+
+
+        }
+
+
+        if (counter) counter.textContent = '';
+
+
+    } else {
+
+
+        // Show navigation buttons
+
+
+        if (prevBtn) {
+
+
+            prevBtn.style.opacity = currentNotificationIndex > 0 ? '1' : '0.3';
+
+
+            prevBtn.style.pointerEvents = currentNotificationIndex > 0 ? 'auto' : 'none';
+
+
+        }
+
+
+        if (nextBtn) {
+
+
+            nextBtn.style.opacity = currentNotificationIndex < sortedNotifs.length - 1 ? '1' : '0.3';
+
+
+            nextBtn.style.pointerEvents = currentNotificationIndex < sortedNotifs.length - 1 ? 'auto' : 'none';
+
+
+        }
+
+
+        if (counter) counter.textContent = `${currentNotificationIndex + 1} / ${sortedNotifs.length}`;
+
+
+    }
+
+
+}
+
+
+
+
+function navigateNotification(direction) {
+
+
+    const sortedNotifs = [...AppData.notifications].sort((a, b) => {
+
+
+        const priorityOrder = { critical: 0, high: 1, normal: 2, low: 3 };
+
+
+        const aPriority = priorityOrder[a.priority] || 2;
+
+
+        const bPriority = priorityOrder[b.priority] || 2;
+
+
+        if (aPriority !== bPriority) return aPriority - bPriority;
+
+
+        return a.read === b.read ? 0 : a.read ? 1 : -1;
+
+
+    });
+
+
+
+
+    const newIndex = currentNotificationIndex + direction;
+
+
+
+
+    if (newIndex >= 0 && newIndex < sortedNotifs.length) {
+
+
+        const newId = sortedNotifs[newIndex].id;
+
+
+        const container = document.getElementById('notif-content-container');
+
+
+
+
+        // Add slide animation
+
+
+        container.style.transform = direction === 1 ? 'translateX(-100%)' : 'translateX(100%)';
+
+
+        container.style.opacity = '0';
+
+
+
+
+        setTimeout(() => {
+
+
+            openNotificationModal(newId);
+
+
+
+
+            // Reset and slide in
+
+
+            container.style.transform = direction === 1 ? 'translateX(100%)' : 'translateX(-100%)';
+
+
+            container.style.opacity = '0';
+
+
+
+
+            setTimeout(() => {
+
+
+                container.style.transform = 'translateX(0)';
+
+
+                container.style.opacity = '1';
+
+
+            }, 50);
+
+
+        }, 300);
+
+
+    }
+
+
+}
+
+
+
+
+function closeNotificationModal() {
+
+
+    const modal = document.getElementById('notif-detail-modal');
+
+
+    if (modal) modal.classList.add('hidden');
+
+
+}
+
+
+
+
+function deleteNotification(id) {
+
+
+    if (!confirm('Delete this notification?')) return;
+
+
+    fetch('API/notifications_api.php?action=delete', {
+
+
+        method: 'POST',
+
+
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+
+
+        body: JSON.stringify({ id })
+
+
+    }).then(() => loadNotifications()).catch(() => loadNotifications());
+
+
+    // If on notifications page, re-render it
+
+
+    const current = document.getElementById('breadcrumb-current');
+
+
+    if (current && current.textContent && current.textContent.toLowerCase().includes('notifications')) {
+
+
+        renderNotifications();
+
+
+    }
+
+
+}
+
+
+
+
+function toggleNotificationRead(id, isRead) {
+
+
+    return fetch('API/notifications_api.php?action=mark_read', {
+
+
+        method: 'POST',
+
+
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+
+
+        body: JSON.stringify({ id, is_read: isRead ? 1 : 0 })
+
+
+    }).then(() => loadNotifications()).catch(() => loadNotifications());
+
+
+}
+
+
+
+
+function markAllNotificationsRead() {
+
+
+    fetch('API/notifications_api.php?action=mark_all_read', {
+
+
+        method: 'POST',
+
+
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+
+
+        body: JSON.stringify({})
+
+
+    }).then(() => loadNotifications()).catch(() => loadNotifications());
+
+
+}
+
+
+
+
+function clearAllNotifications() {
+
+
+    showNotification('Clearing all notifications is not enabled for DB-backed notifications.', 'info');
+
+
+}
+
+
+
+
+function saveAnnouncementsToStorage() {
+
+
+    try {
+
+
+        localStorage.setItem('llrm_announcements', JSON.stringify(AppData.announcements));
+
+
+    } catch (e) {
+
+
+        console.warn('Failed to save announcements to storage', e);
+
+
+    }
+
+
+}
+
+
+
+
+function loadAnnouncementsFromStorage() {
+
+
+    try {
+
+
+        const raw = localStorage.getItem('llrm_announcements');
+
+
+        if (raw) {
+
+
+            AppData.announcements = JSON.parse(raw);
+
+
+        }
+
+
+    } catch (e) {
+
+
+        console.warn('Failed to load announcements from storage', e);
+
+
+    }
+
+
+}
+
+
+
+
+function createAnnouncement(title, message, options = {}) {
+
+
+    const ann = {
+
+
+        id: Date.now(),
+
+
+        title: title,
+
+
+        message: message,
+
+
+        priority: options.priority || 'normal',
+
+
+        pinned: !!options.pinned,
+
+
+        published: options.published !== undefined ? !!options.published : true,
+
+
+        createdBy: AppData.currentUser?.name || 'System',
+
+
+        createdAt: new Date().toISOString()
+
+
+    };
+
+
+
+
+    AppData.announcements.unshift(ann);
+
+
+    saveAnnouncementsToStorage();
+
+
+    showNotification('Announcement created', 'success');
+
+
+    return ann;
+
+
+}
+
+
+
+
+function deleteAnnouncement(id) {
+
+
+    if (!confirm('Delete this announcement?')) return;
+
+
+    AppData.announcements = AppData.announcements.filter(a => a.id !== id);
+
+
+    saveAnnouncementsToStorage();
+
+
+    showSection('announcements');
+
+
+}
+
+
+
+
+
+// ==============================
+
+
+// USERS MODULE (User Management — Citizens + Staff)
+
+
+// ==============================
+
+
+function showNotification(message, type = 'info') {
+
+
+    const colors = {
+
+
+        success: 'bg-green-100 text-green-800 border-green-300',
+
+
+        error: 'bg-red-100 text-red-800 border-red-300',
+
+
+        info: 'bg-blue-100 text-blue-800 border-blue-300',
+
+
+        warning: 'bg-yellow-100 text-yellow-800 border-yellow-300'
+
+
+    };
+
+
+    
+
+
+    const icons = {
+
+
+        success: 'bi-check-circle-fill',
+
+
+        error: 'bi-x-circle-fill',
+
+
+        info: 'bi-info-circle-fill',
+
+
+        warning: 'bi-exclamation-triangle-fill'
+
+
+    };
+
+
+    
+
+
+    const notif = document.createElement('div');
+
+
+    notif.className = `fixed top-4 right-4 ${colors[type]} px-6 py-4 rounded-lg shadow-lg border-2 flex items-center gap-3 z-50 animate-fade-in`;
+
+
+    notif.innerHTML = `
+
+
+        <i class="bi ${icons[type]} text-xl"></i>
+
+
+        <span class="font-medium">${message}</span>
+
+
+    `;
+
+
+    
+
+
+    document.body.appendChild(notif);
+
+
+    
+
+
+    setTimeout(() => {
+
+
+        notif.classList.add('opacity-0', 'transform', 'translate-x-full');
+
+
+        setTimeout(() => notif.remove(), 300);
+
+
+    }, 3000);
+
+
+}
+
+
+
+
+function getStatusBadge(status) {
+
+
+    const statusLower = (status || '').toLowerCase();
+
+
+    const badges = {
+
+
+        'approved': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Approved</span>',
+
+
+        'pending': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Pending</span>',
+
+
+        'draft': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Draft</span>',
+
+
+        'success': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800"><i class="bi bi-check-circle mr-1"></i>Success</span>',
+
+
+        'failure': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800"><i class="bi bi-x-circle mr-1"></i>Failed</span>'
+
+
+    };
+
+
+    return badges[statusLower] || '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">' + (status || 'N/A') + '</span>';
+
+
+}
+
+
+
+
+function getUserStatusBadge(status) {
+
+
+    const badges = {
+
+
+        active: '<span class="badge badge-success">Active</span>',
+
+
+        inactive: '<span class="badge badge-secondary">Inactive</span>'
+
+
+    };
+
+
+    return badges[status] || '<span class="badge badge-secondary">Unknown</span>';
+
+
+}
+
+
+
+
+function getActionBadge(action) {
+
+
+    const actionLower = (action || '').toLowerCase();
+
+
+    const badges = {
+
+
+        'upload': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Upload</span>',
+
+
+        'approve': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Approve</span>',
+
+
+        'update': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Update</span>',
+
+
+        'delete': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">Delete</span>',
+
+
+        'login': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">Login</span>',
+
+
+        'logout': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Logout</span>',
+
+
+        'created': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Created</span>'
+
+
+    };
+
+
+    return badges[actionLower] || '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">' + (action || 'N/A') + '</span>';
+
+
+}
+
+
+
+
+function getNotificationIcon(type) {
+
+
+    const icons = {
+
+
+        document: '<i class="bi bi-file-earmark-text text-red-600"></i>',
+
+
+        approval: '<i class="bi bi-check-circle text-green-600"></i>',
+
+
+        user: '<i class="bi bi-person text-blue-600"></i>'
+
+
+    };
+
+
+    return icons[type] || '<i class="bi bi-bell text-gray-600"></i>';
+
+
+}
+
+
+
+
+function capitalizeFirstLetter(string) {
+
+
+    return string.charAt(0).toUpperCase() + string.slice(1);
+
+
+}
+
+
+
+
+function getInitials(name) {
+
+
+    return name.split(' ').map(n => n[0]).join('').toUpperCase();
+
+
+}
+
+
+
+
+function formatDate(dateString) {
+
+
+    const date = new Date(dateString);
+
+
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+
+
+}
+
+
+
+
+// ==============================
+
+
+// PUBLIC CONSULTATION PLACEHOLDERS
+
+
+// ==============================
+
+
+
+
+async function renderPublicConsultation() {
+
+
+    // Update page title and breadcrumb
+
+
+
+
+    const breadcrumbCurrent = document.querySelector('.breadcrumb-current');
+
+
+
+
+    if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'Public Consultation';
+
+    const contentArea = document.getElementById('content-area');
+    if (contentArea && !contentArea.innerHTML.trim()) {
+        contentArea.innerHTML = '<div class="p-8 text-center text-gray-500">Loading consultation overview...</div>';
+    }
+
+    try {
+        await Promise.all([
+            loadConsultationsFromApi().catch(e => console.warn('Consultation overview load failed:', e)),
+            loadFeedbackFromApi().catch(e => console.warn('Feedback overview load failed:', e)),
+            loadIssuesFromApi().catch(e => console.warn('Issues overview load failed:', e))
+        ]);
+    } catch (e) {
+        console.warn('Consultation overview bootstrap failed:', e);
+    }
+
+
+
+
+    const totalConsults = AppData.consultations.length;
+
+
+    const draftConsults = AppData.consultations.filter(c => {
+        const st = String(c.status || '').toLowerCase();
+        return st === 'draft' || st === 'pending';
+    }).length;
+
+
+    const activeConsults = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'active').length;
+
+
+    const closedConsults = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'closed').length;
+
+
+    const totalFeedback = AppData.feedback.length;
+
+
+    const avgFeedback = totalConsults > 0 ? Math.round(totalFeedback / totalConsults) : 0;
+
+
+    const totalDocuments = AppData.consultations.reduce((sum, c) => sum + (c.documentsAttached || 0), 0);
+    const sentimentStats = getFeedbackSentimentStats();
+
+
+
+
+    const isReadOnlySuperAdmin = currentUserIsSuperAdmin();
+    const html = `
+
+
+        <div class="space-y-6">
+
+            ${isReadOnlySuperAdmin ? `<div class="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-4 text-sm font-medium"><i class="bi bi-shield-lock mr-2"></i>Super Admin monitoring view. Use <strong>Audit Log</strong> and <strong>AI Insights</strong> for oversight. Write actions are disabled.</div>` : ''}
+
+            <!-- Header Section -->
+
+
+            <div class="bg-gradient-to-r from-red-600 to-red-800 rounded-lg shadow-lg p-8 text-white">
+
+
+                <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+
+
+                    <div>
+
+
+                        <h1 class="text-3xl font-bold mb-2">${isReadOnlySuperAdmin ? 'System Monitoring Overview' : 'Consultation Overview'}</h1>
+
+
+                        <p class="text-red-100">${isReadOnlySuperAdmin ? 'Read-only overview of consultations, feedback, and engagement metrics' : 'Manage consultations, track feedback, and monitor community engagement'}</p>
+
+
+                    </div>
+
+
+                    ${isReadOnlySuperAdmin ? '' : `<div class="dashboard-header-actions flex flex-wrap items-center gap-2">
+                    </div>`}
+
+
+                </div>
+
+
+            </div>
+
+
+
+
+            <!-- Statistics Cards -->
+
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition group">
+
+                    <div class="flex items-center gap-3">
+
+                        <div class="bg-red-50 rounded-lg p-2.5 group-hover:bg-red-100 transition"><i class="bi bi-megaphone-fill text-red-600 text-xl"></i></div>
+
+                        <div>
+
+                            <p class="text-xs text-gray-500 font-medium">Total Consultations</p>
+
+                            <p class="text-2xl font-bold text-gray-900">${totalConsults}</p>
+
+                        </div>
+
+                    </div>
+
+                    <div class="mt-3 flex gap-3 text-xs">
+
+                        <span class="text-green-600 font-semibold"><i class="bi bi-circle-fill text-green-500" style="font-size:6px;vertical-align:middle"></i> ${activeConsults} Active</span>
+
+                        <span class="text-gray-500"><i class="bi bi-circle-fill text-gray-400" style="font-size:6px;vertical-align:middle"></i> ${closedConsults} Closed</span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition group">
+
+                    <div class="flex items-center gap-3">
+
+                        <div class="bg-blue-50 rounded-lg p-2.5 group-hover:bg-blue-100 transition"><i class="bi bi-file-earmark-text-fill text-blue-600 text-xl"></i></div>
+
+                        <div>
+
+                            <p class="text-xs text-gray-500 font-medium">Pending Review</p>
+
+                            <p class="text-2xl font-bold text-blue-600">${draftConsults}</p>
+
+                        </div>
+
+                    </div>
+
+                    <div class="mt-3 text-xs text-gray-500">Citizen submissions awaiting approval</div>
+
+                </div>
+
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition group">
+
+                    <div class="flex items-center gap-3">
+
+                        <div class="bg-purple-50 rounded-lg p-2.5 group-hover:bg-purple-100 transition"><i class="bi bi-chat-square-quote-fill text-purple-600 text-xl"></i></div>
+
+                        <div>
+
+                            <p class="text-xs text-gray-500 font-medium">Total Feedback</p>
+
+                            <p class="text-2xl font-bold text-purple-600">${totalFeedback}</p>
+
+                        </div>
+
+                    </div>
+
+                    <div class="mt-3 text-xs text-gray-500">Avg <strong class="text-purple-600">${avgFeedback}</strong> per consultation</div>
+
+                </div>
+
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition group">
+
+                    <div class="flex items-center gap-3">
+
+                        <div class="bg-amber-50 rounded-lg p-2.5 group-hover:bg-amber-100 transition"><i class="bi bi-paperclip text-amber-600 text-xl"></i></div>
+
+                        <div>
+
+                            <p class="text-xs text-gray-500 font-medium">Documents</p>
+
+                            <p class="text-2xl font-bold text-amber-600">${totalDocuments}</p>
+
+                        </div>
+
+                    </div>
+
+                    <div class="mt-3 text-xs text-gray-500">Attached to consultations</div>
+
+                </div>
+
+            </div>
+
+            <!-- Calendar Display -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-gray-700 text-lg font-semibold">Consultation Calendar</div>
+                    <div class="flex gap-2">
+                        <button onclick="pcDashboardCalendarChangeMonth(-1)" class="p-2 hover:bg-gray-100 rounded text-gray-600"><i class="bi bi-chevron-left"></i></button>
+                        <button onclick="pcDashboardCalendarChangeMonth(1)" class="p-2 hover:bg-gray-100 rounded text-gray-600"><i class="bi bi-chevron-right"></i></button>
+                    </div>
+                </div>
+                <div id="pc-dashboard-calendar-label" class="text-center font-bold text-gray-900 text-lg mb-4"></div>
+                <div class="grid grid-cols-7 gap-1 text-sm text-gray-600 mb-2">
+                    <div class="text-center font-medium">Mon</div>
+                    <div class="text-center font-medium">Tue</div>
+                    <div class="text-center font-medium">Wed</div>
+                    <div class="text-center font-medium">Thu</div>
+                    <div class="text-center font-medium">Fri</div>
+                    <div class="text-center font-medium">Sat</div>
+                    <div class="text-center font-medium">Sun</div>
+                </div>
+                <div id="pc-dashboard-calendar-grid" class="grid grid-cols-7 gap-1 text-base"></div>
+            </div>
+
+
+
+
+            <!-- Analytics Section (charts on top) -->
+            <div id="pc-analytics-row" class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col h-full">
+                    <div id="pc-feedback-sentiment-pane">
+                        <div class="flex items-start justify-between mb-4 gap-3">
+                            <div class="flex items-center gap-2">
+                                <div class="bg-purple-50 rounded-lg p-1.5"><i class="bi bi-pie-chart-fill text-purple-600"></i></div>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Feedback Sentiment</h3>
+                                    <p class="text-xs text-gray-500">Community sentiment across responses</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-end">
+                                <button id="pc-issue-mapping-toggle-btn" type="button" onclick="togglePCIssueMappingPanel()" class="text-xs border border-blue-100 rounded-full p-2 text-blue-700 hover:bg-blue-50 transition" aria-expanded="false" aria-controls="pc-issue-mapping-pane" title="Toggle issue mapping">
+                                    <i class="bi bi-arrow-right-circle"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 mb-3 text-xs" style="min-height: 30px;">
+                            <span class="px-2 py-1 rounded-full bg-green-50 text-green-700 font-semibold" id="pc-positive-count">Positive: ${sentimentStats.positive}</span>
+                            <span class="px-2 py-1 rounded-full bg-yellow-50 text-yellow-700 font-semibold" id="pc-neutral-count">Neutral: ${sentimentStats.neutral}</span>
+                            <span class="px-2 py-1 rounded-full bg-red-50 text-red-700 font-semibold" id="pc-negative-count">Negative: ${sentimentStats.negative}</span>
+                        </div>
+                    </div>
+                    <div id="pc-feedback-chart-pane" class="mt-auto flex justify-center items-center">
+                        <div style="height: 340px; width: 340px; max-width: 100%;">
+                            <canvas id="pcFeedbackSentimentChart"></canvas>
+                        </div>
+                    </div>
+                    <div id="pc-issue-mapping-pane" class="hidden mt-4">
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <div class="flex items-center gap-2">
+                                <div class="bg-amber-50 rounded-lg p-1.5"><i class="bi bi-map-fill text-amber-600"></i></div>
+                                <div>
+                                    <h4 class="text-sm font-semibold text-gray-900">Issue Mapping / Topic Themes</h4>
+                                    <p class="text-xs text-gray-500">Showing issue themes inline with feedback.</p>
+                                </div>
+                            </div>
+                            <button id="pc-issue-mapping-back-btn" class="pc-issue-toggle text-xs border border-blue-100 rounded-full p-2 text-blue-700 hover:bg-blue-50 transition" type="button" onclick="togglePCIssueMappingPanel()" title="Back to sentiment overview" aria-controls="pc-feedback-sentiment-pane" aria-expanded="true">
+                                <i class="bi bi-arrow-left-circle"></i>
+                            </button>
+                        </div>
+                        <div id="pc-issue-theme-list" class="space-y-2 mb-3"></div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col h-full">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <div class="bg-blue-50 rounded-lg p-1.5"><i class="bi bi-pie-chart-fill text-blue-600"></i></div>
+                            <div>
+                                <h3 class="text-sm font-bold text-gray-900">Survey Response Summary</h3>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <select id="pc-survey-select" onchange="handlePCSurveySelectionChange()" class="text-xs border border-gray-300 rounded-md px-2 py-1 text-gray-700 bg-white max-w-[140px]">
+                                <option value="all">All surveys</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mb-3">
+                        <div class="rounded-lg bg-red-50 p-2">
+                            <div class="text-xs text-gray-500">Respondents</div>
+                            <div id="pc-respondent-total" class="text-xl font-bold text-red-700">0</div>
+                        </div>
+                        <div class="rounded-lg bg-blue-50 p-2">
+                            <div class="text-xs text-gray-500">Forms</div>
+                            <div id="pc-survey-count-summary" class="text-xl font-bold text-blue-700">0</div>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-1 mb-2 text-xs">
+                        <span class="px-2 py-0.5 rounded-full bg-green-50 text-green-700 font-semibold" id="pc-survey-agree-count">Agree: 0</span>
+                        <span class="px-2 py-0.5 rounded-full bg-red-50 text-red-700 font-semibold" id="pc-survey-disagree-count">Disagree: 0</span>
+                        <span class="text-xs text-gray-500 ml-auto" id="pc-survey-source">0 surveys</span>
+                    </div>
+                    <div style="height: 340px;" class="mt-auto flex items-center justify-center">
+                        <canvas id="pcSurveyAnswersChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col h-full">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="bg-red-50 rounded-lg p-1.5"><i class="bi bi-pie-chart-fill text-red-600"></i></div>
+                        <h3 class="text-sm font-bold text-gray-900">Total Consultation</h3>
+                    </div>
+                    <div style="height: 340px;" class="mt-auto flex items-center justify-center">
+                        <canvas id="pcStatusChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Advanced Filtering Section -->
+
+
+            <div class="bg-white p-6 rounded-lg shadow">
+
+
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+
+
+                    <div>
+
+
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Search Consultations</label>
+
+
+                        <input type="text" id="pc-search" placeholder="Search title..." 
+
+
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+
+
+                            onkeyup="filterPublicConsultations()">
+
+
+                    </div>
+
+
+                    <div>
+
+
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Status</label>
+
+
+                        <select id="pc-status-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+
+
+                            onchange="filterPublicConsultations()">
+
+
+                            <option value="">All Status</option>
+
+
+                            <option value="active">Active</option>
+
+
+                            <option value="draft">Draft</option>
+
+
+                            <option value="closed">Closed</option>
+
+
+                        </select>
+
+
+                    </div>
+
+
+                    <div>
+
+
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Type</label>
+
+
+                        <select id="pc-type-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+
+
+                            onchange="filterPublicConsultations()">
+
+
+                            <option value="">All Types</option>
+
+
+                            <option value="admin">Admin Created</option>
+
+
+                            <option value="user">User Submission</option>
+
+
+                        </select>
+
+
+                    </div>
+
+
+                    <div>
+
+
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Sort By</label>
+
+
+                        <select id="pc-sort" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+
+
+                            onchange="filterPublicConsultations()">
+
+
+                            <option value="date-desc">Latest First</option>
+
+
+                            <option value="date-asc">Oldest First</option>
+
+
+                            <option value="feedback">Most Feedback</option>
+
+
+                        </select>
+
+
+                    </div>
+
+
+                    <div class="flex items-end">
+
+
+                        <button onclick="resetPublicConsultationFilters()" class="w-full px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 font-semibold">
+
+
+                            Reset
+
+
+                        </button>
+
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+
+
+            <!-- Consultations Grid View -->
+
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="consultations-grid">
+
+
+            </div>
+
+
+
+
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+
+
+                <div class="text-sm text-gray-600" id="pc-grid-summary"></div>
+
+
+                <div class="flex flex-wrap gap-2 justify-end">
+
+
+                    <button id="pc-grid-prev" onclick="pcGridPrevPage()" class="btn-outline px-3 py-2 text-sm">Prev</button>
+
+
+                    <button id="pc-grid-next" onclick="pcGridNextPage()" class="btn-outline px-3 py-2 text-sm">Next</button>
+
+
+                    <button id="pc-grid-toggle" onclick="pcGridToggleShowAll()" class="btn-primary px-3 py-2 text-sm">Show All</button>
+
+
+                </div>
+
+
+            </div>
+
+            <!-- Export Modal -->
+            <div id="consultation-export-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div class="bg-white rounded-lg shadow-xl max-w-lg w-full">
+                    <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-4 flex justify-between items-center">
+                        <h3 id="consultation-export-title" class="text-lg font-bold">Export Consultation</h3>
+                        <button onclick="closeConsultationExportModal()" class="text-white hover:text-red-100 text-xl">&times;</button>
+                    </div>
+                    <div id="consultation-export-message" class="p-5 text-sm text-gray-700"></div>
+                    <div id="consultation-export-actions" class="px-5 pb-5 flex flex-wrap gap-2 justify-end">
+                        <button onclick="closeConsultationExportModal()" class="btn-outline">Close</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+
+    `;
+
+
+
+
+    document.getElementById('content-area').innerHTML = html;
+
+
+
+
+    // Populate sections
+
+
+    renderConsultationsGrid();
+
+
+    
+
+
+        // Render charts
+    setTimeout(() => {
+        const filtered = getFilteredPublicConsultations();
+        renderPCStatusChart(filtered);
+        renderPCFeedbackSentimentChart();
+        refreshPCSurveySelector(filtered);
+        renderPCSurveyAnswersChart(filtered);
+    }, 120);
+
+    // Refresh feedback and issue analytics using latest DB data
+    try {
+        Promise.all([
+            loadFeedbackFromApi(),
+            loadIssuesFromApi()
+        ]).then(() => {
+            renderPCFeedbackSentimentChart();
+            renderPCSurveyAnswersChart(getFilteredPublicConsultations());
+        }).catch((e) => {
+            console.error(e);
+            renderPCFeedbackSentimentChart();
+            renderPCSurveyAnswersChart(getFilteredPublicConsultations());
+        });
+    } catch (e) {
+        console.error(e);
+    }
+
+    // Initialize PC dashboard calendar
+    renderPCDashboardCalendar();
+
+}
+
+
+
+
+function getPCGridState() {
+
+
+    if (!window.__pcGridState) {
+
+
+        window.__pcGridState = {
+
+
+            page: 1,
+
+
+            pageSize: 6,
+
+
+            showAll: false
+
+
+        };
+
+
+    }
+
+
+    return window.__pcGridState;
+
+
+}
+
+
+
+
+function pcGridPrevPage() {
+
+
+    const st = getPCGridState();
+
+
+    if (st.page > 1) st.page -= 1;
+
+
+    renderConsultationsGrid();
+
+
+}
+
+
+
+
+function pcGridNextPage() {
+
+
+    const st = getPCGridState();
+
+
+    st.page += 1;
+
+
+    renderConsultationsGrid();
+
+
+}
+
+
+
+
+function pcGridToggleShowAll() {
+
+
+    const st = getPCGridState();
+
+
+    st.showAll = !st.showAll;
+
+
+    st.page = 1;
+
+
+    renderConsultationsGrid();
+
+
+}
+
+
+
+
+// ==============================
+
+
+// SETTINGS
+
+
+// ==============================
+
+
+function renderSettings() {
+
+
+    if (!AppData.currentUser) {
+
+
+        AppData.currentUser = {
+
+
+            id: null,
+
+
+            name: 'User',
+
+
+            email: '',
+
+
+            role: '',
+
+
+            profilePicture: '',
+
+
+            twoFactorEnabled: false,
+
+
+            twoFactorMethod: 'email'
+
+
+        };
+
+
+    }
+
+
+    const html = `
+
+
+        <div class="mb-6">
+
+
+            <h1 class="text-2xl font-bold text-gray-800">Settings</h1>
+
+
+            <p class="text-gray-600 mt-1">Manage account and application preferences</p>
+
+
+        </div>
+
+
+
+
+        <div class="bg-white rounded-xl shadow-md p-6 space-y-6">
+
+
+            <div>
+
+
+                <h3 class="text-lg font-semibold">Account</h3>
+
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+
+
+                    <div>
+
+
+                        <label class="block text-sm text-gray-700 mb-1">Name</label>
+
+
+                        <input id="setting-name" class="input-field" value="${AppData.currentUser.name}">
+
+
+                    </div>
+
+
+                    <div>
+
+
+                        <label class="block text-sm text-gray-700 mb-1">Email</label>
+
+
+                        <input id="setting-email" class="input-field" value="${AppData.currentUser.email}">
+
+
+                    </div>
+
+
+                </div>
+
+
+                <div class="mt-4">
+
+
+                    <button onclick="saveSettings()" class="btn-primary">Save Account</button>
+
+
+                </div>
+
+
+            </div>
+
+
+
+
+            <div>
+
+
+                <h3 class="text-lg font-semibold">Preferences</h3>
+
+
+                <div class="mt-4 space-y-3">
+
+
+                    <label class="flex items-center gap-3">
+
+
+                        <input type="checkbox" id="pref-notifications" checked class="form-checkbox">
+
+
+                        <span class="text-sm text-gray-700">Enable notifications</span>
+
+
+                    </label>
+
+
+                    <label class="flex items-center gap-3">
+
+
+                        <input type="checkbox" id="pref-emails" class="form-checkbox">
+
+
+                        <span class="text-sm text-gray-700">Receive email summaries</span>
+
+
+                    </label>
+
+
+                </div>
+
+
+                <div class="mt-4">
+
+
+                    <button onclick="savePreferences()" class="btn-primary">Save Preferences</button>
+
+
+                </div>
+
+
+            </div>
+
+
+        </div>
+
+
+    `;
+
+
+
+
+    document.getElementById('content-area').innerHTML = html;
+
+
+}
+
+
+
+
+function saveSettings() {
+
+
+    const name = document.getElementById('setting-name')?.value || AppData.currentUser.name;
+
+
+    const email = document.getElementById('setting-email')?.value || AppData.currentUser.email;
+
+
+    
+
+
+    if (!name || !email) {
+
+
+        showNotification('Name and email are required', 'warning');
+
+
+        return;
+
+
+    }
+
+
+
+
+    // Send update to backend
+
+
+    const formData = new FormData();
+
+
+    formData.append('action', 'update_profile');
+
+
+    formData.append('fullname', name);
+
+
+    formData.append('email', email);
+
+
+    formData.append('username', AppData.currentUser.name);
+
+
+
+
+    fetch('API/update_profile.php', {
+
+
+        method: 'POST',
+
+
+        body: formData
+
+
+    })
+
+
+    .then(response => response.json())
+
+
+    .then(data => {
+
+
+        if (data.success) {
+
+
+            AppData.currentUser.name = name;
+
+
+            AppData.currentUser.email = email;
+
+
+            updateHeaderUserDisplays();
+
+
+            showNotification('Settings saved successfully', 'success');
+
+
+        } else {
+
+
+            showNotification(data.message || 'Failed to save settings', 'error');
+
+
+        }
+
+
+    })
+
+
+    .catch(error => {
+
+
+        console.error('Error saving settings:', error);
+
+
+        showNotification('Error saving settings', 'error');
+
+
+    });
+
+
+}
+
+
+
+
+// ==============================
+
+
+// HELP & SUPPORT
+
+
+// ==============================
+
+
+function renderHelp() {
+
+
+    const html = `
+
+
+        <div class="mb-6">
+
+
+            <h1 class="text-2xl font-bold text-gray-800">Help & Support</h1>
+
+
+            <p class="text-gray-600 mt-1">Find answers and contact support</p>
+
+
+        </div>
+
+
+
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+
+            <div class="lg:col-span-2 bg-white rounded-xl shadow-md p-6">
+
+
+                <h3 class="text-lg font-semibold mb-4">Frequently Asked Questions</h3>
+
+
+                <div class="space-y-4">
+
+
+                    <div>
+
+
+                        <p class="font-medium">How do I upload a document?</p>
+
+
+                        <p class="text-sm text-gray-600 mt-1">Use the Upload button in Document Management or Quick Actions.</p>
+
+
+                    </div>
+
+
+                    <div>
+
+
+                        <p class="font-medium">How do I manage users?</p>
+
+
+                        <p class="text-sm text-gray-600 mt-1">Go to Administration → User Management to view citizen submitters and manage staff accounts.</p>
+
+
+                    </div>
+
+
+                    <div>
+
+
+                        <p class="font-medium">Where can I view consultation feedback?</p>
+
+
+                        <p class="text-sm text-gray-600 mt-1">Open Public Consultation or Public Feedback Queue from the menu.</p>
+
+
+                    </div>
+
+
+                </div>
+
+
+
+
+                <h3 class="text-lg font-semibold mt-6 mb-3">Contact Support</h3>
+
+
+                <form onsubmit="event.preventDefault(); sendSupportRequest();">
+
+
+                    <div class="grid grid-cols-1 gap-3">
+
+
+                        <input id="support-name" class="input-field" placeholder="Your name" value="${AppData.currentUser.name}">
+
+
+                        <input id="support-email" class="input-field" placeholder="Your email" value="${AppData.currentUser.email}">
+
+
+                        <textarea id="support-message" class="input-field" placeholder="How can we help?" rows="5"></textarea>
+
+
+                        <div class="flex justify-end">
+
+
+                            <button type="submit" class="btn-primary">Send Request</button>
+
+
+                        </div>
+
+
+                    </div>
+
+
+                </form>
+
+
+            </div>
+
+
+
+
+            <div class="bg-white rounded-xl shadow-md p-6">
+
+
+                <h3 class="text-lg font-semibold mb-3">Support Resources</h3>
+
+
+                <ul class="space-y-2 text-sm text-gray-700">
+
+
+                    <li><a href="#" onclick="showSection('documents')" class="text-red-600">User Guide: Document Management</a></li>
+
+
+                    <li><a href="#" onclick="showSection('users')" class="text-red-600">User Guide: User Management</a></li>
+
+
+                    <li><a href="#" onclick="showSection('public-consultation')" class="text-red-600">Public Consultation Overview</a></li>
+
+
+                </ul>
+
+
+            </div>
+
+
+        </div>
+
+
+    `;
+
+
+
+
+    document.getElementById('content-area').innerHTML = html;
+
+
+}
+
+
+
+
+function sendSupportRequest() {
+
+
+    const name = document.getElementById('support-name')?.value || '';
+
+
+    const email = document.getElementById('support-email')?.value || '';
+
+
+    const message = document.getElementById('support-message')?.value || '';
+
+
+    if (!message) {
+
+
+        showNotification('Please enter a message', 'warning');
+
+
+        return;
+
+
+    }
+
+
+
+
+    // Simulate sending
+
+
+    showNotification('Support request sent. We will contact you via email.', 'success');
+
+
+}
+
+
+
+
+// ==============================
+
+
+// NOTIFICATIONS PAGE
+
+
+// ==============================
+
+
+function renderNotifications() {
+
+
+    const html = `
+
+
+        <div class="mb-6">
+
+
+            <h1 class="text-2xl font-bold text-gray-800">Notifications</h1>
+
+
+            <p class="text-gray-600 mt-1">All system notifications and actions</p>
+
+
+        </div>
+
+
+
+
+        <div class="bg-white rounded-xl shadow-md p-4 mb-4 flex items-center justify-between">
+
+
+            <div class="text-sm text-gray-700">You have <strong>${AppData.notifications.filter(n => !n.read).length}</strong> unread notification(s)</div>
+
+
+            <div class="flex items-center gap-2">
+
+
+                <button onclick="markAllNotificationsRead()" class="btn-outline text-sm">Mark all read</button>
+
+
+                <button onclick="clearAllNotifications()" class="btn-danger text-sm">Clear all</button>
+
+
+            </div>
+
+
+        </div>
+
+
+
+
+        <div class="bg-white rounded-xl shadow-md p-4">
+
+
+            ${AppData.notifications.length === 0 ? '<div class="p-6 text-center text-gray-500">No notifications</div>' : ''}
+
+
+            <div class="space-y-2">
+
+
+                ${AppData.notifications.map(n => `
+
+
+                    <div class="p-3 border rounded ${!n.read ? 'bg-blue-50' : ''} flex items-start justify-between">
+
+
+                        <div class="flex items-start gap-3">
+
+
+                            <div>${getNotificationIcon(n.type)}</div>
+
+
+                            <div>
+
+
+                                <div class="text-sm font-medium text-gray-800">${n.title}</div>
+
+
+                                <div class="text-xs text-gray-600">${n.message}</div>
+
+
+                                <div class="text-xs text-gray-400 mt-1">${n.time}</div>
+
+
+                            </div>
+
+
+                        </div>
+
+
+                        <div class="flex items-center gap-2">
+
+
+                            <button onclick="toggleNotificationRead(${n.id})" class="text-sm text-gray-600">${n.read ? 'Mark Unread' : 'Mark Read'}</button>
+
+
+                            <button onclick="deleteNotification(${n.id})" class="text-sm text-red-600">Delete</button>
+
+
+                        </div>
+
+
+                    </div>
+
+
+                `).join('')}
+
+
+            </div>
+
+
+        </div>
+
+
+    `;
+
+
+
+
+    document.getElementById('content-area').innerHTML = html;
+
+
+}
+
+
+
+
+// ==============================
+
+
+// ANNOUNCEMENTS PAGE (ADMIN)
+
+
+// ==============================
+
+
+function renderAnnouncements() {
+
+
+    // ensure we have announcements loaded from storage
+
+
+    loadAnnouncementsFromStorage();
+
+
+
+
+    const html = `
+
+
+        <div class="mb-6">
+
+
+            <h1 class="text-2xl font-bold text-gray-800">Announcements & Moderation</h1>
+
+
+            <p class="text-gray-600 mt-1">Manage announcements and review user posts</p>
+
+
+        </div>
+
+
+
+
+        <!-- 50/50 Split Layout -->
+
+
+        <div class="flex gap-6 h-[70vh]">
+
+
+            <!-- Left: Announcements Publisher & List -->
+
+
+            <div class="w-1/2 min-w-0 flex flex-col gap-4">
+
+
+                <!-- Compact Publisher -->
+
+
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+
+
+                    <div class="space-y-3">
+
+
+                        <input id="new-ann-title" placeholder="Announcement title..." class="input-field w-full text-sm font-medium border-0 border-b border-gray-300 focus:border-red-500 focus:ring-0 p-0" />
+
+
+                        <textarea id="new-ann-message" placeholder="Write your announcement message..." class="input-field w-full text-sm border-0 focus:ring-0 p-0 resize-none" rows="3"></textarea>
+
+
+                        <div class="flex justify-end gap-2 pt-2">
+
+
+                            <button onclick="document.getElementById('new-ann-title').value=''; document.getElementById('new-ann-message').value='';" class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded transition">Clear</button>
+
+
+                            <button onclick="(function(){ const t=document.getElementById('new-ann-title').value; const m=document.getElementById('new-ann-message').value; if(!t||!m){ showNotification('Title and message required','warning'); return;} createAnnouncement(t,m); document.getElementById('new-ann-title').value=''; document.getElementById('new-ann-message').value=''; })()" class="btn-primary px-4 py-1.5 text-sm">Publish</button>
+
+
+                        </div>
+
+
+                    </div>
+
+
+                </div>
+
+
+
+
+                <!-- Announcements List -->
+
+
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex-1 flex flex-col">
+
+
+                    <h3 class="text-sm font-semibold text-gray-900 mb-3">Recent Announcements</h3>
+
+
+                    <div class="space-y-2 overflow-auto flex-1">
+
+
+                        ${AppData.announcements.length === 0 ? '<div class="text-xs text-gray-400 text-center py-4">No announcements yet</div>' : ''}
+
+
+                        ${AppData.announcements.map(a => `
+
+
+                            <div class="p-2.5 border border-gray-200 rounded hover:bg-gray-50 transition text-xs">
+
+
+                                <div class="font-semibold text-gray-800 text-sm">${a.title}</div>
+
+
+                                <div class="text-gray-500 text-xs mt-0.5">${new Date(a.createdAt).toLocaleDateString()}</div>
+
+
+                                <div class="flex justify-end mt-2">
+
+
+                                    <button onclick="deleteAnnouncement(${a.id}); renderAnnouncements()" class="text-xs text-red-600 hover:text-red-700">Delete</button>
+
+
+                                </div>
+
+
+                            </div>
+
+
+                        `).join('')}
+
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+
+
+            <!-- Right: User Posts for Moderation -->
+
+
+            <div class="w-1/2 min-w-0 flex flex-col">
+
+
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5 flex-1 flex flex-col">
+
+
+                    <div class="mb-4">
+
+
+                        <h2 class="text-lg font-semibold text-gray-900">User Posts</h2>
+
+
+                        <p class="text-xs text-gray-500 mt-1">Review & take action on citizen posts</p>
+
+
+                    </div>
+
+
+                    <div id="admin-posts-list" class="space-y-3 overflow-auto flex-1">
+
+
+                        <div class="text-xs text-gray-400 text-center py-4">Loading posts...</div>
+
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+        </div>
+
+
+    `;
+
+
+
+
+    document.getElementById('content-area').innerHTML = html;
+
+
+    
+
+
+    // Load user posts via AJAX
+
+
+    loadUserPostsForModeration();
+
+
+}
+
+
+
+
+function loadUserPostsForModeration() {
+
+
+    fetch('get_posts.php')
+
+
+        .then(res => res.json())
+
+
+        .then(data => {
+
+
+            const list = document.getElementById('admin-posts-list');
+
+
+            if (!data.posts || data.posts.length === 0) {
+
+
+                list.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">No user posts yet.</div>';
+
+
+                return;
+
+
+            }
+
+
+            list.innerHTML = data.posts.map(p => `
+
+
+                <div class="p-3 border border-gray-200 rounded hover:bg-gray-50 transition text-xs">
+
+
+                    <div class="flex justify-between items-start">
+
+
+                        <div class="flex-1">
+
+
+                            <div class="font-semibold text-gray-800">${p.author}</div>
+
+
+                            <div class="text-gray-600 text-xs mt-1">${p.content.substring(0, 80)}${p.content.length > 80 ? '...' : ''}</div>
+
+
+                            <div class="text-gray-400 text-xs mt-1">${new Date(p.created_at).toLocaleString()}</div>
+
+
+                        </div>
+
+
+                    </div>
+
+
+                    <div class="flex gap-2 mt-2 flex-wrap">
+
+
+                        <button onclick="quickNotify(${p.user_id}, ${p.id}, 'inappropriate')" class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200">Inappropriate</button>
+
+
+                        <button onclick="quickNotify(${p.user_id}, ${p.id}, 'untruthful')" class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200">Untruthful</button>
+
+
+                        <button onclick="quickNotify(${p.user_id}, ${p.id}, 'unlawful')" class="px-2 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200">Unlawful</button>
+
+
+                    </div>
+
+
+                </div>
+
+
+            `).join('');
+
+
+        })
+
+
+        .catch(err => {
+
+
+            console.error(err);
+
+
+            document.getElementById('admin-posts-list').innerHTML = '<div class="text-xs text-red-500">Failed to load posts</div>';
+
+
+        });
+
+
+}
+
+
+
+
+
+
+function renderConsultationsGrid() {
+
+
+    const grid = document.getElementById('consultations-grid');
+
+
+    const all = getFilteredPublicConsultations();
+
+
+    const st = getPCGridState();
+
+
+    const total = all.length;
+
+
+
+
+    let consultations = all;
+
+
+    if (!st.showAll) {
+
+
+        const start = (st.page - 1) * st.pageSize;
+
+
+        consultations = all.slice(start, start + st.pageSize);
+
+
+    }
+
+
+
+
+    if (consultations.length === 0) {
+
+
+        grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">No consultations found</div>';
+
+
+        const summary = document.getElementById('pc-grid-summary');
+
+
+        if (summary) summary.textContent = '';
+
+
+        return;
+
+
+    }
+
+
+
+
+    const startIndex = st.showAll ? 1 : ((st.page - 1) * st.pageSize + 1);
+
+
+    const endIndex = st.showAll ? total : Math.min((st.page - 1) * st.pageSize + consultations.length, total);
+
+
+
+
+    const summary = document.getElementById('pc-grid-summary');
+
+
+    if (summary) {
+
+
+        summary.textContent = `Showing ${startIndex}-${endIndex} of ${total} consultations`;
+
+
+    }
+
+
+
+
+    const prevBtn = document.getElementById('pc-grid-prev');
+
+
+    const nextBtn = document.getElementById('pc-grid-next');
+
+
+    const toggleBtn = document.getElementById('pc-grid-toggle');
+
+
+
+
+    const totalPages = st.pageSize > 0 ? Math.ceil(total / st.pageSize) : 1;
+
+
+    if (prevBtn) prevBtn.disabled = st.showAll || st.page <= 1;
+
+
+    if (nextBtn) nextBtn.disabled = st.showAll || st.page >= totalPages;
+
+
+    if (toggleBtn) toggleBtn.textContent = st.showAll ? 'Show Less' : 'Show All';
+
+
+
+
+    grid.innerHTML = consultations.map(c => {
+
+        const stRaw = String(c.status || '').toLowerCase();
+
+        const statusLabel = stRaw === 'active' ? 'Active' : (stRaw === 'scheduled' ? 'Pending' : (stRaw === 'draft' ? 'Pending' : (stRaw === 'closed' ? 'Closed' : (stRaw === 'pending' ? 'Pending' : stRaw))));
+
+        const statusDot = stRaw === 'active' ? 'bg-green-500' : (stRaw === 'scheduled' ? 'bg-amber-500' : (stRaw === 'draft' || stRaw === 'pending' ? 'bg-amber-500' : 'bg-gray-400'));
+
+        const statusBg = stRaw === 'active' ? 'bg-green-50 text-green-700' : (stRaw === 'scheduled' ? 'bg-amber-50 text-amber-700' : (stRaw === 'draft' || stRaw === 'pending' ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-600'));
+
+
+        const srcType = String(c.type || '').toLowerCase();
+
+        const typeLabel = srcType === 'user' ? 'Citizen' : 'Admin';
+
+        const typeBg = srcType === 'user' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600';
+
+
+        const dateText = c.date ? new Date(c.date).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '';
+
+        const desc = String(c.description || '').substring(0, 80);
+
+
+        return `
+
+            <div class="bg-white rounded-xl border border-gray-200 hover:border-red-200 hover:shadow-lg transition-all duration-200 overflow-hidden group">
+
+                <div class="p-5">
+
+                    <div class="flex items-center justify-between mb-3">
+
+                        <div class="flex items-center gap-2">
+
+                            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${statusBg}">
+
+                                <span class="w-1.5 h-1.5 rounded-full ${statusDot}"></span>${statusLabel}
+
+                            </span>
+
+                            <span class="px-2 py-0.5 rounded-full text-xs font-medium ${typeBg}">${typeLabel}</span>
+
+                        </div>
+
+                        ${dateText ? `<span class="text-xs text-gray-400">${dateText}</span>` : ''}
+
+                    </div>
+
+                    <h4 class="font-bold text-gray-900 text-base mb-1.5 line-clamp-2 group-hover:text-red-700 transition-colors">${escapeHtml(c.title)}</h4>
+
+                    ${desc ? `<p class="text-xs text-gray-500 mb-4 line-clamp-2">${escapeHtml(desc)}${desc.length >= 80 ? '...' : ''}</p>` : '<div class="mb-4"></div>'}
+
+                    <div class="flex items-center justify-between pt-3 border-t border-gray-100">
+
+                        <div class="flex gap-4">
+
+                            <span class="flex items-center gap-1 text-xs text-gray-500"><i class="bi bi-chat-dots text-purple-500"></i> <strong class="text-gray-700">${c.feedbackCount || 0}</strong> feedback</span>
+
+                            <span class="flex items-center gap-1 text-xs text-gray-500"><i class="bi bi-paperclip text-amber-500"></i> <strong class="text-gray-700">${c.documentsAttached || 0}</strong> docs</span>
+
+                        </div>
+
+                        <button onclick="openConsultationDetailsFromDashboard(${c.id})" class="text-xs font-semibold text-red-600 hover:text-red-800 transition">
+
+                            Details <i class="bi bi-arrow-right"></i>
+
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        `;
+
+    }).join('');
+
+
+}
+
+
+
+
+function openConsultationDetailsFromDashboard(id) {
+
+
+    // The Public Consultation dashboard doesn't include the details modal markup.
+
+
+    // Route to Consultation Management, then open the details modal there.
+
+
+    showSection('consultation-management');
+
+
+    setTimeout(() => {
+
+
+        try {
+
+
+            viewConsultationDetails(id);
+
+
+        } catch (e) {
+
+
+            console.error(e);
+
+
+        }
+
+
+    }, 200);
+
+
+}
+
+
+
+
+function renderRecentFeedbackList() {
+
+
+    const list = document.getElementById('recent-feedback-list');
+
+
+    const recent = AppData.feedback.slice().reverse().slice(0, 5);
+
+
+
+
+    if (recent.length === 0) {
+
+
+        list.innerHTML = '<p class="text-gray-500 text-sm">No feedback yet</p>';
+
+
+        return;
+
+
+    }
+
+
+
+
+    list.innerHTML = recent.map(f => {
+
+
+        const consultation = AppData.consultations.find(c => c.id === f.consultationId);
+
+
+        return `
+
+
+            <div class="border-l-4 border-red-500 pl-4 py-2">
+
+
+                <div class="font-semibold text-sm text-gray-900">${f.author}</div>
+
+
+                <div class="text-xs text-gray-500 mb-1">${consultation ? consultation.title : 'Unknown'}</div>
+
+
+                <div class="text-sm text-gray-700">${f.message.substring(0, 60)}${f.message.length > 60 ? '...' : ''}</div>
+
+
+                <div class="text-xs text-gray-400 mt-1">${f.date}</div>
+
+
+            </div>
+
+
+        `;
+
+
+    }).join('');
+
+
+}
+
+
+
+
+function renderUpcomingList() {
+
+
+    const list = document.getElementById('upcoming-list');
+
+
+    const upcoming = AppData.consultations
+        .filter(c => {
+            const st = String(c.status || '').toLowerCase();
+            return st === 'scheduled' || st === 'draft' || st === 'pending';
+        })
+        .slice(0, 5);
+
+
+
+
+    if (upcoming.length === 0) {
+
+
+        list.innerHTML = '<p class="text-gray-500 text-sm">No pending consultations</p>';
+
+
+        return;
+
+
+    }
+
+
+
+
+    list.innerHTML = upcoming.map(c => `
+
+
+        <div class="border rounded-lg p-3 border-blue-200 bg-blue-50">
+
+
+            <div class="font-semibold text-sm text-gray-900">${c.title}</div>
+
+
+            <div class="flex items-center gap-2 mt-1 text-xs text-gray-600">
+
+
+                <i class="bi bi-calendar-event"></i>
+
+
+                <span>${new Date(c.date).toLocaleDateString()}</span>
+
+
+                <span>•</span>
+
+
+                <span>${c.type}</span>
+
+
+            </div>
+
+
+        </div>
+
+
+    `).join('');
+
+
+}
+
+
+
+
+function renderTopConsultations() {
+
+
+    const list = document.getElementById('top-consultations');
+
+
+    const top = AppData.consultations.slice().sort((a, b) => (b.feedbackCount || 0) - (a.feedbackCount || 0)).slice(0, 5);
+
+
+
+
+    if (top.length === 0) {
+
+
+        list.innerHTML = '<p class="text-gray-500 text-sm">No consultations</p>';
+
+
+        return;
+
+
+    }
+
+
+
+
+    list.innerHTML = top.map((c, idx) => `
+
+
+        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+
+
+            <div class="flex items-center gap-3">
+
+
+                <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center text-red-600 font-bold text-sm">
+
+
+                    ${idx + 1}
+
+
+                </div>
+
+
+                <div>
+
+
+                    <div class="font-semibold text-sm text-gray-900">${c.title}</div>
+
+
+                    <div class="text-xs text-gray-500">${c.type}</div>
+
+
+                </div>
+
+
+            </div>
+
+
+            <div class="text-right">
+
+
+                <div class="font-bold text-red-600">${c.feedbackCount || 0}</div>
+
+
+                <div class="text-xs text-gray-500">Feedback</div>
+
+
+            </div>
+
+
+        </div>
+
+
+    `).join('');
+
+
+}
+
+
+
+
+function getFilteredPublicConsultations() {
+
+
+    let filtered = [...AppData.consultations];
+
+
+    
+
+
+    const searchTerm = document.getElementById('pc-search')?.value.toLowerCase() || '';
+
+
+    const statusFilter = document.getElementById('pc-status-filter')?.value || '';
+
+
+    const typeFilter = document.getElementById('pc-type-filter')?.value || '';
+
+
+    const sortBy = document.getElementById('pc-sort')?.value || 'date-desc';
+
+
+
+
+    if (searchTerm) {
+
+
+        filtered = filtered.filter(c => (c.title || '').toLowerCase().includes(searchTerm));
+
+
+    }
+
+
+    
+
+
+    if (statusFilter) {
+
+
+        filtered = filtered.filter(c => String(c.status || '').toLowerCase() === String(statusFilter).toLowerCase());
+
+
+    }
+
+
+    
+
+
+    if (typeFilter) {
+
+
+        filtered = filtered.filter(c => String(c.type || '').toLowerCase() === String(typeFilter).toLowerCase());
+
+
+    }
+
+
+
+
+    // Sort
+
+
+    filtered.sort((a, b) => {
+
+
+        switch(sortBy) {
+
+
+            case 'date-asc':
+
+
+                return new Date(a.date) - new Date(b.date);
+
+
+            case 'feedback':
+
+
+                return (b.feedbackCount || 0) - (a.feedbackCount || 0);
+
+
+            case 'date-desc':
+
+
+            default:
+
+
+                return new Date(b.date) - new Date(a.date);
+
+
+        }
+
+
+    });
+
+
+
+
+    return filtered;
+
+
+}
+
+
+
+
+function filterPublicConsultations() {
+
+    renderConsultationsGrid();
+    const filtered = getFilteredPublicConsultations();
+    renderPCStatusChart(filtered);
+    refreshPCSurveySelector(filtered);
+    renderPCSurveyAnswersChart(filtered);
+
+
+}
+
+
+
+
+function resetPublicConsultationFilters() {
+
+
+    document.getElementById('pc-search').value = '';
+
+
+    document.getElementById('pc-status-filter').value = '';
+
+
+    document.getElementById('pc-type-filter').value = '';
+
+
+    document.getElementById('pc-sort').value = 'date-desc';
+
+
+    renderConsultationsGrid();
+
+
+}
+
+
+
+
+function getFeedbackSentimentStats() {
+    const stats = { positive: 0, neutral: 0, negative: 0, rated: 0 };
+    const feedbackRows = Array.isArray(AppData.feedback) ? AppData.feedback : [];
+
+    for (const row of feedbackRows) {
+        const rating = Number(row && row.rating);
+        if (!Number.isFinite(rating) || rating <= 0) continue;
+        stats.rated += 1;
+        if (rating >= 4) stats.positive += 1;
+        else if (rating >= 3) stats.neutral += 1;
+        else stats.negative += 1;
+    }
+
+    return stats;
+}
+
+function getTopicThemeBreakdown() {
+    const feedbackRows = Array.isArray(AppData.feedback) ? AppData.feedback : [];
+    const issueRows = Array.isArray(AppData.issueReports) ? AppData.issueReports : [];
+    const buckets = new Map();
+    const addBucket = (label, count = 1) => {
+        const key = label.toLowerCase();
+        buckets.set(key, (buckets.get(key) || 0) + count);
+    };
+
+    const keywords = [
+        { label: 'Garbage Collection', keywords: ['garbage', 'trash', 'waste', 'basura', 'dump', 'collection'] },
+        { label: 'Plastic Ban', keywords: ['plastic', 'styrofoam', 'single-use', 'plastic ban', 'waste'] },
+        { label: 'Budget / Finance', keywords: ['budget', 'finance', 'fund', 'tax', 'appropriation', 'spending'] },
+        { label: 'Health & Sanitation', keywords: ['health', 'sanitation', 'clinic', 'hospital', 'mosquito', 'toilet', 'clean'] },
+        { label: 'Flooding / Drainage', keywords: ['flood', 'drainage', 'road', 'pothole', 'street', 'traffic'] },
+        { label: 'Public Safety', keywords: ['safety', 'crime', 'security', 'police', 'hazard', 'lighting'] },
+        { label: 'Water & Utilities', keywords: ['water', 'electric', 'power', 'utility', 'light', 'streetlight'] },
+        { label: 'Education', keywords: ['school', 'education', 'teacher', 'learning', 'scholarship'] }
+    ];
+
+    const scanText = (text) => {
+        const lower = String(text || '').toLowerCase();
+        if (!lower) return;
+        for (const entry of keywords) {
+            if (entry.keywords.some((k) => lower.includes(k))) {
+                addBucket(entry.label);
+                return;
+            }
+        }
+        addBucket('General Feedback');
+    };
+
+    for (const row of feedbackRows) {
+        scanText(`${row.message || ''} ${row.category || ''} ${row.sentimentTag || ''}`);
+    }
+
+    for (const row of issueRows) {
+        const label = String(row.category || '').trim();
+        if (label) addBucket(label === 'general' ? 'General Feedback' : label, 1);
+    }
+
+    return Array.from(buckets.entries())
+        .map(([key, count]) => ({ key, count, label: key === 'general feedback' ? 'General Feedback' : key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 6);
+}
+
+function renderPCFeedbackSentimentChart() {
+    const ctx = document.getElementById('pcFeedbackSentimentChart');
+    if (!ctx) return;
+
+    const stats = getFeedbackSentimentStats();
+    const ratedBadge = document.getElementById('pc-rated-feedback-count');
+    const posEl = document.getElementById('pc-positive-count');
+    const neuEl = document.getElementById('pc-neutral-count');
+    const negEl = document.getElementById('pc-negative-count');
+    const summaryEl = document.getElementById('pc-feedback-stats-summary');
+    const topicListEl = document.getElementById('pc-feedback-topic-list');
+    if (ratedBadge) ratedBadge.textContent = String(stats.rated);
+    if (posEl) posEl.textContent = `Positive: ${stats.positive}`;
+    if (neuEl) neuEl.textContent = `Neutral: ${stats.neutral}`;
+    if (negEl) negEl.textContent = `Negative: ${stats.negative}`;
+    if (summaryEl) {
+        const totalFeedback = Array.isArray(AppData.feedback) ? AppData.feedback.length : 0;
+        const avgRating = totalFeedback > 0 ? (Array.isArray(AppData.feedback) ? AppData.feedback.reduce((sum, item) => sum + (Number(item && item.rating) > 0 ? Number(item.rating) : 0), 0) / totalFeedback : 0) : 0;
+        summaryEl.innerHTML = `Total feedback: <strong>${totalFeedback}</strong> · Avg rating: <strong>${avgRating.toFixed(1)}</strong>`;
+    }
+    if (topicListEl) {
+        const topics = getTopicThemeBreakdown();
+        topicListEl.innerHTML = topics.length
+            ? topics.map((item) => `<div class="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm"><span class="text-gray-700">${escapeHtml(item.label)}</span><span class="font-semibold text-gray-900">${item.count}</span></div>`).join('')
+            : '<div class="text-sm text-gray-500">No topic themes detected yet.</div>';
+    }
+
+    if (window.pcFeedbackSentimentChart) {
+        try { window.pcFeedbackSentimentChart.destroy(); } catch (e) {}
+    }
+
+    window.pcFeedbackSentimentChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Positive (4-5)', 'Neutral (3)', 'Negative (1-2)'],
+            datasets: [{
+                data: [stats.positive, stats.neutral, stats.negative],
+                backgroundColor: ['#22c55e', '#eab308', '#ef4444'],
+                borderColor: '#fff',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = Number(context.parsed || 0);
+                            const total = Array.isArray(context.dataset?.data)
+                                ? context.dataset.data.reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0)
+                                : 0;
+                            const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function isSurveyFormConsultation(consultation) {
+    const mode = String(consultation && consultation.response_mode ? consultation.response_mode : '').toLowerCase().trim();
+    const question = String(consultation && consultation.survey_question ? consultation.survey_question : '').trim();
+    return mode === 'survey' || (question !== '' && mode !== 'feedback');
+}
+
+function getSurveyConsultations(consultations) {
+    const source = Array.isArray(consultations) ? consultations : (Array.isArray(AppData.consultations) ? AppData.consultations : []);
+    return source.filter(isSurveyFormConsultation);
+}
+
+function getSurveyDisplayTitle(consultation) {
+    if (!consultation) return 'Untitled survey';
+    const t = String(consultation.title || '').trim();
+    const q = String(consultation.survey_question || '').trim();
+    return t || q || `Survey #${consultation.id || ''}`.trim();
+}
+
+function refreshPCSurveySelector(consultations) {
+    const selectEl = document.getElementById('pc-survey-select');
+    if (!selectEl) return;
+
+    const surveys = getSurveyConsultations(consultations);
+    const prev = String(selectEl.value || 'all');
+
+    if (!surveys.length) {
+        selectEl.innerHTML = '<option value="all">No surveys</option>';
+        selectEl.value = 'all';
+        selectEl.disabled = true;
+        return;
+    }
+
+    const options = ['<option value="all">All surveys</option>'];
+    for (const s of surveys) {
+        const id = Number(s && s.id ? s.id : 0);
+        if (!id) continue;
+        const title = getSurveyDisplayTitle(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        options.push(`<option value="${id}">${title}</option>`);
+    }
+
+    selectEl.innerHTML = options.join('');
+    selectEl.disabled = false;
+    const hasPrev = Array.from(selectEl.options).some((o) => o.value === prev);
+    selectEl.value = hasPrev ? prev : 'all';
+}
+
+function handlePCSurveySelectionChange() {
+    renderPCSurveyAnswersChart(getFilteredPublicConsultations());
+}
+
+async function fetchSurveyVoteTotals(consultations) {
+    const surveys = getSurveyConsultations(consultations);
+    if (!surveys.length) {
+        return { agree: 0, disagree: 0, total: 0, surveyCount: 0 };
+    }
+
+    const requests = surveys.map((c) => {
+        const cid = Number(c && c.id ? c.id : 0);
+        if (!cid) return Promise.resolve(null);
+        return fetch(`API/consultation_feedback.php?action=get_vote_stats&consultation_id=${encodeURIComponent(String(cid))}`, {
+            headers: { 'Accept': 'application/json' }
+        })
+            .then((res) => (res.ok ? res.json() : null))
+            .catch(() => null);
+    });
+
+    const rows = await Promise.all(requests);
+    let agree = 0;
+    let disagree = 0;
+    for (const row of rows) {
+        if (!row || !row.success || !row.data) continue;
+        agree += Number(row.data.agree_votes || 0);
+        disagree += Number(row.data.disagree_votes || 0);
+    }
+    return { agree, disagree, total: agree + disagree, surveyCount: surveys.length };
+}
+
+async function renderPCSurveyAnswersChart(consultations) {
+    const ctx = document.getElementById('pcSurveyAnswersChart');
+    if (!ctx) return;
+
+    const respondentTotalEl = document.getElementById('pc-respondent-total');
+    const surveyCountEl = document.getElementById('pc-survey-count-summary');
+    const respondentScopeEl = document.getElementById('pc-respondent-scope');
+
+    const totalEl = document.getElementById('pc-survey-total-count');
+    const agreeEl = document.getElementById('pc-survey-agree-count');
+    const disagreeEl = document.getElementById('pc-survey-disagree-count');
+    const sourceEl = document.getElementById('pc-survey-source');
+
+    if (totalEl) totalEl.textContent = '...';
+    if (agreeEl) agreeEl.textContent = 'Agree: ...';
+    if (disagreeEl) disagreeEl.textContent = 'Disagree: ...';
+    if (sourceEl) sourceEl.textContent = 'Loading survey scope...';
+
+    const selectEl = document.getElementById('pc-survey-select');
+    const selectedId = String(selectEl && selectEl.value ? selectEl.value : 'all');
+    const surveys = getSurveyConsultations(consultations);
+    const selectedSurvey = selectedId === 'all' ? null : surveys.find((s) => String(Number(s && s.id ? s.id : 0)) === selectedId);
+    const scope = selectedSurvey ? [selectedSurvey] : surveys;
+    const totals = await fetchSurveyVoteTotals(scope);
+
+    if (totalEl) totalEl.textContent = String(totals.total);
+    if (agreeEl) agreeEl.textContent = `Agree: ${totals.agree}`;
+    if (disagreeEl) disagreeEl.textContent = `Disagree: ${totals.disagree}`;
+    if (respondentTotalEl) respondentTotalEl.textContent = String(totals.total);
+    if (surveyCountEl) surveyCountEl.textContent = String(totals.surveyCount || surveys.length || 0);
+    if (respondentScopeEl) {
+        if (selectedSurvey) {
+            respondentScopeEl.textContent = `Showing respondents for ${getSurveyDisplayTitle(selectedSurvey)}`;
+        } else if (surveys.length) {
+            respondentScopeEl.textContent = `Across ${surveys.length} active survey forms`;
+        } else {
+            respondentScopeEl.textContent = 'No survey responses available yet.';
+        }
+    }
+    if (sourceEl) {
+        const count = Number(totals.surveyCount || 0);
+        if (selectedSurvey) {
+            sourceEl.textContent = `Showing: ${getSurveyDisplayTitle(selectedSurvey)}`;
+        } else {
+            sourceEl.textContent = count > 0
+                ? `Across ${count} survey consultation${count === 1 ? '' : 's'}`
+                : 'No survey consultations found';
+        }
+    }
+
+    if (window.pcSurveyAnswersChart) {
+        try { window.pcSurveyAnswersChart.destroy(); } catch (e) {}
+    }
+
+    window.pcSurveyAnswersChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Agree', 'Disagree'],
+            datasets: [{
+                data: [totals.agree, totals.disagree],
+                backgroundColor: ['#22c55e', '#ef4444'],
+                borderColor: '#fff',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = Number(context.parsed || 0);
+                            const total = Array.isArray(context.dataset?.data)
+                                ? context.dataset.data.reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0)
+                                : 0;
+                            const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function togglePCIssueMappingPanel() {
+    const chartPane = document.getElementById('pc-feedback-chart-pane');
+    const issuePane = document.getElementById('pc-issue-mapping-pane');
+    const sentimentPane = document.getElementById('pc-feedback-sentiment-pane');
+    const toggleButtons = Array.from(document.querySelectorAll('#pc-issue-mapping-toggle-btn, #pc-issue-mapping-back-btn'));
+    if (!chartPane || !issuePane || !sentimentPane || toggleButtons.length === 0) return;
+    const issueWasVisible = !issuePane.classList.contains('hidden');
+    const issueNowVisible = !issueWasVisible;
+    chartPane.classList.toggle('hidden', issueNowVisible);
+    sentimentPane.classList.toggle('hidden', issueNowVisible);
+    issuePane.classList.toggle('hidden', !issueNowVisible);
+    toggleButtons.forEach(button => {
+        button.innerHTML = issueNowVisible
+            ? '<i class="bi bi-arrow-left-circle"></i>'
+            : '<i class="bi bi-arrow-right-circle"></i>';
+        button.setAttribute('aria-expanded', issueNowVisible ? 'true' : 'false');
+        button.setAttribute('aria-controls', issueNowVisible ? 'pc-feedback-sentiment-pane' : 'pc-issue-mapping-pane');
+    });
+}
+function renderPCStatusChart(consultations) {
+
+
+    const ctx = document.getElementById('pcStatusChart');
+
+
+    if (!ctx) return;
+
+
+
+
+    const source = Array.isArray(consultations) ? consultations : (Array.isArray(AppData.consultations) ? AppData.consultations : []);
+    const active = source.filter(c => String(c.status || '').toLowerCase() === 'active').length;
+
+
+    const draft = source.filter(c => {
+        const st = String(c.status || '').toLowerCase();
+        return st === 'draft' || st === 'pending' || st === 'scheduled';
+    }).length;
+
+
+    const closed = source.filter(c => String(c.status || '').toLowerCase() === 'closed').length;
+
+
+
+
+    const labelPlugin = {
+
+
+        id: 'pcDoughnutLabels',
+
+
+        afterDatasetsDraw(chart) {
+
+
+            const { ctx } = chart;
+
+
+            const dataset = chart.data.datasets && chart.data.datasets[0] ? chart.data.datasets[0] : null;
+
+
+            if (!dataset || !dataset.data) return;
+
+
+            const meta = chart.getDatasetMeta(0);
+
+
+            const data = dataset.data.map(v => Number(v) || 0);
+            const visible = data.map((v, i) => (chart.getDataVisibility(i) ? v : 0));
+            const total = visible.reduce((a, b) => a + b, 0);
+
+
+
+
+            ctx.save();
+
+
+            ctx.textAlign = 'center';
+
+
+            ctx.textBaseline = 'middle';
+
+
+            ctx.fillStyle = '#111827';
+
+
+
+
+            meta.data.forEach((arc, i) => {
+
+
+                const v = visible[i] || 0;
+
+
+                if (!v || !arc || !chart.getDataVisibility(i)) return;
+
+
+                const pos = arc.tooltipPosition();
+
+
+                const pct = total > 0 ? Math.round((v / total) * 100) : 0;
+
+
+                const text = `${v} (${pct}%)`;
+
+
+                ctx.font = '600 12px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+
+
+                ctx.fillText(text, pos.x, pos.y);
+
+
+            });
+
+
+
+
+            ctx.restore();
+
+
+        }
+
+
+    };
+
+
+
+
+    if (window.pcStatusChart) {
+
+
+        try { window.pcStatusChart.destroy(); } catch (e) {}
+
+
+    }
+
+
+
+
+    window.pcStatusChart = new Chart(ctx, {
+
+
+        type: 'doughnut',
+
+
+        data: {
+
+
+            labels: ['Active', 'Pending', 'Closed'],
+
+
+            datasets: [{
+
+
+                data: [active, draft, closed],
+
+
+                backgroundColor: ['#22c55e', '#3b82f6', '#9ca3af'],
+
+
+                borderColor: '#fff',
+
+
+                borderWidth: 2
+
+
+            }]
+
+
+        },
+
+
+        options: {
+
+
+            responsive: true,
+
+
+            maintainAspectRatio: false,
+
+
+            plugins: {
+
+
+                legend: {
+
+
+                    position: 'bottom'
+
+
+                },
+
+
+                tooltip: {
+
+
+                    callbacks: {
+
+
+                        label: function(context) {
+
+
+                            const label = context.label || '';
+
+
+                            const value = Number(context.parsed || 0);
+                            const data = Array.isArray(context.dataset?.data) ? context.dataset.data : [];
+                            const totalVisible = data.reduce((sum, v, i) => sum + (context.chart.getDataVisibility(i) ? (Number(v) || 0) : 0), 0);
+                            const percentage = totalVisible > 0 ? Math.round((value / totalVisible) * 100) : 0;
+
+
+                            return `${label}: ${value} (${percentage}%)`;
+
+
+                        }
+
+
+                    }
+
+
+                }
+
+
+            }
+
+
+        },
+
+
+        plugins: [labelPlugin]
+
+
+    });
+
+
+}
+
+
+
+
+function renderPCFeedbackChart() {
+
+
+    const ctx = document.getElementById('pcFeedbackChart');
+
+
+    if (!ctx) return;
+
+
+
+
+    // Aggregate feedback by consultation
+
+
+    const labels = AppData.consultations.map(c => c.title);
+
+
+    const data = AppData.consultations.map(c => c.feedbackCount || 0);
+
+
+
+
+    // Destroy existing chart instance if present
+
+
+    if (window.pcFeedbackChart) {
+
+
+        try { window.pcFeedbackChart.destroy(); } catch(e) {}
+
+
+    }
+
+
+
+
+    window.pcFeedbackChart = new Chart(ctx, {
+
+
+        type: 'bar',
+
+
+        data: {
+
+
+            labels,
+
+
+            datasets: [{
+
+
+                label: 'Feedback Count',
+
+
+                data,
+
+
+                backgroundColor: labels.map(() => '#ef4444'),
+
+
+                borderColor: '#ef4444',
+
+
+                borderWidth: 1
+
+
+            }]
+
+
+        },
+
+
+        options: {
+
+
+            responsive: true,
+
+
+            maintainAspectRatio: false,
+
+
+            scales: {
+
+
+                y: { beginAtZero: true }
+
+
+            },
+
+
+            plugins: { legend: { display: false } }
+
+
+        }
+
+
+    });
+
+
+}
+
+
+
+
+function renderConsultationManagement() {
+
+
+    const contentArea = document.getElementById('content-area');
+
+
+    
+
+
+
+
+    const breadcrumbCurrent = document.querySelector('.breadcrumb-current');
+
+
+    
+
+
+
+
+    if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'Consultation Management';
+
+
+
+
+    const totalConsultations = AppData.consultations.length;
+
+
+    const openConsultations = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'active').length;
+
+
+    const pendingConsultations = AppData.consultations.filter(c => {
+        const st = String(c.status || '').toLowerCase();
+        return st === 'scheduled' || st === 'draft' || st === 'pending';
+    }).length;
+
+
+
+
+    contentArea.innerHTML = `
+
+
+        <div class="space-y-6">
+
+
+            <!-- Header with Statistics -->
+
+
+            <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-8 rounded-lg shadow-lg">
+
+
+                <div class="flex justify-between items-start mb-6">
+
+
+                    <div>
+
+
+                        <h1 class="text-3xl font-bold mb-2">Consultation Management</h1>
+
+
+                        <p class="text-red-100">Manage all public consultations, track feedback, and monitor engagement</p>
+
+
+                    </div>
+
+
+                    <div class="flex gap-2">
+                        <button onclick="openCreateConsultationModal('feedback')" class="btn-primary flex items-center gap-2 bg-white text-red-600 hover:bg-red-50 font-bold px-4 py-2 rounded-lg shadow-sm">
+                            <i class="bi bi-plus-lg"></i> Add Consultation
+                        </button>
+                        <button onclick="openCreateConsultationModal('survey')" class="btn-primary flex items-center gap-2 bg-white text-blue-600 hover:bg-blue-50 font-bold px-4 py-2 rounded-lg shadow-sm">
+                            <i class="bi bi-square-poll-horizontal"></i> Create Survey Form
+                        </button>
+                    </div>
+
+
+                </div>
+
+
+                
+
+
+                <!-- Stats Cards -->
+
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+
+                    <div class="bg-white bg-opacity-20 rounded-lg p-4">
+
+
+                        <div class="text-red-100 text-sm font-semibold mb-1">Total Consultations</div>
+
+
+                        <div class="text-3xl font-bold" id="cm-stat-total">${totalConsultations}</div>
+
+
+                    </div>
+
+
+                    <div class="bg-white bg-opacity-20 rounded-lg p-4">
+
+
+                        <div class="text-red-100 text-sm font-semibold mb-1">Open Consultations</div>
+
+
+                        <div class="text-3xl font-bold" id="cm-stat-open">${openConsultations}</div>
+
+
+                    </div>
+
+
+                    <div class="bg-white bg-opacity-20 rounded-lg p-4">
+
+
+                        <div class="text-red-100 text-sm font-semibold mb-1">Pending</div>
+
+
+                        <div class="text-3xl font-bold" id="cm-stat-scheduled">${pendingConsultations}</div>
+
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+
+
+            <!-- Filter and Search -->
+
+
+            <div class="bg-white p-6 rounded-lg shadow">
+
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+
+                    <div>
+
+
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Search Consultations</label>
+
+
+                        <input type="text" id="consultation-search" placeholder="Search by title..." 
+
+
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+
+
+                            onkeyup="filterConsultations()">
+
+
+                    </div>
+
+
+                    <div>
+
+
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Status</label>
+
+
+                        <select id="consultation-status-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+
+
+                            onchange="filterConsultations()">
+
+
+                            <option value="">All Status</option>
+                            <option value="draft">Draft</option>
+                            <option value="pending">Pending</option>
+                            <option value="active">Active</option>
+                            <option value="viewed">Viewed</option>
+                            <option value="replied">Replied</option>
+                            <option value="completed">Completed</option>
+                            <option value="closed">Closed</option>
+                            <option value="archived">Archived</option>
+
+
+                        </select>
+
+
+                    </div>
+
+                    <div>
+
+
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Category</label>
+
+
+                        <select id="consultation-sort" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                            onchange="filterConsultations()">
+                            <option value="">All Categories</option>
+                            <option value="Appropriations">Appropriations</option>
+                            <option value="Ways & Means">Ways & Means</option>
+                            <option value="Women, Family & Gender Equality">Women, Family & Gender Equality</option>
+                            <option value="Justice & Human Rights">Justice & Human Rights</option>
+                            <option value="Higher & Technical Education">Higher & Technical Education</option>
+                            <option value="Cooperatives">Cooperatives</option>
+                            <option value="Health & Sanitation">Health & Sanitation</option>
+                            <option value="Social Services">Social Services</option>
+                            <option value="Livelihood, Trade, Commerce & Industry">Livelihood, Trade, Commerce & Industry</option>
+                            <option value="Food & Agriculture">Food & Agriculture</option>
+                            <option value="Urban Planning, Housing & Development">Urban Planning, Housing & Development</option>
+                            <option value="Public Utilities & Facilities">Public Utilities & Facilities</option>
+                            <option value="Market & Slaughterhouse">Market & Slaughterhouse</option>
+                            <option value="Rules & Privileges">Rules & Privileges</option>
+                        </select>
+
+
+                    </div>
+
+
+                </div>
+
+
+
+
+                <div class="flex flex-wrap gap-2 mt-4">
+
+
+                    <button id="consultation-type-admin-btn" onclick="cmQuickType('admin')" class="btn-outline px-3 py-2 text-sm">Admin Created</button>
+
+
+                    <button id="consultation-type-user-btn" onclick="cmQuickType('user')" class="btn-outline px-3 py-2 text-sm">User Submissions</button>
+
+
+                </div>
+
+
+            </div>
+            <!-- Consultations Tables: separate admin and user submissions for proper column layout -->
+
+            <div class="grid grid-cols-1 gap-6">
+
+                <!-- Admin-Created Consultations -->
+                <div id="consultations-admin-section" class="bg-white rounded-lg shadow overflow-hidden">
+                    <div class="p-4 border-b">
+                        <h3 class="text-lg font-semibold text-gray-900">Admin Created Consultations</h3>
+                    </div>
+                    <div class="overflow-x-auto max-h-[60vh] overflow-y-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-100 border-b-2 border-gray-300 sticky top-0 z-10">
+                                <tr>
+                                    <th class="px-6 py-3 text-left font-semibold text-gray-700">ID</th>
+                                    <th class="px-6 py-3 text-left font-semibold text-gray-700">Title</th>
+                                    <th class="px-6 py-3 text-left font-semibold text-gray-700">Date</th>
+                                    <th class="px-6 py-3 text-left font-semibold text-gray-700">Status</th>
+                                    <th class="px-6 py-3 text-center font-semibold text-gray-700">Feedback</th>
+                                    <th class="px-6 py-3 text-center font-semibold text-gray-700">Documents</th>
+                                    <th class="px-6 py-3 text-center font-semibold text-gray-700">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="consultations-admin-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- User Submissions -->
+                <div id="consultations-user-section" class="bg-white rounded-lg shadow overflow-hidden" style="display:none;">
+                    <div class="p-4 border-b">
+                        <h3 class="text-lg font-semibold text-gray-900">User Submissions</h3>
+                    </div>
+                    <div class="overflow-x-auto max-h-[60vh] overflow-y-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-100 border-b-2 border-gray-300 sticky top-0 z-10">
+                                <tr>
+                                    <th class="px-6 py-3 text-left font-semibold text-gray-700">Reference ID</th>
+                                    <th class="px-6 py-3 text-left font-semibold text-gray-700">Citizen Name</th>
+                                    <th class="px-6 py-3 text-left font-semibold text-gray-700">Consultation Type</th>
+                                    <th class="px-6 py-3 text-left font-semibold text-gray-700">Scheduled Date & Time</th>
+                                    <th class="px-6 py-3 text-left font-semibold text-gray-700">Status</th>
+                                    <th class="px-6 py-3 text-center font-semibold text-gray-700">Documents</th>
+                                    <th class="px-6 py-3 text-left font-semibold text-gray-700">Message</th>
+                                </tr>
+                            </thead>
+                            <tbody id="consultations-user-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+
+        </div>
+
+
+
+
+        <!-- Outcome & Remarks Modal -->
+        <div id="outcome-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" style="display: none;">
+            <div class="bg-white rounded-lg shadow-lg p-6 w-96">
+                <h3 class="text-lg font-bold text-gray-900 mb-4">Add Outcome & Remarks</h3>
+                
+                <div class="mb-4">
+                    <p class="text-sm text-gray-600 mb-2"><strong>Citizen:</strong> <span id="outcome-citizen-name" class="text-gray-900"></span></p>
+                    <p class="text-sm text-gray-600 mb-2"><strong>Email:</strong> <span id="outcome-user-email" class="text-gray-900 break-all"></span></p>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Outcome</label>
+                    <select id="outcome-dropdown" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+                        <option value="">-- Select Outcome --</option>
+                        <option value="solved">Solved</option>
+                        <option value="needs-follow-up">Needs Follow-up</option>
+                        <option value="escalated">Escalated</option>
+                    </select>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Remarks</label>
+                    <textarea id="outcome-remarks" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="Add your remarks here..."></textarea>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Optional Email to User</label>
+                    <textarea id="outcome-email-body" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="Write an email to the user manually if needed."></textarea>
+                </div>
+                
+                <input type="hidden" id="outcome-consultation-id" />
+                
+                <div class="flex gap-2 justify-end">
+                    <button onclick="closeOutcomeModal()" class="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium">Cancel</button>
+                    <button onclick="submitOutcome()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">Save Outcome</button>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Create/Edit Consultation Modal -->
+
+        <div id="consultation-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+
+            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full" style="max-height:90vh; overflow-y:auto;">
+
+                <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-6 flex justify-between items-center sticky top-0 z-10">
+
+                    <h2 id="modal-title" class="text-2xl font-bold">Create New Consultation</h2>
+
+                    <button onclick="closeConsultationModal()" class="text-white hover:text-red-100 text-2xl">&times;</button>
+
+                </div>
+
+                <form id="consultation-form" enctype="multipart/form-data" class="p-6 space-y-4">
+
+                    <input type="hidden" id="consultation-id">
+
+                    <input type="hidden" name="csrf_token" id="consultation-csrf" value="">
+
+                    <div id="consultation-type-selector-wrap">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Consultation Type *</label>
+                        <select id="consultation-response-mode" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500" required>
+                            <option value="feedback">Consultation Form</option>
+                            <option value="survey">Survey Form</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Title *</label>
+                        <input type="text" id="consultation-title" placeholder="e.g., Proposed Traffic Management Plan" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" required>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Category *</label>
+                        <select id="consultation-category" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500" required>
+                            <option value="">Select Category</option>
+                            <option value="Appropriations">Appropriations</option>
+                            <option value="Ways & Means">Ways & Means</option>
+                            <option value="Women, Family & Gender Equality">Women, Family & Gender Equality</option>
+                            <option value="Justice & Human Rights">Justice & Human Rights</option>
+                            <option value="Higher & Technical Education">Higher & Technical Education</option>
+                            <option value="Cooperatives">Cooperatives</option>
+                            <option value="Health & Sanitation">Health & Sanitation</option>
+                            <option value="Social Services">Social Services</option>
+                            <option value="Livelihood, Trade, Commerce & Industry">Livelihood, Trade, Commerce & Industry</option>
+                            <option value="Food & Agriculture">Food & Agriculture</option>
+                            <option value="Urban Planning, Housing & Development">Urban Planning, Housing & Development</option>
+                            <option value="Public Utilities & Facilities">Public Utilities & Facilities</option>
+                            <option value="Market & Slaughterhouse">Market & Slaughterhouse</option>
+                            <option value="Rules & Privileges">Rules & Privileges</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Description *</label>
+                        <textarea id="consultation-description" placeholder="Describe the consultation, its purpose, and what feedback you're looking for..." rows="4"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" required></textarea>
+                    </div>
+
+                    <div id="consultation-feedback-config" class="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50">
+                        <h3 class="text-sm font-bold text-gray-800">Consultation Feedback</h3>
+                        <p class="text-xs text-gray-600 mb-0">Citizens can submit long-form feedback from the public consultation page.</p>
+                    </div>
+
+                    <div id="consultation-survey-config" class="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50">
+                        <h3 class="text-sm font-bold text-gray-800">Survey Setup</h3>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Survey Question</label>
+                            <input type="text" id="consultation-survey-question" placeholder="Do you support this proposal?"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-1">Option A Label</label>
+                                <input type="text" id="consultation-survey-option-a" value="Agree"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-1">Option B Label</label>
+                                <input type="text" id="consultation-survey-option-b" value="Disagree"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                                <input type="checkbox" id="consultation-allow-guest-quick-vote" checked>
+                                <span>Allow guest quick vote</span>
+                            </label>
+                            <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                                <input type="checkbox" id="consultation-allow-guest-verified-vote" checked>
+                                <span>Allow guest verified vote (OTP)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                        <div>
+
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Start Date *</label>
+
+                            <input type="date" id="consultation-start-date" 
+
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" required>
+
+                        </div>
+
+                        <div>
+
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">End Date *</label>
+
+                            <input type="date" id="consultation-end-date" 
+
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" required>
+
+                        </div>
+
+                    </div>
+
+                    <div>
+
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Source URL (Optional)</label>
+
+                        <input type="url" id="consultation-source-url" placeholder="https://example.com/official-document" 
+
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent">
+
+                    </div>
+
+                    <div>
+
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Image (Optional)</label>
+
+                        <div id="consultation-image-dropzone" style="border: 2px dashed #d1d5db; border-radius: 8px; padding: 1.25rem; text-align: center; background: #f9fafb; cursor:pointer;" onclick="document.getElementById('consultation-image').click()">
+
+                            <input type="file" id="consultation-image" name="consultation_image" accept=".jpg,.jpeg,.png,.gif,.webp" style="display:none;" onchange="previewConsultationImage(this)">
+
+                            <div id="consultation-image-preview" style="display:none; margin-bottom:0.5rem;"></div>
+
+                            <i class="bi bi-image text-gray-400" style="font-size:2rem;" id="consultation-image-icon"></i>
+
+                            <p class="text-gray-600 font-semibold text-sm mt-1">Click to upload image</p>
+
+                            <p class="text-gray-400 text-xs">JPG, PNG, GIF, or WebP (Max 10MB)</p>
+
+                        </div>
+
+                    </div>
+                    <div class="flex gap-3 pt-4">
+
+                        <button type="button" onclick="saveConsultation()" class="flex-1 btn-primary" id="save-consultation-btn">
+
+                            <i class="bi bi-check-lg mr-1"></i> Save Consultation
+
+                        </button>
+
+                        <button type="button" onclick="closeConsultationModal()" class="flex-1 btn-secondary">Cancel</button>
+
+                    </div>
+
+                </form>
+
+            </div>
+
+        </div>
+
+
+
+
+        <!-- Consultation Details Modal -->
+
+
+        <div id="consultation-details-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+
+
+
+            <div class="bg-white rounded-2xl shadow-xl max-w-5xl w-full max-h-[85vh] overflow-hidden">
+
+                <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-6 flex justify-between items-center">
+
+                    <h2 id="details-modal-title" class="text-2xl font-bold">Consultation Details</h2>
+
+                    <button onclick="closeDetailsModal()" class="text-white hover:text-red-100 text-2xl">&times;</button>
+
+                </div>
+
+                <div id="details-modal-content" class="p-6 space-y-6 overflow-y-auto" style="max-height:calc(85vh - 120px);">
+
+                </div>
+
+            </div>
+
+
+        </div>
+
+
+    `;
+
+
+
+
+    const tbody = document.getElementById('consultations-table-body');
+
+
+    if (tbody) {
+
+
+        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">Loading consultations...</td></tr>';
+
+
+    }
+
+
+
+
+    window.consultationTypeView = window.consultationTypeView || 'admin';
+    updateConsultationTypeTabButtons();
+
+    loadConsultationsFromApi();
+
+
+}
+
+
+
+
+function cmQuickType(type) {
+    window.consultationTypeView = String(type || 'admin').toLowerCase();
+    filterConsultations();
+}
+
+function updateConsultationTypeTabButtons() {
+    const type = window.consultationTypeView || 'admin';
+    const adminBtn = document.getElementById('consultation-type-admin-btn');
+    const userBtn = document.getElementById('consultation-type-user-btn');
+    const adminSection = document.getElementById('consultations-admin-section');
+    const userSection = document.getElementById('consultations-user-section');
+
+    const makeActive = (btn) => {
+        if (!btn) return;
+        btn.classList.remove('border-gray-200','text-gray-600');
+        btn.classList.add('border-red-600','border-b-2','text-red-600');
+    };
+    const makeInactive = (btn) => {
+        if (!btn) return;
+        btn.classList.remove('border-red-600','border-b-2','text-red-600');
+        btn.classList.add('border-gray-200','text-gray-600');
+    };
+
+    if (type === 'admin') {
+        makeActive(adminBtn);
+        makeInactive(userBtn);
+        if (adminSection) adminSection.style.display = '';
+        if (userSection) userSection.style.display = 'none';
+    } else if (type === 'user') {
+        makeActive(userBtn);
+        makeInactive(adminBtn);
+        if (adminSection) adminSection.style.display = 'none';
+        if (userSection) userSection.style.display = '';
+    } else if (type === 'all') {
+        // All types: show both and reset buttons
+        makeInactive(adminBtn);
+        makeInactive(userBtn);
+        if (adminSection) adminSection.style.display = '';
+        if (userSection) userSection.style.display = '';
+    } else {
+        // Any unexpected value, default to admin
+        makeActive(adminBtn);
+        makeInactive(userBtn);
+        if (adminSection) adminSection.style.display = '';
+        if (userSection) userSection.style.display = 'none';
+    }
+}
+
+
+// ======== OUTCOME & REMARKS SYSTEM ========
+
+function openOutcomeModal(consultationId, citizenName, userEmail) {
+    document.getElementById('outcome-consultation-id').value = consultationId;
+    document.getElementById('outcome-citizen-name').textContent = citizenName;
+    document.getElementById('outcome-user-email').textContent = userEmail;
+    document.getElementById('outcome-dropdown').value = '';
+    document.getElementById('outcome-remarks').value = '';
+    document.getElementById('outcome-email-body').value = '';
+    document.getElementById('outcome-modal').style.display = 'flex';
+}
+
+function closeOutcomeModal() {
+    document.getElementById('outcome-modal').style.display = 'none';
+}
+
+function submitOutcome() {
+    const consultationId = document.getElementById('outcome-consultation-id').value;
+    const outcome = document.getElementById('outcome-dropdown').value;
+    const remarks = document.getElementById('outcome-remarks').value;
+    const userEmail = document.getElementById('outcome-user-email').textContent;
+    const emailBody = document.getElementById('outcome-email-body').value;
+    
+    if (!outcome) {
+        alert('Please select an outcome');
+        return;
+    }
+    
+    const optionalRemarks = remarks.trim() || 'No additional remarks were provided.';
+    const emailValue = (userEmail || '').trim();
+
+    const formData = new FormData();
+    formData.append('action', 'save_outcome');
+    formData.append('consultation_id', consultationId);
+    formData.append('outcome', outcome);
+    formData.append('remarks', optionalRemarks);
+    formData.append('user_email', emailValue);
+    formData.append('manual_email_body', emailBody.trim());
+    
+    fetch('API/consultations_api.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            const consultation = AppData.consultations.find(c => Number(c.id) === Number(consultationId));
+            const outcomeStatusMap = {
+                solved: 'completed',
+                'needs-follow-up': 'replied',
+                escalated: 'viewed'
+            };
+            const newStatus = String(data.status || outcomeStatusMap[outcome] || outcome).toLowerCase();
+
+            if (consultation) {
+                consultation.status = newStatus;
+            }
+
+            updateConsultationStatsUI();
+            renderConsultationsTable();
+
+            alert('Outcome saved and consultation status updated.');
+            closeOutcomeModal();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to save outcome'));
+        }
+    })
+    .catch(err => alert('Error: ' + err));
+}
+
+
+
+
+function mapDbConsultationToUi(row) {
+
+
+    const statusRaw = String(row.status || '').toLowerCase();
+
+
+    const createdAt = row.created_at || null;
+
+
+    const startDate = row.start_date || null;
+
+
+    const endDate = row.end_date || null;
+
+
+    const effectiveDate = startDate || createdAt || endDate || null;
+
+
+
+
+    const sourceType = String(row.type || 'admin').toLowerCase();
+
+
+    const title = row.title || '';
+
+
+
+
+    return {
+
+        id: Number(row.id),
+
+        title,
+
+        type: sourceType,
+
+        category: String(row.category || '').trim(),
+
+        date: effectiveDate,
+
+        start_date: row.start_date || null,
+
+        end_date: row.end_date || null,
+
+        status: statusRaw || 'draft',
+
+        description: row.description || '',
+
+        documentsAttached: Number(row.documents_count || 0),
+        image_path: row.image_path || '',
+
+        userName: row.user_name || '',
+
+        userEmail: row.user_email || '',
+
+        response_mode: String(row.response_mode || 'feedback').toLowerCase(),
+        survey_question: row.survey_question || '',
+        survey_option_a: row.survey_option_a || 'Agree',
+        survey_option_b: row.survey_option_b || 'Disagree',
+
+        feedbackCount: Number(row.posts_count || 0),
+
+        // preserve DB created timestamp for client-side rules
+        created_at: row.created_at || null,
+        createdAt: row.created_at || null,
+
+        documentsAttached: 0
+
+    };
+
+
+}
+
+
+
+
+async function loadConsultationsFromApi() {
+
+
+    try {
+
+
+        const res = await fetch('API/consultations_api.php?action=list&limit=200&offset=0', {
+
+
+            headers: { 'Accept': 'application/json' }
+
+
+        });
+
+
+
+
+        let data;
+
+
+        try {
+
+
+            data = await res.json();
+
+
+        } catch (_) {
+
+
+            data = null;
+
+
+        }
+
+
+
+
+        if (!res.ok) {
+
+
+            const msg = (data && data.message) ? data.message : (res.status === 403 ? 'Unauthorized (admin session required)' : `HTTP ${res.status}`);
+
+
+            throw new Error(msg);
+
+
+        }
+
+
+
+
+        if (!data || !data.success || !Array.isArray(data.data)) {
+
+
+            throw new Error((data && data.message) ? data.message : 'Failed to load consultations');
+
+
+        }
+
+
+
+
+        window.__last_consultations_api__ = data;
+
+
+
+
+        AppData.consultations = data.data.map(mapDbConsultationToUi);
+
+
+        recomputeConsultationFeedbackCounts();
+
+
+        updateConsultationStatsUI();
+
+
+        renderConsultationsTable();
+
+
+
+
+        if (data.data.length === 0) {
+
+
+            const tbody = document.getElementById('consultations-table-body');
+
+
+            if (tbody) {
+
+
+                tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No consultations returned by API. Checking connection...</td></tr>';
+
+
+            }
+
+
+            try {
+
+
+                        const dbgRes = await fetchWithTimeout('API/consultations_api.php?action=debug', { headers: { 'Accept': 'application/json' } }, 5000);
+
+
+                const dbg = await dbgRes.json();
+
+
+                window.__last_consultations_debug__ = dbg;
+
+
+                const dbName = dbg?.data?.db?.database ?? 'unknown';
+
+
+                const cnt = dbg?.data?.db?.consultations_count;
+
+
+                const role = dbg?.data?.session?.role_normalized ?? dbg?.data?.session?.role ?? 'unknown';
+
+
+                if (tbody) {
+
+
+                    const numericCount = Number(cnt || 0);
+                    if (numericCount > 0) {
+                        tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-red-600">API returned 0 rows, but debug says DB has <b>${escapeHtml(String(numericCount))}</b> consultations (DB: <b>${escapeHtml(String(dbName))}</b>, role: <b>${escapeHtml(String(role))}</b>).<div class="text-xs text-gray-500 mt-2">This means the list query is not returning rows as expected. Next step is to inspect the SQL query output.</div></td></tr>`;
+                    } else {
+                        tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No consultations yet (DB: <b>${escapeHtml(String(dbName))}</b>).<div class="text-xs text-gray-400 mt-2">Create your first consultation in Consultation Management.</div></td></tr>`;
+                    }
+
+
+                }
+
+
+            } catch (_) {
+
+
+            }
+
+
+        }
+
+
+    } catch (e) {
+
+
+        const tbody = document.getElementById('consultations-table-body');
+
+
+        if (tbody) {
+
+
+            const details = e && e.message ? String(e.message) : 'Unknown error';
+
+
+            const hint = details.toLowerCase().includes('unauthorized') || details.toLowerCase().includes('403')
+
+
+                ? 'Please log in as Admin and refresh the page.'
+
+
+                : 'Check database connection and server logs.';
+
+
+            tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-red-600">Failed to load consultations from database.<div class="text-xs text-gray-500 mt-2">${escapeHtml(details)}<br>${escapeHtml(hint)}</div></td></tr>`;
+
+
+        }
+
+
+        updateConsultationStatsUI();
+
+
+        console.error(e);
+
+
+    }
+
+
+}
+
+
+
+
+function recomputeConsultationFeedbackCounts() {
+
+
+    if (!Array.isArray(AppData.consultations) || AppData.consultations.length === 0) return;
+
+
+
+
+    const counts = new Map();
+
+
+    if (Array.isArray(AppData.feedback)) {
+
+
+        for (const f of AppData.feedback) {
+
+
+            const cid = f && f.consultationId !== undefined && f.consultationId !== null ? Number(f.consultationId) : null;
+
+
+            if (!cid) continue;
+
+
+            counts.set(cid, (counts.get(cid) || 0) + 1);
+
+
+        }
+
+
+    }
+
+
+
+
+    for (const c of AppData.consultations) {
+
+
+        const cid = c && c.id !== undefined && c.id !== null ? Number(c.id) : null;
+
+
+        if (!cid) continue;
+
+
+        c.feedbackCount = counts.get(cid) || 0;
+
+
+    }
+
+
+
+
+    // Refresh any visible UI that displays feedback counts
+
+
+    try {
+
+
+        if (document.getElementById('consultations-table-body')) {
+
+
+            renderConsultationsTable();
+
+
+        }
+
+
+        if (document.getElementById('consultations-grid')) {
+
+
+            renderConsultationsGrid();
+
+
+        }
+
+
+    } catch (e) {
+
+
+        console.error(e);
+
+
+    }
+
+
+}
+
+
+
+
+function escapeHtml(str) {
+
+
+    return String(str)
+
+
+        .replaceAll('&', '&amp;')
+
+
+        .replaceAll('<', '&lt;')
+
+
+        .replaceAll('>', '&gt;')
+
+
+        .replaceAll('"', '&quot;')
+
+
+        .replaceAll("'", '&#039;');
+
+
+}
+
+
+
+
+function updateConsultationStatsUI() {
+
+
+    const totalEl = document.getElementById('cm-stat-total');
+
+
+    const openEl = document.getElementById('cm-stat-open');
+
+
+    const schedEl = document.getElementById('cm-stat-scheduled');
+
+
+
+
+    const total = AppData.consultations.length;
+
+
+    const open = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'active').length;
+
+
+    const closed = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'closed').length;
+
+
+
+
+    if (totalEl) totalEl.textContent = String(total);
+
+
+    if (openEl) openEl.textContent = String(open);
+
+
+    if (schedEl) schedEl.textContent = String(closed);
+
+
+}
+
+
+
+
+function toggleConsultationUserActionsMenu(id) {
+    document.querySelectorAll('[id^="consultation-user-actions-"]').forEach(menu => {
+        if (menu.id !== `consultation-user-actions-${id}`) {
+            menu.classList.add('hidden');
+        }
+    });
+
+    const menu = document.getElementById(`consultation-user-actions-${id}`);
+    if (menu) {
+        menu.classList.toggle('hidden');
+    }
+}
+
+function closeConsultationUserActionsMenu(id) {
+    const menu = document.getElementById(`consultation-user-actions-${id}`);
+    if (menu) {
+        menu.classList.add('hidden');
+    }
+}
+
+function isConsultationClosed(consultation) {
+    const status = String(consultation?.status || '').toLowerCase();
+    if (status === 'closed') return true;
+
+    const endDateValue = consultation?.end_date || consultation?.date;
+    if (!endDateValue) return false;
+
+    const endDate = new Date(endDateValue);
+    if (Number.isNaN(endDate.getTime())) return false;
+
+    return endDate < new Date();
+>>>>>>> Stashed changes
 }
 
 function renderConsultationsTable() {
@@ -4383,7 +9534,13 @@ function filterConsultations() {
 
 function openCreateConsultationModal() {
     document.getElementById('consultation-id').value = '';
+<<<<<<< Updated upstream
     document.getElementById('modal-title').textContent = 'Create New Consultation';
+=======
+    const initialResponseMode = (createMode === 'survey') ? 'survey' : 'feedback';
+    document.getElementById('modal-title').textContent = (createMode === 'survey') ? 'Create New Survey Form' : 'Create New Consultation';
+
+>>>>>>> Stashed changes
     document.getElementById('consultation-title').value = '';
     document.getElementById('consultation-type').value = '';
     document.getElementById('consultation-date').value = '';

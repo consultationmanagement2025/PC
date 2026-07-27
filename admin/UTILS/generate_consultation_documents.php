@@ -100,84 +100,94 @@ function generateConsultationDocuments(int $consultation_id, array $options = []
         }
     }
 
+    $logoDataUri = '';
+    $logoPath = __DIR__ . '/../images/valenzuela-logo.png';
+    if (!is_file($logoPath)) $logoPath = __DIR__ . '/../images/logo.webp';
+    if (is_file($logoPath)) {
+        $mime = mime_content_type($logoPath) ?: 'image/png';
+        $logoDataUri = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($logoPath));
+    }
+
+    $imageDataUri = '';
+    if (!empty($image_path)) {
+        $resolved_image = resolveConsultationImagePathForPDF($image_path);
+        if ($resolved_image && file_exists(__DIR__ . '/../' . $resolved_image)) {
+            $mimeImg = mime_content_type(__DIR__ . '/../' . $resolved_image) ?: 'image/png';
+            $imageDataUri = 'data:' . $mimeImg . ';base64,' . base64_encode(file_get_contents(__DIR__ . '/../' . $resolved_image));
+        }
+    }
+
     $html = "<!doctype html><html><head><meta charset=\"utf-8\"><title>" . $title . "</title>";
     $html .= "<style>";
-    $html .= "body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 12pt; color: #333; line-height: 1.8; margin: 0; padding: 40px; }";
-    $html .= "header { border-bottom: 3px solid #e5e7eb; padding-bottom: 20px; margin-bottom: 30px; text-align: center; }";
-    $html .= ".brand-logo { display: block; margin: 0 auto 12px auto; max-width: 200px; height: auto; }";
-    $html .= ".city-seal { text-align: center; margin-bottom: 10px; font-size: 14pt; font-weight: 700; color: #1f2937; }";
-    $html .= ".title { text-align: center; font-size: 20pt; font-weight: 800; color: #1f2937; margin: 12px 0; }";
-    $html .= ".subtitle { text-align: center; font-size: 12pt; color: #6b7280; margin-bottom: 20px; }";
-    $html .= "section { margin-bottom: 24px; }";
-    $html .= ".section-title { font-size: 14pt; font-weight: 700; color: #ffffff; background: #1f2937; padding: 12px 16px; margin: 20px 0 12px 0; display:block; border-radius: 4px; }";
-    $html .= ".meta-row { display: flex; margin-bottom: 12px; align-items: baseline; }";
-    $html .= ".meta-label { font-weight: 700; width: 180px; color: #1f2937; font-size: 11pt; }";
-    $html .= ".meta-value { flex: 1; color: #374151; font-size: 11pt; }";
-    $html .= ".divider { border-top: 2px solid #e5e7eb; margin: 24px 0; }";
-    $html .= ".description { background: #f9fafb; padding: 20px; border-left: 5px solid #2563eb; white-space: pre-wrap; font-size: 11pt; line-height: 1.8; border-radius: 4px; }";
-    $html .= ".footer { text-align: center; font-size: 10pt; color: #6b7280; margin-top: 32px; border-top: 2px solid #e5e7eb; padding-top: 16px; }";
+    $html .= "@page { margin: 25px 35px; }";
+    $html .= "body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 11pt; color: #1e293b; line-height: 1.6; margin: 0; padding: 0; }";
+    $html .= ".header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border-bottom: 3px double #0033a0; padding-bottom: 12px; }";
+    $html .= ".header-table td { vertical-align: middle; text-align: center; }";
+    $html .= ".brand-logo { max-width: 85px; height: auto; margin-bottom: 6px; }";
+    $html .= ".republic-text { font-size: 8.5pt; font-weight: bold; text-transform: uppercase; color: #64748b; letter-spacing: 1px; }";
+    $html .= ".city-text { font-size: 14pt; font-weight: 900; color: #0033a0; letter-spacing: 0.5px; margin: 2px 0; }";
+    $html .= ".office-text { font-size: 10pt; font-weight: bold; color: #dc2626; text-transform: uppercase; margin-bottom: 4px; }";
+    $html .= ".doc-title { font-size: 15pt; font-weight: 800; color: #0f172a; margin-top: 8px; text-transform: uppercase; }";
+    $html .= ".section-banner { font-size: 10.5pt; font-weight: bold; color: #ffffff; background-color: #0033a0; padding: 6px 12px; margin: 16px 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px; border-radius: 3px; }";
+    $html .= ".meta-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }";
+    $html .= ".meta-table td { padding: 8px 12px; border: 1px solid #cbd5e1; font-size: 10.5pt; vertical-align: top; }";
+    $html .= ".meta-table .label { width: 28%; font-weight: bold; background-color: #f1f5f9; color: #334155; }";
+    $html .= ".meta-table .value { width: 72%; color: #0f172a; }";
+    $html .= ".meta-table .code-val { font-family: monospace; font-weight: bold; color: #0033a0; font-size: 11pt; }";
+    $html .= ".description-box { background-color: #f8fafc; border: 1px solid #cbd5e1; border-left: 5px solid #0033a0; padding: 15px; font-size: 10.5pt; line-height: 1.7; color: #334155; white-space: pre-wrap; border-radius: 3px; margin-bottom: 20px; }";
+    $html .= ".image-container { text-align: center; margin: 15px 0; }";
+    $html .= ".image-container img { max-width: 95%; max-height: 380px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px; background: #fff; }";
+    $html .= ".footer-table { width: 100%; border-collapse: collapse; margin-top: 25px; border-top: 1px solid #cbd5e1; padding-top: 10px; font-size: 8.5pt; color: #64748b; text-align: center; }";
     $html .= "</style>";
     $html .= "</head><body>";
     
-    // Header with official branding (centered text heading)
-    $html .= "<header>";
-    // Embed Valenzuela logo for admin-created documents
-    if ($isAdminCreated) {
-        $logoPath = __DIR__ . '/../images/valenzuela-logo.png';
-        if (!is_file($logoPath)) $logoPath = __DIR__ . '/../images/logo.webp';
-        if (is_file($logoPath)) {
-            $mime = mime_content_type($logoPath) ?: 'image/png';
-            $logoDataUri = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($logoPath));
-            $html .= "<img class='brand-logo' src='" . $logoDataUri . "' alt='Valenzuela Logo'/>";
-        }
+    // Header with official letterhead
+    $html .= "<table class='header-table'><tr><td>";
+    if ($logoDataUri) {
+        $html .= "<img class='brand-logo' src='" . $logoDataUri . "' alt='Valenzuela Logo'/>";
     }
-    $html .= "<div class='city-seal'>CITY OF VALENZUELA</div>";
-    $html .= "<div class='title'>Consultation Submission Summary</div>";
-    $html .= "<div class='subtitle'>Public Consultation Office</div>";
-    $html .= "</header>";
+    $html .= "<div class='republic-text'>Republic of the Philippines</div>";
+    $html .= "<div class='city-text'>CITY GOVERNMENT OF VALENZUELA</div>";
+    $html .= "<div class='office-text'>Public Consultation & Legislative Office</div>";
+    $html .= "<div class='doc-title'>Consultation Submission Summary</div>";
+    $html .= "</td></tr></table>";
     
-    // Reference and metadata
-    $html .= "<section>";
-    $html .= "<div class='meta-row'><div class='meta-label'>Reference Number:</div><div class='meta-value'>" . $tracking . "</div></div>";
-    $html .= "<div class='meta-row'><div class='meta-label'>Date Created:</div><div class='meta-value'>" . date('F j, Y g:i A', strtotime($created)) . "</div></div>";
-    $html .= "<div class='meta-row'><div class='meta-label'>Status:</div><div class='meta-value'>" . ucfirst($status) . "</div></div>";
-    $html .= "</section>";
-
-    // Created by information
-    $html .= "<div class='section-title'>Created By</div>";
-    $html .= "<section>";
-    $html .= "<div class='meta-row'><div class='meta-label'>Admin Name:</div><div class='meta-value'>" . $adminName . "</div></div>";
-    $html .= "</section>";
-
-    // Consultation details
-    $html .= "<div class='section-title'>Consultation Details</div>";
-    $html .= "<section>";
-    $html .= "<div class='meta-row'><div class='meta-label'>Topic:</div><div class='meta-value'>" . $title . "</div></div>";
-    $html .= "<div class='meta-row'><div class='meta-label'>Category:</div><div class='meta-value'>" . $category . "</div></div>";
-    $html .= "</section>";
-
-    // Consultation Image
-    if (!empty($image_path)) {
-        // Resolve the image path similar to how it's done in public-portal.php
-        $resolved_image = resolveConsultationImagePathForPDF($image_path);
-        if ($resolved_image && file_exists(__DIR__ . '/../' . $resolved_image)) {
-            $imageDataUri = 'data:image/' . pathinfo($resolved_image, PATHINFO_EXTENSION) . ';base64,' . base64_encode(file_get_contents(__DIR__ . '/../' . $resolved_image));
-            $html .= "<div class='section-title'>Consultation Image</div>";
-            $html .= "<section>";
-            $html .= "<img src='" . $imageDataUri . "' style='max-width: 100%; height: auto; border: 1px solid #e5e7eb; border-radius: 8px;' alt='Consultation Image'>";
-            $html .= "</section>";
-        }
+    // Section 1: Reference info
+    $html .= "<div class='section-banner'>1. Reference & Filing Information</div>";
+    $html .= "<table class='meta-table'>";
+    $html .= "<tr><td class='label'>Tracking Reference Code:</td><td class='value code-val'>" . $tracking . "</td></tr>";
+    $html .= "<tr><td class='label'>Date Submitted:</td><td class='value'>" . date('F j, Y \a\t g:i A', strtotime($created)) . "</td></tr>";
+    $html .= "<tr><td class='label'>Status:</td><td class='value'><strong>" . strtoupper($status) . "</strong></td></tr>";
+    $html .= "<tr><td class='label'>Submitted By:</td><td class='value'>" . $user_name . ($user_email ? " (" . $user_email . ")" : "") . "</td></tr>";
+    if ($isAdminCreated) {
+        $html .= "<tr><td class='label'>Processed By Admin:</td><td class='value'>" . $adminName . "</td></tr>";
     }
+    $html .= "</table>";
 
-    // Description/Message
-    $html .= "<div class='section-title'>Description</div>";
-    $html .= "<div class='description'>" . $description . "</div>";
+    // Section 2: Consultation details
+    $html .= "<div class='section-banner'>2. Consultation Topic & Category</div>";
+    $html .= "<table class='meta-table'>";
+    $html .= "<tr><td class='label'>Title / Ordinance Topic:</td><td class='value'><strong>" . $title . "</strong></td></tr>";
+    $html .= "<tr><td class='label'>Category:</td><td class='value'>" . $category . "</td></tr>";
+    $html .= "</table>";
+
+    // Section 3: Description
+    $html .= "<div class='section-banner'>3. Detailed Description & Rationale</div>";
+    $html .= "<div class='description-box'>" . $description . "</div>";
+
+    // Section 4: Image Attachment if present
+    if (!empty($imageDataUri)) {
+        $html .= "<div class='section-banner'>4. Supporting Graphic Attachment</div>";
+        $html .= "<div class='image-container'>";
+        $html .= "<img src='" . $imageDataUri . "' alt='Consultation Attachment'>";
+        $html .= "</div>";
+    }
     
     // Footer
-    $html .= "<div class='footer'>";
-    $html .= "<p>This is an official record of your consultation submission to the City of Valenzuela.</p>";
-    $html .= "<p>Retain this document for your records. Reference Number: " . $tracking . "</p>";
-    $html .= "</div>";
+    $html .= "<table class='footer-table'><tr><td>";
+    $html .= "This is an official record generated by the Valenzuela City Public Consultation & Management System (PCMS).<br>";
+    $html .= "Reference Code: <strong>" . $tracking . "</strong> • Document Generated: " . date('F j, Y \a\t g:i A');
+    $html .= "</td></tr></table>";
     
     $html .= "</body></html>";
 
