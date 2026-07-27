@@ -1,5 +1,5 @@
 <?php
 // Compatibility shim for legacy links.
-header('Location: public-portal.php');
+header('Location: public/index.php');
 exit;
 ?>

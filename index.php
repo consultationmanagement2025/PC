@@ -846,7 +846,7 @@
 
     <div class="header-buttons">
 
-        <a href="public-portal.php"><button class="signup-btn">PARTICIPATE</button></a>
+        <a href="public/index.php"><button class="signup-btn">PARTICIPATE</button></a>
 
     </div>
 
@@ -876,7 +876,7 @@
 
         <div class="hero-button-wrap">
 
-            <a href="public-portal.php" class="hero-button">
+            <a href="public/index.php" class="hero-button">
 
                 PARTICIPATE NOW
 

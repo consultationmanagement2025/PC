@@ -1,9 +1,65 @@
 <?php
 session_start();
+require_once '../db.php';
 
-// Redirect to admin login for unified authentication
-header('Location: ../admin/login.php');
-exit;
+$error = '';
+$signup_success = false;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $email = trim($_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
+    
+    if (empty($email) || empty($password)) {
+        $error = 'Please enter both email and password.';
+    } else {
+        // Check user credentials
+        $stmt = $conn->prepare("SELECT id, fullname, email, password, role FROM users WHERE email = ? LIMIT 1");
+        if (!$stmt) {
+            $stmt = $conn->prepare("SELECT id, fullname, email, password, role FROM users WHERE email = ? LIMIT 1");
+        }
+        
+        if (!$stmt) {
+            $error = 'Database error: ' . $conn->error;
+        } else {
+            $stmt->bind_param('s', $email);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            if ($result && $result->num_rows === 1) {
+                $user = $result->fetch_assoc();
+
+                if (password_verify($password, $user['password'])) {
+                    $role = strtolower(trim($user['role'] ?? 'citizen'));
+                    $admin_roles = ['admin', 'administrator', 'super admin', 'superadmin', 'staff'];
+                    
+                    if (in_array($role, $admin_roles, true)) {
+                        $error = 'Admin and staff accounts must use the main login page at ../login.php';
+                    } else {
+                        // Set session variables
+                        $_SESSION['user_id'] = $user['id'];
+                        $_SESSION['fullname'] = $user['fullname'] ?? 'Citizen';
+                        $_SESSION['full_name'] = $user['fullname'] ?? 'Citizen';
+                        $_SESSION['email'] = $user['email'];
+                        $_SESSION['role'] = $role;
+
+                        // Redirect to public portal
+                        header('Location: index.php?login=success&name=' . urlencode($user['fullname'] ?? 'Citizen'));
+                        exit;
+                    }
+                } else {
+                    $error = 'Invalid email or password.';
+                }
+            } else {
+                $error = 'Invalid email or password.';
+            }
+            $stmt->close();
+        }
+    }
+}
+
+if (isset($_GET['signup']) && $_GET['signup'] === 'success') {
+    $signup_success = true;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -11,7 +67,7 @@ exit;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In - Valenzuela PCMS</title>
-    <link rel="icon" type="image/png" href="/pcms/admin/ASSETS/images/logo.png">
+    <link rel="icon" type="image/png" href="../images/valenzuela-logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -87,7 +143,7 @@ exit;
             <div class="flex justify-between items-center h-20">
                 <div class="flex items-center gap-3 shrink-0">
                     <div class="w-12 h-12 rounded-full border-2 border-gray-100 shadow-inner flex items-center justify-center overflow-hidden bg-white">
-                        <img src="/pcms/admin/ASSETS/images/logo.png" alt="Seal" class="w-full h-full object-cover opacity-80">
+                        <img src="../images/valenzuela-logo.png" alt="Valenzuela Seal" class="w-full h-full object-cover opacity-80">
                     </div>
                     <div class="flex flex-col justify-center">
                         <div class="flex items-baseline gap-2">

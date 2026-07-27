@@ -8,7 +8,11 @@
 
 session_start();
 
-
+if (!isset($_GET['noredirect'])) {
+    $queryString = !empty($_SERVER['QUERY_STRING']) ? ('?' . $_SERVER['QUERY_STRING']) : '';
+    header('Location: public/index.php' . $queryString);
+    exit;
+}
 
 error_log('=== PUBLIC PORTAL PHP LOADED ===');
 

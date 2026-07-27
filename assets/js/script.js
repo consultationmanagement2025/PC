@@ -218,34 +218,16 @@ function initNotificationsDropdown() {
     const notifDropdown = document.getElementById('notifications-dropdown');
     
     if (notifBtn && notifDropdown) {
-        notifBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            notifDropdown.classList.toggle('hidden');
-            // Close profile dropdown if open
-            const profileDropdown = document.getElementById('profile-dropdown');
-            if (profileDropdown) {
-                profileDropdown.classList.add('hidden');
-            }
-        });
+        // Skip - the inline DOMContentLoaded script in system-template-full.php
+        // already attaches an addEventListener handler that also calls loadNotifications().
+        // Attaching another toggle here causes double-toggle (open then immediately close).
+        return;
     }
 }
 
-// Profile Dropdown
+// Profile Dropdown (disabled to avoid conflict with app-features.js)
 function initProfileDropdown() {
-    const profileBtn = document.getElementById('profile-btn');
-    const profileDropdown = document.getElementById('profile-dropdown');
-    
-    if (profileBtn && profileDropdown) {
-        profileBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            profileDropdown.classList.toggle('hidden');
-            // Close notifications dropdown if open
-            const notifDropdown = document.getElementById('notifications-dropdown');
-            if (notifDropdown) {
-                notifDropdown.classList.add('hidden');
-            }
-        });
-    }
+    // Profile dropdown is now handled in app-features.js
 }
 
 // Close dropdowns when clicking outside
@@ -256,11 +238,11 @@ function initClickOutside() {
         const notifBtn = document.getElementById('notifications-btn');
         const profileBtn = document.getElementById('profile-btn');
         
-        if (notifDropdown && !notifBtn.contains(e.target)) {
+        if (notifDropdown && !(notifBtn && notifBtn.contains(e.target)) && !notifDropdown.contains(e.target)) {
             notifDropdown.classList.add('hidden');
         }
         
-        if (profileDropdown && !profileBtn.contains(e.target)) {
+        if (profileDropdown && !(profileBtn && profileBtn.contains(e.target)) && !profileDropdown.contains(e.target)) {
             profileDropdown.classList.add('hidden');
         }
     });
@@ -374,38 +356,6 @@ async function toggleAnnouncementAction(e, annId, action) {
     } catch (err) {
         console.error(err);
         showToast('Error updating announcement', 'error');
-    }
-}
-
-async function toggleAllowComments(e, annId) {
-    if (e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-    if (!annId) return;
-    
-    const data = new FormData();
-    data.append('ann_id', annId);
-    try {
-        const res = await fetch('API/toggle_comments_api.php', { method: 'POST', body: data });
-        const json = await res.json();
-        if (json.success) {
-            const btn = e?.target.closest('button');
-            if (btn) {
-                const isNowAllowed = json.allow_comments;
-                btn.classList.toggle('text-green-600');
-                btn.classList.toggle('text-gray-400');
-                const span = btn.querySelector('span');
-                if (span) span.textContent = isNowAllowed ? 'On' : 'Off';
-                btn.title = isNowAllowed ? 'Comments Allowed' : 'Comments Disabled';
-            }
-            showToast(json.allow_comments ? 'Comments enabled for this announcement' : 'Comments disabled for this announcement', 'success');
-        } else {
-            showToast(json.error || 'Failed to update', 'error');
-        }
-    } catch (err) {
-        console.error(err);
-        showToast('Error updating announcement settings', 'error');
     }
 }
 
@@ -751,82 +701,104 @@ document.addEventListener('DOMContentLoaded', function() {
 function showAuditDetails(logData) {
     const modal = document.getElementById('audit-modal');
     const detailsContainer = document.getElementById('audit-details');
-    
+
     if (!modal || !detailsContainer) return;
-    
+
+    const getValue = (source, keys, fallback = '') => {
+        if (!source) return fallback;
+        for (const key of (Array.isArray(keys) ? keys : [keys])) {
+            const value = source[key];
+            if (value !== undefined && value !== null && value !== '') return value;
+        }
+        return fallback;
+    };
+
     const formatDate = (dateStr) => {
+        if (!dateStr) return 'N/A';
         const date = new Date(dateStr);
-        return date.toLocaleString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric', 
-            hour: '2-digit', 
+        if (Number.isNaN(date.getTime())) return 'Invalid date';
+        return date.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
             minute: '2-digit',
             second: '2-digit'
         });
     };
-    
-    const statusColor = logData.status === 'success' ? 'text-green-700' : 'text-red-700';
-    const statusBg = logData.status === 'success' ? 'bg-green-50' : 'bg-red-50';
-    
+
+    const status = String(getValue(logData, ['status'], 'success')).toLowerCase();
+    const statusLabel = status === 'success' ? 'Success' : 'Failed';
+    const statusColor = status === 'success' ? 'text-green-700' : 'text-red-700';
+    const statusBg = status === 'success' ? 'bg-green-50' : 'bg-red-50';
+    const adminUser = getValue(logData, ['admin_user', 'username', 'user', 'fullname'], 'System');
+    const action = getValue(logData, ['action', 'summary'], 'Performed an action');
+    const entityType = getValue(logData, ['entity_type'], 'N/A');
+    const entityId = getValue(logData, ['entity_id', 'id'], 'N/A');
+    const ipAddress = getValue(logData, ['ip_address'], 'N/A');
+    const userAgent = getValue(logData, ['user_agent'], 'N/A');
+    const oldValue = getValue(logData, ['old_value'], '');
+    const newValue = getValue(logData, ['new_value'], '');
+    const details = getValue(logData, ['details', 'description'], '');
+
     detailsContainer.innerHTML = `
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="border border-gray-200 rounded-lg p-4">
                 <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Admin User</label>
-                <p class="text-gray-900 font-medium">${escapeHtml(logData.admin_user)}</p>
-            </div>
-            <div class="border border-gray-200 rounded-lg p-4">
-                <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Admin ID</label>
-                <p class="text-gray-900 font-medium">${logData.admin_id || '-'}</p>
+                <p class="text-gray-900 font-medium">${escapeHtml(adminUser)}</p>
             </div>
             <div class="border border-gray-200 rounded-lg p-4">
                 <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Action</label>
-                <p class="text-gray-900 font-medium">${escapeHtml(logData.action)}</p>
+                <p class="text-gray-900 font-medium">${escapeHtml(action)}</p>
             </div>
             <div class="border border-gray-200 rounded-lg p-4">
                 <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Entity Type</label>
-                <p class="text-gray-900 font-medium">${escapeHtml(logData.entity_type || 'N/A')}</p>
+                <p class="text-gray-900 font-medium">${escapeHtml(entityType)}</p>
             </div>
             <div class="border border-gray-200 rounded-lg p-4">
                 <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Entity ID</label>
-                <p class="text-gray-900 font-medium">${logData.entity_id || '-'}</p>
+                <p class="text-gray-900 font-medium">${escapeHtml(entityId)}</p>
             </div>
             <div class="border border-gray-200 rounded-lg p-4">
                 <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">IP Address</label>
-                <p class="text-gray-900 font-mono text-sm">${escapeHtml(logData.ip_address || '-')}</p>
+                <p class="text-gray-900 font-mono text-sm">${escapeHtml(ipAddress)}</p>
             </div>
-            <div class="border border-gray-200 rounded-lg p-4 col-span-2">
+            <div class="border border-gray-200 rounded-lg p-4">
+                <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">User Agent</label>
+                <p class="text-gray-900 font-medium break-words">${escapeHtml(userAgent)}</p>
+            </div>
+            <div class="border border-gray-200 rounded-lg p-4 md:col-span-2">
                 <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Timestamp</label>
-                <p class="text-gray-900 font-medium">${formatDate(logData.timestamp)}</p>
+                <p class="text-gray-900 font-medium">${escapeHtml(formatDate(getValue(logData, ['timestamp'], '')))}</p>
             </div>
-            <div class="border border-gray-200 rounded-lg p-4 col-span-2">
+            <div class="border border-gray-200 rounded-lg p-4 md:col-span-2">
                 <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Status</label>
                 <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${statusBg} ${statusColor}">
-                    <i class="bi bi-${logData.status === 'success' ? 'check-circle-fill' : 'x-circle-fill'}"></i>
-                    ${logData.status.charAt(0).toUpperCase() + logData.status.slice(1)}
+                    <i class="bi bi-${status === 'success' ? 'check-circle-fill' : 'x-circle-fill'}"></i>
+                    ${escapeHtml(statusLabel)}
                 </span>
             </div>
-            ${logData.old_value ? `
-                <div class="border border-gray-200 rounded-lg p-4 col-span-2">
+            ${oldValue ? `
+                <div class="border border-gray-200 rounded-lg p-4 md:col-span-2">
                     <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Old Value</label>
-                    <p class="text-gray-700 bg-gray-50 p-2 rounded text-sm font-mono max-h-32 overflow-y-auto">${escapeHtml(logData.old_value)}</p>
+                    <p class="text-gray-700 bg-gray-50 p-2 rounded text-sm font-mono max-h-32 overflow-y-auto whitespace-pre-wrap">${escapeHtml(oldValue)}</p>
                 </div>
             ` : ''}
-            ${logData.new_value ? `
-                <div class="border border-gray-200 rounded-lg p-4 col-span-2">
+            ${newValue ? `
+                <div class="border border-gray-200 rounded-lg p-4 md:col-span-2">
                     <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">New Value</label>
-                    <p class="text-gray-700 bg-gray-50 p-2 rounded text-sm font-mono max-h-32 overflow-y-auto">${escapeHtml(logData.new_value)}</p>
+                    <p class="text-gray-700 bg-gray-50 p-2 rounded text-sm font-mono max-h-32 overflow-y-auto whitespace-pre-wrap">${escapeHtml(newValue)}</p>
                 </div>
             ` : ''}
-            ${logData.details ? `
-                <div class="border border-gray-200 rounded-lg p-4 col-span-2">
+            ${details ? `
+                <div class="border border-gray-200 rounded-lg p-4 md:col-span-2">
                     <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Additional Details</label>
-                    <p class="text-gray-700 bg-gray-50 p-2 rounded text-sm max-h-32 overflow-y-auto">${escapeHtml(logData.details)}</p>
+                    <p class="text-gray-700 bg-gray-50 p-2 rounded text-sm max-h-32 overflow-y-auto whitespace-pre-wrap">${escapeHtml(details)}</p>
                 </div>
             ` : ''}
         </div>
     `;
-    
+
     openModal('audit-modal');
 }
 
@@ -837,10 +809,13 @@ function exportAuditLogs() {
 }
 
 function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 // Open modal function (if not already defined)
@@ -851,135 +826,3 @@ function openModal(modalId) {
     }
 }
 
-// Auto-refresh admin posts
-async function loadAdminPosts() {
-    const postsList = document.getElementById('admin-posts-list');
-    if (!postsList) return;
-    
-    try {
-        const res = await fetch('get_posts_api.php?limit=30');
-        const posts = await res.json();
-        
-        if (!posts || posts.length === 0) {
-            postsList.innerHTML = '<div class="text-gray-500">No user posts yet.</div>';
-            return;
-        }
-        
-        let html = '';
-        posts.forEach(p => {
-            const uid = p.user_id || 0;
-            const postId = p.id || 0;
-            const author = (p.author || 'Anonymous').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const content = (p.content || '').substring(0, 800).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-            const createdDate = new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-            
-            html += `
-            <div class="p-3 border rounded">
-                <div class="flex items-center justify-between">
-                    <div class="font-medium">${author}</div>
-                    <div class="text-sm text-gray-500">${createdDate}</div>
-                </div>
-                <div class="text-sm text-gray-800 mt-2">${content}</div>
-                <div class="mt-3 flex gap-2 items-center flex-wrap">
-                    <button type="button" onclick="openNotifyModal(${uid}, ${postId})" class="btn-secondary px-3 py-1 text-sm">Notify</button>
-                    <button type="button" onclick="quickNotify(${uid}, ${postId}, 'inappropriate')" class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded">Inappropriate</button>
-                    <button type="button" onclick="quickNotify(${uid}, ${postId}, 'untruthful')" class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">Untruthful</button>
-                    <button type="button" onclick="quickNotify(${uid}, ${postId}, 'unlawful')" class="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">Unlawful</button>
-                    <form method="POST" action="system-template-full.php" style="display:inline">
-                        <input type="hidden" name="mark_reviewed_post_id" value="${postId}">
-                        <button type="submit" class="btn-secondary px-3 py-1 text-sm">Mark Reviewed</button>
-                    </form>
-                </div>
-            </div>
-            `;
-        });
-        
-        postsList.innerHTML = html;
-    } catch (err) {
-        console.warn('Failed to load admin posts', err);
-    }
-}
-
-// Auto-refresh admin announcements
-async function loadAdminAnnouncements() {
-    const annList = document.getElementById('admin-announcements-list');
-    if (!annList) return;
-    
-    try {
-        const res = await fetch('get_announcements_api.php?limit=6');
-        const anns = await res.json();
-        
-        if (!anns || anns.length === 0) {
-            annList.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">No announcements yet.</div>';
-            return;
-        }
-        
-        let html = '';
-        anns.forEach(a => {
-            const annId = a.id || 0;
-            const title = (a.title || '').substring(0, 60).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const createdDate = new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            const createdTime = new Date(a.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-            const likes = a.liked_by ? JSON.parse(a.liked_by || '[]').length : 0;
-            const saves = a.saved_by ? JSON.parse(a.saved_by || '[]').length : 0;
-            
-            html += `
-            <div class="p-2.5 border border-gray-200 rounded hover:bg-gray-50 transition text-xs">
-                <div class="font-semibold text-gray-800 text-sm">${title}</div>
-                <div class="text-gray-500 text-xs mt-0.5">${createdDate}, ${createdTime}</div>
-                <div class="mt-1.5 flex gap-2 text-xs">
-                    <button type="button" onclick="toggleAnnouncementAction(event, ${annId}, 'like')" class="flex items-center gap-0.5 text-gray-400 hover:text-red-600 transition">
-                        <i class="bi bi-heart-fill text-xs"></i><span>${likes}</span>
-                    </button>
-                    <button type="button" onclick="toggleAnnouncementAction(event, ${annId}, 'save')" class="flex items-center gap-0.5 text-gray-400 hover:text-blue-600 transition">
-                        <i class="bi bi-bookmark-fill text-xs"></i><span>${saves}</span>
-                    </button>
-                </div>
-            </div>
-            `;
-        });
-        
-        annList.innerHTML = html;
-    } catch (err) {
-        console.warn('Failed to load admin announcements', err);
-    }
-}
-
-// Remove Saved Item Function
-function removeSavedItem(announcementId, button) {
-    button.disabled = true;
-    button.textContent = 'Removing...';
-    
-    toggleAnnouncementAction({
-        target: button,
-        stopPropagation: function() {}
-    }, announcementId, 'save').then(() => {
-        // Remove the item container
-        const itemContainer = button.closest('div[style*="padding: 16px"]');
-        if (itemContainer) {
-            itemContainer.style.opacity = '0';
-            itemContainer.style.transition = 'opacity 0.3s ease';
-            setTimeout(() => {
-                itemContainer.remove();
-                
-                // Check if no items left
-                const container = document.getElementById('saved-items-container');
-                if (container && container.children.length === 0) {
-                    container.innerHTML = '<div class="empty-state" style="background: transparent; padding: 40px 20px;">No saved items yet. Save announcements from the announcements page!</div>';
-                }
-            }, 300);
-        }
-    }).catch(err => {
-        button.disabled = false;
-        button.textContent = 'Remove ✕';
-        alert('Error removing saved item. Please try again.');
-        console.error('Error removing saved item:', err);
-    });
-}
-
-// Initialize auto-refresh on page load
-document.addEventListener('DOMContentLoaded', function() {
-    // Refresh every 5 seconds
-    setInterval(loadAdminPosts, 5000);
-    setInterval(loadAdminAnnouncements, 10000);
-});

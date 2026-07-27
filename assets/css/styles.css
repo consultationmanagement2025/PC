@@ -670,8 +670,6 @@
     border: 1px solid #d1d5db;
     border-radius: 0.5rem;
     transition: all 0.2s;
-    cursor: text;
-    caret-color: #111827;
 }
 
 .input-field:focus {
@@ -762,100 +760,11 @@
     background-color: #2d2d2d !important;
 }
 
-/* Dark Mode - Content, cards, forms, tables, buttons */
-.dark .card,
-.dark .bg-white.rounded-xl,
-.dark .bg-white.rounded-lg,
-.dark .panel,
-.dark .panel-body,
-.dark .table-container,
-.dark .form-row,
-.dark .form-input,
-.dark .form-select,
-.dark .form-textarea,
-.dark input,
-.dark select,
-.dark textarea,
-.dark .dropdown-content,
-.dark .modal-content,
-.dark .toast {
-    background-color: #1f2937 !important;
-    color: #e5e7eb !important;
-    border-color: #374151 !important;
-}
-
-.dark input,
-.dark select,
-.dark textarea,
-.dark .form-input,
-.dark .form-select,
-.dark .form-textarea {
-    background-color: #2b2b3a !important;
-    border-color: #52525b !important;
-    color: #e5e7eb !important;
-}
-
-.dark input::placeholder,
-.dark textarea::placeholder,
-.dark select::-ms-value {
-    color: #9ca3af !important;
-}
-
-.dark .btn-secondary,
-.dark .btn-primary,
-.dark button,
-.dark input[type="submit"],
-.dark .btn,
-.dark .btn-outline {
-    background-color: #374151 !important;
-    color: #e5e7eb !important;
-    border-color: #52525b !important;
-}
-
-.dark .btn-secondary:hover,
-.dark .btn-primary:hover,
-.dark button:hover,
-.dark .btn:hover,
-.dark .btn-outline:hover {
-    background-color: #4b5563 !important;
-}
-
-.dark .badge,
-.dark .badge-success,
-.dark .badge-warning,
-.dark .badge-danger,
-.dark .badge-info {
-    border-color: #4b5563 !important;
-}
-
-.dark .badge-warning { background-color: #92400e !important; color: #fef2f2 !important; }
-.dark .badge-danger { background-color: #991b1b !important; color: #fee2e2 !important; }
-.dark .badge-info { background-color: #1e3a8a !important; color: #dbeafe !important; }
-.dark .badge-success { background-color: #064e3b !important; color: #d1fae5 !important; }
-
-.dark .table th,
-.dark .table td,
-.dark table {
-    border-color: #374151 !important;
-    color: #e5e7eb !important;
-}
-
-.dark .table-hover tbody tr:hover {
-    background-color: #273449 !important;
-}
-
-.dark .toast {
-    background-color: #1f2937 !important;
-    color: #e5e7eb !important;
-}
-
 /* Dark Mode - Input Fields */
 .dark .input-field {
     background-color: #404040 !important;
     border-color: #555555 !important;
     color: #e5e5e5 !important;
-    cursor: text;
-    caret-color: #e5e7eb;
 }
 
 .dark .input-field:focus {

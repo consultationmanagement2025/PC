@@ -1,9 +1,85 @@
 <?php
 session_start();
+require_once '../db.php';
 
-// Redirect to admin login for unified authentication/registration
-header('Location: ../admin/login.php');
-exit;
+$errors = [];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $fullname = trim($_POST['fullname'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $phone = trim($_POST['phone'] ?? '');
+    $address = trim($_POST['address'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $confirm_password = $_POST['confirm_password'] ?? '';
+    $terms = isset($_POST['terms']);
+    
+    // Validation
+    if (empty($fullname)) {
+        $errors[] = 'Full name is required.';
+    }
+    
+    if (empty($email)) {
+        $errors[] = 'Email is required.';
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'Please enter a valid email address.';
+    }
+    
+    if (empty($password)) {
+        $errors[] = 'Password is required.';
+    } elseif (strlen($password) < 6) {
+        $errors[] = 'Password must be at least 6 characters.';
+    }
+    
+    if ($password !== $confirm_password) {
+        $errors[] = 'Passwords do not match.';
+    }
+    
+    if (!$terms) {
+        $errors[] = 'You must agree to the terms and conditions.';
+    }
+    
+    if (empty($errors)) {
+        // Check if email already exists
+        $stmt = $conn->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
+        $stmt->bind_param('s', $email);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
+            $errors[] = 'An account with this email already exists.';
+        } else {
+            // Create new user
+            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+            $role = 'citizen';
+            $username = explode('@', $email)[0];
+            
+            $stmt = $conn->prepare("INSERT INTO users (fullname, username, email, password, role, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
+            if ($stmt) {
+                $stmt->bind_param('sssss', $fullname, $username, $email, $hashed_password, $role);
+            } else {
+                $stmt = $conn->prepare("INSERT INTO users (full_name, email, password, role, created_at) VALUES (?, ?, ?, ?, NOW())");
+                if ($stmt) {
+                    $stmt->bind_param('ssss', $fullname, $email, $hashed_password, $role);
+                }
+            }
+            
+            if ($stmt && $stmt->execute()) {
+                $user_id = $stmt->insert_id;
+                $_SESSION['user_id'] = $user_id;
+                $_SESSION['fullname'] = $fullname;
+                $_SESSION['full_name'] = $fullname;
+                $_SESSION['email'] = $email;
+                $_SESSION['role'] = $role;
+                
+                header('Location: sign-in.php?signup=success');
+                exit;
+            } else {
+                $errors[] = 'Failed to create account: ' . ($conn->error ?: 'Database error');
+            }
+            if ($stmt) $stmt->close();
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -11,6 +87,7 @@ exit;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign Up - Valenzuela PCMS</title>
+    <link rel="icon" type="image/png" href="../images/valenzuela-logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
