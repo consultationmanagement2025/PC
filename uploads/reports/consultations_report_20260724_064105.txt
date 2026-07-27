@@ -1,0 +1,15 @@
+Consultation Module Report
+Generated: 2026-07-24 06:41:05
+Module: Consultations
+
+Generated: 2026-07-24 06:41:05
+Module: Consultations
+Total Consultations: 2
+Pending Review: 1
+Survey Responses: 0
+Feedback Entries: 0
+Average Rating: 0.0
+Participation Score: 2
+
+Additional Details:
+Sentiment Summary: Positive: 0, Neutral: 0, Negative: 0

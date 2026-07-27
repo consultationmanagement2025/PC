@@ -12637,9 +12637,14 @@ function renderConsultationManagement() {
                     </div>
 
 
-                    <button onclick="openCreateConsultationModal()" class="btn-primary flex items-center gap-2 bg-white text-red-600 hover:bg-red-50">
-                        <i class="bi bi-plus-lg"></i> New Consultation
-                    </button>
+                    <div class="flex gap-2">
+                        <button onclick="openCreateConsultationModal('feedback')" class="btn-primary flex items-center gap-2 bg-white text-red-600 hover:bg-red-50 font-bold px-4 py-2 rounded-lg shadow-sm">
+                            <i class="bi bi-plus-lg"></i> Add Consultation
+                        </button>
+                        <button onclick="openCreateConsultationModal('survey')" class="btn-primary flex items-center gap-2 bg-white text-blue-600 hover:bg-blue-50 font-bold px-4 py-2 rounded-lg shadow-sm">
+                            <i class="bi bi-square-poll-horizontal"></i> Create Survey Form
+                        </button>
+                    </div>
 
 
                 </div>
@@ -13908,8 +13913,8 @@ function guessConsultationCategoryFromTitle(title) {
 function openCreateConsultationModal(createMode) {
 
     document.getElementById('consultation-id').value = '';
-    const initialResponseMode = 'feedback';
-    document.getElementById('modal-title').textContent = 'Create New Consultation';
+    const initialResponseMode = (createMode === 'survey') ? 'survey' : 'feedback';
+    document.getElementById('modal-title').textContent = (createMode === 'survey') ? 'Create New Survey Form' : 'Create New Consultation';
 
     document.getElementById('consultation-title').value = '';
 
