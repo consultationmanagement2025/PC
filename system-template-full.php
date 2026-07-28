@@ -4649,11 +4649,12 @@ $totalPages = ceil($totalLogs / $pageSize);
                                         if(!d) return;
                                         try{
                                             var o = d.overall || d.data || {};
-                                            document.getElementById('reports-consultations-total').innerText = o.consultations_total || 0;
-                                            document.getElementById('reports-pending-review').innerText = o.pending_review || 0;
-                                            document.getElementById('reports-survey-responses').innerText = o.survey_responses || 0;
-                                            document.getElementById('reports-feedback-total').innerText = o.feedback_total || 0;
-                                            document.getElementById('reports-feedback-avg').innerText = (o.feedback_avg_rating!==undefined)?parseFloat(o.feedback_avg_rating).toFixed(1):'0.0';
+                                            function setSafeText(id, val) { var el = document.getElementById(id); if(el) el.innerText = val; }
+                                            setSafeText('reports-consultations-total', o.consultations_total || 0);
+                                            setSafeText('reports-pending-review', o.pending_review || 0);
+                                            setSafeText('reports-survey-responses', o.survey_responses || 0);
+                                            setSafeText('reports-feedback-total', o.feedback_total || 0);
+                                            setSafeText('reports-feedback-avg', (o.feedback_avg_rating!==undefined)?parseFloat(o.feedback_avg_rating).toFixed(1):'0.0');
 
                                             var scont = document.getElementById('reports-status-breakdown');
                                             if(scont){ scont.innerHTML=''; (d.status_breakdown||d.data?.status_breakdown||[]).forEach(function(it){ var div=document.createElement('div'); div.className='flex items-center justify-between text-sm'; div.innerHTML = '<span class="capitalize text-gray-700">'+(it.status||'')+'</span><span class="font-semibold text-gray-900">'+(it.total||0)+'</span>'; scont.appendChild(div); }); }

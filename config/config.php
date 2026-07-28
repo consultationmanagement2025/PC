@@ -17,6 +17,12 @@ function siteUrl($path = '') {
     return $base === '' ? $path : $base . ($path === '' ? '' : '/' . $path);
 }
 
+// Database configuration
+define('DB_HOST', 'localhostplease');
+define('DB_NAME', 'pcms_db');
+define('DB_USER', 'root');
+define('DB_PASS', '');
+
 // Environment settings
 define('APP_ENV', strtolower((string)(getenv('APP_ENV') ?: getenv('ENVIRONMENT') ?: (IS_LOCALHOST ? 'development' : 'production'))));
 $debugFlag = getenv('DEBUG');
@@ -28,15 +34,15 @@ if ($debugFlag === false || $debugFlag === '') {
 define('LOG_ERRORS', !DEBUG_MODE);
 
 // Email Configuration
-if (!defined('EMAIL_USERNAME')) define('EMAIL_USERNAME', getenv('EMAIL_USERNAME') ?: 'consultationmanagement2025@gmail.com');
-if (!defined('EMAIL_PASSWORD')) define('EMAIL_PASSWORD', getenv('EMAIL_PASSWORD') ?: '');
-if (!defined('EMAIL_FROM')) define('EMAIL_FROM', getenv('EMAIL_FROM') ?: 'Valenzuela City Government');
+define('EMAIL_USERNAME', getenv('EMAIL_USERNAME') ?: 'consultationmanagement2025@gmail.com');
+define('EMAIL_PASSWORD', getenv('EMAIL_PASSWORD') ?: '');
+define('EMAIL_FROM', getenv('EMAIL_FROM') ?: 'Valenzuela City Government');
 
-// Database Configuration - Matches .env and live server credentials
-if (!defined('DB_HOST')) define('DB_HOST', (string)(getenv('DB_HOST') ?: 'localhost'));
-if (!defined('DB_USER')) define('DB_USER', (string)(getenv('DB_USER') ?: (IS_LOCALHOST ? 'root' : 'cons_pc_db')));
-if (!defined('DB_PASS')) define('DB_PASS', (string)(getenv('DB_PASS') !== false ? getenv('DB_PASS') : (IS_LOCALHOST ? '' : '%wE!*-vMg4GCbB#3')));
-if (!defined('DB_NAME')) define('DB_NAME', (string)(getenv('DB_NAME') ?: (IS_LOCALHOST ? 'pc_db' : 'cons_pc_db')));
+// Database Configuration
+define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+define('DB_USER', getenv('DB_USER') ?: 'root');
+define('DB_PASS', getenv('DB_PASS') ?: '');
+define('DB_NAME', getenv('DB_NAME') ?: 'pc_db');
 // Security settings
 define('SESSION_LIFETIME', 120); // 2 minutes
 define('MAX_LOGIN_ATTEMPTS', 5);

@@ -3967,11 +3967,11 @@ function renderConsultationManagement() {
                         <p class="text-red-100">Manage all public consultations, track feedback, and monitor engagement</p>
                     </div>
                     <div class="flex gap-2">
-                        <button onclick="openCreateConsultationModal('feedback')" class="btn-primary flex items-center gap-2 bg-white text-red-600 hover:bg-red-50 font-bold px-4 py-2 rounded-lg shadow-sm">
-                            <i class="bi bi-plus-lg"></i> Add Consultation
+                        <button onclick="openCreateConsultationModal('feedback')" class="flex items-center gap-2 bg-white !bg-white text-red-700 !text-red-700 hover:bg-gray-100 font-bold px-4 py-2.5 rounded-lg shadow-md transition-all border border-white/20">
+                            <i class="bi bi-plus-lg text-lg"></i> Add Consultation
                         </button>
-                        <button onclick="openCreateConsultationModal('survey')" class="btn-primary flex items-center gap-2 bg-white text-blue-600 hover:bg-blue-50 font-bold px-4 py-2 rounded-lg shadow-sm">
-                            <i class="bi bi-square-poll-horizontal"></i> Create Survey Form
+                        <button onclick="openCreateConsultationModal('survey')" class="flex items-center gap-2 bg-white !bg-white text-blue-700 !text-blue-700 hover:bg-gray-100 font-bold px-4 py-2.5 rounded-lg shadow-md transition-all border border-white/20">
+                            <i class="bi bi-square-poll-horizontal text-lg"></i> Create Survey Form
                         </button>
                     </div>
                 </div>

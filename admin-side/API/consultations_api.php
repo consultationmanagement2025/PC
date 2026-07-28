@@ -114,17 +114,12 @@ function resizeImage($source, $destination, $maxWidth, $maxHeight, $extension) {
 // Allow admin or staff roles to access create/update consultation endpoints
 
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
+$is_authenticated = isset($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($_SESSION['role']);
 
-$allowed_roles = ['admin', 'administrator', 'super admin', 'superadmin', 'staff', 'resource person', 'resource_person'];
-
-if (!in_array($current_role, $allowed_roles, true)) {
-
+if (!$is_authenticated) {
     http_response_code(403);
-
-    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
-
+    echo json_encode(['success' => false, 'message' => 'Unauthorized access. Please log in first.']);
     exit;
-
 }
 
 
@@ -255,16 +250,39 @@ try {
             // Support both JSON and multipart/form-data
 
             if (!empty($_POST)) {
-
                 $data = $_POST;
-
             } else {
-
                 $data = json_decode(file_get_contents('php://input'), true) ?? [];
-
             }
 
-            
+            // Auto-populate missing title, description, and category from survey_question if creating a survey
+            if (!empty($data['survey_question'])) {
+                if (empty($data['title'])) {
+                    $data['title'] = trim((string)$data['survey_question']);
+                }
+                if (empty($data['description'])) {
+                    $data['description'] = trim((string)$data['survey_question']);
+                }
+                if (empty($data['category'])) {
+                    $data['category'] = 'General';
+                }
+            }
+
+            if (empty($data['title']) && !empty($data['description'])) {
+                $data['title'] = substr(trim((string)$data['description']), 0, 100);
+            }
+            if (empty($data['description']) && !empty($data['title'])) {
+                $data['description'] = trim((string)$data['title']);
+            }
+            if (empty($data['category'])) {
+                $data['category'] = 'General';
+            }
+            if (empty($data['start_date'])) {
+                $data['start_date'] = date('Y-m-d');
+            }
+            if (empty($data['end_date'])) {
+                $data['end_date'] = date('Y-m-d', strtotime('+30 days'));
+            }
 
             $required = ['title', 'description', 'category', 'start_date', 'end_date'];
 
@@ -349,6 +367,22 @@ try {
 
             
 
+            $creator_user_id = (int)($_SESSION['user_id'] ?? 0);
+            if ($creator_user_id <= 0 && !empty($_SESSION['email'])) {
+                $uStmt = $conn->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
+                if ($uStmt) {
+                    $uStmt->bind_param('s', $_SESSION['email']);
+                    $uStmt->execute();
+                    $uRes = $uStmt->get_result();
+                    if ($uRes && $uRow = $uRes->fetch_assoc()) {
+                        $creator_user_id = (int)$uRow['id'];
+                        $_SESSION['user_id'] = $creator_user_id;
+                    }
+                    $uStmt->close();
+                }
+            }
+
+            $createErr = null;
             $id = createConsultation(
 
                 $data['title'],
@@ -361,7 +395,7 @@ try {
 
                 $data['end_date'],
 
-                $_SESSION['user_id'],
+                $creator_user_id,
 
                 $data['expected_posts'] ?? 0,
 
@@ -383,7 +417,8 @@ try {
                 $data['survey_option_a'] ?? 'Agree',
                 $data['survey_option_b'] ?? 'Disagree',
                 !empty($data['allow_guest_quick_vote']) ? 1 : 0,
-                !empty($data['allow_guest_verified_vote']) ? 1 : 0
+                !empty($data['allow_guest_verified_vote']) ? 1 : 0,
+                $createErr
 
             );
 
@@ -446,8 +481,9 @@ try {
                 $consultation = getConsultationById($id);
                 echo json_encode(['success' => true, 'data' => $consultation]);
             } else {
+                $dbErr = $createErr ?: ((isset($conn) && !empty($conn->error)) ? ('Database error: ' . $conn->error) : 'Failed to create consultation record.');
                 http_response_code(500);
-                echo json_encode(['success' => false, 'message' => 'Failed to create consultation']);
+                echo json_encode(['success' => false, 'message' => $dbErr]);
             }
 
             break;

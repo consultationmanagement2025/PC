@@ -12659,11 +12659,11 @@ function renderConsultationManagement() {
 
 
                     <div class="flex gap-2">
-                        <button onclick="openCreateConsultationModal('feedback')" class="btn-primary flex items-center gap-2 bg-white text-red-600 hover:bg-red-50 font-bold px-4 py-2 rounded-lg shadow-sm">
-                            <i class="bi bi-plus-lg"></i> Add Consultation
+                        <button onclick="openCreateConsultationModal('feedback')" class="flex items-center gap-2 bg-white !bg-white text-red-700 !text-red-700 hover:bg-gray-100 font-bold px-4 py-2.5 rounded-lg shadow-md transition-all border border-white/20">
+                            <i class="bi bi-plus-lg text-lg"></i> Add Consultation
                         </button>
-                        <button onclick="openCreateConsultationModal('survey')" class="btn-primary flex items-center gap-2 bg-white text-blue-600 hover:bg-blue-50 font-bold px-4 py-2 rounded-lg shadow-sm">
-                            <i class="bi bi-square-poll-horizontal"></i> Create Survey Form
+                        <button onclick="openCreateConsultationModal('survey')" class="flex items-center gap-2 bg-white !bg-white text-blue-700 !text-blue-700 hover:bg-gray-100 font-bold px-4 py-2.5 rounded-lg shadow-md transition-all border border-white/20">
+                            <i class="bi bi-square-poll-horizontal text-lg"></i> Create Survey Form
                         </button>
                     </div>
 
@@ -12944,7 +12944,7 @@ function renderConsultationManagement() {
 
                     <input type="hidden" name="csrf_token" id="consultation-csrf" value="">
 
-                    <div id="consultation-type-selector-wrap">
+                    <div id="consultation-type-selector-wrap" class="hidden" style="display: none !important;">
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Consultation Type *</label>
                         <select id="consultation-response-mode" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500" required>
                             <option value="feedback">Consultation Form</option>
@@ -13998,7 +13998,7 @@ function openCreateConsultationModal(createMode) {
     }
     const selectorWrap = document.getElementById('consultation-type-selector-wrap');
     if (selectorWrap) {
-        selectorWrap.style.display = '';
+        selectorWrap.style.display = 'none';
     }
     refreshConsultationModeConfigVisibility();
 
@@ -14119,7 +14119,7 @@ function editConsultation(id) {
     }
     const selectorWrap = document.getElementById('consultation-type-selector-wrap');
     if (selectorWrap) {
-        selectorWrap.style.display = '';
+        selectorWrap.style.display = 'none';
     }
     refreshConsultationModeConfigVisibility();
 
@@ -14152,17 +14152,18 @@ async function saveConsultation() {
 
     const id = document.getElementById('consultation-id').value;
 
-    const title = document.getElementById('consultation-title').value.trim();
-
-    const category = document.getElementById('consultation-category').value;
-
-    const startDate = document.getElementById('consultation-start-date').value;
-
-    const endDate = document.getElementById('consultation-end-date').value;
-
-    const description = document.getElementById('consultation-description').value.trim();
+    let title = document.getElementById('consultation-title').value.trim();
+    let category = document.getElementById('consultation-category').value;
+    let description = document.getElementById('consultation-description').value.trim();
+    const startDate = document.getElementById('consultation-start-date') ? document.getElementById('consultation-start-date').value : '';
+    const endDate = document.getElementById('consultation-end-date') ? document.getElementById('consultation-end-date').value : '';
     const responseMode = document.getElementById('consultation-response-mode').value;
     const surveyQuestion = document.getElementById('consultation-survey-question').value.trim();
+
+    if (!title && surveyQuestion) title = surveyQuestion;
+    if (!description && surveyQuestion) description = surveyQuestion;
+    if (!category) category = 'General';
+
     const surveyOptionA = document.getElementById('consultation-survey-option-a').value.trim() || 'Agree';
     const surveyOptionB = document.getElementById('consultation-survey-option-b').value.trim() || 'Disagree';
     const allowGuestQuickVote = document.getElementById('consultation-allow-guest-quick-vote').checked ? '1' : '0';
@@ -14175,7 +14176,7 @@ async function saveConsultation() {
 
     if (!title || !category || !startDate || !endDate || !description) {
 
-        showNotification('Please fill in all required fields', 'error');
+        showNotification('Please fill in all required fields (Question/Title, Start & End dates)', 'error');
 
         return;
 

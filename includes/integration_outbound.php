@@ -3,7 +3,12 @@
  * PCMS outbound — sync consultation updates back to PHMS (+ ORTS on close)
  */
 
-require_once __DIR__ . '/../../shared/integration/HttpClient.php';
+$http_client_file = __DIR__ . '/../../shared/integration/HttpClient.php';
+if (file_exists($http_client_file)) {
+    require_once $http_client_file;
+} elseif (file_exists(__DIR__ . '/../shared/integration/HttpClient.php')) {
+    require_once __DIR__ . '/../shared/integration/HttpClient.php';
+}
 
 function pcms_consultation_submission_counts(mysqli $conn, int $consultationId): array
 {
@@ -56,6 +61,9 @@ function pcms_consultation_submission_counts(mysqli $conn, int $consultationId):
 
 function pcms_integration_on_consultation_updated(array $consultation, string $event = 'consultation_sync'): void
 {
+    if (!function_exists('lgu2_client')) {
+        return;
+    }
     $client = lgu2_client('PCMS');
     $linked = !empty($consultation['phms_hearing_id']) || !empty($consultation['external_ref']);
     $eventName = $linked ? $event : 'consultation_update';
@@ -97,6 +105,9 @@ function pcms_integration_on_consultation_closed(array $consultation): void
     pcms_integration_on_consultation_updated($consultation, 'consultation_sync');
 
     // Optional ORTS note when we can resolve an ordinance link
+    if (!function_exists('lgu2_client')) {
+        return;
+    }
     $client = lgu2_client('PCMS');
     $ortsDocId = null;
     $ref = $consultation['external_ref'] ?? null;

@@ -122,7 +122,10 @@ function initializeConsultationsTable() {
         }
     }
 
-    // Ensure tracking number has a unique index for lookup performance.
+    // Convert strict ENUM columns to VARCHAR(50) to prevent truncation errors across MySQL strict modes
+    @$conn->query("ALTER TABLE consultations MODIFY COLUMN `type` VARCHAR(50) NOT NULL DEFAULT 'admin'");
+    @$conn->query("ALTER TABLE consultations MODIFY COLUMN `status` VARCHAR(50) NOT NULL DEFAULT 'active'");
+    @$conn->query("ALTER TABLE consultations MODIFY COLUMN `response_mode` VARCHAR(50) NOT NULL DEFAULT 'hybrid'");
     $trackingIndex = $conn->query("SHOW INDEX FROM consultations WHERE Key_name = 'idx_tracking_number'");
     if ($trackingIndex && $trackingIndex->num_rows === 0) {
         $conn->query("ALTER TABLE consultations ADD UNIQUE INDEX idx_tracking_number (tracking_number)");
@@ -550,30 +553,46 @@ function submitConsultationGuestVote($consultation_id, $device_token, $vote_opti
 
 
 
+if (!function_exists('normalizeDateForMysql')) {
+    function normalizeDateForMysql($dateStr, $isEnd = false) {
+        if (empty($dateStr)) return date('Y-m-d H:i:s');
+        $dateStr = trim((string)$dateStr);
+        // Handle DD/MM/YYYY or DD-MM-YYYY format
+        if (preg_match('/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(.*)$/', $dateStr, $m)) {
+            $day = (int)$m[1];
+            $month = (int)$m[2];
+            $year = (int)$m[3];
+            $timePart = trim($m[4]);
+            if (empty($timePart)) {
+                $timePart = $isEnd ? '23:59:59' : '00:00:00';
+            }
+            return sprintf('%04d-%02d-%02d %s', $year, $month, $day, $timePart);
+        }
+        $ts = strtotime($dateStr);
+        if ($ts !== false && $ts > 0) {
+            return date('Y-m-d H:i:s', $ts);
+        }
+        return $dateStr;
+    }
+}
+
 // Create new consultation
 
-function createConsultation($title, $description, $category, $start_date, $end_date, $admin_id, $expected_posts = 0, $image_path = null, $user_name = null, $user_email = null, $allow_email_notifications = 1, $type = 'admin', $status_override = null, $source_url = null, $response_mode = 'hybrid', $survey_question = null, $survey_option_a = 'Agree', $survey_option_b = 'Disagree', $allow_guest_quick_vote = 1, $allow_guest_verified_vote = 1) {
+function createConsultation($title, $description, $category, $start_date, $end_date, $admin_id, $expected_posts = 0, $image_path = null, $user_name = null, $user_email = null, $allow_email_notifications = 1, $type = 'admin', $status_override = null, $source_url = null, $response_mode = 'hybrid', $survey_question = null, $survey_option_a = 'Agree', $survey_option_b = 'Disagree', $allow_guest_quick_vote = 1, $allow_guest_verified_vote = 1, &$errorMsg = null) {
 
     global $conn;
 
-    
-
     initializeConsultationsTable();
 
+    $start_date = normalizeDateForMysql($start_date, false);
+    $end_date = normalizeDateForMysql($end_date, true);
 
-
-    $admin_id = (int)$admin_id;
-
+    $admin_id_val = ((int)$admin_id > 0) ? (int)$admin_id : null;
     $expected_posts = (int)$expected_posts;
-
     $allow_email_notifications = (int)$allow_email_notifications;
-
     $img = $image_path ?? '';
-
     $uname = $user_name ?? '';
-
     $uemail = $user_email ?? '';
-
     $src_url = $source_url ?? '';
 
     $status = $status_override ? $status_override : (($type === 'user') ? 'pending' : deriveConsultationStatus($start_date, $end_date, 'active'));
@@ -584,25 +603,17 @@ function createConsultation($title, $description, $category, $start_date, $end_d
     $allow_guest_quick_vote = (int)$allow_guest_quick_vote ? 1 : 0;
     $allow_guest_verified_vote = (int)$allow_guest_verified_vote ? 1 : 0;
 
-
-
     $stmt = $conn->prepare("INSERT INTO consultations (title, description, category, start_date, end_date, admin_id, expected_posts, status, type, image_path, user_name, user_email, allow_email_notifications, source_url, response_mode, survey_question, survey_option_a, survey_option_b, allow_guest_quick_vote, allow_guest_verified_vote)
 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     if (!$stmt) {
-
-        error_log("Error preparing createConsultation: " . $conn->error);
-
+        $errorMsg = "Prepare failed: " . ($conn ? $conn->error : 'No DB connection');
+        error_log("Error preparing createConsultation: " . $errorMsg);
         return false;
-
     }
 
-
-
-    $stmt->bind_param('sssssiisisssisssssii', $title, $description, $category, $start_date, $end_date, $admin_id, $expected_posts, $status, $type, $img, $uname, $uemail, $allow_email_notifications, $src_url, $response_mode, $survey_question, $survey_option_a, $survey_option_b, $allow_guest_quick_vote, $allow_guest_verified_vote);
-
-
+    $stmt->bind_param('sssssiisssssisssssii', $title, $description, $category, $start_date, $end_date, $admin_id_val, $expected_posts, $status, $type, $img, $uname, $uemail, $allow_email_notifications, $src_url, $response_mode, $survey_question, $survey_option_a, $survey_option_b, $allow_guest_quick_vote, $allow_guest_verified_vote);
 
     if ($stmt->execute()) {
 
@@ -612,14 +623,31 @@ function createConsultation($title, $description, $category, $start_date, $end_d
 
         assignConsultationTrackingNumber($id);
 
+        // Sync linked consultations back to PHMS when applicable
+        try {
+            require_once __DIR__ . '/../includes/integration_outbound.php';
+            $row = ['id' => $id, 'title' => $title, 'status' => $status, 'phms_hearing_id' => null, 'external_ref' => null];
+            $chk = $conn->prepare('SELECT id, title, status, phms_hearing_id, external_ref FROM consultations WHERE id = ? LIMIT 1');
+            if ($chk) {
+                $chk->bind_param('i', $id);
+                $chk->execute();
+                $fetched = $chk->get_result()->fetch_assoc();
+                $chk->close();
+                if ($fetched) {
+                    $row = $fetched;
+                }
+            }
+            pcms_integration_on_consultation_updated($row);
+        } catch (Throwable $e) {
+            error_log('PCMS consultation create integration failed: ' . $e->getMessage());
+        }
+
         return $id;
 
     }
 
-
-
+    $errorMsg = "Execute failed: " . $stmt->error;
     error_log("Error creating consultation: " . $stmt->error);
-
     $stmt->close();
 
     return false;

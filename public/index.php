@@ -185,31 +185,37 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
     }
 
     if ($action === 'get_my_activity') {
-        if (!isset($_SESSION['user_id']) && !isset($_SESSION['email'])) {
-            echo json_encode(['success' => false, 'message' => 'Not authenticated.']);
+        $email = trim($_SESSION['email'] ?? '');
+        $user_name = trim($_SESSION['fullname'] ?? $_SESSION['full_name'] ?? '');
+        
+        if (empty($email) && empty($user_name) && !isset($_SESSION['user_id'])) {
+            echo json_encode(['success' => false, 'message' => 'Please sign in to view your activity history.']);
             exit;
         }
-        $email = $_SESSION['email'] ?? '';
-        
+
         $proposals = [];
-        $stmt = $conn->prepare("SELECT id, title, category, description, status, created_at, tracking_number FROM consultations WHERE user_email = ? AND type = 'user' ORDER BY created_at DESC");
-        $stmt->bind_param('s', $email);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        while ($row = $res->fetch_assoc()) {
-            $proposals[] = $row;
+        if (!empty($email) || !empty($user_name)) {
+            $stmt = $conn->prepare("SELECT id, title, category, description, status, created_at, tracking_number FROM consultations WHERE (user_email = ? OR (user_name = ? AND user_name != '')) AND type = 'user' ORDER BY created_at DESC");
+            $stmt->bind_param('ss', $email, $user_name);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($row = $res->fetch_assoc()) {
+                $proposals[] = $row;
+            }
+            $stmt->close();
         }
-        $stmt->close();
 
         $feedback_list = [];
-        $fStmt = $conn->prepare("SELECT f.id, f.message, f.category, f.status, f.created_at, f.tracking_token, f.admin_response, c.title as consultation_title FROM feedback f LEFT JOIN consultations c ON f.consultation_id = c.id WHERE f.guest_email = ? ORDER BY f.created_at DESC");
-        $fStmt->bind_param('s', $email);
-        $fStmt->execute();
-        $fRes = $fStmt->get_result();
-        while ($fRow = $fRes->fetch_assoc()) {
-            $feedback_list[] = $fRow;
+        if (!empty($email) || !empty($user_name)) {
+            $fStmt = $conn->prepare("SELECT f.id, f.message, f.category, f.status, f.created_at, f.tracking_token, f.admin_response, c.title as consultation_title FROM feedback f LEFT JOIN consultations c ON f.consultation_id = c.id WHERE (f.guest_email = ? OR (f.guest_name = ? AND f.guest_name != '')) ORDER BY f.created_at DESC");
+            $fStmt->bind_param('ss', $email, $user_name);
+            $fStmt->execute();
+            $fRes = $fStmt->get_result();
+            while ($fRow = $fRes->fetch_assoc()) {
+                $feedback_list[] = $fRow;
+            }
+            $fStmt->close();
         }
-        $fStmt->close();
 
         echo json_encode(['success' => true, 'proposals' => $proposals, 'feedback' => $feedback_list]);
         exit;
@@ -400,8 +406,10 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
     $stats['feedback_submitted'] = (int)($fRow['total_feedback'] ?? 0);
 }
 
-$current_user_name = $_SESSION['fullname'] ?? $_SESSION['full_name'] ?? null;
-$is_logged_in = isset($_SESSION['user_id']) || !empty($current_user_name);
+$user_role = strtolower(trim($_SESSION['role'] ?? ''));
+$is_citizen_session = isset($_SESSION['user_id']) && ($user_role === 'citizen' || empty($user_role) || $user_role === 'user');
+$current_user_name = $is_citizen_session ? ($_SESSION['fullname'] ?? $_SESSION['full_name'] ?? $_SESSION['username'] ?? null) : null;
+$is_logged_in = $is_citizen_session && !empty($current_user_name);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -523,8 +531,16 @@ $is_logged_in = isset($_SESSION['user_id']) || !empty($current_user_name);
                             </div>
                         </div>
                     <?php else: ?>
-                        <a href="sign-in.php" class="text-xs font-semibold text-slate-700 hover:text-valenzuela-blue border border-gray-300 px-4 py-2.5 rounded-lg hover:bg-slate-50 transition-colors">Sign In</a>
-                        <a href="sign-up.php" class="bg-valenzuela-red hover:bg-red-700 text-white px-5 py-2.5 rounded-full font-bold text-xs transition-all shadow-[0_4px_14px_0_rgba(220,38,38,0.35)] hover:shadow-lg hover:-translate-y-0.5">
+                        <a href="google-auth.php" class="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs border border-slate-300 hover:border-slate-400 px-4 py-2 rounded-full transition-all shadow-sm hover:shadow">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.3 7.31 24 12 24z"/>
+                                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.17 0 9.99 0 12s.46 3.83 1.26 5.42l4.02-3.15z"/>
+                                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                            </svg>
+                            <span class="font-bold">Sign In</span>
+                        </a>
+                        <a href="sign-up.php" class="bg-valenzuela-red hover:bg-red-700 text-white px-5 py-2 rounded-full font-bold text-xs transition-all shadow-[0_4px_14px_0_rgba(220,38,38,0.35)] hover:shadow-lg hover:-translate-y-0.5">
                             Get Started
                         </a>
                     <?php endif; ?>
@@ -566,8 +582,16 @@ $is_logged_in = isset($_SESSION['user_id']) || !empty($current_user_name);
                         <a href="sign-out.php" class="text-xs font-bold text-red-600">Sign Out</a>
                     </div>
                 <?php else: ?>
-                    <a href="sign-in.php" class="block text-center font-bold text-slate-700 border border-gray-300 py-2 rounded-lg">Sign In</a>
-                    <a href="sign-up.php" class="block text-center bg-valenzuela-red text-white py-2 rounded-lg font-bold">Sign Up</a>
+                    <a href="google-auth.php" class="flex items-center justify-center gap-2 font-bold text-slate-700 bg-white border border-gray-300 py-2.5 rounded-lg shadow-sm hover:bg-slate-50 transition-colors">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.3 7.31 24 12 24z"/>
+                            <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.17 0 9.99 0 12s.46 3.83 1.26 5.42l4.02-3.15z"/>
+                            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                        </svg>
+                        <span>Sign In</span>
+                    </a>
+                    <a href="sign-up.php" class="block text-center bg-valenzuela-red text-white py-2.5 rounded-lg font-bold">Get Started</a>
                 <?php endif; ?>
             </div>
         </div>
@@ -1383,41 +1407,61 @@ $is_logged_in = isset($_SESSION['user_id']) || !empty($current_user_name);
 
         // My Activity History Modal
         function showMyActivityModal() {
-            document.getElementById('my-activity-modal').classList.remove('hidden');
+            const modal = document.getElementById('my-activity-modal');
+            const content = document.getElementById('my-activity-content');
+            if (modal) modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
+            if (content) {
+                content.innerHTML = '<div class="text-center py-8 text-slate-400 flex items-center justify-center gap-2"><i class="fa-solid fa-spinner fa-spin text-valenzuela-blue text-lg"></i> <span>Loading your history...</span></div>';
+            }
 
             fetch('index.php?api=get_my_activity')
                 .then(r => r.json())
                 .then(res => {
-                    const content = document.getElementById('my-activity-content');
+                    if (!content) return;
                     if (res.success) {
                         let html = '';
-                        if (res.proposals.length === 0 && res.feedback.length === 0) {
-                            html = '<p class="text-xs text-slate-400 italic">No proposal submissions or feedback recorded under your account yet.</p>';
+                        if ((!res.proposals || res.proposals.length === 0) && (!res.feedback || res.feedback.length === 0)) {
+                            html = '<div class="p-6 text-center text-slate-400 bg-slate-50 rounded-2xl border border-slate-200"><i class="fa-solid fa-folder-open text-3xl text-slate-300 mb-2"></i><p class="text-xs italic">No proposal submissions or feedback recorded under your account yet.</p></div>';
                         } else {
-                            if (res.proposals.length > 0) {
-                                html += '<h4 class="text-xs font-bold uppercase text-slate-400 mb-2">My Submitted Proposals</h4>';
+                            if (res.proposals && res.proposals.length > 0) {
+                                html += '<h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">My Submitted Proposals (' + res.proposals.length + ')</h4>';
                                 html += res.proposals.map(p => `
-                                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1 mb-2">
-                                        <div class="flex justify-between font-bold text-slate-800">
-                                            <span>${escapeHtml(p.title)}</span>
-                                            <span class="font-mono text-valenzuela-blue">${escapeHtml(p.tracking_number || '')}</span>
+                                    <div class="p-4 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200 text-xs space-y-2 mb-3 transition-colors">
+                                        <div class="flex justify-between items-start font-bold text-slate-800">
+                                            <span class="text-sm text-slate-900">${escapeHtml(p.title)}</span>
+                                            <span class="font-mono bg-blue-50 text-valenzuela-blue px-2.5 py-1 rounded-lg border border-blue-200 text-[11px]">${escapeHtml(p.tracking_number || 'TRK-PENDING')}</span>
                                         </div>
-                                        <span class="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold text-[10px] uppercase">${escapeHtml(p.status)}</span>
+                                        <p class="text-slate-600 line-clamp-2">${escapeHtml(p.description || '')}</p>
+                                        <div class="flex justify-between items-center pt-2 border-t border-slate-200 text-[11px] text-slate-400">
+                                            <span>Category: ${escapeHtml(p.category || 'General')}</span>
+                                            <span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold uppercase text-[10px]">${escapeHtml(p.status || 'pending')}</span>
+                                        </div>
                                     </div>
                                 `).join('');
                             }
-                            if (res.feedback.length > 0) {
-                                html += '<h4 class="text-xs font-bold uppercase text-slate-400 mt-4 mb-2">My Feedback & Comments</h4>';
+                            if (res.feedback && res.feedback.length > 0) {
+                                html += '<h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mt-5 mb-3">My Feedback & Comments (' + res.feedback.length + ')</h4>';
                                 html += res.feedback.map(f => `
-                                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1 mb-2">
-                                        <p class="text-slate-800 font-semibold">${escapeHtml(f.message)}</p>
-                                        <span class="text-[10px] text-slate-400 font-mono">${escapeHtml(f.tracking_token || '')}</span>
+                                    <div class="p-4 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200 text-xs space-y-2 mb-3 transition-colors">
+                                        <div class="flex justify-between items-start">
+                                            <span class="font-bold text-slate-800">${escapeHtml(f.consultation_title || 'General Feedback')}</span>
+                                            <span class="font-mono bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px]">${escapeHtml(f.tracking_token || '')}</span>
+                                        </div>
+                                        <p class="text-slate-700">${escapeHtml(f.message)}</p>
+                                        ${f.admin_response ? `<div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-xl text-valenzuela-blue font-medium"><strong>Response:</strong> ${escapeHtml(f.admin_response)}</div>` : ''}
                                     </div>
                                 `).join('');
                             }
                         }
                         content.innerHTML = html;
+                    } else {
+                        content.innerHTML = `<div class="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-xs font-semibold text-center">${escapeHtml(res.message || 'Unable to load activity history.')}</div>`;
+                    }
+                })
+                .catch(err => {
+                    if (content) {
+                        content.innerHTML = '<div class="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-xs font-semibold text-center">Failed to connect to server. Please try again.</div>';
                     }
                 });
         }
