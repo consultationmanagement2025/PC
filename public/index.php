@@ -309,7 +309,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_consultation']
 $category_filter = trim($_GET['category'] ?? '');
 $search_query = trim($_GET['search'] ?? '');
 
-$consultation_sql = "SELECT id, title, category, description, status, created_at, end_date, type, image_path, tracking_number, views, posts_count FROM consultations WHERE status IN ('active', 'viewed', 'replied', 'scheduled')";
+$consultation_sql = "SELECT id, title, category, description, status, created_at, end_date, type, image_path, tracking_number, views, posts_count FROM consultations WHERE response_mode IN ('feedback', 'hybrid') AND status IN ('active', 'viewed', 'replied', 'scheduled')";
 $params = [];
 $types = "";
 
@@ -450,7 +450,43 @@ $is_logged_in = $is_citizen_session && !empty($current_user_name);
         .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
     </style>
 </head>
-<body class="text-slate-800 antialiased min-h-screen flex flex-col relative">
+    <script>
+        window.__IS_LOGGED_IN__ = <?php echo $is_logged_in ? 'true' : 'false'; ?>;
+    </script>
+
+    <!-- Require Login Modal -->
+    <div id="require-login-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-100 text-center relative animate-fadeIn">
+            <button onclick="closeRequireLoginModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            
+            <div class="w-16 h-16 bg-blue-50 text-valenzuela-blue rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl border border-blue-100 shadow-inner">
+                <i class="fa-solid fa-user-lock"></i>
+            </div>
+
+            <h3 class="text-xl font-extrabold text-slate-900 mb-2">Sign In Required</h3>
+            <p class="text-slate-600 text-xs sm:text-sm mb-6 leading-relaxed">
+                To participate in city consultations, submit citizen feedback, or vote on community polls, please sign in with your Google / Gmail account.
+            </p>
+
+            <div class="space-y-3">
+                <a href="google-auth.php" class="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm border border-slate-300 px-5 py-3 rounded-xl transition-all shadow-sm hover:shadow">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.3 7.31 24 12 24z"/>
+                        <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.17 0 9.99 0 12s.46 3.83 1.26 5.42l4.02-3.15z"/>
+                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                    </svg>
+                    <span>Sign in with Google</span>
+                </a>
+
+                <button onclick="closeRequireLoginModal()" class="w-full text-slate-500 hover:text-slate-700 font-semibold text-xs py-2">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Toast Notification Container -->
     <div id="toast-container" class="fixed top-24 right-5 z-50 flex flex-col gap-3 pointer-events-none"></div>
@@ -1271,8 +1307,22 @@ $is_logged_in = $is_citizen_session && !empty($current_user_name);
             showToast('Tracking Code copied to clipboard: ' + text);
         }
 
+        function showRequireLoginModal() {
+            const m = document.getElementById('require-login-modal');
+            if (m) m.classList.remove('hidden');
+        }
+
+        function closeRequireLoginModal() {
+            const m = document.getElementById('require-login-modal');
+            if (m) m.classList.add('hidden');
+        }
+
         // Consultation Details Modal
         function openConsultationModal(id) {
+            if (!window.__IS_LOGGED_IN__) {
+                showRequireLoginModal();
+                return;
+            }
             fetch('index.php?api=get_consultation&id=' + id)
                 .then(r => r.json())
                 .then(res => {
@@ -1319,6 +1369,10 @@ $is_logged_in = $is_citizen_session && !empty($current_user_name);
 
         function handleFeedbackSubmit(e) {
             e.preventDefault();
+            if (!window.__IS_LOGGED_IN__) {
+                showRequireLoginModal();
+                return;
+            }
             const form = document.getElementById('feedback-form');
             const data = new FormData(form);
             data.append('api_action', 'submit_feedback');
@@ -1338,6 +1392,10 @@ $is_logged_in = $is_citizen_session && !empty($current_user_name);
 
         // Survey Vote Handler
         function castSurveyVote(surveyId, optionChosen) {
+            if (!window.__IS_LOGGED_IN__) {
+                showRequireLoginModal();
+                return;
+            }
             const data = new FormData();
             data.append('api_action', 'submit_survey_vote');
             data.append('survey_id', surveyId);
