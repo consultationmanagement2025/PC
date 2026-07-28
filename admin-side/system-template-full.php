@@ -3,7 +3,7 @@
 
 
 session_start();
-require_once 'session_check.php';
+require_once 'UTILS/session_check.php';
 
 
 
@@ -34,7 +34,7 @@ require 'DATABASE/feedback.php';
 require_once 'UTILS/security.php';
 require_once 'DATABASE/document-management.php';
 require_once 'UTILS/pdf_generator.php';
-require_once 'config/email_config.php';
+require_once __DIR__ . '/email_config.php';
 
 
 
@@ -273,7 +273,7 @@ function buildModuleReportData($module, $conn) {
         }
         
         // Fetch all users for user management section
-        $r = $conn->query("SELECT id, fullname, email, role, status FROM users ORDER BY created_at DESC");
+        $r = $conn->query("SELECT id, fullname, email, role, status, verification_status, created_at FROM users ORDER BY created_at DESC");
         if ($r) {
             $users = [];
             while ($row = $r->fetch_assoc()) {
@@ -282,6 +282,13 @@ function buildModuleReportData($module, $conn) {
         } else {
             $users = [];
         }
+
+        // Separate users by role for different sections
+        $citizens = array_filter($users, function($u) {
+            $role = strtolower($u['role'] ?? '');
+            return !in_array($role, ['admin', 'administrator', 'super admin', 'superadmin', 'staff', 'resource person', 'resource_person']);
+        });
+        $citizens = array_values($citizens);
 
         $r = $conn->query("SELECT COUNT(*) AS total FROM posts");
         if ($r) {
@@ -3382,9 +3389,6 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
                 <div id="content-area">
-
-
-
                     <?php if ($is_super_admin): ?>
                     <!-- AUDIT LOG SECTION -->
 
@@ -4682,6 +4686,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                     </section>
 
 
+
                     <!-- USER MANAGEMENT SECTION -->
 
 
@@ -4832,25 +4837,16 @@ $totalPages = ceil($totalLogs / $pageSize);
                                             </thead>
                                             <tbody>
                                                 <?php
-                                                    $allUsers = isset($users) ? $users : [];
-                                                    if (empty($allUsers)) {
-                                                        echo '<tr><td colspan="5" class="text-center py-8 text-slate-500">No users found</td></tr>';
+                                                    $citizenUsers = isset($citizens) ? $citizens : [];
+                                                    if (empty($citizenUsers)) {
+                                                        echo '<tr><td colspan="5" class="text-center py-8 text-slate-500">No citizens found</td></tr>';
                                                     } else {
-                                                        foreach ($allUsers as $u) {
-                                                            $role = strtolower($u['role'] ?? 'user');
-                                                            $roleBadge = '';
-                                                            if ($role === 'admin' || $role === 'administrator' || $role === 'super admin' || $role === 'superadmin') {
-                                                                $roleBadge = '<span class="badge badge-blue">Admin</span>';
-                                                            } elseif ($role === 'staff') {
-                                                                $roleBadge = '<span class="badge badge-blue">Staff</span>';
-                                                            } elseif ($role === 'resource person' || $role === 'resource_person') {
-                                                                $roleBadge = '<span class="badge" style="background:#f3e8ff;color:#9333ea">Resource Person</span>';
-                                                            } else {
-                                                                $roleBadge = '<span class="badge" style="background:#f3e8ff;color:#9333ea">Citizen</span>';
-                                                            }
+                                                        foreach ($citizenUsers as $u) {
+                                                            $role = strtolower($u['role'] ?? 'citizen');
+                                                            $roleBadge = '<span class="badge" style="background:#f3e8ff;color:#9333ea">Citizen</span>';
                                                             
-                                                            $status = isset($u['approval_status']) && $u['approval_status'] === 'pending' ? 'pending' : 'active';
-                                                            $statusBadge = $status === 'pending' ? '<span class="badge badge-yellow">Pending</span>' : '<span class="badge badge-green">Active</span>';
+                                                            $status = isset($u['status']) && $u['status'] === 'active' ? 'active' : 'inactive';
+                                                            $statusBadge = $status === 'active' ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-red">Inactive</span>';
                                                             
                                                             echo '<tr class="user-row" data-name="' . strtolower($u['fullname'] ?? '') . '" data-email="' . strtolower($u['email'] ?? '') . '" data-role="' . $role . '" data-status="' . $status . '">';
                                                             echo '<td class="font-medium">' . htmlspecialchars($u['fullname'] ?? 'N/A') . '</td>';
@@ -8309,7 +8305,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                     `;
                     const actions = `
                         <a href="${data.download_url}" target="_blank" class="btn-primary inline-block">Download Report</a>
-                        <button onclick="closeModal('export-modal')" class="btn-outline">Close</button>
+                        <button onclick="closeModal(\'export-modal\')" class="btn-outline">Close</button>
                     `;
                     showExportModal(msg, actions, 'Report Ready');
                 } else {
@@ -8321,6 +8317,14 @@ $totalPages = ceil($totalLogs / $pageSize);
                 showExportModal('<div class="bg-red-50 border border-red-200 text-red-800 rounded p-3">Report generation failed. Please try again.</div>', '<button onclick="closeModal(\'export-modal\')" class="btn-outline">Close</button>', 'Report Failed');
             });
         }
+
+        // Override any global error handlers to prevent toast notifications for report errors
+        window.addEventListener('error', function(e) {
+            if (e.message && e.message.includes('report')) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, true);
 
         function detectBestExportFormat(consultationId) {
             const row = document.querySelector(`[onclick="openExportChooser(${consultationId})"]`)?.closest('tr');

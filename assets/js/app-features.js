@@ -860,6 +860,13 @@ function stopHeaderClock() {
 }
 
 function hideManagedTemplateSections() {
+    const container = document.getElementById('content-area') || document.querySelector('main');
+    if (container) {
+        Array.from(container.children).forEach((child) => {
+            child.style.display = 'none';
+        });
+    }
+
     const managedSectionIds = [
         'dashboard-section',
         'document-management-section',
@@ -877,17 +884,10 @@ function hideManagedTemplateSections() {
             section.style.display = 'none';
         }
     });
-
-    const container = document.getElementById('content-area') || document.querySelector('main');
-    if (container) {
-        const allSections = container.querySelectorAll('section');
-        allSections.forEach((s) => {
-            s.style.display = 'none';
-        });
-    }
 }
 
 function showManagedTemplateSection(sectionName) {
+    window._currentActiveSection = sectionName;
     const templateSectionMap = {
         dashboard: 'dashboard-section',
         'dashboard-section': 'dashboard-section',
@@ -934,14 +934,12 @@ function showManagedTemplateSection(sectionName) {
     // If mapping not found or element missing, try sensible fallbacks
     if (!targetSectionId || !document.getElementById(targetSectionId)) {
         const fallbacks = [
-            // common variants
             sectionName,
-            sectionName + '-section',
-            'document-management-section',
-            'documents-module-section',
-            'documents-section',
-            'pc-documents-section'
+            sectionName + '-section'
         ];
+        if (sectionName.includes('doc')) {
+            fallbacks.push('document-management-section', 'documents-module-section', 'documents-section', 'pc-documents-section');
+        }
         for (const f of fallbacks) {
             if (f && document.getElementById(f)) {
                 targetSectionId = f;
@@ -987,9 +985,9 @@ function showManagedTemplateSection(sectionName) {
     const rendererMap = {
         dashboard: 'renderDashboard',
         'consultation-management': 'renderConsultationManagement',
-        documents: 'renderDocumentsModule',
-        'document-management': 'renderDocumentsModule',
-        'pc-documents': 'renderDocumentsModule',
+        documents: 'renderPCDocuments',
+        'document-management': 'renderPCDocuments',
+        'pc-documents': 'renderPCDocuments',
         users: 'renderUsers',
         audit: 'renderAudit',
         'public-feedback-queue': 'renderPublicFeedbackPortal',
@@ -3459,580 +3457,411 @@ function renderDocumentsByStatusChart() {
 
 
 // ==============================
-
-
-// USERS MODULE (User Management — Citizens)
-
-
-// ==============================
-
-
 var _citizenData = [];
-
-
-
+var _userMgmtTab = 'citizens';
 
 function renderUsers(skipLoad = false) {
-
-
-
-
     const breadcrumbCurrent = document.querySelector('.breadcrumb-current');
-
-
-    
-
-
-
-
     if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'User Management';
 
-
-
-
     const totalCitizens = _citizenData.length;
-
-
     const totalConsultations = _citizenData.reduce((s, c) => s + (c.consultation_count || 0), 0);
-
-
     const totalFeedbacks = _citizenData.reduce((s, c) => s + (c.feedback_count || 0), 0);
+    const totalVotes = _citizenData.reduce((s, c) => s + (c.survey_vote_count || 0), 0);
 
-
-
-
-
-
-
+    const citizenTabActive = (_userMgmtTab === 'citizens');
+    const adminTabActive = (_userMgmtTab === 'admins');
+    const expertTabActive = (_userMgmtTab === 'experts');
 
     const html = `
-
-
         <div class="space-y-6">
-
-
-            <!-- Header -->
-
-
+            <!-- Header Banner -->
             <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-8 rounded-lg shadow-lg">
-
-
                 <div class="flex justify-between items-start mb-6">
-
-
                     <div>
-
-
-                        <h1 class="text-3xl font-bold mb-2">User Management</h1>
-
-
-                        <p class="text-red-100">Manage citizen submitters</p>
-
-
+                        <h1 class="text-3xl font-bold mb-2">User Management & Citizen Registry</h1>
+                        <p class="text-red-100 text-sm">Monitor, verify, and engage registered citizen submitters across Valenzuela City.</p>
                     </div>
-
-
                 </div>
 
-
-                
-
-
-                <!-- Stats Cards -->
-
-
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-
-
+                <!-- KPI Metric Cards Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
-
-
-                        <div class="text-red-100 text-sm font-semibold mb-1">Citizen Submitters</div>
-
-
+                        <div class="text-red-100 text-sm font-semibold mb-1">Registered Citizens</div>
                         <div class="text-3xl font-bold">${totalCitizens}</div>
-
-
+                        <div class="text-xs text-red-100 opacity-90 mt-1">Verified via Google / 2FA</div>
                     </div>
 
-
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
-
-
-                        <div class="text-red-100 text-sm font-semibold mb-1">Total Consultations</div>
-
-
+                        <div class="text-red-100 text-sm font-semibold mb-1">Proposals Submitted</div>
                         <div class="text-3xl font-bold">${totalConsultations}</div>
-
-
+                        <div class="text-xs text-red-100 opacity-90 mt-1">Citizen initiative papers</div>
                     </div>
-
 
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
-
-
-                        <div class="text-red-100 text-sm font-semibold mb-1">Total Feedback</div>
-
-
-                        <div class="text-3xl font-bold">${totalFeedbacks}</div>
-
-
+                        <div class="text-red-100 text-sm font-semibold mb-1">Survey Votes Cast</div>
+                        <div class="text-3xl font-bold">${totalVotes}</div>
+                        <div class="text-xs text-red-100 opacity-90 mt-1">Community poll participation</div>
                     </div>
 
-
+                    <div class="bg-white bg-opacity-20 rounded-lg p-4">
+                        <div class="text-red-100 text-sm font-semibold mb-1">Total Engagement</div>
+                        <div class="text-3xl font-bold">${totalConsultations + totalFeedbacks + totalVotes}</div>
+                        <div class="text-xs text-red-100 opacity-90 mt-1">Combined citizen actions</div>
+                    </div>
                 </div>
-
-
             </div>
 
-
-
-
-            <!-- Tab Switcher -->
-
-
-            <div class="bg-white rounded-lg shadow p-1 flex gap-1">
-
-
-                <button onclick="_userMgmtTab='citizens'; renderUsers(true);" class="flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${citizenTabActive ? 'bg-red-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}">
-
-
-                    <i class="bi bi-people"></i> Citizen Submitters <span class="ml-1 px-2 py-0.5 rounded-full text-xs ${citizenTabActive ? 'bg-white bg-opacity-20' : 'bg-gray-200'}">${totalCitizens}</span>
-
-
+            <!-- Role Tabs Navigation (Matching Document Management Group Tabs) -->
+            <div class="flex flex-wrap gap-2 mt-6 border-b border-gray-200">
+                <button onclick="_userMgmtTab='citizens'; renderUsers(true);" class="px-6 py-3 font-semibold text-sm border-b-2 transition flex items-center gap-2 ${citizenTabActive ? 'border-red-600 text-red-600 bg-red-50/40' : 'border-gray-200 text-gray-600 hover:border-red-600 hover:text-red-600'}">
+                    <i class="bi bi-people-fill"></i> Citizen Submitters <span class="ml-1 px-2 py-0.5 rounded-full text-xs ${citizenTabActive ? 'bg-red-100 text-red-800' : 'bg-gray-200 text-gray-700'}">${totalCitizens}</span>
                 </button>
 
+                <button onclick="_userMgmtTab='admins'; renderUsers(true);" class="px-6 py-3 font-semibold text-sm border-b-2 transition flex items-center gap-2 ${adminTabActive ? 'border-red-600 text-red-600 bg-red-50/40' : 'border-gray-200 text-gray-600 hover:border-red-600 hover:text-red-600'}">
+                    <i class="bi bi-shield-lock-fill"></i> Admins & Staff <span class="ml-1 px-2 py-0.5 rounded-full text-xs ${adminTabActive ? 'bg-red-100 text-red-800' : 'bg-gray-200 text-gray-700'}">4</span>
+                </button>
 
-
-
+                <button onclick="_userMgmtTab='experts'; renderUsers(true);" class="px-6 py-3 font-semibold text-sm border-b-2 transition flex items-center gap-2 ${expertTabActive ? 'border-red-600 text-red-600 bg-red-50/40' : 'border-gray-200 text-gray-600 hover:border-red-600 hover:text-red-600'}">
+                    <i class="bi bi-award-fill"></i> Experts & Resource Persons <span class="ml-1 px-2 py-0.5 rounded-full text-xs ${expertTabActive ? 'bg-red-100 text-red-800' : 'bg-gray-200 text-gray-700'}">3</span>
+                </button>
             </div>
 
+            <!-- Tab Content Container -->
+            <div id="user-mgmt-tab-content" class="mt-6">
+                ${citizenTabActive ? `
+                    <div class="bg-white p-6 rounded-lg shadow border border-gray-200 space-y-6">
+                        <!-- Filters Toolbar -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1.5">Search Citizen</label>
+                                <div class="relative">
+                                    <i class="bi bi-search absolute left-3 top-2.5 text-gray-400 text-sm"></i>
+                                    <input type="text" id="citizen-search" placeholder="Name or email..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 outline-none" onkeyup="renderCitizensTable()">
+                                </div>
+                            </div>
 
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1.5">Filter Barangay</label>
+                                <select id="citizen-barangay" class="w-full px-3 py-2 text-xs rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 outline-none" onchange="renderCitizensTable()">
+                                    <option value="">All 33 Barangays</option>
+                                    <option value="Gen. T. de Leon">Gen. T. de Leon</option>
+                                    <option value="Marulas">Marulas</option>
+                                    <option value="Karuhatan">Karuhatan</option>
+                                    <option value="Poblacion">Poblacion</option>
+                                    <option value="Malinta">Malinta</option>
+                                    <option value="Ugong">Ugong</option>
+                                    <option value="Dalandanan">Dalandanan</option>
+                                    <option value="Maysan">Maysan</option>
+                                    <option value="Paso de Blas">Paso de Blas</option>
+                                </select>
+                            </div>
 
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1.5">Sort By</label>
+                                <select id="citizen-sort" class="w-full px-3 py-2 text-xs rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 outline-none" onchange="renderCitizensTable()">
+                                    <option value="recent">Most Recent Engagement</option>
+                                    <option value="submissions">Highest Activity Count</option>
+                                    <option value="name">Alphabetical (A-Z)</option>
+                                </select>
+                            </div>
 
-            <!-- CITIZEN SUBMITTERS TAB -->
+                            <div class="flex items-end">
+                                <button onclick="exportCitizensCsv()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 border border-gray-300">
+                                    <i class="bi bi-download"></i> Export Citizen Registry
+                                </button>
+                            </div>
+                        </div>
 
-
-            <script>console.log('app-features.js loaded: categories updated 2026-07-06');</script>
-            <div class="bg-white p-6 rounded-lg shadow">
-
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-
-                    <div>
-
-
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Search Citizens</label>
-
-
-                        <input type="text" id="citizen-search" placeholder="Search by name or email..." 
-
-
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-
-
-                            onkeyup="renderCitizensTable()">
-
-
+                        <!-- Citizens Table -->
+                        <div class="overflow-x-auto rounded-lg border border-gray-200">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50 text-gray-700 text-xs uppercase font-semibold tracking-wider border-b border-gray-200">
+                                        <th class="px-6 py-3.5">Citizen Profile</th>
+                                        <th class="px-6 py-3.5">Email & Identity</th>
+                                        <th class="px-6 py-3.5 text-center">Proposals</th>
+                                        <th class="px-6 py-3.5 text-center">Survey Votes</th>
+                                        <th class="px-6 py-3.5 text-center">Total Engagement</th>
+                                        <th class="px-6 py-3.5">Last Active</th>
+                                        <th class="px-6 py-3.5 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="citizens-table-body" class="divide-y divide-gray-100 text-xs text-gray-700">
+                                    <tr>
+                                        <td colspan="7" class="px-6 py-8 text-center text-gray-400">Loading citizen records...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-
-
-                    <div>
-
-
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Sort By</label>
-
-
-                        <select id="citizen-sort" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
-
-
-                            onchange="renderCitizensTable()">
-
-
-                            <option value="recent">Most Recent Activity</option>
-
-
-                            <option value="submissions">Most Submissions</option>
-
-
-                            <option value="name">Name (A-Z)</option>
-
-
-                        </select>
-
-
+                ` : `
+                    <div class="bg-white p-8 rounded-lg shadow border border-gray-200 text-center space-y-4">
+                        <div class="w-16 h-16 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-2xl mx-auto">
+                            <i class="bi bi-shield-lock"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-gray-900">${adminTabActive ? 'Administrative Accounts' : 'Resource Persons & Experts'}</h3>
+                        <p class="text-xs text-gray-500 max-w-md mx-auto">View and manage internal credentials, committee assignments, and department authority across PCMS.</p>
+                        <div class="pt-2">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold border border-gray-200">
+                                <i class="bi bi-info-circle"></i> Active Role Group
+                            </span>
+                        </div>
                     </div>
-
-
-                </div>
-
-
+                `}
             </div>
-
-
-            <div class="bg-white rounded-lg shadow overflow-hidden">
-
-
-                <div class="overflow-x-auto">
-
-
-                    <table class="w-full text-sm">
-
-
-                        <thead class="bg-gray-100 border-b-2 border-gray-300">
-
-
-                            <tr>
-
-
-                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Citizen</th>
-
-
-                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Email</th>
-
-
-                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Consultations</th>
-
-
-                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Feedback</th>
-
-
-                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Total</th>
-
-
-                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Last Activity</th>
-
-
-                            </tr>
-
-
-                        </thead>
-
-
-                        <tbody id="citizens-table-body">
-
-
-                        </tbody>
-
-
-                    </table>
-
-
-                </div>
-
-
-            </div>
-
-
         </div>
 
+        <!-- Citizen Dossier Drawer Modal -->
+        <div id="citizen-dossier-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 relative border border-slate-200 max-h-[85vh] overflow-y-auto">
+                <button onclick="closeCitizenDossierModal()" class="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
+                    <i class="bi bi-x-lg"></i>
+                </button>
 
+                <div class="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
+                    <div class="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-lg" id="dossier-avatar">
+                        C
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-slate-900" id="dossier-name">Citizen Dossier</h3>
+                        <span class="text-xs text-slate-500 flex items-center gap-2" id="dossier-email">
+                            <i class="bi bi-envelope"></i> citizen@valenzuela.gov.ph
+                        </span>
+                    </div>
+                </div>
+
+                <div id="dossier-content" class="space-y-4 text-xs">
+                    <div class="text-center py-6 text-slate-400">Loading citizen timeline...</div>
+                </div>
+            </div>
+        </div>
     `;
 
+    const contentArea = document.getElementById('content-area') || document.getElementById('main-content') || document.querySelector('.content-area') || document.querySelector('main');
+    if (contentArea) {
+        let userSection = document.getElementById('user-management-section');
+        if (!userSection) {
+            userSection = document.createElement('section');
+            userSection.id = 'user-management-section';
+            userSection.className = 'user-management-section mb-6';
+            contentArea.appendChild(userSection);
+        }
+        
+        userSection.innerHTML = html;
 
-    
-
-
-    document.getElementById('content-area').innerHTML = html;
-
-
-
+        if (window._currentActiveSection === 'users' || window._currentActiveSection === 'user-management') {
+            if (typeof hideManagedTemplateSections === 'function') {
+                hideManagedTemplateSections();
+            }
+            userSection.style.display = 'block';
+        } else {
+            userSection.style.display = 'none';
+        }
+    }
 
     if (!skipLoad) {
-
-
-        // Load both citizens and staff data
-
-
-        const citizenPromise = loadCitizensFromApi();
-
-
-
-
-        
-
-
-        Promise.all([citizenPromise])
-
-
-            .then(() => renderUsers(true))
-
-
-            .catch(err => {
-
-
-                console.error('User management load error:', err);
-
-
-                renderUsers(true);
-
-
-            });
-
-
-        return;
-
-
-    }
-
-
-
-
-    if (_userMgmtTab === 'citizens') {
-
-
-        renderCitizensTable();
-
-
+        loadCitizensFromApi().then(() => renderCitizensTable());
     } else {
-
-
-        renderUsersTable();
-
-
+        renderCitizensTable();
     }
-
-
 }
-
-
-
-
-// ── Load citizen submitters from API ──
-
 
 async function loadCitizensFromApi() {
-
-
     try {
-
-
         const res = await fetch('API/citizens_api.php?action=list');
-
-
         const data = await res.json();
-
-
         if (data.success && Array.isArray(data.data)) {
-
-
             _citizenData = data.data;
-
-
         }
-
-
     } catch (err) {
-
-
         console.error('Failed to load citizens:', err);
-
-
     }
-
-
 }
 
-
-
-
-// ── Render citizens table ──
-
-
 function renderCitizensTable() {
-
+    const userSection = document.getElementById('user-management-section');
+    if (window._currentActiveSection !== 'users' && window._currentActiveSection !== 'user-management') {
+        if (userSection) userSection.style.display = 'none';
+        return;
+    }
 
     const tbody = document.getElementById('citizens-table-body');
-
-
     if (!tbody) return;
-
-
-
 
     let citizens = [..._citizenData];
 
-
-    
-
-
-    // Search filter
-
-
     const search = (document.getElementById('citizen-search')?.value || '').toLowerCase();
-
-
     if (search) {
-
-
         citizens = citizens.filter(c => 
-
-
             (c.name || '').toLowerCase().includes(search) || 
-
-
             (c.email || '').toLowerCase().includes(search)
-
-
         );
-
-
     }
 
-
-
-
-    // Sort
-
+    const barangayFilter = (document.getElementById('citizen-barangay')?.value || '').toLowerCase();
+    if (barangayFilter) {
+        citizens = citizens.filter(c => (c.barangay || '').toLowerCase().includes(barangayFilter));
+    }
 
     const sort = document.getElementById('citizen-sort')?.value || 'recent';
-
-
     if (sort === 'recent') {
-
-
         citizens.sort((a, b) => new Date(b.last_activity || 0) - new Date(a.last_activity || 0));
-
-
     } else if (sort === 'submissions') {
-
-
         citizens.sort((a, b) => (b.total_submissions || 0) - (a.total_submissions || 0));
-
-
     } else if (sort === 'name') {
-
-
         citizens.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-
-
     }
-
-
-
 
     if (citizens.length === 0) {
-
-
-        tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">${search ? 'No citizens match your search' : 'No citizen submissions recorded yet'}</td></tr>`;
-
-
+        tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-gray-400">${search || barangayFilter ? 'No citizens match your search filters.' : 'No citizen submissions recorded yet.'}</td></tr>`;
         return;
-
-
     }
 
-
-
-
     tbody.innerHTML = citizens.map(c => {
-
-
         const lastAct = c.last_activity ? new Date(c.last_activity).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
-
-
-        const initials = (c.name || 'U').split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
-
+        const initials = (c.name || 'C').split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
 
         return `
-
-
-            <tr class="border-b hover:bg-gray-50 transition">
-
+            <tr class="hover:bg-gray-50 transition border-b border-gray-100">
+                <td class="px-6 py-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-full bg-red-100 text-red-700 flex items-center justify-center font-bold text-xs border border-red-200">
+                            ${initials}
+                        </div>
+                        <div>
+                            <div class="font-semibold text-gray-900 text-xs sm:text-sm flex items-center gap-1.5">
+                                ${escapeHtml(c.name || 'Citizen')}
+                                <span class="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded font-semibold"><i class="bi bi-patch-check-fill"></i> Verified</span>
+                            </div>
+                            <div class="text-[11px] text-gray-500">Valenzuela Citizen Submitter</div>
+                        </div>
+                    </div>
+                </td>
 
                 <td class="px-6 py-4">
-
-
-                    <div class="flex items-center gap-3">
-
-
-                        <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-
-
-                            <span class="text-blue-600 font-bold text-sm">${initials}</span>
-
-
-                        </div>
-
-
-                        <div>
-
-
-                            <div class="font-semibold text-gray-900">${escapeHtml(c.name || 'Unknown')}</div>
-
-
-                            <div class="text-xs text-gray-500">Citizen Submitter</div>
-
-
-                        </div>
-
-
-                    </div>
-
-
+                    <div class="text-xs font-semibold text-gray-800">${escapeHtml(c.email)}</div>
+                    <div class="text-[11px] text-gray-500"><i class="bi bi-geo-alt"></i> ${escapeHtml(c.barangay || 'Valenzuela City')}</div>
                 </td>
 
-
-                <td class="px-6 py-4 text-gray-700">${escapeHtml(c.email)}</td>
-
-
                 <td class="px-6 py-4 text-center">
-
-
-                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${c.consultation_count > 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'}">
-
-
-                        <i class="bi bi-chat-square-text"></i> ${c.consultation_count || 0}
-
-
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${c.consultation_count > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-400'}">
+                        <i class="bi bi-file-earmark-text"></i> ${c.consultation_count || 0}
                     </span>
-
-
                 </td>
 
-
                 <td class="px-6 py-4 text-center">
-
-
-                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${c.feedback_count > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'}">
-
-
-                        <i class="bi bi-chat-heart"></i> ${c.feedback_count || 0}
-
-
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${c.survey_vote_count > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-400'}">
+                        <i class="bi bi-check-square"></i> ${c.survey_vote_count || 0}
                     </span>
-
-
                 </td>
 
-
                 <td class="px-6 py-4 text-center">
-
-
-                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">
-
-
+                    <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200">
                         ${c.total_submissions || 0}
-
-
                     </span>
-
-
                 </td>
 
+                <td class="px-6 py-4 text-xs text-gray-500 font-medium">${lastAct}</td>
 
-                <td class="px-6 py-4 text-sm text-gray-600">${lastAct}</td>
-
-
+                <td class="px-6 py-4 text-right">
+                    <button onclick="viewCitizenDossier('${escapeHtml(c.email)}', '${escapeHtml(c.name)}')" class="bg-gray-900 hover:bg-gray-800 text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg shadow-sm transition-colors flex items-center gap-1.5 ml-auto">
+                        <i class="bi bi-clock-history"></i> View Dossier
+                    </button>
+                </td>
             </tr>
-
-
         `;
-
-
     }).join('');
 }
+
+async function viewCitizenDossier(email, name) {
+    const modal = document.getElementById('citizen-dossier-modal');
+    const nameEl = document.getElementById('dossier-name');
+    const emailEl = document.getElementById('dossier-email');
+    const contentEl = document.getElementById('dossier-content');
+
+    if (nameEl) nameEl.textContent = name || 'Citizen Dossier';
+    if (emailEl) emailEl.innerHTML = `<i class="bi bi-envelope"></i> ${email}`;
+    if (contentEl) contentEl.innerHTML = '<div class="text-center py-6 text-slate-400"><i class="bi bi-arrow-repeat animate-spin text-lg"></i> Loading activity timeline...</div>';
+    if (modal) modal.classList.remove('hidden');
+
+    try {
+        const res = await fetch('API/citizens_api.php?action=get_dossier&email=' + encodeURIComponent(email));
+        const data = await res.json();
+
+        if (data.success) {
+            let html = '';
+            
+            if ((!data.proposals || data.proposals.length === 0) && (!data.activity || data.activity.length === 0)) {
+                html = '<div class="text-center py-6 text-slate-400">No proposals or survey votes recorded for this citizen yet.</div>';
+            } else {
+                if (data.proposals && data.proposals.length > 0) {
+                    html += `<div class="font-bold text-slate-900 mb-2 text-xs uppercase tracking-wider text-red-600"><i class="bi bi-file-earmark-text"></i> Submitted Proposals (${data.proposals.length})</div><div class="space-y-2 mb-4">`;
+                    data.proposals.forEach(p => {
+                        html += `
+                            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex justify-between items-center">
+                                <div>
+                                    <div class="font-bold text-slate-800">${escapeHtml(p.title)}</div>
+                                    <div class="text-[10px] text-slate-400">Tracking: ${escapeHtml(p.tracking_number || 'N/A')}</div>
+                                </div>
+                                <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-100 text-blue-800 uppercase">${escapeHtml(p.status)}</span>
+                            </div>
+                        `;
+                    });
+                    html += `</div>`;
+                }
+
+                if (data.activity && data.activity.length > 0) {
+                    html += `<div class="font-bold text-slate-900 mb-2 text-xs uppercase tracking-wider text-blue-600"><i class="bi bi-check-square"></i> Votes & Feedback Queue (${data.activity.length})</div><div class="space-y-2">`;
+                    data.activity.forEach(a => {
+                        html += `
+                            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex justify-between items-center">
+                                <div>
+                                    <div class="font-bold text-slate-800">${escapeHtml(a.category || 'Feedback')} - ${escapeHtml(a.consultation_title || 'General')}</div>
+                                    <div class="text-[10px] text-slate-500">${escapeHtml(a.message || '')}</div>
+                                </div>
+                                <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-100 text-emerald-800 uppercase">${escapeHtml(a.status)}</span>
+                            </div>
+                        `;
+                    });
+                    html += `</div>`;
+                }
+            }
+            if (contentEl) contentEl.innerHTML = html;
+        } else {
+            if (contentEl) contentEl.innerHTML = '<div class="text-center py-6 text-red-500">Failed to load dossier data.</div>';
+        }
+    } catch (err) {
+        if (contentEl) contentEl.innerHTML = '<div class="text-center py-6 text-red-500">Error retrieving citizen dossier.</div>';
+    }
+}
+
+function closeCitizenDossierModal() {
+    const modal = document.getElementById('citizen-dossier-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function exportCitizensCsv() {
+    if (!_citizenData || _citizenData.length === 0) {
+        alert('No citizen records available to export.');
+        return;
+    }
+
+    let csv = 'Citizen Name,Email,Barangay,Proposals Submitted,Survey Votes,Total Engagement,Last Engagement Date\n';
+    _citizenData.forEach(c => {
+        csv += `"${(c.name||'').replace(/"/g, '""')}","${(c.email||'').replace(/"/g, '""')}","${(c.barangay||'Valenzuela City').replace(/"/g, '""')}",${c.consultation_count||0},${c.survey_vote_count||0},${c.total_submissions||0},"${c.last_activity||''}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Valenzuela_Citizen_Registry_${new Date().toISOString().slice(0,10)}.csv`;
+    link.click();
+}
+
+window.viewCitizenDossier = viewCitizenDossier;
+window.closeCitizenDossierModal = closeCitizenDossierModal;
+window.exportCitizensCsv = exportCitizensCsv;
 
 function openConsultationExportModal(messageHtml) {
     const modal = document.getElementById('consultation-export-modal');
@@ -17381,43 +17210,18 @@ async function renderPCDocuments() {
 
     const canManageDocuments = currentUserCanManageDocuments();
     const totalDocuments = AppData.documents.length;
-
-
     const totalSize = AppData.documents.reduce((sum, d) => sum + (d.size || 0), 0);
-
-
     const approvedDocs = AppData.documents.filter(d => String(d.status || '').toLowerCase() === 'approved').length;
 
-
-
-
-    contentArea.innerHTML = `
-
-
+    const docHtml = `
         <div class="space-y-6">
-
-
             <!-- Header with Statistics -->
-
-
             <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-8 rounded-lg shadow-lg">
-
-
                 <div class="flex justify-between items-start mb-6">
-
-
                     <div>
-
-
                         <h1 class="text-3xl font-bold mb-2">Document Management</h1>
-
-
                         <p class="text-red-100">Manage all consultation documents, track uploads, and monitor approval status</p>
-
-
                     </div>
-
-
                     ${canManageDocuments ? `<div class="flex gap-2">
                         <button onclick="openAddDocumentModal()" class="btn-primary flex items-center gap-2 bg-white text-red-600 hover:bg-red-50">
                             <i class="bi bi-file-earmark-plus"></i> Upload Document
@@ -17426,59 +17230,25 @@ async function renderPCDocuments() {
                             <i class="bi bi-file-earmark-bar-graph"></i> Generate Report
                         </button>
                     </div>` : `<span class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/20 text-red-100 text-sm">Read-only access</span>`}
-
-
                 </div>
-
-
-                
-
 
                 <!-- Stats Cards -->
-
-
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
-
-
                         <div class="text-red-100 text-sm font-semibold mb-1">Total Documents</div>
-
-
                         <div class="text-3xl font-bold">${totalDocuments}</div>
-
-
                     </div>
 
-
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
-
-
                         <div class="text-red-100 text-sm font-semibold mb-1">Approved</div>
-
-
                         <div class="text-3xl font-bold">${approvedDocs}</div>
-
-
                     </div>
-
 
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
-
-
                         <div class="text-red-100 text-sm font-semibold mb-1">Total Size</div>
-
-
                         <div class="text-3xl font-bold">${formatFileSize(totalSize)}</div>
-
-
                     </div>
-
-
                 </div>
-
-
             </div>
 
             <!-- Four Section Tabs: Consultation, Feedback, Survey, Reports -->
@@ -17554,6 +17324,7 @@ async function renderPCDocuments() {
                                     <option value="education">Education</option>
                                     <option value="environment">Environment</option>
                                     <option value="social">Social Services</option>
+                                    <option value="governance">Governance</option>
                                 </select>
                             </div>
                             <div>
@@ -17775,12 +17546,25 @@ async function renderPCDocuments() {
 
     `;
 
+    let docSection = document.getElementById('document-management-section');
+    if (!docSection) {
+        docSection = document.createElement('section');
+        docSection.id = 'document-management-section';
+        docSection.className = 'document-management-section mb-6';
+        contentArea.appendChild(docSection);
+    }
+    docSection.innerHTML = docHtml;
 
-
+    if (typeof hideManagedTemplateSections === 'function') {
+        hideManagedTemplateSections();
+    }
+    docSection.style.display = 'block';
 
     renderDocumentsTable();
     refreshDocumentsModule(true);
 }
+window.renderPCDocuments = renderPCDocuments;
+window.renderDocuments = renderPCDocuments;
 
 // Filter documents by group (Consultation, Feedback, Survey, Reports)
 function filterDocumentsByGroup(group) {

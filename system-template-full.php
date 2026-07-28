@@ -3389,9 +3389,6 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
                 <div id="content-area">
-
-
-
                     <?php if ($is_super_admin): ?>
                     <!-- AUDIT LOG SECTION -->
 

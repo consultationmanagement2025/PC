@@ -81,9 +81,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $email_file = file_exists(__DIR__ . '/../email_config_simple.php') ? (__DIR__ . '/../email_config_simple.php') : (__DIR__ . '/email_config_simple.php');
             if (file_exists($email_file)) {
-                require_once $email_file;
-                if (function_exists('sendGmailEmailSimple')) {
-                    sendGmailEmailSimple($target_email, $subject, $body, false);
+                try {
+                    require_once $email_file;
+                    if (function_exists('sendGmailEmailSimple')) {
+                        @sendGmailEmailSimple($target_email, $subject, $body, false);
+                    }
+                } catch (Throwable $e) {
+                    error_log("Google OTP Email Error: " . $e->getMessage());
                 }
             }
 

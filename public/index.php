@@ -85,65 +85,147 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
     }
 
     if ($action === 'submit_survey_vote') {
-        $survey_id = (int)($_POST['survey_id'] ?? 0);
-        $option_chosen = trim($_POST['option_chosen'] ?? '');
+        try {
+            $survey_id = (int)($_POST['survey_id'] ?? 0);
+            $option_chosen = trim($_POST['option_chosen'] ?? '');
 
-        if ($survey_id <= 0 || empty($option_chosen)) {
-            echo json_encode(['success' => false, 'message' => 'Invalid survey vote.']);
-            exit;
-        }
-
-        $user_name = isset($_SESSION['fullname']) ? $_SESSION['fullname'] : 'Citizen';
-        $user_email = isset($_SESSION['email']) ? $_SESSION['email'] : 'guest@valenzuela.gov.ph';
-        $tracking_token = 'VOTE-' . date('Y') . '-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 6));
-
-        // Save vote as feedback entry
-        $stmt = $conn->prepare("INSERT INTO feedback (consultation_id, guest_name, guest_email, category, message, rating, tracking_token, status, created_at) VALUES (?, ?, ?, 'Survey Vote', ?, 5, ?, 'reviewed', NOW())");
-        $stmt->bind_param('issss', $survey_id, $user_name, $user_email, $option_chosen, $tracking_token);
-
-        if ($stmt->execute()) {
-            // Calculate total votes for Option A and Option B for this survey
-            $sStmt = $conn->prepare("SELECT survey_option_a, survey_option_b FROM consultations WHERE id = ? LIMIT 1");
-            $sStmt->bind_param('i', $survey_id);
-            $sStmt->execute();
-            $sRes = $sStmt->get_result();
-            $optA = 'Agree';
-            $optB = 'Disagree';
-            if ($sRes && $sRow = $sRes->fetch_assoc()) {
-                $optA = $sRow['survey_option_a'] ?? 'Agree';
-                $optB = $sRow['survey_option_b'] ?? 'Disagree';
+            if ($survey_id <= 0 || empty($option_chosen)) {
+                echo json_encode(['success' => false, 'message' => 'Invalid survey vote.']);
+                exit;
             }
-            $sStmt->close();
 
-            $vAStmt = $conn->prepare("SELECT COUNT(*) as count_a FROM feedback WHERE consultation_id = ? AND category = 'Survey Vote' AND message = ?");
-            $vAStmt->bind_param('is', $survey_id, $optA);
-            $vAStmt->execute();
-            $count_a = (int)($vAStmt->get_result()->fetch_assoc()['count_a'] ?? 0);
-            $vAStmt->close();
+            $user_name = isset($_SESSION['fullname']) ? $_SESSION['fullname'] : (isset($_SESSION['full_name']) ? $_SESSION['full_name'] : 'Citizen');
+            $user_email = isset($_SESSION['email']) ? $_SESSION['email'] : 'guest@valenzuela.gov.ph';
 
-            $vBStmt = $conn->prepare("SELECT COUNT(*) as count_b FROM feedback WHERE consultation_id = ? AND category = 'Survey Vote' AND message = ?");
-            $vBStmt->bind_param('is', $survey_id, $optB);
-            $vBStmt->execute();
-            $count_b = (int)($vBStmt->get_result()->fetch_assoc()['count_b'] ?? 0);
-            $vBStmt->close();
+            $safeEmail = $conn->real_escape_string($user_email);
+            $safeName = $conn->real_escape_string($user_name);
+            $safeOption = $conn->real_escape_string($option_chosen);
 
-            $total = max(1, $count_a + $count_b);
-            $pct_a = round(($count_a / $total) * 100);
-            $pct_b = round(($count_b / $total) * 100);
+            $confirm_change = !empty($_POST['confirm_change']) && ($_POST['confirm_change'] === '1' || $_POST['confirm_change'] === 'true');
 
-            echo json_encode([
-                'success' => true,
-                'message' => 'Vote recorded successfully!',
-                'count_a' => $count_a,
-                'count_b' => $count_b,
-                'total_votes' => $count_a + $count_b,
-                'pct_a' => $pct_a,
-                'pct_b' => $pct_b
-            ]);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'Failed to record vote.']);
+            // 1. Check if citizen has already cast a vote for this survey
+            if (!empty($user_email) && $user_email !== 'guest@valenzuela.gov.ph') {
+                $checkRes = $conn->query("SELECT id, message FROM feedback WHERE consultation_id = $survey_id AND guest_email = '$safeEmail' AND category = 'Survey Vote' LIMIT 1");
+                if ($checkRes && $cRow = $checkRes->fetch_assoc()) {
+                    $prevVote = $cRow['message'];
+
+                    if ($prevVote === $option_chosen) {
+                        echo json_encode([
+                            'success' => false,
+                            'already_voted_same' => true,
+                            'previous_vote' => $prevVote,
+                            'message' => "You have already cast your vote ('$prevVote') for this survey."
+                        ]);
+                        exit;
+                    }
+
+                    if (!$confirm_change) {
+                        echo json_encode([
+                            'success' => false,
+                            'can_change_vote' => true,
+                            'previous_vote' => $prevVote,
+                            'new_vote' => $option_chosen,
+                            'message' => "You previously voted '$prevVote'. Do you want to change your vote to '$option_chosen'?"
+                        ]);
+                        exit;
+                    } else {
+                        // Update existing vote in database
+                        $feedback_id = (int)$cRow['id'];
+                        $conn->query("UPDATE feedback SET message = '$safeOption', updated_at = NOW() WHERE id = $feedback_id");
+                        
+                        // Recalculate survey stats
+                        $sRes = $conn->query("SELECT survey_option_a, survey_option_b FROM consultations WHERE id = $survey_id LIMIT 1");
+                        $optA = 'Agree'; $optB = 'Disagree';
+                        if ($sRes && $sRow = $sRes->fetch_assoc()) {
+                            $optA = !empty($sRow['survey_option_a']) ? $sRow['survey_option_a'] : 'Agree';
+                            $optB = !empty($sRow['survey_option_b']) ? $sRow['survey_option_b'] : 'Disagree';
+                        }
+                        $safeOptA = $conn->real_escape_string($optA);
+                        $safeOptB = $conn->real_escape_string($optB);
+
+                        $vARes = $conn->query("SELECT COUNT(*) as count_a FROM feedback WHERE consultation_id = $survey_id AND category = 'Survey Vote' AND message = '$safeOptA'");
+                        $count_a = ($vARes && $vARow = $vARes->fetch_assoc()) ? (int)$vARow['count_a'] : 0;
+
+                        $vBRes = $conn->query("SELECT COUNT(*) as count_b FROM feedback WHERE consultation_id = $survey_id AND category = 'Survey Vote' AND message = '$safeOptB'");
+                        $count_b = ($vBRes && $vBRow = $vBRes->fetch_assoc()) ? (int)$vBRow['count_b'] : 0;
+
+                        $total = max(1, $count_a + $count_b);
+                        $pct_a = round(($count_a / $total) * 100);
+                        $pct_b = round(($count_b / $total) * 100);
+
+                        echo json_encode([
+                            'success' => true,
+                            'updated_vote' => true,
+                            'message' => "Your vote has been successfully changed to '$option_chosen'!",
+                            'count_a' => $count_a,
+                            'count_b' => $count_b,
+                            'total_votes' => $count_a + $count_b,
+                            'pct_a' => $pct_a,
+                            'pct_b' => $pct_b,
+                            'option_voted' => $option_chosen
+                        ]);
+                        exit;
+                    }
+                }
+            }
+
+            $tracking_token = 'VOTE-' . date('Y') . '-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 6));
+
+            // Attempt auto-migration of tracking_token column if missing in database
+            @$conn->query("ALTER TABLE feedback ADD COLUMN tracking_token VARCHAR(64) NULL");
+
+            // Primary insert with tracking_token
+            $insertSql = "INSERT INTO feedback (consultation_id, guest_name, guest_email, category, message, rating, tracking_token, status, created_at) VALUES ($survey_id, '$safeName', '$safeEmail', 'Survey Vote', '$safeOption', 5, '$tracking_token', 'new', NOW())";
+            
+            $inserted = @$conn->query($insertSql);
+            if (!$inserted) {
+                // Fallback insert using standard columns
+                $fallbackSql = "INSERT INTO feedback (consultation_id, guest_name, guest_email, category, message, rating, status, created_at) VALUES ($survey_id, '$safeName', '$safeEmail', 'Survey Vote', '$safeOption', 5, 'new', NOW())";
+                $inserted = $conn->query($fallbackSql);
+            }
+
+            if ($inserted) {
+                // Update posts_count on consultations
+                $conn->query("UPDATE consultations SET posts_count = posts_count + 1 WHERE id = " . $survey_id);
+
+                // Fetch survey options
+                $sRes = $conn->query("SELECT survey_option_a, survey_option_b FROM consultations WHERE id = $survey_id LIMIT 1");
+                $optA = 'Agree';
+                $optB = 'Disagree';
+                if ($sRes && $sRow = $sRes->fetch_assoc()) {
+                    $optA = !empty($sRow['survey_option_a']) ? $sRow['survey_option_a'] : 'Agree';
+                    $optB = !empty($sRow['survey_option_b']) ? $sRow['survey_option_b'] : 'Disagree';
+                }
+
+                $safeOptA = $conn->real_escape_string($optA);
+                $safeOptB = $conn->real_escape_string($optB);
+
+                $vARes = $conn->query("SELECT COUNT(*) as count_a FROM feedback WHERE consultation_id = $survey_id AND category = 'Survey Vote' AND message = '$safeOptA'");
+                $count_a = ($vARes && $vARow = $vARes->fetch_assoc()) ? (int)$vARow['count_a'] : 0;
+
+                $vBRes = $conn->query("SELECT COUNT(*) as count_b FROM feedback WHERE consultation_id = $survey_id AND category = 'Survey Vote' AND message = '$safeOptB'");
+                $count_b = ($vBRes && $vBRow = $vBRes->fetch_assoc()) ? (int)$vBRow['count_b'] : 0;
+
+                $total = max(1, $count_a + $count_b);
+                $pct_a = round(($count_a / $total) * 100);
+                $pct_b = round(($count_b / $total) * 100);
+
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Vote recorded successfully!',
+                    'count_a' => $count_a,
+                    'count_b' => $count_b,
+                    'total_votes' => $count_a + $count_b,
+                    'pct_a' => $pct_a,
+                    'pct_b' => $pct_b,
+                    'option_voted' => $option_chosen
+                ]);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Database query failed: ' . $conn->error]);
+            }
+        } catch (Throwable $e) {
+            echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
         }
-        $stmt->close();
         exit;
     }
 
@@ -391,7 +473,7 @@ if (!empty($types)) {
 
 // Community Surveys
 $surveys = [];
-$survey_query = "SELECT id, title, survey_question, survey_option_a, survey_option_b, response_mode, status, created_at, end_date, posts_count FROM consultations WHERE response_mode IN ('survey', 'hybrid') AND status IN ('active', 'viewed', 'replied', 'scheduled') ORDER BY created_at DESC LIMIT 6";
+$survey_query = "SELECT id, title, description, survey_question, survey_option_a, survey_option_b, response_mode, status, created_at, end_date, posts_count FROM consultations WHERE response_mode IN ('survey', 'hybrid') AND status IN ('active', 'viewed', 'replied', 'scheduled') ORDER BY created_at DESC LIMIT 6";
 $sRes = $conn->query($survey_query);
 if ($sRes) {
     while ($sRow = $sRes->fetch_assoc()) {
@@ -415,6 +497,17 @@ if ($sRes) {
         $sRow['total_votes'] = $vA + $vB;
         $sRow['pct_a'] = round(($vA / $tot) * 100);
         $sRow['pct_b'] = round(($vB / $tot) * 100);
+
+        $user_vote = null;
+        if (!empty($_SESSION['email'])) {
+            $eMail = $conn->real_escape_string($_SESSION['email']);
+            $uvStmt = $conn->query("SELECT message FROM feedback WHERE consultation_id = $sId AND guest_email = '$eMail' AND category = 'Survey Vote' LIMIT 1");
+            if ($uvStmt && $uvRow = $uvStmt->fetch_assoc()) {
+                $user_vote = $uvRow['message'];
+            }
+        }
+        $sRow['user_vote'] = $user_vote;
+
         $surveys[] = $sRow;
     }
 }
@@ -451,8 +544,8 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
 
 $user_role = strtolower(trim($_SESSION['role'] ?? ''));
 $is_citizen_session = isset($_SESSION['user_id']) && ($user_role === 'citizen' || empty($user_role) || $user_role === 'user');
-$current_user_name = $is_citizen_session ? ($_SESSION['fullname'] ?? $_SESSION['full_name'] ?? $_SESSION['username'] ?? null) : null;
-$is_logged_in = $is_citizen_session && !empty($current_user_name);
+$current_user_name = $_SESSION['fullname'] ?? $_SESSION['full_name'] ?? $_SESSION['username'] ?? ($_SESSION['email'] ?? null);
+$is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($current_user_name);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -909,9 +1002,16 @@ $is_logged_in = $is_citizen_session && !empty($current_user_name);
                                 <?php echo htmlspecialchars($s['title']); ?>
                             </h4>
 
-                            <p class="text-sm text-slate-600 mb-4">
+                            <p class="text-sm font-bold text-slate-800 mb-2">
                                 <?php echo htmlspecialchars($s['survey_question'] ?? $s['title']); ?>
                             </p>
+
+                            <?php if (!empty($s['description'])): ?>
+                                <div class="text-xs text-slate-600 mb-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200 leading-relaxed max-h-36 overflow-y-auto">
+                                    <i class="fa-solid fa-circle-info text-valenzuela-blue mr-1"></i>
+                                    <?php echo nl2br(htmlspecialchars($s['description'])); ?>
+                                </div>
+                            <?php endif; ?>
 
                             <!-- Poll Progress Bars -->
                             <div class="space-y-3 my-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
@@ -936,14 +1036,32 @@ $is_logged_in = $is_citizen_session && !empty($current_user_name);
                             </div>
                         </div>
 
-                        <!-- Vote Action Buttons -->
-                        <div class="grid grid-cols-2 gap-3 mt-2">
-                            <button onclick="castSurveyVote(<?php echo $s['id']; ?>, '<?php echo addslashes($optA); ?>')" class="w-full bg-blue-50 hover:bg-valenzuela-blue hover:text-white text-valenzuela-blue border border-blue-200 font-bold py-2.5 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5">
-                                <i class="fa-solid fa-thumbs-up"></i> Vote <?php echo htmlspecialchars($optA); ?>
-                            </button>
-                            <button onclick="castSurveyVote(<?php echo $s['id']; ?>, '<?php echo addslashes($optB); ?>')" class="w-full bg-red-50 hover:bg-valenzuela-red hover:text-white text-valenzuela-red border border-red-200 font-bold py-2.5 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5">
-                                <i class="fa-solid fa-thumbs-down"></i> Vote <?php echo htmlspecialchars($optB); ?>
-                            </button>
+                        <!-- Vote Action / Voted Status Buttons -->
+                        <div id="survey-action-buttons-<?php echo $s['id']; ?>" class="mt-2 space-y-2.5" data-opta="<?php echo htmlspecialchars($optA); ?>" data-optb="<?php echo htmlspecialchars($optB); ?>">
+                            <?php if (!empty($s['user_vote'])): ?>
+                                <div class="w-full bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold py-2 px-3.5 rounded-xl text-xs flex items-center justify-between shadow-sm">
+                                    <span class="flex items-center gap-1.5">
+                                        <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                                        <span>You voted: <strong class="uppercase font-extrabold text-emerald-950"><?php echo htmlspecialchars($s['user_vote']); ?></strong></span>
+                                    </span>
+                                    <span class="text-[10px] text-emerald-700 font-semibold bg-emerald-100 px-2 py-0.5 rounded-full">(Click other button to change)</span>
+                                </div>
+                            <?php endif; ?>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <?php 
+                                    $userV = strtolower(trim($s['user_vote'] ?? ''));
+                                    $isA = ($userV !== '' && $userV === strtolower(trim($optA)));
+                                    $isB = ($userV !== '' && $userV === strtolower(trim($optB)));
+                                ?>
+                                <button onclick="castSurveyVote(<?php echo $s['id']; ?>, '<?php echo addslashes($optA); ?>')" class="w-full <?php echo $isA ? 'bg-emerald-600 text-white border-emerald-700 font-extrabold shadow' : 'bg-blue-50 hover:bg-valenzuela-blue hover:text-white text-valenzuela-blue border-blue-200 font-bold'; ?> border py-2.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5">
+                                    <i class="fa-solid <?php echo $isA ? 'fa-check-circle' : 'fa-thumbs-up'; ?>"></i> <?php echo $isA ? 'Voted ' . htmlspecialchars($optA) : 'Vote ' . htmlspecialchars($optA); ?>
+                                </button>
+
+                                <button onclick="castSurveyVote(<?php echo $s['id']; ?>, '<?php echo addslashes($optB); ?>')" class="w-full <?php echo $isB ? 'bg-red-600 text-white border-red-700 font-extrabold shadow' : 'bg-red-50 hover:bg-valenzuela-red hover:text-white text-valenzuela-red border-red-200 font-bold'; ?> border py-2.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5">
+                                    <i class="fa-solid <?php echo $isB ? 'fa-check-circle' : 'fa-thumbs-down'; ?>"></i> <?php echo $isB ? 'Voted ' . htmlspecialchars($optB) : 'Vote ' . htmlspecialchars($optB); ?>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 <?php endforeach; endif; ?>
@@ -1274,6 +1392,33 @@ $is_logged_in = $is_citizen_session && !empty($current_user_name);
         </div>
     </div>
 
+    <!-- Change Vote Confirmation Modal -->
+    <div id="change-vote-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 text-center relative border border-slate-200">
+            <button onclick="closeChangeVoteModal()" class="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+
+            <div class="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 border border-amber-200 shadow-sm">
+                <i class="fa-solid fa-rotate text-2xl"></i>
+            </div>
+
+            <h3 class="text-xl font-extrabold text-slate-900 mb-2">Change Your Vote?</h3>
+            <p class="text-xs sm:text-sm text-slate-600 mb-6 leading-relaxed">
+                You previously voted <strong id="change-vote-prev" class="text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">Option A</strong> on this survey. Would you like to change your vote to <strong id="change-vote-new" class="text-valenzuela-blue bg-blue-50 px-2 py-0.5 rounded border border-blue-200">Option B</strong>?
+            </p>
+
+            <div class="space-y-3">
+                <button onclick="executeChangeVote()" class="w-full bg-valenzuela-blue hover:bg-blue-800 text-white font-bold py-3 px-6 rounded-xl text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-check-circle"></i> Yes, Change My Vote
+                </button>
+                <button onclick="closeChangeVoteModal()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-6 rounded-xl text-xs sm:text-sm transition-colors">
+                    Keep Existing Vote
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- My Submissions Activity Modal -->
     <div id="my-activity-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 relative border border-slate-200 max-h-[85vh] overflow-y-auto">
@@ -1333,6 +1478,10 @@ $is_logged_in = $is_citizen_session && !empty($current_user_name);
     <!-- ========================================== -->
     <script src="../assets/js/index.js"></script>
     <script>
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
         // Star rating picker logic
         document.querySelectorAll('#star-rating-picker i').forEach(star => {
             star.addEventListener('click', function() {
@@ -1383,9 +1532,10 @@ $is_logged_in = $is_citizen_session && !empty($current_user_name);
         }
 
         // Community Survey Voting Functionality
-        function castSurveyVote(surveyId, optionChosen) {
+        let pendingChangeVote = null;
+
+        function castSurveyVote(surveyId, optionChosen, confirmChange = false) {
             if (!window.__IS_LOGGED_IN__) {
-                // If citizen is not logged in, redirect to Google Choose an Account screen
                 window.location.href = 'google-auth.php';
                 return;
             }
@@ -1394,6 +1544,9 @@ $is_logged_in = $is_citizen_session && !empty($current_user_name);
             formData.append('api_action', 'submit_survey_vote');
             formData.append('survey_id', surveyId);
             formData.append('option_chosen', optionChosen);
+            if (confirmChange) {
+                formData.append('confirm_change', '1');
+            }
 
             fetch('index.php', {
                 method: 'POST',
@@ -1402,7 +1555,8 @@ $is_logged_in = $is_citizen_session && !empty($current_user_name);
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    // Update percentage UI real-time
+                    closeChangeVoteModal();
+
                     const pctA = document.getElementById('survey-pct-a-' + surveyId);
                     const barA = document.getElementById('survey-bar-a-' + surveyId);
                     const pctB = document.getElementById('survey-pct-b-' + surveyId);
@@ -1417,18 +1571,85 @@ $is_logged_in = $is_citizen_session && !empty($current_user_name);
                         barB.style.width = data.pct_b + '%';
                     }
 
-                    // Open Vote Success Modal
                     const modal = document.getElementById('vote-success-modal');
                     const optText = document.getElementById('vote-success-option');
                     if (optText) optText.textContent = optionChosen;
-                    if (modal) modal.classList.remove('hidden');
+                    if (modal) {
+                        modal.classList.remove('hidden');
+                    }
+
+                    updateSurveyButtonsUI(surveyId, optionChosen);
+                } else if (data.can_change_vote) {
+                    // Open Change Vote Confirmation Modal
+                    pendingChangeVote = { surveyId, optionChosen };
+                    const pEl = document.getElementById('change-vote-prev');
+                    const nEl = document.getElementById('change-vote-new');
+                    if (pEl) pEl.textContent = data.previous_vote;
+                    if (nEl) nEl.textContent = data.new_vote;
+
+                    const changeModal = document.getElementById('change-vote-modal');
+                    if (changeModal) changeModal.classList.remove('hidden');
+                } else if (data.already_voted_same) {
+                    showToast("You have already cast your vote ('" + optionChosen + "') for this survey.", 'info');
                 } else {
                     showToast(data.message || 'Failed to record vote.', 'error');
                 }
             })
             .catch(err => {
-                showToast('Error recording vote.', 'error');
+                console.error("Voting error:", err);
+                showToast('Error recording vote. Please try again.', 'error');
             });
+        }
+
+        function closeChangeVoteModal() {
+            const changeModal = document.getElementById('change-vote-modal');
+            if (changeModal) changeModal.classList.add('hidden');
+            pendingChangeVote = null;
+        }
+
+        function executeChangeVote() {
+            if (pendingChangeVote) {
+                const { surveyId, optionChosen } = pendingChangeVote;
+                castSurveyVote(surveyId, optionChosen, true);
+            }
+        }
+
+        function updateSurveyButtonsUI(surveyId, optionChosen) {
+            const container = document.getElementById('survey-action-buttons-' + surveyId);
+            if (!container) return;
+
+            const optA = container.getAttribute('data-opta') || 'Agree';
+            const optB = container.getAttribute('data-optb') || 'Disagree';
+
+            const isA = (optionChosen.toLowerCase() === optA.toLowerCase());
+            const isB = (optionChosen.toLowerCase() === optB.toLowerCase());
+
+            const btnAClass = isA ? 'bg-emerald-600 text-white border-emerald-700 font-extrabold shadow' : 'bg-blue-50 hover:bg-valenzuela-blue hover:text-white text-valenzuela-blue border-blue-200 font-bold';
+            const btnBClass = isB ? 'bg-red-600 text-white border-red-700 font-extrabold shadow' : 'bg-red-50 hover:bg-valenzuela-red hover:text-white text-valenzuela-red border-red-200 font-bold';
+
+            const iconA = isA ? 'fa-check-circle' : 'fa-thumbs-up';
+            const iconB = isB ? 'fa-check-circle' : 'fa-thumbs-down';
+
+            const textA = isA ? ('Voted ' + escapeHtml(optA)) : ('Vote ' + escapeHtml(optA));
+            const textB = isB ? ('Voted ' + escapeHtml(optB)) : ('Vote ' + escapeHtml(optB));
+
+            container.innerHTML = `
+                <div class="w-full bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold py-2 px-3.5 rounded-xl text-xs flex items-center justify-between shadow-sm">
+                    <span class="flex items-center gap-1.5">
+                        <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                        <span>You voted: <strong class="uppercase font-extrabold text-emerald-950">${escapeHtml(optionChosen)}</strong></span>
+                    </span>
+                    <span class="text-[10px] text-emerald-700 font-semibold bg-emerald-100 px-2 py-0.5 rounded-full">(Click other button to change)</span>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="castSurveyVote(${surveyId}, '${optA.replace(/'/g, "\\'")}')" class="w-full ${btnAClass} border py-2.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5">
+                        <i class="fa-solid ${iconA}"></i> ${textA}
+                    </button>
+                    <button onclick="castSurveyVote(${surveyId}, '${optB.replace(/'/g, "\\'")}')" class="w-full ${btnBClass} border py-2.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5">
+                        <i class="fa-solid ${iconB}"></i> ${textB}
+                    </button>
+                </div>
+            `;
         }
 
         function closeVoteSuccessModal() {
@@ -1509,32 +1730,7 @@ $is_logged_in = $is_citizen_session && !empty($current_user_name);
                 });
         }
 
-        // Survey Vote Handler
-        function castSurveyVote(surveyId, optionChosen) {
-            if (!window.__IS_LOGGED_IN__) {
-                showRequireLoginModal();
-                return;
-            }
-            const data = new FormData();
-            data.append('api_action', 'submit_survey_vote');
-            data.append('survey_id', surveyId);
-            data.append('option_chosen', optionChosen);
-
-            fetch('index.php', { method: 'POST', body: data })
-                .then(r => r.json())
-                .then(res => {
-                    if (res.success) {
-                        showToast(res.message);
-                        // Update progress bar percentages dynamically
-                        document.getElementById('survey-pct-a-' + surveyId).textContent = res.pct_a + '%';
-                        document.getElementById('survey-pct-b-' + surveyId).textContent = res.pct_b + '%';
-                        document.getElementById('survey-bar-a-' + surveyId).style.width = res.pct_a + '%';
-                        document.getElementById('survey-bar-b-' + surveyId).style.width = res.pct_b + '%';
-                    } else {
-                        showToast(res.message, 'error');
-                    }
-                });
-        }
+        // Survey Vote Handler (Handled above by interactive modal version)
 
         // Track Code Lookup Modal
         function showTrackModal() {

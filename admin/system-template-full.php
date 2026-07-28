@@ -3,7 +3,7 @@
 
 
 session_start();
-require_once 'session_check.php';
+require_once 'UTILS/session_check.php';
 
 
 
@@ -34,7 +34,7 @@ require 'DATABASE/feedback.php';
 require_once 'UTILS/security.php';
 require_once 'DATABASE/document-management.php';
 require_once 'UTILS/pdf_generator.php';
-require_once 'email_config.php';
+require_once __DIR__ . '/email_config.php';
 
 
 
@@ -273,7 +273,7 @@ function buildModuleReportData($module, $conn) {
         }
         
         // Fetch all users for user management section
-        $r = $conn->query("SELECT id, fullname, email, role, status FROM users ORDER BY created_at DESC");
+        $r = $conn->query("SELECT id, fullname, email, role, status, verification_status, created_at FROM users ORDER BY created_at DESC");
         if ($r) {
             $users = [];
             while ($row = $r->fetch_assoc()) {
@@ -282,6 +282,13 @@ function buildModuleReportData($module, $conn) {
         } else {
             $users = [];
         }
+
+        // Separate users by role for different sections
+        $citizens = array_filter($users, function($u) {
+            $role = strtolower($u['role'] ?? '');
+            return !in_array($role, ['admin', 'administrator', 'super admin', 'superadmin', 'staff', 'resource person', 'resource_person']);
+        });
+        $citizens = array_values($citizens);
 
         $r = $conn->query("SELECT COUNT(*) AS total FROM posts");
         if ($r) {
@@ -1676,11 +1683,11 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-    <link rel="icon" type="image/png" href="/pcms/admin/ASSETS/images/logo.webp">
+    <link rel="icon" type="image/png" href="images/logo.webp">
 
 
 
-    <link rel="apple-touch-icon" href="/pcms/admin/ASSETS/images/logo.webp">
+    <link rel="apple-touch-icon" href="images/logo.webp">
 
 
 
@@ -2315,7 +2322,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                        <img src="/pcms/admin/ASSETS/images/logo.webp" alt="Valenzuela Logo" class="w-9 h-9 object-contain">
+                        <img src="images/logo.webp" alt="Valenzuela Logo" class="w-9 h-9 object-contain">
 
 
 
@@ -2660,7 +2667,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                        <img src="/pcms/admin/ASSETS/images/logo.webp" alt="Valenzuela Logo" style="width: 100%; height: 100%;" class="object-contain">
+                        <img src="images/logo.webp" alt="Valenzuela Logo" style="width: 100%; height: 100%;" class="object-contain">
 
 
 
@@ -2994,7 +3001,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                                <img src="/pcms/admin/ASSETS/images/logo.webp" alt="Valenzuela" class="w-10 h-10 object-contain">
+                                <img src="images/logo.webp" alt="Valenzuela" class="w-10 h-10 object-contain">
 
 
 
@@ -3382,9 +3389,6 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
                 <div id="content-area">
-
-
-
                     <?php if ($is_super_admin): ?>
                     <!-- AUDIT LOG SECTION -->
 
@@ -4528,8 +4532,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
                     <!-- REPORTS SECTION -->
-                    <?php if ($module === 'reports'): ?>
-                    <section id="reports-section" class="mb-6" style="display: block;">
+                    <section id="reports-section" class="mb-6" style="display: none;">
                         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                             <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
                                 <div>
@@ -4681,59 +4684,76 @@ $totalPages = ceil($totalLogs / $pageSize);
                             </script>
                         </div>
                     </section>
-                    <?php endif; ?>
 
 
 
                     <!-- USER MANAGEMENT SECTION -->
+
+
+
                     <section id="user-management-section" class="mb-6" style="display: none;">
+
+
+
                         <div class="bg-white rounded-lg shadow-md p-6">
+
+
+
                             <h2 class="text-2xl font-bold text-slate-800 mb-6">User Management</h2>
 
-                            <div class="filter-bar">
+                            <!-- Filter Bar -->
+                            <div class="filter-bar mb-6">
                                 <div class="filter-group flex-1 min-w-[200px]">
                                     <label>Search Users</label>
-                                    <input type="text" placeholder="Search by name or email...">
+                                    <input type="text" id="user-search" placeholder="Search by name or email..." onkeyup="filterUsers()">
                                 </div>
                                 <div class="filter-group">
                                     <label>Role</label>
-                                    <select>
-                                        <option>All Roles</option>
-                                        <option>Superadmin</option>
-                                        <option>Admin</option>
-                                        <option>Citizen</option>
+                                    <select id="role-filter" onchange="filterUsers()">
+                                        <option value="">All Roles</option>
+                                        <option value="admin">Admin</option>
+                                        <option value="staff">Staff</option>
+                                        <option value="citizen">Citizen</option>
+                                        <option value="resource person">Resource Person</option>
                                     </select>
                                 </div>
                                 <div class="filter-group">
                                     <label>Status</label>
-                                    <select>
-                                        <option>All Status</option>
-                                        <option>Active</option>
-                                        <option>Inactive</option>
+                                    <select id="status-filter" onchange="filterUsers()">
+                                        <option value="">All Status</option>
+                                        <option value="active">Active</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="inactive">Inactive</option>
                                     </select>
                                 </div>
                                 <div class="filter-group">
                                     <label>&nbsp;</label>
-                                    <button class="btn-primary" type="button"><i class="fa-solid fa-plus mr-1"></i> Add User</button>
+                                    <button type="button" onclick="openModuleReportModal('users')" class="btn-primary">
+                                        <i class="fa-solid fa-file-earmark-bar-graph mr-1"></i> Generate Report
+                                    </button>
                                 </div>
                             </div>
 
-                            <div class="stat-cards" style="grid-template-columns: repeat(3, 1fr); max-width: 600px;">
-                                <?php
-                                    $allUsers = isset($users) ? $users : [];
-                                    $totalUsers = count($allUsers);
-                                    $adminCount = 0;
-                                    $citizenCount = 0;
-                                    
-                                    foreach ($allUsers as $u) {
-                                        $role = strtolower($u['role'] ?? '');
-                                        if ($role === 'admin' || $role === 'administrator' || $role === 'super admin' || $role === 'superadmin') {
-                                            $adminCount++;
-                                        } else {
-                                            $citizenCount++;
-                                        }
+                            <!-- Stat Cards -->
+                            <?php
+                                $allUsers = isset($users) ? $users : [];
+                                $totalUsers = count($allUsers);
+                                $adminCount = 0;
+                                $citizenCount = 0;
+                                $resourcePersonCount = 0;
+                                
+                                foreach ($allUsers as $u) {
+                                    $role = strtolower($u['role'] ?? '');
+                                    if ($role === 'admin' || $role === 'administrator' || $role === 'super admin' || $role === 'superadmin') {
+                                        $adminCount++;
+                                    } elseif ($role === 'citizen') {
+                                        $citizenCount++;
+                                    } elseif ($role === 'resource person' || $role === 'resource_person') {
+                                        $resourcePersonCount++;
                                     }
-                                ?>
+                                }
+                            ?>
+                            <div class="stat-cards mb-6" style="grid-template-columns: repeat(3, 1fr); max-width: 600px;">
                                 <div class="stat-card">
                                     <div class="label">Total Users</div>
                                     <div class="value blue"><?php echo $totalUsers; ?></div>
@@ -4744,59 +4764,118 @@ $totalPages = ceil($totalLogs / $pageSize);
                                 </div>
                                 <div class="stat-card">
                                     <div class="label">Citizens</div>
-                                    <div class="value green"><?php echo $citizenCount; ?></div>
+                                    <div class="value green"><?php echo $citizenCount + $resourcePersonCount; ?></div>
                                 </div>
                             </div>
 
-                            <div class="admin-card">
-                                <div class="admin-card-header">User Accounts</div>
-                                <div class="overflow-x-auto">
-                                    <table class="admin-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Name</th>
-                                                <th>Email</th>
-                                                <th>Role</th>
-                                                <th>Status</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php
-                                                $allUsers = isset($users) ? $users : [];
-                                                if (empty($allUsers)) {
-                                                    echo '<tr><td colspan="5" class="text-center py-8 text-slate-500">No users found</td></tr>';
-                                                } else {
-                                                    foreach ($allUsers as $u) {
-                                                        $role = strtolower($u['role'] ?? 'user');
-                                                        $roleBadge = '';
-                                                        if ($role === 'admin' || $role === 'administrator' || $role === 'super admin' || $role === 'superadmin') {
-                                                            $roleBadge = '<span class="badge badge-blue">Superadmin</span>';
-                                                        } elseif ($role === 'admin') {
-                                                            $roleBadge = '<span class="badge badge-blue">Admin</span>';
-                                                        } else {
-                                                            $roleBadge = '<span class="badge" style="background:#f3e8ff;color:#9333ea">Citizen</span>';
-                                                        }
-                                                        
-                                                        $statusBadge = '<span class="badge badge-green">Active</span>';
-                                                        
-                                                        echo '<tr>';
-                                                        echo '<td class="font-medium">' . htmlspecialchars($u['fullname'] ?? 'N/A') . '</td>';
-                                                        echo '<td>' . htmlspecialchars($u['email'] ?? 'N/A') . '</td>';
-                                                        echo '<td>' . $roleBadge . '</td>';
-                                                        echo '<td>' . $statusBadge . '</td>';
-                                                        echo '<td>
-                                                            <button class="action-btn edit" type="button" title="Edit"><i class="fa-solid fa-pen text-sm"></i></button>
-                                                        </td>';
-                                                        echo '</tr>';
-                                                    }
-                                                }
-                                            ?>
-                                        </tbody>
-                                    </table>
+                            <!-- Resource Person Applications Tabs -->
+                            <div class="bg-white rounded-xl border border-gray-200 p-1 flex gap-1 mb-6 shadow-sm">
+                                <button onclick="showUserTab('citizens')" id="tab-citizens" class="flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 bg-valenzuela-red text-white shadow-sm">
+                                    <i class="bi bi-people"></i> Citizen Submitters
+                                </button>
+                                <button onclick="showUserTab('pending')" id="tab-pending" class="flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 text-slate-600 hover:bg-gray-100">
+                                    <i class="bi bi-clock-history"></i> Pending Applications
+                                    <span id="pending-count" class="px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-700">0</span>
+                                </button>
+                                <button onclick="showUserTab('resource-persons')" id="tab-resource-persons" class="flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 text-slate-600 hover:bg-gray-100">
+                                    <i class="bi bi-person-badge"></i> Resource Persons
+                                </button>
+                            </div>
+
+                            <!-- Pending Applications Section -->
+                            <div id="pending-applications-section" class="hidden">
+                                <div class="mb-4">
+                                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                        <i class="fa-solid fa-clock text-yellow-500"></i> Resource Person Applications
+                                    </h3>
+                                    <p class="text-slate-500 text-sm">Review and approve/reject resource person applications</p>
+                                </div>
+                                <div id="pending-applications-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <div class="text-center py-12 text-slate-500 col-span-full">
+                                        <i class="fa-solid fa-hourglass-split text-4xl mb-3 text-slate-300"></i>
+                                        <p>Loading pending applications...</p>
+                                    </div>
                                 </div>
                             </div>
+
+                            <!-- Resource Persons Section -->
+                            <div id="resource-persons-section" class="hidden">
+                                <div class="mb-4">
+                                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                        <i class="fa-solid fa-user-check text-green-500"></i> Approved Resource Persons
+                                    </h3>
+                                    <p class="text-slate-500 text-sm">View all approved resource persons</p>
+                                </div>
+                                <div id="resource-persons-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <div class="text-center py-12 text-slate-500 col-span-full">
+                                        <i class="fa-solid fa-users text-4xl mb-3 text-slate-300"></i>
+                                        <p>Loading resource persons...</p>
+                                    </div>
+                                </div>
+                            </div>
+
+
+
+                            
+
+
+
+                            <!-- Citizen Submitters Section -->
+                            <div id="citizens-section">
+                                <div class="admin-card">
+                                    <div class="admin-card-header">User Accounts</div>
+                                    <div class="overflow-x-auto">
+                                        <table class="admin-table" id="users-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Name</th>
+                                                    <th>Email</th>
+                                                    <th>Role</th>
+                                                    <th>Status</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php
+                                                    $citizenUsers = isset($citizens) ? $citizens : [];
+                                                    if (empty($citizenUsers)) {
+                                                        echo '<tr><td colspan="5" class="text-center py-8 text-slate-500">No citizens found</td></tr>';
+                                                    } else {
+                                                        foreach ($citizenUsers as $u) {
+                                                            $role = strtolower($u['role'] ?? 'citizen');
+                                                            $roleBadge = '<span class="badge" style="background:#f3e8ff;color:#9333ea">Citizen</span>';
+                                                            
+                                                            $status = isset($u['status']) && $u['status'] === 'active' ? 'active' : 'inactive';
+                                                            $statusBadge = $status === 'active' ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-red">Inactive</span>';
+                                                            
+                                                            echo '<tr class="user-row" data-name="' . strtolower($u['fullname'] ?? '') . '" data-email="' . strtolower($u['email'] ?? '') . '" data-role="' . $role . '" data-status="' . $status . '">';
+                                                            echo '<td class="font-medium">' . htmlspecialchars($u['fullname'] ?? 'N/A') . '</td>';
+                                                            echo '<td>' . htmlspecialchars($u['email'] ?? 'N/A') . '</td>';
+                                                            echo '<td>' . $roleBadge . '</td>';
+                                                            echo '<td>' . $statusBadge . '</td>';
+                                                            echo '<td>
+                                                                <button class="action-btn edit" type="button" title="Edit" onclick="editUser(' . ($u['id'] ?? 0) . ')"><i class="fa-solid fa-pen text-sm"></i></button>
+                                                            </td>';
+                                                            echo '</tr>';
+                                                        }
+                                                    }
+                                                ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+
+
+                            </div>
+
+
+
                         </div>
+
+
+
                     </section>
 
 
@@ -5522,7 +5601,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                            <img src="/pcms/admin/ASSETS/images/logo.webp" alt="Valenzuela" class="w-10 h-10 object-contain">
+                            <img src="images/logo.webp" alt="Valenzuela" class="w-10 h-10 object-contain">
 
 
 
@@ -5582,7 +5661,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                            <img src="/pcms/admin/ASSETS/images/logo.webp" alt="Valenzuela" style="width: 24px; height: 24px; object-fit: contain;">
+                            <img src="images/logo.webp" alt="Valenzuela" style="width: 24px; height: 24px; object-fit: contain;">
 
 
 
@@ -8226,7 +8305,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                     `;
                     const actions = `
                         <a href="${data.download_url}" target="_blank" class="btn-primary inline-block">Download Report</a>
-                        <button onclick="closeModal('export-modal')" class="btn-outline">Close</button>
+                        <button onclick="closeModal(\'export-modal\')" class="btn-outline">Close</button>
                     `;
                     showExportModal(msg, actions, 'Report Ready');
                 } else {
@@ -8238,6 +8317,14 @@ $totalPages = ceil($totalLogs / $pageSize);
                 showExportModal('<div class="bg-red-50 border border-red-200 text-red-800 rounded p-3">Report generation failed. Please try again.</div>', '<button onclick="closeModal(\'export-modal\')" class="btn-outline">Close</button>', 'Report Failed');
             });
         }
+
+        // Override any global error handlers to prevent toast notifications for report errors
+        window.addEventListener('error', function(e) {
+            if (e.message && e.message.includes('report')) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, true);
 
         function detectBestExportFormat(consultationId) {
             const row = document.querySelector(`[onclick="openExportChooser(${consultationId})"]`)?.closest('tr');
