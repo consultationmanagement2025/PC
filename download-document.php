@@ -34,9 +34,29 @@ if ($source === 'consultation') {
     $doc = getDocumentById($document_id);
     if ($doc) {
         $stored_name = trim((string)($doc['stored_filename'] ?? ''));
-        $download_name = trim((string)($doc['original_filename'] ?? $stored_name ?: 'document'));
+        $download_name = trim((string)($doc['original_filename'] ?? $stored_name ?: 'document.pdf'));
+        $consultation_id = (int)($doc['consultation_id'] ?? 0);
+
         if ($stored_name !== '') {
             $candidate = __DIR__ . '/uploads/documents/' . $stored_name;
+            // Dynamically regenerate PDF summary with clean layout if target is a consultation summary PDF
+            if ($consultation_id > 0 && strtolower(pathinfo($stored_name, PATHINFO_EXTENSION)) === 'pdf') {
+                require_once __DIR__ . '/UTILS/pdf_generator.php';
+                if (isset($conn) && $conn instanceof mysqli) {
+                    $cStmt = $conn->prepare("SELECT * FROM consultations WHERE id = ? LIMIT 1");
+                    if ($cStmt) {
+                        $cStmt->bind_param('i', $consultation_id);
+                        $cStmt->execute();
+                        $cRes = $cStmt->get_result();
+                        $cRow = $cRes ? $cRes->fetch_assoc() : null;
+                        $cStmt->close();
+                        if ($cRow) {
+                            $pdfGen = new ConsultationPDFGenerator($consultation_id);
+                            $pdfGen->save($cRow, $candidate);
+                        }
+                    }
+                }
+            }
             if (is_file($candidate)) {
                 $file_path = $candidate;
             }

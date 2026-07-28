@@ -84,9 +84,9 @@ function isSuperAdminRole(role) {
     return normalized === 'super admin' || normalized === 'superadmin';
 }
 
-function isResourcePersonRole(role) {
+function isBarangayStaffRole(role) {
     const normalized = normalizeRoleName(role);
-    return normalized === 'resource person' || normalized === 'resource_person' || normalized === 'staff';
+    return normalized === 'barangay staff' || normalized === 'barangay_staff' || normalized === 'barangay' || normalized === 'staff';
 }
 
 function currentUserRole() {
@@ -100,8 +100,8 @@ function currentUserRole() {
         if (window.__IS_SUPER_ADMIN__) {
             return 'super admin';
         }
-        if (window.__IS_RESOURCE_PERSON__) {
-            return 'resource person';
+        if (window.__IS_BARANGAY_STAFF__) {
+            return 'barangay staff';
         }
     }
     return '';
@@ -116,7 +116,7 @@ function currentUserIsSuperAdmin() {
 function currentUserIsAdminRole() {
     const role = currentUserRole();
     const normalized = normalizeRoleName(role);
-    return ['admin', 'administrator', 'super admin', 'superadmin', 'staff', 'resource person', 'resource_person'].indexOf(normalized) !== -1 || (typeof window !== 'undefined' && window.__IS_SUPER_ADMIN__ === true);
+    return ['admin', 'administrator', 'super admin', 'superadmin', 'staff', 'barangay staff', 'barangay_staff', 'barangay'].indexOf(normalized) !== -1 || (typeof window !== 'undefined' && window.__IS_SUPER_ADMIN__ === true);
 }
 
 function fetchWithTimeout(resource, options = {}, timeout = 5000) {
@@ -128,25 +128,25 @@ function fetchWithTimeout(resource, options = {}, timeout = 5000) {
         .finally(() => clearTimeout(timer));
 }
 
-function currentUserIsResourcePerson() {
-    if (typeof window !== 'undefined' && typeof window.__IS_RESOURCE_PERSON__ === 'boolean') {
-        return window.__IS_RESOURCE_PERSON__;
+function currentUserIsBarangayStaff() {
+    if (typeof window !== 'undefined' && typeof window.__IS_BARANGAY_STAFF__ === 'boolean') {
+        return window.__IS_BARANGAY_STAFF__;
     }
     const role = currentUserRole();
-    return isResourcePersonRole(role);
+    return isBarangayStaffRole(role);
 }
 
 function currentUserCanAccessDocuments() {
-    return currentUserIsAdminRole() || currentUserIsSuperAdmin() || currentUserIsResourcePerson();
+    return currentUserIsAdminRole() || currentUserIsSuperAdmin() || currentUserIsBarangayStaff();
 }
 
 function currentUserCanManageDocuments() {
-    return currentUserIsAdminRole() || currentUserIsResourcePerson();
+    return currentUserIsAdminRole() || currentUserIsBarangayStaff();
 }
 
 function adjustUIForRoleVisibility() {
-    // Hide admin-only links from Resource Person on the client side (in case template allows them)
-    if (currentUserIsResourcePerson()) {
+    // Hide admin-only links from Barangay Staff on the client side (in case template allows them)
+    if (currentUserIsBarangayStaff()) {
         // Remove User Management links
         document.querySelectorAll('[data-section="users"], a[onclick*="showSection(\'users\')"]').forEach(el => el.remove());
         // Hide system-wide analytics/configuration links
@@ -278,7 +278,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Super Admin lands on the dashboard view by default. Regular admin lands on the consultation dashboard.
     startHeaderClock();
 
-    // Adjust UI for Resource Person (hide admin-only links)
+    // Adjust UI for Barangay Staff (hide admin-only links)
     try { adjustUIForRoleVisibility(); } catch (e) { /* ignore */ }
 
 
@@ -1214,7 +1214,7 @@ function showSection(sectionName) {
 
             case 'audit':
                 if (!currentUserIsAdminRole()) {
-                    showNotification('Audit Log is available for Admin and Resource Person only.', 'warning');
+                    showNotification('Audit Log is available for Admin and Barangay Staff only.', 'warning');
                     renderDashboard();
                     break;
                 }
@@ -3473,26 +3473,327 @@ var _citizenData = [];
 
 
 function renderUsers(skipLoad = false) {
-    // Hide all other sections first
-    hideManagedTemplateSections();
-    
-    // Show PHP-based user management section instead of JS-generated content
-    const section = document.getElementById('user-management-section');
-    
-    if (section) {
-        section.style.display = 'block';
-        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-    
+
+
+
+
     const breadcrumbCurrent = document.querySelector('.breadcrumb-current');
+
+
+    
+
+
+
+
     if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'User Management';
+
+
+
+
+    const totalCitizens = _citizenData.length;
+
+
+    const totalConsultations = _citizenData.reduce((s, c) => s + (c.consultation_count || 0), 0);
+
+
+    const totalFeedbacks = _citizenData.reduce((s, c) => s + (c.feedback_count || 0), 0);
+
+
+
+
+
+
+
+
+    const html = `
+
+
+        <div class="space-y-6">
+
+
+            <!-- Header -->
+
+
+            <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-8 rounded-lg shadow-lg">
+
+
+                <div class="flex justify-between items-start mb-6">
+
+
+                    <div>
+
+
+                        <h1 class="text-3xl font-bold mb-2">User Management</h1>
+
+
+                        <p class="text-red-100">Manage citizen submitters</p>
+
+
+                    </div>
+
+
+                </div>
+
+
+                
+
+
+                <!-- Stats Cards -->
+
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+
+                    <div class="bg-white bg-opacity-20 rounded-lg p-4">
+
+
+                        <div class="text-red-100 text-sm font-semibold mb-1">Citizen Submitters</div>
+
+
+                        <div class="text-3xl font-bold">${totalCitizens}</div>
+
+
+                    </div>
+
+
+                    <div class="bg-white bg-opacity-20 rounded-lg p-4">
+
+
+                        <div class="text-red-100 text-sm font-semibold mb-1">Total Consultations</div>
+
+
+                        <div class="text-3xl font-bold">${totalConsultations}</div>
+
+
+                    </div>
+
+
+                    <div class="bg-white bg-opacity-20 rounded-lg p-4">
+
+
+                        <div class="text-red-100 text-sm font-semibold mb-1">Total Feedback</div>
+
+
+                        <div class="text-3xl font-bold">${totalFeedbacks}</div>
+
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+
+
+            <!-- Tab Switcher -->
+
+
+            <div class="bg-white rounded-lg shadow p-1 flex gap-1">
+
+
+                <button onclick="_userMgmtTab='citizens'; renderUsers(true);" class="flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${citizenTabActive ? 'bg-red-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}">
+
+
+                    <i class="bi bi-people"></i> Citizen Submitters <span class="ml-1 px-2 py-0.5 rounded-full text-xs ${citizenTabActive ? 'bg-white bg-opacity-20' : 'bg-gray-200'}">${totalCitizens}</span>
+
+
+                </button>
+
+
+
+
+            </div>
+
+
+
+
+            <!-- CITIZEN SUBMITTERS TAB -->
+
+
+            <script>console.log('app-features.js loaded: categories updated 2026-07-06');</script>
+            <div class="bg-white p-6 rounded-lg shadow">
+
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+
+                    <div>
+
+
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Search Citizens</label>
+
+
+                        <input type="text" id="citizen-search" placeholder="Search by name or email..." 
+
+
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+
+
+                            onkeyup="renderCitizensTable()">
+
+
+                    </div>
+
+
+                    <div>
+
+
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Sort By</label>
+
+
+                        <select id="citizen-sort" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+
+
+                            onchange="renderCitizensTable()">
+
+
+                            <option value="recent">Most Recent Activity</option>
+
+
+                            <option value="submissions">Most Submissions</option>
+
+
+                            <option value="name">Name (A-Z)</option>
+
+
+                        </select>
+
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+
+
+                <div class="overflow-x-auto">
+
+
+                    <table class="w-full text-sm">
+
+
+                        <thead class="bg-gray-100 border-b-2 border-gray-300">
+
+
+                            <tr>
+
+
+                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Citizen</th>
+
+
+                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Email</th>
+
+
+                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Consultations</th>
+
+
+                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Feedback</th>
+
+
+                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Total</th>
+
+
+                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Last Activity</th>
+
+
+                            </tr>
+
+
+                        </thead>
+
+
+                        <tbody id="citizens-table-body">
+
+
+                        </tbody>
+
+
+                    </table>
+
+
+                </div>
+
+
+            </div>
+
+
+        </div>
+
+
+    `;
+
+
     
-    // Initialize the citizens tab
-    if (typeof showUserTab === 'function') {
-        showUserTab('citizens');
+
+
+    document.getElementById('content-area').innerHTML = html;
+
+
+
+
+    if (!skipLoad) {
+
+
+        // Load both citizens and staff data
+
+
+        const citizenPromise = loadCitizensFromApi();
+
+
+
+
+        
+
+
+        Promise.all([citizenPromise])
+
+
+            .then(() => renderUsers(true))
+
+
+            .catch(err => {
+
+
+                console.error('User management load error:', err);
+
+
+                renderUsers(true);
+
+
+            });
+
+
+        return;
+
+
     }
-    
-    return; // Exit early to prevent old JS-generated content
+
+
+
+
+    if (_userMgmtTab === 'citizens') {
+
+
+        renderCitizensTable();
+
+
+    } else {
+
+
+        renderUsersTable();
+
+
+    }
+
+
 }
 
 
@@ -3502,23 +3803,35 @@ function renderUsers(skipLoad = false) {
 
 
 async function loadCitizensFromApi() {
+
+
     try {
+
+
         const res = await fetch('API/citizens_api.php?action=list');
+
+
         const data = await res.json();
-        
-        console.log('Citizens API response:', data);
-        
+
+
         if (data.success && Array.isArray(data.data)) {
+
+
             _citizenData = data.data;
-            console.log('Loaded citizens:', _citizenData.length);
-        } else {
-            console.error('Citizens API returned error:', data.message);
-            _citizenData = [];
+
+
         }
+
+
     } catch (err) {
+
+
         console.error('Failed to load citizens:', err);
-        _citizenData = [];
+
+
     }
+
+
 }
 
 
@@ -3531,12 +3844,9 @@ function renderCitizensTable() {
 
 
     const tbody = document.getElementById('citizens-table-body');
-    if (!tbody) {
-        console.error('Citizens table body not found');
-        return;
-    }
 
-    console.log('Rendering citizens table, data length:', _citizenData.length);
+
+    if (!tbody) return;
 
 
 
@@ -3554,13 +3864,21 @@ function renderCitizensTable() {
 
 
     if (search) {
-        citizens = citizens.filter(c => 
-            (c.name || '').toLowerCase().includes(search) || 
-            (c.email || '').toLowerCase().includes(search)
-        );
-    }
 
-    console.log('Filtered citizens count:', citizens.length);
+
+        citizens = citizens.filter(c => 
+
+
+            (c.name || '').toLowerCase().includes(search) || 
+
+
+            (c.email || '').toLowerCase().includes(search)
+
+
+        );
+
+
+    }
 
 
 
@@ -3611,7 +3929,7 @@ function renderCitizensTable() {
     tbody.innerHTML = citizens.map(c => {
 
 
-        const lastAct = c.last_activity ? new Date(c.last_activity).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A';
+        const lastAct = c.last_activity ? new Date(c.last_activity).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
 
 
         const initials = (c.name || 'U').split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
@@ -3832,245 +4150,6 @@ function exportConsultationWithFormat(consultationId, format) {
     });
 }
 
-
-function showUserTab(tab) {
-    // Hide all sections with null checks
-    const pendingSection = document.getElementById('pending-applications-section');
-    const resourceSection = document.getElementById('resource-persons-section');
-    const citizensSection = document.getElementById('citizens-section');
-    
-    if (pendingSection) pendingSection.classList.add('hidden');
-    if (resourceSection) resourceSection.classList.add('hidden');
-    if (citizensSection) citizensSection.classList.add('hidden');
-    
-    // Reset tab styles with null checks
-    const tabCitizens = document.getElementById('tab-citizens');
-    const tabPending = document.getElementById('tab-pending');
-    const tabResourcePersons = document.getElementById('tab-resource-persons');
-    
-    if (tabCitizens) tabCitizens.className = 'flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 text-slate-600 hover:bg-gray-100';
-    if (tabPending) tabPending.className = 'flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 text-slate-600 hover:bg-gray-100';
-    if (tabResourcePersons) tabResourcePersons.className = 'flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 text-slate-600 hover:bg-gray-100';
-    
-    // Show selected section and style tab
-    if (tab === 'citizens') {
-        if (citizensSection) citizensSection.classList.remove('hidden');
-        if (tabCitizens) tabCitizens.className = 'flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 bg-valenzuela-red text-white shadow-sm';
-    } else if (tab === 'pending') {
-        if (pendingSection) pendingSection.classList.remove('hidden');
-        if (tabPending) tabPending.className = 'flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 bg-valenzuela-red text-white shadow-sm';
-        loadPendingApplications();
-    } else if (tab === 'resource-persons') {
-        if (resourceSection) resourceSection.classList.remove('hidden');
-        if (tabResourcePersons) tabResourcePersons.className = 'flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 bg-valenzuela-red text-white shadow-sm';
-        loadResourcePersons();
-    }
-}
-
-function filterUsers() {
-    const searchInput = document.getElementById('user-search');
-    const roleSelect = document.getElementById('role-filter');
-    const statusSelect = document.getElementById('status-filter');
-    
-    if (!searchInput || !roleSelect || !statusSelect) return;
-    
-    const searchTerm = searchInput.value.toLowerCase();
-    const roleFilter = roleSelect.value.toLowerCase();
-    const statusFilter = statusSelect.value.toLowerCase();
-    
-    const rows = document.querySelectorAll('#users-table .user-row');
-    
-    rows.forEach(row => {
-        const name = row.dataset.name || '';
-        const email = row.dataset.email || '';
-        const role = row.dataset.role || '';
-        const status = row.dataset.status || '';
-        
-        const matchesSearch = name.includes(searchTerm) || email.includes(searchTerm);
-        const matchesRole = !roleFilter || role === roleFilter;
-        const matchesStatus = !statusFilter || status === statusFilter;
-        
-        if (matchesSearch && matchesRole && matchesStatus) {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
-        }
-    });
-}
-
-function editUser(userId) {
-    // TODO: Implement edit user functionality
-    console.log('Edit user:', userId);
-}
-
-async function loadPendingApplications() {
-    const container = document.getElementById('pending-applications-list');
-    const countBadge = document.getElementById('pending-count');
-    
-    try {
-        const res = await fetch('API/resource_person_api.php?action=list_pending');
-        const data = await res.json();
-        
-        if (data.success) {
-            const applications = data.data || [];
-            countBadge.textContent = applications.length;
-            
-            if (applications.length === 0) {
-                container.innerHTML = '<div class="text-center py-8 text-gray-500"><i class="bi bi-check-circle text-4xl mb-2"></i><p>No pending applications</p></div>';
-                return;
-            }
-            
-            container.innerHTML = applications.map(app => {
-                const initials = app.fullname ? app.fullname.substring(0, 2).toUpperCase() : 'NA';
-                return `
-                <div class="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow group">
-                    <div class="flex items-start gap-4 mb-4">
-                        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white font-bold text-lg shrink-0">
-                            ${initials}
-                        </div>
-                        <div class="flex-grow min-w-0">
-                            <h4 class="font-bold text-slate-800 truncate">${escapeHtml(app.fullname)}</h4>
-                            <p class="text-sm text-slate-500 truncate">${escapeHtml(app.email)}</p>
-                        </div>
-                        <span class="px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-yellow-100 text-yellow-700 shrink-0">Pending</span>
-                    </div>
-                    <div class="space-y-3 mb-4">
-                        <div class="flex items-center gap-2 text-sm">
-                            <i class="fa-solid fa-building text-slate-400 w-4"></i>
-                            <span class="text-slate-600">${escapeHtml(app.department)}</span>
-                        </div>
-                        <div class="flex items-center gap-2 text-sm">
-                            <i class="fa-solid fa-calendar text-slate-400 w-4"></i>
-                            <span class="text-slate-600">Applied: ${new Date(app.created_at).toLocaleDateString()}</span>
-                        </div>
-                        <div class="flex items-start gap-2 text-sm">
-                            <i class="fa-solid fa-lightbulb text-slate-400 w-4 mt-0.5"></i>
-                            <span class="text-slate-600">${escapeHtml(app.expertise_areas)}</span>
-                        </div>
-                    </div>
-                    <div class="flex gap-2">
-                        <button onclick="approveApplication(${app.id})" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2.5 px-4 rounded-lg font-semibold text-xs transition-colors shadow-sm">
-                            <i class="fa-solid fa-check mr-1"></i> Approve
-                        </button>
-                        <button onclick="rejectApplication(${app.id})" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 px-4 rounded-lg font-semibold text-xs transition-colors shadow-sm">
-                            <i class="fa-solid fa-xmark mr-1"></i> Reject
-                        </button>
-                    </div>
-                </div>
-            `}).join('');
-        }
-    } catch (err) {
-        console.error('Failed to load pending applications:', err);
-        container.innerHTML = '<div class="text-center py-8 text-red-500"><i class="bi bi-exclamation-triangle text-4xl mb-2"></i><p>Failed to load applications</p></div>';
-    }
-}
-
-async function loadResourcePersons() {
-    const container = document.getElementById('resource-persons-list');
-    
-    try {
-        const res = await fetch('API/resource_person_api.php?action=list_approved');
-        const data = await res.json();
-        
-        if (data.success) {
-            const persons = data.data || [];
-            
-            if (persons.length === 0) {
-                container.innerHTML = '<div class="text-center py-8 text-gray-500"><i class="bi bi-people text-4xl mb-2"></i><p>No approved resource persons</p></div>';
-                return;
-            }
-            
-            container.innerHTML = persons.map(person => {
-                const initials = person.fullname ? person.fullname.substring(0, 2).toUpperCase() : 'NA';
-                return `
-                <div class="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow group">
-                    <div class="flex items-start gap-4 mb-4">
-                        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center text-white font-bold text-lg shrink-0">
-                            ${initials}
-                        </div>
-                        <div class="flex-grow min-w-0">
-                            <h4 class="font-bold text-slate-800 truncate">${escapeHtml(person.fullname)}</h4>
-                            <p class="text-sm text-slate-500 truncate">${escapeHtml(person.email)}</p>
-                        </div>
-                        <span class="px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-green-100 text-green-700 shrink-0">Approved</span>
-                    </div>
-                    <div class="space-y-3 mb-4">
-                        <div class="flex items-center gap-2 text-sm">
-                            <i class="fa-solid fa-building text-slate-400 w-4"></i>
-                            <span class="text-slate-600">${escapeHtml(person.department)}</span>
-                        </div>
-                        <div class="flex items-center gap-2 text-sm">
-                            <i class="fa-solid fa-calendar-check text-slate-400 w-4"></i>
-                            <span class="text-slate-600">Approved: ${new Date(person.approved_at).toLocaleDateString()}</span>
-                        </div>
-                        <div class="flex items-start gap-2 text-sm">
-                            <i class="fa-solid fa-lightbulb text-slate-400 w-4 mt-0.5"></i>
-                            <span class="text-slate-600">${escapeHtml(person.expertise_areas)}</span>
-                        </div>
-                    </div>
-                    <div class="flex gap-2">
-                        <button class="flex-1 bg-valenzuela-blue hover:bg-blue-800 text-white py-2.5 px-4 rounded-lg font-semibold text-xs transition-colors shadow-sm">
-                            <i class="fa-solid fa-eye mr-1"></i> View Profile
-                        </button>
-                        <button class="px-3 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-slate-600 text-xs font-semibold transition-colors">
-                            <i class="fa-solid fa-ellipsis-vertical"></i>
-                        </button>
-                    </div>
-                </div>
-            `}).join('');
-        }
-    } catch (err) {
-        console.error('Failed to load resource persons:', err);
-        container.innerHTML = '<div class="text-center py-8 text-red-500"><i class="bi bi-exclamation-triangle text-4xl mb-2"></i><p>Failed to load resource persons</p></div>';
-    }
-}
-
-async function approveApplication(userId) {
-    if (!confirm('Are you sure you want to approve this application?')) return;
-    
-    try {
-        const res = await fetch('API/resource_person_api.php?action=approve', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `user_id=${userId}`
-        });
-        const data = await res.json();
-        
-        if (data.success) {
-            showNotification('Application approved successfully', 'success');
-            loadPendingApplications();
-        } else {
-            showNotification(data.message || 'Failed to approve application', 'error');
-        }
-    } catch (err) {
-        console.error('Failed to approve application:', err);
-        showNotification('Failed to approve application', 'error');
-    }
-}
-
-async function rejectApplication(userId) {
-    const reason = prompt('Please provide a reason for rejection (optional):');
-    if (reason === null) return; // User cancelled
-    
-    try {
-        const res = await fetch('API/resource_person_api.php?action=reject', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `user_id=${userId}&reason=${encodeURIComponent(reason)}`
-        });
-        const data = await res.json();
-        
-        if (data.success) {
-            showNotification('Application rejected successfully', 'success');
-            loadPendingApplications();
-        } else {
-            showNotification(data.message || 'Failed to reject application', 'error');
-        }
-    } catch (err) {
-        console.error('Failed to reject application:', err);
-        showNotification('Failed to reject application', 'error');
-    }
-}
 
 function renderUsersTable() {
 
@@ -5305,7 +5384,7 @@ function filterAuditLogs() {
         <tr class="hover:bg-gray-50 transition">
 
 
-            <td class="px-6 py-4 text-sm text-gray-700">${new Date(log.timestamp).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+            <td class="px-6 py-4 text-sm text-gray-700">${new Date(log.timestamp).toLocaleString()}</td>
 
 
             <td class="px-6 py-4 text-sm font-medium text-gray-900">${log.admin_user}</td>
@@ -5369,7 +5448,7 @@ function addAuditLog(action, description) {
         description: description,
 
 
-        timestamp: new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toLocaleString(),
 
 
         ipAddress: '192.168.1.100'
@@ -7599,7 +7678,7 @@ function signOutAllDevices() {
     setTimeout(() => {
 
 
-        window.location.href = 'login.php';
+        window.location.href = 'login.html';
 
 
     }, 2000);
@@ -8321,7 +8400,7 @@ function formatNotifTime(isoOrSqlDate) {
     if (Number.isNaN(d.getTime())) return String(isoOrSqlDate);
 
 
-    return d.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleString();
 
 
 }
@@ -9738,7 +9817,7 @@ function formatDate(dateString) {
     const date = new Date(dateString);
 
 
-    return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 
 
 }
@@ -11111,7 +11190,7 @@ function renderAnnouncements() {
                                 <div class="font-semibold text-gray-800 text-sm">${a.title}</div>
 
 
-                                <div class="text-gray-500 text-xs mt-0.5">${new Date(a.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
+                                <div class="text-gray-500 text-xs mt-0.5">${new Date(a.createdAt).toLocaleDateString()}</div>
 
 
                                 <div class="flex justify-end mt-2">
@@ -11246,7 +11325,7 @@ function loadUserPostsForModeration() {
                             <div class="text-gray-600 text-xs mt-1">${p.content.substring(0, 80)}${p.content.length > 80 ? '...' : ''}</div>
 
 
-                            <div class="text-gray-400 text-xs mt-1">${new Date(p.created_at).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                            <div class="text-gray-400 text-xs mt-1">${new Date(p.created_at).toLocaleString()}</div>
 
 
                         </div>
@@ -11417,7 +11496,7 @@ function renderConsultationsGrid() {
         const typeBg = srcType === 'user' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600';
 
 
-        const dateText = c.date ? new Date(c.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+        const dateText = c.date ? new Date(c.date).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '';
 
         const desc = String(c.description || '').substring(0, 80);
 
@@ -11628,7 +11707,7 @@ function renderUpcomingList() {
                 <i class="bi bi-calendar-event"></i>
 
 
-                <span>${new Date(c.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                <span>${new Date(c.date).toLocaleDateString()}</span>
 
 
                 <span>•</span>
@@ -12584,7 +12663,7 @@ function renderConsultationManagement() {
                             <i class="bi bi-plus-lg text-lg"></i> Add Consultation
                         </button>
                         <button onclick="openCreateConsultationModal('survey')" class="flex items-center gap-2 bg-white !bg-white text-blue-700 !text-blue-700 hover:bg-gray-100 font-bold px-4 py-2.5 rounded-lg shadow-md transition-all border border-white/20">
-                            <i class="bi bi-plus-lg text-lg"></i> Create Survey
+                            <i class="bi bi-square-poll-horizontal text-lg"></i> Create Survey Form
                         </button>
                     </div>
 
@@ -13685,7 +13764,7 @@ function renderConsultationsTable() {
         const st = String(consultation.status || '').toLowerCase();
         const statusColor = st === 'active' ? 'bg-green-100 text-green-800' : (st === 'closed' ? 'bg-gray-100 text-gray-800' : (st === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'));
         const srcType = isUserConsultation(consultation) ? 'user' : String(consultation.type || 'admin').toLowerCase();
-        const dateText = consultation.date ? new Date(consultation.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-';
+        const dateText = consultation.date ? new Date(consultation.date).toLocaleDateString() : '-';
         const closed = isConsultationClosed(consultation);
         const editButton = currentUserIsSuperAdmin()
             ? ''
@@ -13696,7 +13775,7 @@ function renderConsultationsTable() {
         if (srcType === 'user') {
             const citizenName = String(consultation.userName || 'Citizen');
             const consultationType = String(consultation.title || '-');
-            const scheduledDateTime = consultation.date ? new Date(consultation.date).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+            const scheduledDateTime = consultation.date ? new Date(consultation.date).toLocaleString() : '-';
             userRows.push(`
                 <tr class="border-b hover:bg-gray-50 transition">
                     <td class="px-6 py-4 font-semibold text-gray-900">${'CONSULT-' + String(consultation.id || '').padStart(6, '0')}</td>
@@ -13855,8 +13934,8 @@ function guessConsultationCategoryFromTitle(title) {
 function openCreateConsultationModal(createMode) {
 
     document.getElementById('consultation-id').value = '';
-    const initialResponseMode = createMode || 'feedback';
-    document.getElementById('modal-title').textContent = createMode === 'survey' ? 'Create New Survey' : 'Create New Consultation';
+    const initialResponseMode = (createMode === 'survey') ? 'survey' : 'feedback';
+    document.getElementById('modal-title').textContent = (createMode === 'survey') ? 'Create New Survey Form' : 'Create New Consultation';
 
     document.getElementById('consultation-title').value = '';
 
@@ -14187,118 +14266,6 @@ function deleteConsultation(id) {
 
 }
 
-// ======== RESOURCE PERSON FUNCTIONS ========
-
-function uploadResolutionReport(consultationId) {
-    const modal = document.getElementById('resolution-report-modal');
-    if (!modal) {
-        showNotification('Resolution report modal not found', 'error');
-        return;
-    }
-    
-    document.getElementById('resolution-consultation-id').value = consultationId;
-    document.getElementById('resolution-file').value = '';
-    document.getElementById('resolution-notes').value = '';
-    modal.classList.remove('hidden');
-}
-
-function closeResolutionReportModal() {
-    const modal = document.getElementById('resolution-report-modal');
-    if (modal) modal.classList.add('hidden');
-}
-
-async function submitResolutionReport() {
-    const consultationId = document.getElementById('resolution-consultation-id').value;
-    const fileInput = document.getElementById('resolution-file');
-    const notes = document.getElementById('resolution-notes').value;
-    
-    if (!fileInput.files || fileInput.files.length === 0) {
-        showNotification('Please select a file to upload', 'error');
-        return;
-    }
-    
-    const formData = new FormData();
-    formData.append('consultation_id', consultationId);
-    formData.append('resolution_file', fileInput.files[0]);
-    formData.append('notes', notes);
-    
-    try {
-        const res = await fetch('API/upload_resolution_report.php', {
-            method: 'POST',
-            body: formData
-        });
-        
-        const data = await res.json();
-        
-        if (!res.ok || !data.success) {
-            throw new Error(data.message || 'Failed to upload resolution report');
-        }
-        
-        showNotification('Resolution report uploaded successfully', 'success');
-        closeResolutionReportModal();
-        await loadConsultationsFromApi();
-    } catch (err) {
-        showNotification('Error: ' + err.message, 'error');
-        console.error('uploadResolutionReport error:', err);
-    }
-}
-
-function requestAdditionalInfo(consultationId, userEmail, consultationTitle) {
-    const modal = document.getElementById('request-info-modal');
-    if (!modal) {
-        showNotification('Request info modal not found', 'error');
-        return;
-    }
-    
-    document.getElementById('request-info-consultation-id').value = consultationId;
-    document.getElementById('request-info-user-email').value = userEmail || '';
-    document.getElementById('request-info-consultation-title').textContent = consultationTitle || '';
-    document.getElementById('request-info-message').value = '';
-    modal.classList.remove('hidden');
-}
-
-function closeRequestInfoModal() {
-    const modal = document.getElementById('request-info-modal');
-    if (modal) modal.classList.add('hidden');
-}
-
-async function submitRequestInfo() {
-    const consultationId = document.getElementById('request-info-consultation-id').value;
-    const userEmail = document.getElementById('request-info-user-email').value;
-    const message = document.getElementById('request-info-message').value;
-    
-    if (!message.trim()) {
-        showNotification('Please enter a message', 'error');
-        return;
-    }
-    
-    try {
-        const res = await fetch('API/request_additional_info.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                consultation_id: consultationId,
-                user_email: userEmail,
-                message: message
-            })
-        });
-        
-        const data = await res.json();
-        
-        if (!res.ok || !data.success) {
-            throw new Error(data.message || 'Failed to send request');
-        }
-        
-        showNotification('Request for additional information sent successfully', 'success');
-        closeRequestInfoModal();
-    } catch (err) {
-        showNotification('Error: ' + err.message, 'error');
-        console.error('submitRequestInfo error:', err);
-    }
-}
-
 
 function previewConsultationImage(input) {
 
@@ -14498,7 +14465,7 @@ function viewConsultationDetails(id) {
                 <label class="text-xs font-semibold text-gray-500 uppercase">Date</label>
 
 
-                <p class="text-gray-900 font-semibold mt-1">${new Date(consultation.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
+                <p class="text-gray-900 font-semibold mt-1">${new Date(consultation.date).toLocaleDateString()}</p>
 
 
             </div>
@@ -15331,7 +15298,7 @@ function renderFeedbackTable() {
         const rowClass = isOverdue ? 'bg-red-50' : '';
 
 
-        const dateText = feedback.date ? new Date(feedback.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-';
+        const dateText = feedback.date ? new Date(feedback.date).toLocaleDateString() : '-';
 
 
 
@@ -15557,7 +15524,7 @@ function viewFeedbackDetails(id) {
                 <label class="text-xs font-semibold text-gray-500 uppercase">Submitted</label>
 
 
-                <p class="text-gray-900 font-semibold mt-1">${f.date ? escapeHtml(new Date(f.date).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })) : '-'}</p>
+                <p class="text-gray-900 font-semibold mt-1">${f.date ? escapeHtml(new Date(f.date).toLocaleString()) : '-'}</p>
 
 
             </div>
@@ -16576,6 +16543,9 @@ function pfpGetFilteredFeedback() {
     const q = String(document.getElementById('pfq-search')?.value || '').toLowerCase().trim();
     const status = String(document.getElementById('pfq-status')?.value || '').toLowerCase();
     const priority = String(document.getElementById('pfq-priority')?.value || '').toLowerCase();
+    const type = String(document.getElementById('pfq-type')?.value || '').toLowerCase();
+    const committee = String(document.getElementById('pfq-committee')?.value || '').toLowerCase().trim();
+    const archiveMode = String(document.getElementById('pfq-archive-mode')?.value || 'active').toLowerCase();
     const barangay = String(document.getElementById('pfq-barangay')?.value || '').toLowerCase().trim();
     const refNo = String(document.getElementById('pfq-ref')?.value || '').toLowerCase().trim();
     const fromDate = String(document.getElementById('pfq-from-date')?.value || '');
@@ -16583,19 +16553,33 @@ function pfpGetFilteredFeedback() {
 
     let rows = [...AppData.feedback];
 
+    // Filter active vs archived
+    if (archiveMode === 'archived') {
+        rows = rows.filter(f => Number(f.is_archived) === 1 || String(f.status || '').toLowerCase() === 'closed');
+    } else {
+        rows = rows.filter(f => Number(f.is_archived) !== 1);
+    }
+
     if (q) {
         rows = rows.filter(f => {
             const ref = pfpBuildRef(f).toLowerCase();
             return (
                 ref.includes(q) ||
-                String(f.author || '').toLowerCase().includes(q) ||
-                String(f.authorEmail || '').toLowerCase().includes(q) ||
-                String(f.message || '').toLowerCase().includes(q)
+                String(f.author || f.guest_name || '').toLowerCase().includes(q) ||
+                String(f.authorEmail || f.guest_email || '').toLowerCase().includes(q) ||
+                String(f.message || f.content || '').toLowerCase().includes(q) ||
+                String(f.committee_assigned || '').toLowerCase().includes(q)
             );
         });
     }
     if (status) {
         rows = rows.filter(f => String(f.status || '').toLowerCase() === status);
+    }
+    if (type) {
+        rows = rows.filter(f => String(f.submission_type || f.type || 'comment').toLowerCase() === type);
+    }
+    if (committee) {
+        rows = rows.filter(f => String(f.committee_assigned || '').toLowerCase().includes(committee));
     }
     if (priority) {
         rows = rows.filter(f => pfpGetPriority(f) === priority);
@@ -16614,18 +16598,30 @@ function pfpGetFilteredFeedback() {
         const to = new Date(`${toDate}T23:59:59`);
         rows = rows.filter(f => !f.date || new Date(f.date) <= to);
     }
-    rows.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    rows.sort((a, b) => new Date(b.date || b.created_at || 0) - new Date(a.date || a.created_at || 0));
 
     return rows;
 }
 
 function pfpRenderStats() {
     const total = AppData.feedback.length;
-    const newCount = AppData.feedback.filter(f => String(f.status || '').toLowerCase() === 'new').length;
+    const newCount = AppData.feedback.filter(f => ['new', 'pending'].includes(String(f.status || '').toLowerCase())).length;
     const reviewedCount = AppData.feedback.filter(f => String(f.status || '').toLowerCase() === 'reviewed').length;
     const respondedCount = AppData.feedback.filter(f => String(f.status || '').toLowerCase() === 'responded').length;
     const closedCount = AppData.feedback.filter(f => String(f.status || '').toLowerCase() === 'closed').length;
-    const anonymousCount = AppData.feedback.filter(f => !String(f.authorEmail || '').trim()).length;
+    const forwardedCount = AppData.feedback.filter(f => String(f.status || '').toLowerCase() === 'forwarded' || !!f.committee_assigned).length;
+    const anonymousCount = AppData.feedback.filter(f => !String(f.authorEmail || f.guest_email || '').trim()).length;
+    
+    const surveyCount = AppData.feedback.filter(f => String(f.submission_type || f.type || '').toLowerCase() === 'survey').length;
+    const proposalCount = AppData.feedback.filter(f => String(f.submission_type || f.type || '').toLowerCase() === 'proposal').length;
+
+    // Survey Agree/Disagree Consensus Ratio
+    const positiveSurveys = AppData.feedback.filter(f => String(f.sentiment_tag || f.sentiment || '').toLowerCase() === 'positive').length;
+    const negativeSurveys = AppData.feedback.filter(f => String(f.sentiment_tag || f.sentiment || '').toLowerCase() === 'negative').length;
+    const totalSentiments = positiveSurveys + negativeSurveys;
+    const agreePct = totalSentiments > 0 ? Math.round((positiveSurveys / totalSentiments) * 100) : 75;
+    const disagreePct = 100 - agreePct;
+
     const topBarangay = (() => {
         const tally = new Map();
         for (const row of AppData.feedback) {
@@ -16638,18 +16634,31 @@ function pfpRenderStats() {
         }
         return top;
     })();
+
     const fields = {
         'pfq-stat-total': total,
         'pfq-stat-new': newCount,
         'pfq-stat-reviewed': reviewedCount,
         'pfq-stat-responded': respondedCount,
         'pfq-stat-closed': closedCount,
-        'pfq-stat-anon': anonymousCount
+        'pfq-stat-anon': anonymousCount,
+        'pfq-analytics-surveys': surveyCount,
+        'pfq-analytics-proposals': proposalCount,
+        'pfq-analytics-forwarded': forwardedCount,
+        'pfq-survey-agree-pct': `${agreePct}% Agree`,
+        'pfq-survey-disagree-pct': `${disagreePct}% Disagree`
     };
+
     Object.entries(fields).forEach(([id, value]) => {
         const el = document.getElementById(id);
         if (el) el.textContent = String(value);
     });
+
+    const agreeBar = document.getElementById('pfq-survey-bar-agree');
+    if (agreeBar) agreeBar.style.width = `${agreePct}%`;
+    const disagreeBar = document.getElementById('pfq-survey-bar-disagree');
+    if (disagreeBar) disagreeBar.style.width = `${disagreePct}%`;
+
     const topEl = document.getElementById('pfq-top-barangay');
     if (topEl) topEl.textContent = `${topBarangay[0]} (${topBarangay[1]})`;
 }
@@ -16659,102 +16668,51 @@ function pfpSetRowsCountDisplay(count) {
     if (countEl) countEl.textContent = `${count} item(s)`;
 }
 
-function pfpRenderConsultationCards() {
-    const grid = document.getElementById('pfq-cards-grid');
-    if (!grid) return;
-
-    const consultations = AppData.consultations || [];
-    if (!consultations.length) {
-        grid.innerHTML = '<div class="col-span-full py-10 text-center text-gray-500">No consultations found.</div>';
-        return;
+function pfpStatusBadge(status) {
+    const s = String(status || 'pending').toLowerCase().trim();
+    if (s === 'pending' || s === 'new') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300"><i class="bi bi-clock-history mr-1"></i>Pending</span>';
+    } else if (s === 'reviewed') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300"><i class="bi bi-check-circle mr-1"></i>Reviewed</span>';
+    } else if (s === 'responded') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300"><i class="bi bi-reply-fill mr-1"></i>Responded</span>';
+    } else if (s === 'forwarded') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-800 border border-purple-300"><i class="bi bi-arrow-right-circle-fill mr-1"></i>Forwarded</span>';
+    } else if (s === 'closed') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300"><i class="bi bi-archive-fill mr-1"></i>Closed</span>';
     }
-
-    grid.innerHTML = consultations.map(c => {
-        const feedbackCount = AppData.feedback.filter(f => f.consultationId === c.id).length;
-        const imageUrl = c.image_path ? c.image_path : '';
-        const fullImageUrl = imageUrl ? (imageUrl.startsWith('http') ? imageUrl : imageUrl) : '';
-        const description = c.description || 'No description';
-        const title = c.title || 'Untitled Consultation';
-        const type = c.type || 'consultation';
-
-        return `
-            <div class="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition cursor-pointer" onclick="openConsultationFeedbackModal(${Number(c.id)})">
-                <div class="h-48 bg-gray-100 flex items-center justify-center overflow-hidden">
-                    ${fullImageUrl ? `
-                        <img src="${escapeHtml(fullImageUrl)}" alt="${escapeHtml(title)}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\\'text-gray-400 text-center p-4\\'><i class=\\'bi bi-image text-4xl mb-2\\'></i><p class=\\'text-sm\\'>Image not found</p></div>'">
-                    ` : `
-                        <div class="text-gray-400 text-center p-4">
-                            <i class="bi bi-image text-4xl mb-2"></i>
-                            <p class="text-sm">No image</p>
-                        </div>
-                    `}
-                </div>
-                <div class="p-4">
-                    <div class="flex items-center gap-2 mb-2">
-                        <span class="px-2 py-0.5 text-xs font-medium rounded ${type === 'user' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}">${escapeHtml(type === 'user' ? 'User Submitted' : 'Admin Created')}</span>
-                    </div>
-                    <h3 class="font-semibold text-gray-900 mb-2 truncate">${escapeHtml(title)}</h3>
-                    <p class="text-gray-600 text-sm line-clamp-2 mb-3">${escapeHtml(description)}</p>
-                    <div class="flex items-center justify-between text-xs text-gray-500">
-                        <span><i class="bi bi-chat-dots mr-1"></i>${feedbackCount} feedback</span>
-                        <span class="text-red-600 font-medium">View Feedback →</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-700">${escapeHtml(s)}</span>`;
 }
 
-function openConsultationFeedbackModal(consultationId) {
-    const consultation = AppData.consultations.find(c => c.id === consultationId);
-    if (!consultation) return;
-
-    const feedback = AppData.feedback.filter(f => f.consultationId === consultationId);
-
-    const modalHtml = `
-        <div id="consultation-feedback-modal" class="modal" style="display: flex; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000;">
-            <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-                <div class="p-4 border-b border-gray-200 flex items-center justify-between">
-                    <h2 class="text-xl font-bold text-gray-900">${escapeHtml(consultation.title || 'Consultation')}</h2>
-                    <button onclick="closeConsultationFeedbackModal()" class="text-gray-400 hover:text-gray-600">
-                        <i class="bi bi-x-lg text-xl"></i>
-                    </button>
-                </div>
-                <div class="p-4 overflow-y-auto flex-1">
-                    <div class="mb-4">
-                        <p class="text-gray-600">${escapeHtml(consultation.description || 'No description')}</p>
-                    </div>
-                    <div class="border-t border-gray-200 pt-4">
-                        <h3 class="font-semibold text-gray-900 mb-3">Feedback (${feedback.length})</h3>
-                        ${feedback.length === 0 ? `
-                            <p class="text-gray-500 text-center py-8">No feedback yet for this consultation.</p>
-                        ` : feedback.map(f => `
-                            <div class="border border-gray-200 rounded-lg p-4 mb-3">
-                                <div class="flex items-start justify-between mb-2">
-                                    <div>
-                                        <div class="font-medium text-gray-900">${escapeHtml(f.author || 'Anonymous')}</div>
-                                        <div class="text-xs text-gray-500">${escapeHtml(f.authorEmail || 'No email')}</div>
-                                    </div>
-                                    ${pfpStatusBadge(f.status)}
-                                </div>
-                                <p class="text-gray-700 text-sm mb-2">${escapeHtml(f.message || 'No message')}</p>
-                                <div class="text-xs text-gray-500">
-                                    ${f.date ? new Date(f.date).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
+function pfpSubmissionTypeBadge(type) {
+    const t = String(type || 'comment').toLowerCase().trim();
+    if (t === 'survey') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-sky-100 text-sky-800 border border-sky-200"><i class="bi bi-ui-checks mr-1"></i>Survey</span>';
+    } else if (t === 'proposal') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-violet-100 text-violet-800 border border-violet-200"><i class="bi bi-journal-text mr-1"></i>Proposal</span>';
+    }
+    return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-800 border border-gray-200"><i class="bi bi-chat-left-text mr-1"></i>Comment</span>';
 }
 
-function closeConsultationFeedbackModal() {
-    const modal = document.getElementById('consultation-feedback-modal');
-    if (modal) modal.remove();
+function pfpSentimentBadge(sentiment) {
+    const s = String(sentiment || 'neutral').toLowerCase().trim();
+    if (s === 'positive') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800"><i class="bi bi-emoji-smile mr-1"></i>Positive</span>';
+    } else if (s === 'negative') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-100 text-rose-800"><i class="bi bi-emoji-frown mr-1"></i>Negative</span>';
+    }
+    return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700"><i class="bi bi-emoji-neutral mr-1"></i>Neutral</span>';
+}
+
+function pfpRatingStars(rating) {
+    const r = Math.min(5, Math.max(1, parseInt(rating) || 0));
+    if (r <= 0) return '<span class="text-xs text-gray-400">N/A</span>';
+    let stars = '';
+    for (let i = 1; i <= 5; i++) {
+        if (i <= r) stars += '<i class="bi bi-star-fill text-amber-400 text-xs mr-0.5"></i>';
+        else stars += '<i class="bi bi-star text-gray-300 text-xs mr-0.5"></i>';
+    }
+    return stars;
 }
 
 function pfpRenderTable() {
@@ -16764,36 +16722,48 @@ function pfpRenderTable() {
     const rows = pfpGetFilteredFeedback();
     pfpSetRowsCountDisplay(rows.length);
     if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-10 text-center text-gray-500">No matching feedback found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-10 text-center text-gray-500">No matching feedback found.</td></tr>';
         return;
     }
 
     tbody.innerHTML = rows.map(f => {
-        const consultation = AppData.consultations.find(c => c.id === f.consultationId);
+        const consultation = AppData.consultations.find(c => Number(c.id) === Number(f.consultationId || f.consultation_id));
         const typeText = consultation?.type || 'consultation';
-        const categoryText = f.category || consultation?.category || 'service_issue';
-        const created = f.date ? new Date(f.date).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+        const categoryText = f.category || consultation?.category || 'General Feedback';
+        const created = f.date ? new Date(f.date).toLocaleString() : (f.created_at ? new Date(f.created_at).toLocaleString() : '-');
         const priority = pfpGetPriority(f);
+        const ratingHtml = pfpRatingStars(f.rating);
+        const sentimentHtml = pfpSentimentBadge(f.sentiment_tag || f.sentiment);
+        const typeBadge = pfpSubmissionTypeBadge(f.submission_type || f.type);
+        const committeeTag = f.committee_assigned 
+            ? `<div class="mt-1"><span class="inline-block px-1.5 py-0.5 text-[10px] font-semibold bg-purple-50 text-purple-800 rounded border border-purple-200"><i class="bi bi-diagram-3 mr-0.5"></i>${escapeHtml(f.committee_assigned)}</span></div>`
+            : '';
 
         return `
             <tr class="border-b border-gray-100 hover:bg-gray-50/70">
                 <td class="px-4 py-3"><input type="checkbox" class="pfq-row-checkbox rounded border-gray-300" value="${Number(f.id)}"></td>
                 <td class="px-4 py-3 font-semibold text-gray-800">${escapeHtml(pfpBuildRef(f))}</td>
                 <td class="px-4 py-3">
-                    <div class="font-medium text-gray-900">${escapeHtml(f.author || 'Anonymous')}</div>
-                    <div class="text-sm text-gray-500">${escapeHtml(f.authorEmail || 'No email')}</div>
+                    <div class="font-medium text-gray-900">${escapeHtml(f.author || f.guest_name || 'Anonymous')}</div>
+                    <div class="text-xs text-gray-500">${escapeHtml(f.authorEmail || f.guest_email || 'No email')}</div>
+                    <div class="mt-0.5">${ratingHtml}</div>
+                </td>
+                <td class="px-4 py-3">${typeBadge}</td>
+                <td class="px-4 py-3">
+                    <div class="text-gray-900 font-medium text-xs">${escapeHtml(typeText)}</div>
+                    <div class="text-xs text-gray-500">${escapeHtml(categoryText)}</div>
+                    ${committeeTag}
                 </td>
                 <td class="px-4 py-3">
-                    <div class="text-gray-900">${escapeHtml(typeText)}</div>
-                    <div class="text-sm text-gray-500">${escapeHtml(categoryText)}</div>
+                    <div class="text-xs font-medium text-gray-700 mb-0.5">${escapeHtml(priority)}</div>
+                    <div>${sentimentHtml}</div>
                 </td>
-                <td class="px-4 py-3 text-gray-700">${escapeHtml(priority)}</td>
                 <td class="px-4 py-3">${pfpStatusBadge(f.status)}</td>
-                <td class="px-4 py-3 text-gray-700">${escapeHtml(created)}</td>
-                <td class="px-4 py-3 text-gray-700">${escapeHtml(pfpGetAging(f))}</td>
+                <td class="px-4 py-3 text-xs text-gray-700">${escapeHtml(created)}</td>
+                <td class="px-4 py-3 text-xs text-gray-700">${escapeHtml(pfpGetAging(f))}</td>
                 <td class="px-4 py-3">
-                    <button onclick="viewFeedbackDetails(${Number(f.id)})" class="inline-flex items-center justify-center w-8 h-8 border border-blue-300 text-blue-600 rounded hover:bg-blue-50" title="View">
-                        <i class="bi bi-eye"></i>
+                    <button onclick="openFeedbackResponseModal(${Number(f.id)})" class="inline-flex items-center justify-center px-2.5 py-1 text-xs border border-blue-600 text-blue-600 font-medium rounded hover:bg-blue-50 gap-1 shadow-sm" title="View & Respond">
+                        <i class="bi bi-reply-fill"></i> View / Forward
                     </button>
                 </td>
             </tr>
@@ -16802,9 +16772,6 @@ function pfpRenderTable() {
 }
 
 async function pfpSetStatus(id, status, silent) {
-    if (!silent) showNotification('Read-only mode: feedback actions are disabled.', 'warning');
-    return false;
-
     const targetStatus = String(status || '').toLowerCase().trim();
     if (!targetStatus) return false;
     try {
@@ -16814,7 +16781,7 @@ async function pfpSetStatus(id, status, silent) {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ id, status: targetStatus })
+            body: JSON.stringify({ id: Number(id), status: targetStatus })
         });
 
         const data = await res.json().catch(() => null);
@@ -16824,12 +16791,257 @@ async function pfpSetStatus(id, status, silent) {
 
         const row = AppData.feedback.find(f => Number(f.id) === Number(id));
         if (row) row.status = targetStatus;
-        if (!silent) showNotification('Feedback status updated.', 'success');
+        if (!silent) showNotification('Feedback status updated to ' + targetStatus + '.', 'success');
+        pfpRenderStats();
+        pfpRenderTable();
         return true;
     } catch (err) {
         if (!silent) showNotification(err && err.message ? String(err.message) : 'Failed to update status.', 'error');
         return false;
     }
+}
+
+function closeFeedbackModal() {
+    const modal = document.getElementById('pfq-response-modal');
+    if (modal) modal.remove();
+}
+
+function openFeedbackResponseModal(id) {
+    closeFeedbackModal();
+    const f = AppData.feedback.find(item => Number(item.id) === Number(id));
+    if (!f) {
+        showNotification('Feedback entry not found.', 'error');
+        return;
+    }
+
+    const consultation = AppData.consultations.find(c => Number(c.id) === Number(f.consultationId || f.consultation_id));
+    const consultationTitle = consultation ? consultation.title : (f.consultationTitle || `Consultation #${f.consultation_id || f.consultationId || ''}`);
+    const author = f.author || f.guest_name || 'Anonymous';
+    const email = f.authorEmail || f.guest_email || '';
+    const phone = f.guest_phone || '';
+    const category = f.category || consultation?.category || 'General Feedback';
+    const ratingStars = pfpRatingStars(f.rating);
+    const sentimentBadge = pfpSentimentBadge(f.sentiment_tag || f.sentiment);
+    const typeBadge = pfpSubmissionTypeBadge(f.submission_type || f.type);
+    const messageText = f.message || f.content || '';
+    const existingResponse = f.admin_response || f.response || '';
+    const statusBadge = pfpStatusBadge(f.status);
+
+    let topicsHtml = '';
+    let topics = [];
+    try {
+        if (typeof f.topic_tags === 'string') topics = JSON.parse(f.topic_tags);
+        else if (Array.isArray(f.topic_tags)) topics = f.topic_tags;
+        else if (Array.isArray(f.topics)) topics = f.topics;
+    } catch (_) {}
+
+    if (topics.length) {
+        topicsHtml = topics.map(t => `<span class="inline-block px-2 py-0.5 text-xs bg-blue-50 text-blue-700 rounded border border-blue-200 mr-1 mb-1">${escapeHtml(t)}</span>`).join('');
+    }
+
+    const modalHtml = `
+        <div id="pfq-response-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden animate-in fade-in duration-200">
+                <div class="bg-gradient-to-r from-red-600 to-red-700 text-white px-6 py-4 flex items-center justify-between">
+                    <div>
+                        <span class="text-xs uppercase font-semibold text-red-200 tracking-wider">Public Feedback Queue Workflow</span>
+                        <h2 class="text-xl font-bold mt-0.5">Feedback Review & Committee Routing</h2>
+                    </div>
+                    <button onclick="closeFeedbackModal()" class="text-white/80 hover:text-white text-2xl font-bold leading-none">&times;</button>
+                </div>
+
+                <div class="p-6 space-y-5 max-h-[75vh] overflow-y-auto text-sm text-gray-800">
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-xs text-gray-500 font-semibold uppercase">Citizen Info</p>
+                            <p class="font-bold text-gray-900 mt-1">${escapeHtml(author)}</p>
+                            <p class="text-xs text-gray-600">${escapeHtml(email || 'No email provided')}</p>
+                            ${phone ? `<p class="text-xs text-gray-600">Phone: ${escapeHtml(phone)}</p>` : ''}
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 font-semibold uppercase">Consultation Policy</p>
+                            <p class="font-semibold text-gray-900 mt-1">${escapeHtml(consultationTitle)}</p>
+                            <p class="text-xs text-gray-500">Category: <span class="font-medium">${escapeHtml(category)}</span></p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                        <div class="flex items-center gap-4">
+                            <div><span class="text-xs text-gray-500 block mb-0.5">Type</span>${typeBadge}</div>
+                            <div><span class="text-xs text-gray-500 block mb-0.5">Rating</span>${ratingStars}</div>
+                            <div><span class="text-xs text-gray-500 block mb-0.5">Sentiment</span>${sentimentBadge}</div>
+                            <div><span class="text-xs text-gray-500 block mb-0.5">Current Status</span>${statusBadge}</div>
+                        </div>
+                        ${topicsHtml ? `<div><span class="text-xs text-gray-500 block mb-0.5">AI Topics</span><div>${topicsHtml}</div></div>` : ''}
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Citizen Submission Message</label>
+                        <div class="p-4 bg-red-50/50 border border-red-100 rounded-lg text-gray-900 text-sm whitespace-pre-wrap leading-relaxed">${escapeHtml(messageText)}</div>
+                    </div>
+
+                    <!-- Stage 4: Committee Routing & Assignment Section -->
+                    <div class="p-4 bg-purple-50/70 border border-purple-200 rounded-lg space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="font-bold text-purple-900 text-sm flex items-center">
+                                <i class="bi bi-diagram-3 mr-1 text-purple-700"></i> Stage 4: LGU Committee Routing
+                            </label>
+                            ${f.committee_assigned ? `<span class="text-xs font-bold px-2 py-0.5 bg-purple-200 text-purple-900 rounded">Assigned: ${escapeHtml(f.committee_assigned)}</span>` : '<span class="text-xs text-purple-600 font-medium">Currently Unassigned</span>'}
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <div class="sm:col-span-2">
+                                <select id="pfq-modal-committee-select" class="w-full px-3 py-1.5 border border-purple-300 rounded text-xs font-medium focus:ring-purple-500">
+                                    <option value="">-- Select Target LGU Committee --</option>
+                                    <option value="Urban Planning & Infrastructure">Urban Planning & Infrastructure</option>
+                                    <option value="Environmental Management & Sanitation">Environmental Management & Sanitation</option>
+                                    <option value="Health & Social Services">Health & Social Services</option>
+                                    <option value="Finance, Budget & Appropriations">Finance, Budget & Appropriations</option>
+                                    <option value="Rules, Laws & Governance">Rules, Laws & Governance</option>
+                                </select>
+                            </div>
+                            <button onclick="submitForwardToCommittee(${Number(f.id)})" class="w-full px-3 py-1.5 bg-purple-700 text-white rounded text-xs font-bold hover:bg-purple-800 shadow">
+                                <i class="bi bi-send-check mr-1"></i> Forward to Committee
+                            </button>
+                        </div>
+                    </div>
+
+                    ${f.analysis_summary ? `
+                        <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
+                            <strong><i class="bi bi-cpu mr-1"></i>AI Analysis Summary:</strong> ${escapeHtml(f.analysis_summary)}
+                        </div>
+                    ` : ''}
+
+                    <div class="border-t border-gray-200 pt-4 space-y-3">
+                        <label for="pfq-modal-response-input" class="block font-bold text-gray-900">
+                            Official LGU Response
+                        </label>
+                        <textarea id="pfq-modal-response-input" rows="4" placeholder="Type the official government response to this feedback submission..." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm">${escapeHtml(existingResponse)}</textarea>
+                        
+                        <div class="flex items-center gap-2">
+                            <input id="pfq-modal-send-email" type="checkbox" ${email ? 'checked' : 'disabled'} class="rounded border-gray-300 text-red-600 focus:ring-red-500">
+                            <label for="pfq-modal-send-email" class="text-xs text-gray-700 font-medium">
+                                Send official response copy to citizen's email (${escapeHtml(email || 'No email available')})
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 border-t border-gray-200 px-6 py-3 flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <button onclick="pfpSetStatus(${Number(f.id)}, 'reviewed').then(() => closeFeedbackModal())" class="px-3 py-1.5 rounded border border-gray-300 text-gray-700 text-xs font-semibold hover:bg-gray-100">
+                            Mark as Reviewed
+                        </button>
+                        <button onclick="pfpSetStatus(${Number(f.id)}, 'closed').then(() => closeFeedbackModal())" class="px-3 py-1.5 rounded border border-slate-400 text-slate-700 text-xs font-semibold hover:bg-slate-100">
+                            Close & Archive
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="closeFeedbackModal()" class="px-4 py-2 rounded border border-gray-300 text-gray-700 text-xs font-semibold hover:bg-gray-100">
+                            Cancel
+                        </button>
+                        <button onclick="submitFeedbackResponse(${Number(f.id)})" class="px-4 py-2 rounded bg-red-600 text-white text-xs font-bold hover:bg-red-700 shadow">
+                            <i class="bi bi-send mr-1"></i> Submit Response
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+async function submitForwardToCommittee(id) {
+    const select = document.getElementById('pfq-modal-committee-select');
+    const committee = select ? select.value.trim() : '';
+
+    if (!committee) {
+        showNotification('Please select a target LGU Committee.', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch('API/feedback_api.php?action=forward', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                id: Number(id),
+                committee: committee,
+                notes: 'Forwarded via Admin Feedback Queue'
+            })
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !data.success) {
+            throw new Error((data && data.message) ? data.message : `HTTP ${res.status}`);
+        }
+
+        const row = AppData.feedback.find(f => Number(f.id) === Number(id));
+        if (row) {
+            row.status = 'forwarded';
+            row.committee_assigned = committee;
+        }
+
+        closeFeedbackModal();
+        pfpRenderStats();
+        pfpRenderTable();
+        showNotification(data.message || `Feedback forwarded to ${committee}!`, 'success');
+    } catch (err) {
+        showNotification(err && err.message ? String(err.message) : 'Failed to forward feedback.', 'error');
+    }
+}
+
+async function submitFeedbackResponse(id) {
+    const input = document.getElementById('pfq-modal-response-input');
+    const sendEmailCb = document.getElementById('pfq-modal-send-email');
+    const responseText = (input ? input.value : '').trim();
+    const sendEmail = sendEmailCb ? sendEmailCb.checked : false;
+
+    if (!responseText) {
+        showNotification('Please enter an official response message.', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch('API/feedback_api.php?action=respond', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                id: Number(id),
+                response: responseText,
+                send_email: sendEmail
+            })
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !data.success) {
+            throw new Error((data && data.message) ? data.message : `HTTP ${res.status}`);
+        }
+
+        const row = AppData.feedback.find(f => Number(f.id) === Number(id));
+        if (row) {
+            row.status = 'responded';
+            row.admin_response = responseText;
+            row.responded_at = new Date().toISOString();
+        }
+
+        closeFeedbackModal();
+        pfpRenderStats();
+        pfpRenderTable();
+        showNotification(data.message || 'Official response recorded successfully!', 'success');
+    } catch (err) {
+        showNotification(err && err.message ? String(err.message) : 'Failed to record response.', 'error');
+    }
+}
+
+function viewFeedbackDetails(id) {
+    return openFeedbackResponseModal(id);
 }
 
 function pfpToggleSelectAll() {
@@ -16863,19 +17075,19 @@ async function pfpApplyBulkStatus() {
         if (result) ok += 1;
     }
     pfpRenderStats();
-    pfpRenderCards();
+    pfpRenderTable();
     showNotification(`Updated ${ok}/${selected.length} feedback entries.`, ok === selected.length ? 'success' : 'warning');
 }
 
 function pfpResetFilters() {
-    const ids = ['pfq-search', 'pfq-status', 'pfq-priority', 'pfq-barangay'];
+    const ids = ['pfq-search', 'pfq-status', 'pfq-priority', 'pfq-barangay', 'pfq-ref', 'pfq-from-date', 'pfq-to-date'];
     ids.forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         if (el.tagName === 'SELECT') el.selectedIndex = 0;
         else el.value = '';
     });
-    pfpRenderCards();
+    pfpRenderTable();
 }
 
 function pfpExportCsv() {
@@ -16919,8 +17131,8 @@ async function pfpRefreshData() {
     try {
         await Promise.all([loadConsultationsFromApi(), loadFeedbackFromApi()]);
         pfpRenderStats();
-        pfpRenderConsultationCards();
-        showNotification('Feedback data refreshed.', 'success');
+        pfpRenderTable();
+        showNotification('Public Feedback Queue refreshed.', 'success');
     } catch (e) {
         showNotification(e && e.message ? String(e.message) : 'Failed to refresh data.', 'error');
     }
@@ -16933,56 +17145,200 @@ function pfpOpenPortalNotice() {
 async function renderPublicFeedbackPortal() {
     const contentArea = document.getElementById('content-area');
     const breadcrumbCurrent = document.querySelector('.breadcrumb-current');
-    if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'Feedback Management';
+    if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'Public Feedback Queue';
     if (!contentArea) return;
 
-    contentArea.innerHTML = '<div class="p-8 text-center text-gray-500">Loading feedback...</div>';
+    contentArea.innerHTML = '<div class="p-8 text-center text-gray-500"><i class="bi bi-arrow-repeat animate-spin text-2xl mb-2 block"></i>Loading feedback queue...</div>';
 
     try {
         await Promise.all([
-            loadFeedbackFromApi().catch(e => console.warn('Feedback load failed:', e)),
-            loadConsultationsFromApi().catch(e => console.warn('Consultation load failed:', e))
+            loadFeedbackFromApi().catch(e => console.warn('Feedback queue load failed:', e)),
+            loadConsultationsFromApi().catch(e => console.warn('Consultation queue load failed:', e))
         ]);
     } catch (e) {
-        console.warn('Feedback bootstrap failed:', e);
+        console.warn('Feedback queue bootstrap failed:', e);
     }
 
     contentArea.innerHTML = `
-        <div class="space-y-6">
-            <!-- Header -->
-            <div class="bg-gradient-to-r from-red-600 to-red-700 text-white p-7 rounded-lg shadow">
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div>
-                        <h1 class="text-3xl font-bold mb-2">Feedback Management</h1>
-                        <p class="text-red-100">View feedback by consultation</p>
+        <div class="space-y-5">
+            <!-- Sleek Header Banner -->
+            <div class="bg-gradient-to-r from-red-600 to-red-700 text-white p-6 rounded-xl shadow-md flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl font-bold flex items-center gap-2">
+                        <i class="bi bi-inbox-fill"></i> Public Feedback Queue
+                    </h1>
+                    <p class="text-red-100 text-sm mt-1">Review citizen submissions, route feedback to LGU committees, and send official responses.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="pfpExportCsv()" class="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-lg transition border border-white/20 flex items-center gap-1.5 shadow-sm">
+                        <i class="bi bi-download"></i> Export CSV
+                    </button>
+                    <button onclick="pfpRefreshData()" class="px-3.5 py-2 bg-white text-red-700 hover:bg-red-50 text-xs font-bold rounded-lg transition shadow flex items-center gap-1.5">
+                        <i class="bi bi-arrow-repeat"></i> Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- 4 Clean Key Metrics -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                    <div class="flex items-center justify-between text-gray-500 text-xs font-bold uppercase">
+                        <span>Total Submissions</span>
+                        <i class="bi bi-chat-left-text text-gray-400 text-lg"></i>
                     </div>
-                    <div class="flex gap-2">
-                        <button onclick="pfpRefreshData()" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition flex items-center gap-2">
-                            <i class="bi bi-arrow-repeat"></i> Refresh
+                    <p id="pfq-stat-total" class="text-3xl font-extrabold text-gray-900 mt-2">0</p>
+                    <p class="text-[11px] text-gray-400 mt-1">All logged feedback</p>
+                </div>
+
+                <div class="bg-white rounded-xl border border-amber-200 p-4 shadow-sm bg-amber-50/30">
+                    <div class="flex items-center justify-between text-amber-700 text-xs font-bold uppercase">
+                        <span>Pending Review</span>
+                        <i class="bi bi-clock-history text-amber-500 text-lg"></i>
+                    </div>
+                    <p id="pfq-stat-new" class="text-3xl font-extrabold text-amber-600 mt-2">0</p>
+                    <p class="text-[11px] text-amber-600/80 mt-1">Awaiting admin action</p>
+                </div>
+
+                <div class="bg-white rounded-xl border border-purple-200 p-4 shadow-sm bg-purple-50/30">
+                    <div class="flex items-center justify-between text-purple-700 text-xs font-bold uppercase">
+                        <span>Committee Forwarded</span>
+                        <i class="bi bi-diagram-3 text-purple-500 text-lg"></i>
+                    </div>
+                    <p id="pfq-analytics-forwarded" class="text-3xl font-extrabold text-purple-600 mt-2">0</p>
+                    <p class="text-[11px] text-purple-600/80 mt-1">Routed to LGU departments</p>
+                </div>
+
+                <div class="bg-white rounded-xl border border-emerald-200 p-4 shadow-sm bg-emerald-50/30">
+                    <div class="flex items-center justify-between text-emerald-700 text-xs font-bold uppercase">
+                        <span>Responded / Closed</span>
+                        <i class="bi bi-check-circle-fill text-emerald-500 text-lg"></i>
+                    </div>
+                    <p id="pfq-stat-responded" class="text-3xl font-extrabold text-emerald-600 mt-2">0</p>
+                    <p class="text-[11px] text-emerald-600/80 mt-1">Official response sent</p>
+                </div>
+            </div>
+
+            <!-- Hidden stats containers for calculation compatibility -->
+            <div class="hidden">
+                <span id="pfq-stat-reviewed">0</span>
+                <span id="pfq-stat-closed">0</span>
+                <span id="pfq-stat-anon">0</span>
+                <span id="pfq-analytics-surveys">0</span>
+                <span id="pfq-analytics-proposals">0</span>
+                <span id="pfq-survey-agree-pct">75% Agree</span>
+                <span id="pfq-survey-disagree-pct">25% Disagree</span>
+                <div id="pfq-survey-bar-agree"></div>
+                <div id="pfq-survey-bar-disagree"></div>
+                <input id="pfq-ref" type="hidden">
+                <input id="pfq-from-date" type="hidden">
+                <input id="pfq-to-date" type="hidden">
+            </div>
+
+            <!-- Clean Single-Row Filter Bar -->
+            <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-3">
+                <div class="flex flex-wrap items-center gap-3">
+                    <!-- Search Input -->
+                    <div class="flex-1 min-w-[240px]">
+                        <div class="relative">
+                            <i class="bi bi-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+                            <input id="pfq-search" type="text" placeholder="Search by citizen name, reference #, or feedback message..." class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-red-500 focus:border-red-500" oninput="pfpRenderTable()">
+                        </div>
+                    </div>
+
+                    <!-- Submission Type Dropdown -->
+                    <select id="pfq-type" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderTable()">
+                        <option value="">All Submission Types</option>
+                        <option value="survey">Surveys Only</option>
+                        <option value="proposal">Proposals Only</option>
+                        <option value="comment">Comments Only</option>
+                    </select>
+
+                    <!-- Queue Status Dropdown -->
+                    <select id="pfq-status" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderTable()">
+                        <option value="">All Statuses</option>
+                        <option value="pending">Pending</option>
+                        <option value="reviewed">Reviewed</option>
+                        <option value="responded">Responded</option>
+                        <option value="forwarded">Forwarded</option>
+                        <option value="closed">Closed</option>
+                    </select>
+
+                    <!-- Committee Dropdown -->
+                    <select id="pfq-committee" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderTable()">
+                        <option value="">All LGU Committees</option>
+                        <option value="Urban Planning">Urban Planning</option>
+                        <option value="Environmental">Environment</option>
+                        <option value="Health">Health</option>
+                        <option value="Finance">Finance</option>
+                        <option value="Rules">Rules & Governance</option>
+                    </select>
+
+                    <button onclick="pfpResetFilters()" class="px-3 py-2 text-xs font-semibold text-gray-500 hover:text-gray-800">
+                        Reset Filters
+                    </button>
+                </div>
+
+                <!-- Sub-bar: Archive Mode & Bulk Actions -->
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100 text-xs">
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-500 font-semibold">Queue View:</span>
+                            <select id="pfq-archive-mode" class="px-2.5 py-1 border border-purple-200 bg-purple-50 text-purple-900 font-bold rounded-md text-xs" onchange="pfpRenderTable()">
+                                <option value="active">Active Submissions Queue</option>
+                                <option value="archived">Archived Searchable Vault</option>
+                            </select>
+                        </div>
+                        <span class="text-gray-300">|</span>
+                        <div class="flex items-center gap-1">
+                            <span class="text-gray-500 font-medium">Barangay:</span>
+                            <input id="pfq-barangay" type="text" placeholder="e.g. Poblacion" class="px-2.5 py-1 border border-gray-300 rounded-md text-xs w-32" oninput="pfpRenderTable()">
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <select id="pfq-bulk-status" class="px-2.5 py-1 border border-gray-300 rounded-md text-xs">
+                            <option value="">Bulk status action...</option>
+                            <option value="reviewed">Mark as Reviewed</option>
+                            <option value="responded">Mark as Responded</option>
+                            <option value="closed">Close & Archive</option>
+                        </select>
+                        <button onclick="pfpApplyBulkStatus()" class="px-3 py-1 bg-gray-800 text-white font-semibold rounded-md text-xs hover:bg-gray-900 transition">
+                            Apply
                         </button>
+                        <span id="pfq-items-count" class="text-gray-500 font-bold ml-2">0 item(s)</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Stats Cards -->
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                <div class="bg-white rounded-lg border border-gray-200 p-4"><p class="text-xs uppercase text-gray-500">Total</p><p id="pfq-stat-total" class="text-4xl font-extrabold text-gray-900 leading-none mt-2">0</p></div>
-                <div class="bg-white rounded-lg border border-gray-200 p-4"><p class="text-xs uppercase text-gray-500">New</p><p id="pfq-stat-new" class="text-4xl font-extrabold text-red-500 leading-none mt-2">0</p></div>
-                <div class="bg-white rounded-lg border border-gray-200 p-4"><p class="text-xs uppercase text-gray-500">Reviewed</p><p id="pfq-stat-reviewed" class="text-4xl font-extrabold text-amber-500 leading-none mt-2">0</p></div>
-                <div class="bg-white rounded-lg border border-gray-200 p-4"><p class="text-xs uppercase text-gray-500">Responded</p><p id="pfq-stat-responded" class="text-4xl font-extrabold text-emerald-600 leading-none mt-2">0</p></div>
-                <div class="bg-white rounded-lg border border-gray-200 p-4"><p class="text-xs uppercase text-gray-500">Closed</p><p id="pfq-stat-closed" class="text-4xl font-extrabold text-slate-500 leading-none mt-2">0</p></div>
-                <div class="bg-white rounded-lg border border-gray-200 p-4"><p class="text-xs uppercase text-gray-500">Anonymous</p><p id="pfq-stat-anon" class="text-4xl font-extrabold text-gray-900 leading-none mt-2">0</p></div>
-            </div>
-
-            <!-- Consultation Cards Grid -->
-            <div id="pfq-cards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <!-- Cards will be rendered here -->
+            <!-- Queue Submissions Table -->
+            <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-sm">
+                <table class="w-full text-xs text-left">
+                    <thead class="bg-gray-50 border-b border-gray-200 uppercase tracking-wider text-[11px] font-bold text-gray-700">
+                        <tr>
+                            <th class="px-3.5 py-3"><input id="pfq-check-all" type="checkbox" onchange="pfpToggleSelectAll()" class="rounded border-gray-300"></th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Ref #</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Citizen</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Submission Type</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Consultation Policy / Committee</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Priority & Sentiment</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Status</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Submitted Date</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Aging</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pfq-table-body"></tbody>
+                </table>
+                <div class="px-4 py-3 border-t border-gray-100 text-xs text-gray-500 flex items-center justify-between">
+                    <span><strong>Active Barangays Participating:</strong> <span id="pfq-top-barangay">-</span></span>
+                    <span>Click <strong>"View / Forward"</strong> on any row to open the review drawer and take action.</span>
+                </div>
             </div>
         </div>
     `;
 
     pfpRenderStats();
-    pfpRenderConsultationCards();
+    pfpRenderTable();
     if (!AppData.feedback.length || !AppData.consultations.length) {
         pfpRefreshData();
     }
@@ -19065,7 +19421,7 @@ function issueRenderTable() {
             <td class="px-3 py-3 text-gray-700">${escapeHtml(r.barangay || '-')}</td>
             <td class="px-3 py-3">${issuePriorityBadge(r.priority)}</td>
             <td class="px-3 py-3">${issueStatusBadge(r.status)}</td>
-            <td class="px-3 py-3 text-gray-700">${escapeHtml(r.createdAt ? new Date(r.createdAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-')}</td>
+            <td class="px-3 py-3 text-gray-700">${escapeHtml(r.createdAt ? new Date(r.createdAt).toLocaleString() : '-')}</td>
             <td class="px-3 py-3 text-gray-700">${escapeHtml((Number(r.lat).toFixed(5)) + ', ' + (Number(r.lng).toFixed(5)))}</td>
             <td class="px-3 py-3">
                 <div class="flex items-center gap-1">
@@ -19572,8 +19928,6 @@ function generateReport() {
         }
     });
 }
-
-
 
 
 

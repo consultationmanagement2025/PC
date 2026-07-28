@@ -55,7 +55,9 @@ function initializeFeedbackTable() {
     if ($conn->query($sql) === TRUE) {
         return true;
     } else {
-        // Table might already exist, try to add new columns if they don't exist
+        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS submission_type ENUM('survey', 'proposal', 'comment') DEFAULT 'comment'");
+        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS committee_assigned VARCHAR(150) DEFAULT NULL");
+        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS barangay VARCHAR(150) DEFAULT NULL");
         $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS sentiment_tag VARCHAR(20) DEFAULT NULL");
         $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS sentiment_score DECIMAL(6,2) DEFAULT NULL");
         $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS topic_tags JSON");
@@ -137,6 +139,11 @@ function getFeedback($filters = [], $limit = 50, $offset = 0) {
     initializeFeedbackTable();
     
     $where = "1=1";
+    
+    if (isset($filters['id']) && $filters['id']) {
+        $id = (int)$filters['id'];
+        $where .= " AND id = $id";
+    }
     
     if (isset($filters['status']) && $filters['status']) {
         $status = $conn->real_escape_string($filters['status']);
@@ -272,6 +279,32 @@ function archiveFeedback($id) {
     $ok = $stmt->execute();
     if (!$ok) {
         error_log("Error archiving feedback: " . $stmt->error);
+    }
+    $stmt->close();
+    return $ok;
+}
+
+function forwardFeedbackToCommittee($id, $committee, $admin_id = 1, $notes = '') {
+    global $conn;
+    $id = (int)$id;
+    $committee = trim((string)$committee);
+    $admin_id = (int)$admin_id;
+    $notes = trim((string)$notes);
+
+    $stmt = $conn->prepare("UPDATE feedback 
+            SET committee_assigned = ?, 
+                status = 'forwarded', 
+                admin_respondent = ?, 
+                impact_summary = CONCAT(IFNULL(impact_summary, ''), '\n[Forwarded to ', ?, ']: ', ?)
+            WHERE id = ?");
+    if (!$stmt) {
+        error_log("Error preparing forwardFeedbackToCommittee: " . $conn->error);
+        return false;
+    }
+    $stmt->bind_param('sissi', $committee, $admin_id, $committee, $notes, $id);
+    $ok = $stmt->execute();
+    if (!$ok) {
+        error_log("Error forwarding feedback to committee: " . $stmt->error);
     }
     $stmt->close();
     return $ok;

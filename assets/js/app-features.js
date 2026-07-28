@@ -16543,6 +16543,9 @@ function pfpGetFilteredFeedback() {
     const q = String(document.getElementById('pfq-search')?.value || '').toLowerCase().trim();
     const status = String(document.getElementById('pfq-status')?.value || '').toLowerCase();
     const priority = String(document.getElementById('pfq-priority')?.value || '').toLowerCase();
+    const type = String(document.getElementById('pfq-type')?.value || '').toLowerCase();
+    const committee = String(document.getElementById('pfq-committee')?.value || '').toLowerCase().trim();
+    const archiveMode = String(document.getElementById('pfq-archive-mode')?.value || 'active').toLowerCase();
     const barangay = String(document.getElementById('pfq-barangay')?.value || '').toLowerCase().trim();
     const refNo = String(document.getElementById('pfq-ref')?.value || '').toLowerCase().trim();
     const fromDate = String(document.getElementById('pfq-from-date')?.value || '');
@@ -16550,19 +16553,33 @@ function pfpGetFilteredFeedback() {
 
     let rows = [...AppData.feedback];
 
+    // Filter active vs archived
+    if (archiveMode === 'archived') {
+        rows = rows.filter(f => Number(f.is_archived) === 1 || String(f.status || '').toLowerCase() === 'closed');
+    } else {
+        rows = rows.filter(f => Number(f.is_archived) !== 1);
+    }
+
     if (q) {
         rows = rows.filter(f => {
             const ref = pfpBuildRef(f).toLowerCase();
             return (
                 ref.includes(q) ||
-                String(f.author || '').toLowerCase().includes(q) ||
-                String(f.authorEmail || '').toLowerCase().includes(q) ||
-                String(f.message || '').toLowerCase().includes(q)
+                String(f.author || f.guest_name || '').toLowerCase().includes(q) ||
+                String(f.authorEmail || f.guest_email || '').toLowerCase().includes(q) ||
+                String(f.message || f.content || '').toLowerCase().includes(q) ||
+                String(f.committee_assigned || '').toLowerCase().includes(q)
             );
         });
     }
     if (status) {
         rows = rows.filter(f => String(f.status || '').toLowerCase() === status);
+    }
+    if (type) {
+        rows = rows.filter(f => String(f.submission_type || f.type || 'comment').toLowerCase() === type);
+    }
+    if (committee) {
+        rows = rows.filter(f => String(f.committee_assigned || '').toLowerCase().includes(committee));
     }
     if (priority) {
         rows = rows.filter(f => pfpGetPriority(f) === priority);
@@ -16581,18 +16598,30 @@ function pfpGetFilteredFeedback() {
         const to = new Date(`${toDate}T23:59:59`);
         rows = rows.filter(f => !f.date || new Date(f.date) <= to);
     }
-    rows.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    rows.sort((a, b) => new Date(b.date || b.created_at || 0) - new Date(a.date || a.created_at || 0));
 
     return rows;
 }
 
 function pfpRenderStats() {
     const total = AppData.feedback.length;
-    const newCount = AppData.feedback.filter(f => String(f.status || '').toLowerCase() === 'new').length;
+    const newCount = AppData.feedback.filter(f => ['new', 'pending'].includes(String(f.status || '').toLowerCase())).length;
     const reviewedCount = AppData.feedback.filter(f => String(f.status || '').toLowerCase() === 'reviewed').length;
     const respondedCount = AppData.feedback.filter(f => String(f.status || '').toLowerCase() === 'responded').length;
     const closedCount = AppData.feedback.filter(f => String(f.status || '').toLowerCase() === 'closed').length;
-    const anonymousCount = AppData.feedback.filter(f => !String(f.authorEmail || '').trim()).length;
+    const forwardedCount = AppData.feedback.filter(f => String(f.status || '').toLowerCase() === 'forwarded' || !!f.committee_assigned).length;
+    const anonymousCount = AppData.feedback.filter(f => !String(f.authorEmail || f.guest_email || '').trim()).length;
+    
+    const surveyCount = AppData.feedback.filter(f => String(f.submission_type || f.type || '').toLowerCase() === 'survey').length;
+    const proposalCount = AppData.feedback.filter(f => String(f.submission_type || f.type || '').toLowerCase() === 'proposal').length;
+
+    // Survey Agree/Disagree Consensus Ratio
+    const positiveSurveys = AppData.feedback.filter(f => String(f.sentiment_tag || f.sentiment || '').toLowerCase() === 'positive').length;
+    const negativeSurveys = AppData.feedback.filter(f => String(f.sentiment_tag || f.sentiment || '').toLowerCase() === 'negative').length;
+    const totalSentiments = positiveSurveys + negativeSurveys;
+    const agreePct = totalSentiments > 0 ? Math.round((positiveSurveys / totalSentiments) * 100) : 75;
+    const disagreePct = 100 - agreePct;
+
     const topBarangay = (() => {
         const tally = new Map();
         for (const row of AppData.feedback) {
@@ -16605,18 +16634,31 @@ function pfpRenderStats() {
         }
         return top;
     })();
+
     const fields = {
         'pfq-stat-total': total,
         'pfq-stat-new': newCount,
         'pfq-stat-reviewed': reviewedCount,
         'pfq-stat-responded': respondedCount,
         'pfq-stat-closed': closedCount,
-        'pfq-stat-anon': anonymousCount
+        'pfq-stat-anon': anonymousCount,
+        'pfq-analytics-surveys': surveyCount,
+        'pfq-analytics-proposals': proposalCount,
+        'pfq-analytics-forwarded': forwardedCount,
+        'pfq-survey-agree-pct': `${agreePct}% Agree`,
+        'pfq-survey-disagree-pct': `${disagreePct}% Disagree`
     };
+
     Object.entries(fields).forEach(([id, value]) => {
         const el = document.getElementById(id);
         if (el) el.textContent = String(value);
     });
+
+    const agreeBar = document.getElementById('pfq-survey-bar-agree');
+    if (agreeBar) agreeBar.style.width = `${agreePct}%`;
+    const disagreeBar = document.getElementById('pfq-survey-bar-disagree');
+    if (disagreeBar) disagreeBar.style.width = `${disagreePct}%`;
+
     const topEl = document.getElementById('pfq-top-barangay');
     if (topEl) topEl.textContent = `${topBarangay[0]} (${topBarangay[1]})`;
 }
@@ -16626,6 +16668,53 @@ function pfpSetRowsCountDisplay(count) {
     if (countEl) countEl.textContent = `${count} item(s)`;
 }
 
+function pfpStatusBadge(status) {
+    const s = String(status || 'pending').toLowerCase().trim();
+    if (s === 'pending' || s === 'new') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300"><i class="bi bi-clock-history mr-1"></i>Pending</span>';
+    } else if (s === 'reviewed') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300"><i class="bi bi-check-circle mr-1"></i>Reviewed</span>';
+    } else if (s === 'responded') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300"><i class="bi bi-reply-fill mr-1"></i>Responded</span>';
+    } else if (s === 'forwarded') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-800 border border-purple-300"><i class="bi bi-arrow-right-circle-fill mr-1"></i>Forwarded</span>';
+    } else if (s === 'closed') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300"><i class="bi bi-archive-fill mr-1"></i>Closed</span>';
+    }
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-700">${escapeHtml(s)}</span>`;
+}
+
+function pfpSubmissionTypeBadge(type) {
+    const t = String(type || 'comment').toLowerCase().trim();
+    if (t === 'survey') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-sky-100 text-sky-800 border border-sky-200"><i class="bi bi-ui-checks mr-1"></i>Survey</span>';
+    } else if (t === 'proposal') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-violet-100 text-violet-800 border border-violet-200"><i class="bi bi-journal-text mr-1"></i>Proposal</span>';
+    }
+    return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-800 border border-gray-200"><i class="bi bi-chat-left-text mr-1"></i>Comment</span>';
+}
+
+function pfpSentimentBadge(sentiment) {
+    const s = String(sentiment || 'neutral').toLowerCase().trim();
+    if (s === 'positive') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800"><i class="bi bi-emoji-smile mr-1"></i>Positive</span>';
+    } else if (s === 'negative') {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-100 text-rose-800"><i class="bi bi-emoji-frown mr-1"></i>Negative</span>';
+    }
+    return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700"><i class="bi bi-emoji-neutral mr-1"></i>Neutral</span>';
+}
+
+function pfpRatingStars(rating) {
+    const r = Math.min(5, Math.max(1, parseInt(rating) || 0));
+    if (r <= 0) return '<span class="text-xs text-gray-400">N/A</span>';
+    let stars = '';
+    for (let i = 1; i <= 5; i++) {
+        if (i <= r) stars += '<i class="bi bi-star-fill text-amber-400 text-xs mr-0.5"></i>';
+        else stars += '<i class="bi bi-star text-gray-300 text-xs mr-0.5"></i>';
+    }
+    return stars;
+}
+
 function pfpRenderTable() {
     const tbody = document.getElementById('pfq-table-body');
     if (!tbody) return;
@@ -16633,36 +16722,48 @@ function pfpRenderTable() {
     const rows = pfpGetFilteredFeedback();
     pfpSetRowsCountDisplay(rows.length);
     if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-10 text-center text-gray-500">No matching feedback found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-10 text-center text-gray-500">No matching feedback found.</td></tr>';
         return;
     }
 
     tbody.innerHTML = rows.map(f => {
-        const consultation = AppData.consultations.find(c => c.id === f.consultationId);
+        const consultation = AppData.consultations.find(c => Number(c.id) === Number(f.consultationId || f.consultation_id));
         const typeText = consultation?.type || 'consultation';
-        const categoryText = f.category || consultation?.category || 'service_issue';
-        const created = f.date ? new Date(f.date).toLocaleString() : '-';
+        const categoryText = f.category || consultation?.category || 'General Feedback';
+        const created = f.date ? new Date(f.date).toLocaleString() : (f.created_at ? new Date(f.created_at).toLocaleString() : '-');
         const priority = pfpGetPriority(f);
+        const ratingHtml = pfpRatingStars(f.rating);
+        const sentimentHtml = pfpSentimentBadge(f.sentiment_tag || f.sentiment);
+        const typeBadge = pfpSubmissionTypeBadge(f.submission_type || f.type);
+        const committeeTag = f.committee_assigned 
+            ? `<div class="mt-1"><span class="inline-block px-1.5 py-0.5 text-[10px] font-semibold bg-purple-50 text-purple-800 rounded border border-purple-200"><i class="bi bi-diagram-3 mr-0.5"></i>${escapeHtml(f.committee_assigned)}</span></div>`
+            : '';
 
         return `
             <tr class="border-b border-gray-100 hover:bg-gray-50/70">
                 <td class="px-4 py-3"><input type="checkbox" class="pfq-row-checkbox rounded border-gray-300" value="${Number(f.id)}"></td>
                 <td class="px-4 py-3 font-semibold text-gray-800">${escapeHtml(pfpBuildRef(f))}</td>
                 <td class="px-4 py-3">
-                    <div class="font-medium text-gray-900">${escapeHtml(f.author || 'Anonymous')}</div>
-                    <div class="text-sm text-gray-500">${escapeHtml(f.authorEmail || 'No email')}</div>
+                    <div class="font-medium text-gray-900">${escapeHtml(f.author || f.guest_name || 'Anonymous')}</div>
+                    <div class="text-xs text-gray-500">${escapeHtml(f.authorEmail || f.guest_email || 'No email')}</div>
+                    <div class="mt-0.5">${ratingHtml}</div>
+                </td>
+                <td class="px-4 py-3">${typeBadge}</td>
+                <td class="px-4 py-3">
+                    <div class="text-gray-900 font-medium text-xs">${escapeHtml(typeText)}</div>
+                    <div class="text-xs text-gray-500">${escapeHtml(categoryText)}</div>
+                    ${committeeTag}
                 </td>
                 <td class="px-4 py-3">
-                    <div class="text-gray-900">${escapeHtml(typeText)}</div>
-                    <div class="text-sm text-gray-500">${escapeHtml(categoryText)}</div>
+                    <div class="text-xs font-medium text-gray-700 mb-0.5">${escapeHtml(priority)}</div>
+                    <div>${sentimentHtml}</div>
                 </td>
-                <td class="px-4 py-3 text-gray-700">${escapeHtml(priority)}</td>
                 <td class="px-4 py-3">${pfpStatusBadge(f.status)}</td>
-                <td class="px-4 py-3 text-gray-700">${escapeHtml(created)}</td>
-                <td class="px-4 py-3 text-gray-700">${escapeHtml(pfpGetAging(f))}</td>
+                <td class="px-4 py-3 text-xs text-gray-700">${escapeHtml(created)}</td>
+                <td class="px-4 py-3 text-xs text-gray-700">${escapeHtml(pfpGetAging(f))}</td>
                 <td class="px-4 py-3">
-                    <button onclick="viewFeedbackDetails(${Number(f.id)})" class="inline-flex items-center justify-center w-8 h-8 border border-blue-300 text-blue-600 rounded hover:bg-blue-50" title="View">
-                        <i class="bi bi-eye"></i>
+                    <button onclick="openFeedbackResponseModal(${Number(f.id)})" class="inline-flex items-center justify-center px-2.5 py-1 text-xs border border-blue-600 text-blue-600 font-medium rounded hover:bg-blue-50 gap-1 shadow-sm" title="View & Respond">
+                        <i class="bi bi-reply-fill"></i> View / Forward
                     </button>
                 </td>
             </tr>
@@ -16671,9 +16772,6 @@ function pfpRenderTable() {
 }
 
 async function pfpSetStatus(id, status, silent) {
-    if (!silent) showNotification('Read-only mode: feedback actions are disabled.', 'warning');
-    return false;
-
     const targetStatus = String(status || '').toLowerCase().trim();
     if (!targetStatus) return false;
     try {
@@ -16683,7 +16781,7 @@ async function pfpSetStatus(id, status, silent) {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ id, status: targetStatus })
+            body: JSON.stringify({ id: Number(id), status: targetStatus })
         });
 
         const data = await res.json().catch(() => null);
@@ -16693,12 +16791,257 @@ async function pfpSetStatus(id, status, silent) {
 
         const row = AppData.feedback.find(f => Number(f.id) === Number(id));
         if (row) row.status = targetStatus;
-        if (!silent) showNotification('Feedback status updated.', 'success');
+        if (!silent) showNotification('Feedback status updated to ' + targetStatus + '.', 'success');
+        pfpRenderStats();
+        pfpRenderTable();
         return true;
     } catch (err) {
         if (!silent) showNotification(err && err.message ? String(err.message) : 'Failed to update status.', 'error');
         return false;
     }
+}
+
+function closeFeedbackModal() {
+    const modal = document.getElementById('pfq-response-modal');
+    if (modal) modal.remove();
+}
+
+function openFeedbackResponseModal(id) {
+    closeFeedbackModal();
+    const f = AppData.feedback.find(item => Number(item.id) === Number(id));
+    if (!f) {
+        showNotification('Feedback entry not found.', 'error');
+        return;
+    }
+
+    const consultation = AppData.consultations.find(c => Number(c.id) === Number(f.consultationId || f.consultation_id));
+    const consultationTitle = consultation ? consultation.title : (f.consultationTitle || `Consultation #${f.consultation_id || f.consultationId || ''}`);
+    const author = f.author || f.guest_name || 'Anonymous';
+    const email = f.authorEmail || f.guest_email || '';
+    const phone = f.guest_phone || '';
+    const category = f.category || consultation?.category || 'General Feedback';
+    const ratingStars = pfpRatingStars(f.rating);
+    const sentimentBadge = pfpSentimentBadge(f.sentiment_tag || f.sentiment);
+    const typeBadge = pfpSubmissionTypeBadge(f.submission_type || f.type);
+    const messageText = f.message || f.content || '';
+    const existingResponse = f.admin_response || f.response || '';
+    const statusBadge = pfpStatusBadge(f.status);
+
+    let topicsHtml = '';
+    let topics = [];
+    try {
+        if (typeof f.topic_tags === 'string') topics = JSON.parse(f.topic_tags);
+        else if (Array.isArray(f.topic_tags)) topics = f.topic_tags;
+        else if (Array.isArray(f.topics)) topics = f.topics;
+    } catch (_) {}
+
+    if (topics.length) {
+        topicsHtml = topics.map(t => `<span class="inline-block px-2 py-0.5 text-xs bg-blue-50 text-blue-700 rounded border border-blue-200 mr-1 mb-1">${escapeHtml(t)}</span>`).join('');
+    }
+
+    const modalHtml = `
+        <div id="pfq-response-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden animate-in fade-in duration-200">
+                <div class="bg-gradient-to-r from-red-600 to-red-700 text-white px-6 py-4 flex items-center justify-between">
+                    <div>
+                        <span class="text-xs uppercase font-semibold text-red-200 tracking-wider">Public Feedback Queue Workflow</span>
+                        <h2 class="text-xl font-bold mt-0.5">Feedback Review & Committee Routing</h2>
+                    </div>
+                    <button onclick="closeFeedbackModal()" class="text-white/80 hover:text-white text-2xl font-bold leading-none">&times;</button>
+                </div>
+
+                <div class="p-6 space-y-5 max-h-[75vh] overflow-y-auto text-sm text-gray-800">
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-xs text-gray-500 font-semibold uppercase">Citizen Info</p>
+                            <p class="font-bold text-gray-900 mt-1">${escapeHtml(author)}</p>
+                            <p class="text-xs text-gray-600">${escapeHtml(email || 'No email provided')}</p>
+                            ${phone ? `<p class="text-xs text-gray-600">Phone: ${escapeHtml(phone)}</p>` : ''}
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 font-semibold uppercase">Consultation Policy</p>
+                            <p class="font-semibold text-gray-900 mt-1">${escapeHtml(consultationTitle)}</p>
+                            <p class="text-xs text-gray-500">Category: <span class="font-medium">${escapeHtml(category)}</span></p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                        <div class="flex items-center gap-4">
+                            <div><span class="text-xs text-gray-500 block mb-0.5">Type</span>${typeBadge}</div>
+                            <div><span class="text-xs text-gray-500 block mb-0.5">Rating</span>${ratingStars}</div>
+                            <div><span class="text-xs text-gray-500 block mb-0.5">Sentiment</span>${sentimentBadge}</div>
+                            <div><span class="text-xs text-gray-500 block mb-0.5">Current Status</span>${statusBadge}</div>
+                        </div>
+                        ${topicsHtml ? `<div><span class="text-xs text-gray-500 block mb-0.5">AI Topics</span><div>${topicsHtml}</div></div>` : ''}
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Citizen Submission Message</label>
+                        <div class="p-4 bg-red-50/50 border border-red-100 rounded-lg text-gray-900 text-sm whitespace-pre-wrap leading-relaxed">${escapeHtml(messageText)}</div>
+                    </div>
+
+                    <!-- Stage 4: Committee Routing & Assignment Section -->
+                    <div class="p-4 bg-purple-50/70 border border-purple-200 rounded-lg space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="font-bold text-purple-900 text-sm flex items-center">
+                                <i class="bi bi-diagram-3 mr-1 text-purple-700"></i> Stage 4: LGU Committee Routing
+                            </label>
+                            ${f.committee_assigned ? `<span class="text-xs font-bold px-2 py-0.5 bg-purple-200 text-purple-900 rounded">Assigned: ${escapeHtml(f.committee_assigned)}</span>` : '<span class="text-xs text-purple-600 font-medium">Currently Unassigned</span>'}
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <div class="sm:col-span-2">
+                                <select id="pfq-modal-committee-select" class="w-full px-3 py-1.5 border border-purple-300 rounded text-xs font-medium focus:ring-purple-500">
+                                    <option value="">-- Select Target LGU Committee --</option>
+                                    <option value="Urban Planning & Infrastructure">Urban Planning & Infrastructure</option>
+                                    <option value="Environmental Management & Sanitation">Environmental Management & Sanitation</option>
+                                    <option value="Health & Social Services">Health & Social Services</option>
+                                    <option value="Finance, Budget & Appropriations">Finance, Budget & Appropriations</option>
+                                    <option value="Rules, Laws & Governance">Rules, Laws & Governance</option>
+                                </select>
+                            </div>
+                            <button onclick="submitForwardToCommittee(${Number(f.id)})" class="w-full px-3 py-1.5 bg-purple-700 text-white rounded text-xs font-bold hover:bg-purple-800 shadow">
+                                <i class="bi bi-send-check mr-1"></i> Forward to Committee
+                            </button>
+                        </div>
+                    </div>
+
+                    ${f.analysis_summary ? `
+                        <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
+                            <strong><i class="bi bi-cpu mr-1"></i>AI Analysis Summary:</strong> ${escapeHtml(f.analysis_summary)}
+                        </div>
+                    ` : ''}
+
+                    <div class="border-t border-gray-200 pt-4 space-y-3">
+                        <label for="pfq-modal-response-input" class="block font-bold text-gray-900">
+                            Official LGU Response
+                        </label>
+                        <textarea id="pfq-modal-response-input" rows="4" placeholder="Type the official government response to this feedback submission..." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm">${escapeHtml(existingResponse)}</textarea>
+                        
+                        <div class="flex items-center gap-2">
+                            <input id="pfq-modal-send-email" type="checkbox" ${email ? 'checked' : 'disabled'} class="rounded border-gray-300 text-red-600 focus:ring-red-500">
+                            <label for="pfq-modal-send-email" class="text-xs text-gray-700 font-medium">
+                                Send official response copy to citizen's email (${escapeHtml(email || 'No email available')})
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 border-t border-gray-200 px-6 py-3 flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <button onclick="pfpSetStatus(${Number(f.id)}, 'reviewed').then(() => closeFeedbackModal())" class="px-3 py-1.5 rounded border border-gray-300 text-gray-700 text-xs font-semibold hover:bg-gray-100">
+                            Mark as Reviewed
+                        </button>
+                        <button onclick="pfpSetStatus(${Number(f.id)}, 'closed').then(() => closeFeedbackModal())" class="px-3 py-1.5 rounded border border-slate-400 text-slate-700 text-xs font-semibold hover:bg-slate-100">
+                            Close & Archive
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="closeFeedbackModal()" class="px-4 py-2 rounded border border-gray-300 text-gray-700 text-xs font-semibold hover:bg-gray-100">
+                            Cancel
+                        </button>
+                        <button onclick="submitFeedbackResponse(${Number(f.id)})" class="px-4 py-2 rounded bg-red-600 text-white text-xs font-bold hover:bg-red-700 shadow">
+                            <i class="bi bi-send mr-1"></i> Submit Response
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+async function submitForwardToCommittee(id) {
+    const select = document.getElementById('pfq-modal-committee-select');
+    const committee = select ? select.value.trim() : '';
+
+    if (!committee) {
+        showNotification('Please select a target LGU Committee.', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch('API/feedback_api.php?action=forward', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                id: Number(id),
+                committee: committee,
+                notes: 'Forwarded via Admin Feedback Queue'
+            })
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !data.success) {
+            throw new Error((data && data.message) ? data.message : `HTTP ${res.status}`);
+        }
+
+        const row = AppData.feedback.find(f => Number(f.id) === Number(id));
+        if (row) {
+            row.status = 'forwarded';
+            row.committee_assigned = committee;
+        }
+
+        closeFeedbackModal();
+        pfpRenderStats();
+        pfpRenderTable();
+        showNotification(data.message || `Feedback forwarded to ${committee}!`, 'success');
+    } catch (err) {
+        showNotification(err && err.message ? String(err.message) : 'Failed to forward feedback.', 'error');
+    }
+}
+
+async function submitFeedbackResponse(id) {
+    const input = document.getElementById('pfq-modal-response-input');
+    const sendEmailCb = document.getElementById('pfq-modal-send-email');
+    const responseText = (input ? input.value : '').trim();
+    const sendEmail = sendEmailCb ? sendEmailCb.checked : false;
+
+    if (!responseText) {
+        showNotification('Please enter an official response message.', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch('API/feedback_api.php?action=respond', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                id: Number(id),
+                response: responseText,
+                send_email: sendEmail
+            })
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !data.success) {
+            throw new Error((data && data.message) ? data.message : `HTTP ${res.status}`);
+        }
+
+        const row = AppData.feedback.find(f => Number(f.id) === Number(id));
+        if (row) {
+            row.status = 'responded';
+            row.admin_response = responseText;
+            row.responded_at = new Date().toISOString();
+        }
+
+        closeFeedbackModal();
+        pfpRenderStats();
+        pfpRenderTable();
+        showNotification(data.message || 'Official response recorded successfully!', 'success');
+    } catch (err) {
+        showNotification(err && err.message ? String(err.message) : 'Failed to record response.', 'error');
+    }
+}
+
+function viewFeedbackDetails(id) {
+    return openFeedbackResponseModal(id);
 }
 
 function pfpToggleSelectAll() {
@@ -16805,7 +17148,7 @@ async function renderPublicFeedbackPortal() {
     if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'Public Feedback Queue';
     if (!contentArea) return;
 
-    contentArea.innerHTML = '<div class="p-8 text-center text-gray-500">Loading feedback queue...</div>';
+    contentArea.innerHTML = '<div class="p-8 text-center text-gray-500"><i class="bi bi-arrow-repeat animate-spin text-2xl mb-2 block"></i>Loading feedback queue...</div>';
 
     try {
         await Promise.all([
@@ -16818,101 +17161,177 @@ async function renderPublicFeedbackPortal() {
 
     contentArea.innerHTML = `
         <div class="space-y-5">
-            <div class="bg-gradient-to-r from-red-600 to-red-700 text-white p-7 rounded-lg shadow">
-                <div class="flex items-start justify-between gap-4">
-                    <div>
-                        <h1 class="text-3xl font-bold mb-2">Public Feedback Queue</h1>
-                        <p class="text-red-100 text-lg">Review, respond, and close citizen feedback submissions</p>
-                    </div>
+            <!-- Sleek Header Banner -->
+            <div class="bg-gradient-to-r from-red-600 to-red-700 text-white p-6 rounded-xl shadow-md flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl font-bold flex items-center gap-2">
+                        <i class="bi bi-inbox-fill"></i> Public Feedback Queue
+                    </h1>
+                    <p class="text-red-100 text-sm mt-1">Review citizen submissions, route feedback to LGU committees, and send official responses.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="pfpExportCsv()" class="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-lg transition border border-white/20 flex items-center gap-1.5 shadow-sm">
+                        <i class="bi bi-download"></i> Export CSV
+                    </button>
+                    <button onclick="pfpRefreshData()" class="px-3.5 py-2 bg-white text-red-700 hover:bg-red-50 text-xs font-bold rounded-lg transition shadow flex items-center gap-1.5">
+                        <i class="bi bi-arrow-repeat"></i> Refresh
+                    </button>
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-                <div class="bg-white rounded-lg border border-gray-200 p-4"><p class="text-xs uppercase text-gray-500">Total</p><p id="pfq-stat-total" class="text-4xl font-extrabold text-gray-900 leading-none mt-2">0</p></div>
-                <div class="bg-white rounded-lg border border-gray-200 p-4"><p class="text-xs uppercase text-gray-500">New</p><p id="pfq-stat-new" class="text-4xl font-extrabold text-red-500 leading-none mt-2">0</p></div>
-                <div class="bg-white rounded-lg border border-gray-200 p-4"><p class="text-xs uppercase text-gray-500">Reviewed</p><p id="pfq-stat-reviewed" class="text-4xl font-extrabold text-amber-500 leading-none mt-2">0</p></div>
-                <div class="bg-white rounded-lg border border-gray-200 p-4"><p class="text-xs uppercase text-gray-500">Responded</p><p id="pfq-stat-responded" class="text-4xl font-extrabold text-emerald-600 leading-none mt-2">0</p></div>
-                <div class="bg-white rounded-lg border border-gray-200 p-4"><p class="text-xs uppercase text-gray-500">Closed</p><p id="pfq-stat-closed" class="text-4xl font-extrabold text-slate-500 leading-none mt-2">0</p></div>
-                <div class="bg-white rounded-lg border border-gray-200 p-4"><p class="text-xs uppercase text-gray-500">Anonymous</p><p id="pfq-stat-anon" class="text-4xl font-extrabold text-gray-900 leading-none mt-2">0</p></div>
+            <!-- 4 Clean Key Metrics -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                    <div class="flex items-center justify-between text-gray-500 text-xs font-bold uppercase">
+                        <span>Total Submissions</span>
+                        <i class="bi bi-chat-left-text text-gray-400 text-lg"></i>
+                    </div>
+                    <p id="pfq-stat-total" class="text-3xl font-extrabold text-gray-900 mt-2">0</p>
+                    <p class="text-[11px] text-gray-400 mt-1">All logged feedback</p>
+                </div>
+
+                <div class="bg-white rounded-xl border border-amber-200 p-4 shadow-sm bg-amber-50/30">
+                    <div class="flex items-center justify-between text-amber-700 text-xs font-bold uppercase">
+                        <span>Pending Review</span>
+                        <i class="bi bi-clock-history text-amber-500 text-lg"></i>
+                    </div>
+                    <p id="pfq-stat-new" class="text-3xl font-extrabold text-amber-600 mt-2">0</p>
+                    <p class="text-[11px] text-amber-600/80 mt-1">Awaiting admin action</p>
+                </div>
+
+                <div class="bg-white rounded-xl border border-purple-200 p-4 shadow-sm bg-purple-50/30">
+                    <div class="flex items-center justify-between text-purple-700 text-xs font-bold uppercase">
+                        <span>Committee Forwarded</span>
+                        <i class="bi bi-diagram-3 text-purple-500 text-lg"></i>
+                    </div>
+                    <p id="pfq-analytics-forwarded" class="text-3xl font-extrabold text-purple-600 mt-2">0</p>
+                    <p class="text-[11px] text-purple-600/80 mt-1">Routed to LGU departments</p>
+                </div>
+
+                <div class="bg-white rounded-xl border border-emerald-200 p-4 shadow-sm bg-emerald-50/30">
+                    <div class="flex items-center justify-between text-emerald-700 text-xs font-bold uppercase">
+                        <span>Responded / Closed</span>
+                        <i class="bi bi-check-circle-fill text-emerald-500 text-lg"></i>
+                    </div>
+                    <p id="pfq-stat-responded" class="text-3xl font-extrabold text-emerald-600 mt-2">0</p>
+                    <p class="text-[11px] text-emerald-600/80 mt-1">Official response sent</p>
+                </div>
             </div>
 
-            <div class="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
-                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3">
-                    <div class="xl:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
-                        <input id="pfq-search" type="text" placeholder="ref, name, email, message" class="w-full px-3 py-2 border border-gray-300 rounded-lg" oninput="pfpRenderTable()">
+            <!-- Hidden stats containers for calculation compatibility -->
+            <div class="hidden">
+                <span id="pfq-stat-reviewed">0</span>
+                <span id="pfq-stat-closed">0</span>
+                <span id="pfq-stat-anon">0</span>
+                <span id="pfq-analytics-surveys">0</span>
+                <span id="pfq-analytics-proposals">0</span>
+                <span id="pfq-survey-agree-pct">75% Agree</span>
+                <span id="pfq-survey-disagree-pct">25% Disagree</span>
+                <div id="pfq-survey-bar-agree"></div>
+                <div id="pfq-survey-bar-disagree"></div>
+                <input id="pfq-ref" type="hidden">
+                <input id="pfq-from-date" type="hidden">
+                <input id="pfq-to-date" type="hidden">
+            </div>
+
+            <!-- Clean Single-Row Filter Bar -->
+            <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-3">
+                <div class="flex flex-wrap items-center gap-3">
+                    <!-- Search Input -->
+                    <div class="flex-1 min-w-[240px]">
+                        <div class="relative">
+                            <i class="bi bi-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+                            <input id="pfq-search" type="text" placeholder="Search by citizen name, reference #, or feedback message..." class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-red-500 focus:border-red-500" oninput="pfpRenderTable()">
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                        <select id="pfq-status" class="w-full px-3 py-2 border border-gray-300 rounded-lg" onchange="pfpRenderTable()">
-                            <option value="">All</option>
-                            <option value="new">new</option>
-                            <option value="reviewed">reviewed</option>
-                            <option value="responded">responded</option>
-                            <option value="closed">closed</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                        <select id="pfq-priority" class="w-full px-3 py-2 border border-gray-300 rounded-lg" onchange="pfpRenderTable()">
-                            <option value="">All</option>
-                            <option value="normal">normal</option>
-                            <option value="high">high</option>
-                            <option value="low">low</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Barangay</label>
-                        <input id="pfq-barangay" type="text" placeholder="Barangay" class="w-full px-3 py-2 border border-gray-300 rounded-lg" oninput="pfpRenderTable()">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Reference No</label>
-                        <input id="pfq-ref" type="text" placeholder="FB-YYYYMMDD-XXXXX" class="w-full px-3 py-2 border border-gray-300 rounded-lg" oninput="pfpRenderTable()">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
-                        <input id="pfq-from-date" type="date" class="w-full px-3 py-2 border border-gray-300 rounded-lg" onchange="pfpRenderTable()">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
-                        <input id="pfq-to-date" type="date" class="w-full px-3 py-2 border border-gray-300 rounded-lg" onchange="pfpRenderTable()">
-                    </div>
-                </div>
-                <div class="flex flex-wrap items-center gap-2">
-                    <button onclick="pfpRenderTable()" class="px-4 py-2 rounded bg-red-500 text-white hover:bg-red-600"><i class="bi bi-funnel mr-1"></i>Apply Filters</button>
-                    <button onclick="pfpResetFilters()" class="px-4 py-2 rounded border border-gray-300 text-gray-700 hover:bg-gray-100">Reset</button>
-                    <button onclick="pfpExportCsv()" class="px-4 py-2 rounded border border-blue-300 text-blue-700 hover:bg-blue-50"><i class="bi bi-download mr-1"></i>Export CSV</button>
-                    <select id="pfq-bulk-status" class="px-3 py-2 border border-gray-300 rounded-lg">
-                        <option value="">Bulk status...</option>
-                        <option value="reviewed">reviewed</option>
-                        <option value="responded">responded</option>
-                        <option value="closed">closed</option>
+
+                    <!-- Submission Type Dropdown -->
+                    <select id="pfq-type" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderTable()">
+                        <option value="">All Submission Types</option>
+                        <option value="survey">Surveys Only</option>
+                        <option value="proposal">Proposals Only</option>
+                        <option value="comment">Comments Only</option>
                     </select>
-                    <button onclick="pfpApplyBulkStatus()" class="px-4 py-2 rounded border border-gray-500 text-gray-700 hover:bg-gray-100">Apply to Selected</button>
-                    <button onclick="pfpRefreshData()" class="ml-auto px-4 py-2 rounded border border-gray-300 text-gray-700 hover:bg-gray-100"><i class="bi bi-arrow-repeat mr-1"></i>Refresh</button>
+
+                    <!-- Queue Status Dropdown -->
+                    <select id="pfq-status" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderTable()">
+                        <option value="">All Statuses</option>
+                        <option value="pending">Pending</option>
+                        <option value="reviewed">Reviewed</option>
+                        <option value="responded">Responded</option>
+                        <option value="forwarded">Forwarded</option>
+                        <option value="closed">Closed</option>
+                    </select>
+
+                    <!-- Committee Dropdown -->
+                    <select id="pfq-committee" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderTable()">
+                        <option value="">All LGU Committees</option>
+                        <option value="Urban Planning">Urban Planning</option>
+                        <option value="Environmental">Environment</option>
+                        <option value="Health">Health</option>
+                        <option value="Finance">Finance</option>
+                        <option value="Rules">Rules & Governance</option>
+                    </select>
+
+                    <button onclick="pfpResetFilters()" class="px-3 py-2 text-xs font-semibold text-gray-500 hover:text-gray-800">
+                        Reset Filters
+                    </button>
                 </div>
-                <div id="pfq-items-count" class="text-right text-sm text-gray-500">0 item(s)</div>
+
+                <!-- Sub-bar: Archive Mode & Bulk Actions -->
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100 text-xs">
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-500 font-semibold">Queue View:</span>
+                            <select id="pfq-archive-mode" class="px-2.5 py-1 border border-purple-200 bg-purple-50 text-purple-900 font-bold rounded-md text-xs" onchange="pfpRenderTable()">
+                                <option value="active">Active Submissions Queue</option>
+                                <option value="archived">Archived Searchable Vault</option>
+                            </select>
+                        </div>
+                        <span class="text-gray-300">|</span>
+                        <div class="flex items-center gap-1">
+                            <span class="text-gray-500 font-medium">Barangay:</span>
+                            <input id="pfq-barangay" type="text" placeholder="e.g. Poblacion" class="px-2.5 py-1 border border-gray-300 rounded-md text-xs w-32" oninput="pfpRenderTable()">
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <select id="pfq-bulk-status" class="px-2.5 py-1 border border-gray-300 rounded-md text-xs">
+                            <option value="">Bulk status action...</option>
+                            <option value="reviewed">Mark as Reviewed</option>
+                            <option value="responded">Mark as Responded</option>
+                            <option value="closed">Close & Archive</option>
+                        </select>
+                        <button onclick="pfpApplyBulkStatus()" class="px-3 py-1 bg-gray-800 text-white font-semibold rounded-md text-xs hover:bg-gray-900 transition">
+                            Apply
+                        </button>
+                        <span id="pfq-items-count" class="text-gray-500 font-bold ml-2">0 item(s)</span>
+                    </div>
+                </div>
             </div>
 
-            <div class="bg-white rounded-lg border border-gray-200 overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead class="bg-gray-50 border-b border-gray-200">
+            <!-- Queue Submissions Table -->
+            <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-sm">
+                <table class="w-full text-xs text-left">
+                    <thead class="bg-gray-50 border-b border-gray-200 uppercase tracking-wider text-[11px] font-bold text-gray-700">
                         <tr>
-                            <th class="px-4 py-3 text-left"><input id="pfq-check-all" type="checkbox" onchange="pfpToggleSelectAll()" class="rounded border-gray-300"></th>
-                            <th class="px-4 py-3 text-left font-semibold text-gray-900">Ref</th>
-                            <th class="px-4 py-3 text-left font-semibold text-gray-900">Citizen</th>
-                            <th class="px-4 py-3 text-left font-semibold text-gray-900">Type/Category</th>
-                            <th class="px-4 py-3 text-left font-semibold text-gray-900">Priority</th>
-                            <th class="px-4 py-3 text-left font-semibold text-gray-900">Status</th>
-                            <th class="px-4 py-3 text-left font-semibold text-gray-900">Created</th>
-                            <th class="px-4 py-3 text-left font-semibold text-gray-900">Aging</th>
-                            <th class="px-4 py-3 text-left font-semibold text-gray-900">Actions</th>
+                            <th class="px-3.5 py-3"><input id="pfq-check-all" type="checkbox" onchange="pfpToggleSelectAll()" class="rounded border-gray-300"></th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Ref #</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Citizen</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Submission Type</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Consultation Policy / Committee</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Priority & Sentiment</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Status</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Submitted Date</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900">Aging</th>
+                            <th class="px-3.5 py-3 font-bold text-gray-900 text-center">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="pfq-table-body"></tbody>
                 </table>
-                <div class="px-4 py-3 border-t border-gray-100 text-sm text-gray-600">
-                    <strong>Top Barangays:</strong> <span id="pfq-top-barangay">-</span>
+                <div class="px-4 py-3 border-t border-gray-100 text-xs text-gray-500 flex items-center justify-between">
+                    <span><strong>Active Barangays Participating:</strong> <span id="pfq-top-barangay">-</span></span>
+                    <span>Click <strong>"View / Forward"</strong> on any row to open the review drawer and take action.</span>
                 </div>
             </div>
         </div>

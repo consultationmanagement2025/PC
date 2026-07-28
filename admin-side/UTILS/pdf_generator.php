@@ -44,7 +44,7 @@ class ConsultationPDFGenerator {
                     $uStmt->close();
                     if ($uRow && isset($uRow['role'])) {
                         $role = strtolower(trim((string)$uRow['role']));
-                        if (in_array($role, ['admin', 'administrator', 'super admin', 'superadmin', 'staff', 'resource person', 'resource_person'], true)) {
+                        if (in_array($role, ['admin', 'administrator', 'super admin', 'superadmin', 'staff', 'barangay staff', 'barangay_staff', 'barangay'], true)) {
                             $isAdminCreated = true;
                         }
                     }
@@ -128,99 +128,92 @@ class ConsultationPDFGenerator {
      * Create page content with consultation details
      */
     private function createPageContent($data) {
-        // Use relative positioning (Td) for consistent text layout with improved spacing
-        $pageWidth = 612;
-        $leftMargin = 72;
-        $centerX = intval($pageWidth / 2);
-        $content = "BT\n/F1 14 Tf\n"; // Increased font size from 12 to 14
-
-        // Government-style header with logo placeholder
-        $content .= "$leftMargin 720 Td\n"; // Moved down from 750 to 720
-        $content .= "(CITY OF VALENZUELA) Tj\n";
-        $content .= "0 -20 Td\n"; // Increased spacing from 15 to 20
-        $content .= "1 0 0 1 " . ($centerX - $leftMargin) . " 0 Tm\n(Public Consultation Office) Tj\n";
-
-        // Reset matrix and move down
-        $content .= "-1 0 0 -1 0 0 Tm\n";
-        $content .= "$leftMargin -45 Td\n"; // Increased from 35 to 45
-
-        // Title (centered)
-        $title = $this->escapeString('Consultation Submission Summary');
-        $content .= "1 0 0 1 " . ($centerX - $leftMargin) . " 0 Tm\n($title) Tj\n";
-
-        // Move to next line for reference
-        $content .= "-1 0 0 -1 0 0 Tm\n"; // Reset matrix
-        $content .= "$leftMargin -35 Td\n"; // Increased from 28 to 35
-
-        // Reference (left-aligned)
-        $ref = 'Reference Number: CONSULT-' . str_pad(isset($data['id']) ? $data['id'] : 0, 6, '0', STR_PAD_LEFT);
-        $content .= "(" . $this->escapeString($ref) . ") Tj\n";
-        $content .= "0 -22 Td\n"; // Increased from 18 to 22
-
-        // Date (left-aligned)
-        $dateStr = isset($data['created_at']) ? date('F j, Y, g:i A', strtotime($data['created_at'])) : date('F j, Y, g:i A');
-        $content .= "(Date Created: " . $this->escapeString($dateStr) . ") Tj\n";
-        $content .= "0 -22 Td\n"; // Increased from 20 to 22
-
-        // Status (left-aligned)
-        $status = isset($data['status']) ? ucfirst($data['status']) : 'Pending';
-        $content .= "(Status: " . $this->escapeString($status) . ") Tj\n";
-        $content .= "0 -30 Td\n"; // Increased spacing
-
-        // Separator (centered)
-        $sep = str_repeat('-', 45);
-        $content .= "1 0 0 1 " . ($centerX - $leftMargin - 72) . " 0 Tm\n(" . $this->escapeString($sep) . ") Tj\n";
-
-        // Reset to left margin for next section
-        $content .= "-1 0 0 -1 0 0 Tm\n";
-        $content .= "144 -35 Td\n"; // Increased from 26 to 35
-
-        // Created By header
-        $content .= "(Created By:) Tj\n";
-        $content .= "0 -22 Td\n"; // Increased from 18 to 22
-
-        // Admin name (indented)
+        $leftMargin = 54;
+        $title = $this->escapeString($data['topic'] ?? ($data['title'] ?? 'Consultation Summary'));
+        $user_name = $this->escapeString($data['name'] ?? ($data['user_name'] ?? 'Anonymous'));
+        $user_email = $this->escapeString($data['email'] ?? ($data['user_email'] ?? ''));
+        $status = $this->escapeString(ucfirst($data['status'] ?? 'Active'));
+        $category = $this->escapeString($data['category'] ?? 'General');
+        $created = $this->escapeString(isset($data['created_at']) ? date('F j, Y, g:i A', strtotime($data['created_at'])) : date('F j, Y, g:i A'));
+        $tracking = $this->escapeString($data['tracking_number'] ?? ($data['tracking_no'] ?? ('CONSULT-' . str_pad($data['id'] ?? 0, 6, '0', STR_PAD_LEFT))));
         $adminName = $this->escapeString($data['admin_name'] ?? 'Mr. Jojo');
-        $content .= "18 0 Td\n(Admin Name: $adminName) Tj\n";
-        $content .= "-18 -30 Td\n"; // Increased spacing
+        $description = $this->escapeString($data['description'] ?? 'No description provided.');
 
-        // Consultation Details header
-        $content .= "(Consultation Details:) Tj\n";
-        $content .= "0 -22 Td\n"; // Increased from 18 to 22
+        $content = "BT\n";
+        
+        // Header Title
+        $content .= "/F1 16 Tf\n";
+        $content .= "$leftMargin 740 Td\n";
+        $content .= "(CITY OF VALENZUELA) Tj\n";
+        $content .= "0 -22 Td\n";
+        $content .= "/F1 14 Tf\n";
+        $content .= "(Public Consultation Office Summary) Tj\n";
+        $content .= "0 -18 Td\n";
+        $content .= "/F1 10 Tf\n";
+        $content .= "(Official Record of Consultation Document) Tj\n";
+        $content .= "0 -22 Td\n";
+        $content .= "(----------------------------------------------------------------------------------------------------) Tj\n";
+        $content .= "0 -25 Td\n";
 
-        // Topic (indented)
-        $topic = $this->escapeString($data['title'] ?? ($data['topic'] ?? 'N/A'));
-        $content .= "18 0 Td\n(Topic: $topic) Tj\n";
-        $content .= "-18 -20 Td\n"; // Increased from 16 to 20
+        // Reference Information
+        $content .= "/F1 11 Tf\n";
+        $content .= "(Reference Number: $tracking) Tj\n";
+        $content .= "0 -18 Td\n";
+        $content .= "(Date Created: $created) Tj\n";
+        $content .= "0 -18 Td\n";
+        $content .= "(Status: $status) Tj\n";
+        $content .= "0 -25 Td\n";
 
-        // Category (indented)
-        $category = $this->escapeString($data['category'] ?? 'N/A');
+        // Created By Section
+        $content .= "/F1 12 Tf\n";
+        $content .= "(CREATED BY) Tj\n";
+        $content .= "0 -18 Td\n";
+        $content .= "/F1 11 Tf\n";
+        $content .= "(Admin Name: $adminName) Tj\n";
+        if ($user_name && $user_name !== 'Anonymous') {
+            $content .= "0 -18 Td\n";
+            $content .= "(Citizen Name: $user_name) Tj\n";
+        }
+        if ($user_email) {
+            $content .= "0 -18 Td\n";
+            $content .= "(Citizen Email: $user_email) Tj\n";
+        }
+        $content .= "0 -25 Td\n";
+
+        // Consultation Details Section
+        $content .= "/F1 12 Tf\n";
+        $content .= "(CONSULTATION DETAILS) Tj\n";
+        $content .= "0 -18 Td\n";
+        $content .= "/F1 11 Tf\n";
+        $content .= "(Topic: $title) Tj\n";
+        $content .= "0 -18 Td\n";
         $content .= "(Category: $category) Tj\n";
-        $content .= "0 -20 Td\n"; // Increased from 16 to 20
+        $content .= "0 -25 Td\n";
 
-        // Department (indented)
-        $dept = $this->escapeString($data['department'] ?? 'N/A');
-        $content .= "(Department: $dept) Tj\n";
-        $content .= "-18 -30 Td\n"; // Increased spacing
+        // Description Section
+        $content .= "/F1 12 Tf\n";
+        $content .= "(DESCRIPTION) Tj\n";
+        $content .= "0 -18 Td\n";
+        $content .= "/F1 10 Tf\n";
 
-        // Description header
-        $content .= "(Description:) Tj\n";
-        $content .= "0 -20 Td\n"; // Increased from 16 to 20
-
-        // Handle long description (wrap text at ~75 chars for better spacing)
-        $description = wordwrap($this->escapeString($data['description'] ?? 'N/A'), 75, "\n");
-        $lines = explode("\n", $description);
+        $wrappedDesc = wordwrap($description, 80, "\n");
+        $lines = explode("\n", $wrappedDesc);
+        $lineCount = 0;
         foreach ($lines as $line) {
-            $content .= "($line) Tj\n";
-            $content .= "0 -18 Td\n"; // Increased from 14 to 18
+            if ($lineCount > 18) break; // Limit lines to fit clean on single page
+            $content .= "(" . trim($line) . ") Tj\n";
+            $content .= "0 -14 Td\n";
+            $lineCount++;
         }
 
-        // Official footer
-        $content .= "-1 0 0 -1 0 0 Tm\n";
-        $content .= "$leftMargin -40 Td\n"; // Increased from 30 to 40
+        // Footer at bottom of page
+        $content .= "0 -25 Td\n";
+        $content .= "/F1 9 Tf\n";
+        $content .= "(----------------------------------------------------------------------------------------------------) Tj\n";
+        $content .= "0 -14 Td\n";
         $content .= "(This is an official record of your consultation submission to the City of Valenzuela.) Tj\n";
-        $content .= "0 -18 Td\n";
-        $content .= "(Retain this document for your records.) Tj\n";
+        $content .= "0 -12 Td\n";
+        $content .= "(Retain this document for your records. Tracking #: $tracking) Tj\n";
 
         $content .= "ET\n";
         return $content;
@@ -230,9 +223,9 @@ class ConsultationPDFGenerator {
      * Escape special characters for PDF
      */
     private function escapeString($string) {
-        // Simple escaping for PDF content
+        $string = strip_tags(html_entity_decode((string)$string));
         $search = ['\\', '(', ')', "\n", "\r"];
-        $replace = ['\\\\', '\\(', '\\)', '\\n', ''];
+        $replace = ['\\\\', '\\(', '\\)', ' ', ''];
         return str_replace($search, $replace, $string);
     }
     

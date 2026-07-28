@@ -147,6 +147,49 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
         exit;
     }
 
+    if ($action === 'get_my_activity') {
+        $user_email = $_SESSION['email'] ?? '';
+        $user_id = (int)($_SESSION['user_id'] ?? 0);
+
+        $feedback = [];
+        $proposals = [];
+
+        if ($user_email !== '' || $user_id > 0) {
+            if ($user_email !== '') {
+                $fStmt = $conn->prepare("SELECT f.id, f.consultation_id, f.category, f.message, f.created_at, f.admin_response, f.responded_at, f.status, f.tracking_token, c.title as consultation_title FROM feedback f LEFT JOIN consultations c ON f.consultation_id = c.id WHERE f.guest_email = ? ORDER BY f.created_at DESC LIMIT 50");
+                if ($fStmt) {
+                    $fStmt->bind_param('s', $user_email);
+                    $fStmt->execute();
+                    $fRes = $fStmt->get_result();
+                    while ($fRow = $fRes->fetch_assoc()) {
+                        $feedback[] = $fRow;
+                    }
+                    $fStmt->close();
+                }
+            }
+
+            $userName = $_SESSION['fullname'] ?? $_SESSION['full_name'] ?? '';
+            $pStmt = $conn->prepare("SELECT id, title, description, category, status, created_at, tracking_number FROM consultations WHERE (created_by > 0 AND created_by = ?) OR user_name = ? ORDER BY created_at DESC LIMIT 20");
+            if ($pStmt) {
+                $pStmt->bind_param('is', $user_id, $userName);
+                $pStmt->execute();
+                $pRes = $pStmt->get_result();
+                while ($pRow = $pRes->fetch_assoc()) {
+                    $proposals[] = $pRow;
+                }
+                $pStmt->close();
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'user_email' => $user_email,
+            'feedback' => $feedback,
+            'proposals' => $proposals
+        ]);
+        exit;
+    }
+
     if ($action === 'track_status') {
         $code = trim($_GET['code'] ?? $_POST['code'] ?? '');
         if (empty($code)) {
@@ -1209,6 +1252,28 @@ $is_logged_in = $is_citizen_session && !empty($current_user_name);
         </div>
     </div>
 
+    <!-- Vote Success Confirmation Modal -->
+    <div id="vote-success-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 text-center border border-slate-100 relative animate-in fade-in duration-200">
+            <button onclick="closeVoteSuccessModal()" class="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+
+            <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 border border-emerald-200 shadow-sm">
+                <i class="fa-solid fa-check"></i>
+            </div>
+
+            <h3 class="text-xl font-extrabold text-slate-900 mb-2">Vote Cast Successfully!</h3>
+            <p class="text-xs sm:text-sm text-slate-600 mb-6 leading-relaxed">
+                Thank you for participating in Valenzuela's Community Survey. Your vote for <strong id="vote-success-option" class="text-valenzuela-blue">Option</strong> has been recorded and submitted to the Public Feedback Queue.
+            </p>
+
+            <button onclick="closeVoteSuccessModal()" class="w-full bg-valenzuela-red hover:bg-red-700 text-white font-bold py-3 px-6 rounded-xl text-xs sm:text-sm transition-all shadow-md">
+                Done / Close
+            </button>
+        </div>
+    </div>
+
     <!-- My Submissions Activity Modal -->
     <div id="my-activity-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 relative border border-slate-200 max-h-[85vh] overflow-y-auto">
@@ -1315,6 +1380,60 @@ $is_logged_in = $is_citizen_session && !empty($current_user_name);
         function closeRequireLoginModal() {
             const m = document.getElementById('require-login-modal');
             if (m) m.classList.add('hidden');
+        }
+
+        // Community Survey Voting Functionality
+        function castSurveyVote(surveyId, optionChosen) {
+            if (!window.__IS_LOGGED_IN__) {
+                // If citizen is not logged in, redirect to Google Choose an Account screen
+                window.location.href = 'google-auth.php';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('api_action', 'submit_survey_vote');
+            formData.append('survey_id', surveyId);
+            formData.append('option_chosen', optionChosen);
+
+            fetch('index.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Update percentage UI real-time
+                    const pctA = document.getElementById('survey-pct-a-' + surveyId);
+                    const barA = document.getElementById('survey-bar-a-' + surveyId);
+                    const pctB = document.getElementById('survey-pct-b-' + surveyId);
+                    const barB = document.getElementById('survey-bar-b-' + surveyId);
+
+                    if (pctA && barA && data.pct_a !== undefined) {
+                        pctA.textContent = data.pct_a + '%';
+                        barA.style.width = data.pct_a + '%';
+                    }
+                    if (pctB && barB && data.pct_b !== undefined) {
+                        pctB.textContent = data.pct_b + '%';
+                        barB.style.width = data.pct_b + '%';
+                    }
+
+                    // Open Vote Success Modal
+                    const modal = document.getElementById('vote-success-modal');
+                    const optText = document.getElementById('vote-success-option');
+                    if (optText) optText.textContent = optionChosen;
+                    if (modal) modal.classList.remove('hidden');
+                } else {
+                    showToast(data.message || 'Failed to record vote.', 'error');
+                }
+            })
+            .catch(err => {
+                showToast('Error recording vote.', 'error');
+            });
+        }
+
+        function closeVoteSuccessModal() {
+            const modal = document.getElementById('vote-success-modal');
+            if (modal) modal.classList.add('hidden');
         }
 
         // Consultation Details Modal
