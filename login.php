@@ -26,7 +26,7 @@ if (!checkSessionTimeout(1800)) {
 }
 
 require __DIR__ . '/db.php';
-require __DIR__ . '/database/audit-log.php';
+require __DIR__ . '/DATABASE/audit-log.php';
 require_once __DIR__ . '/email_config.php';
 
 $error = "";

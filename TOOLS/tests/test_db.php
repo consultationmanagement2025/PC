@@ -30,7 +30,7 @@ header('Content-Type: text/html; charset=utf-8');
     $isLocal = defined('IS_LOCALHOST') ? IS_LOCALHOST : true;
     $host = app_env('DB_HOST', defined('DB_HOST') ? DB_HOST : 'localhost');
     $user = app_env('DB_USER', defined('DB_USER') ? DB_USER : ($isLocal ? 'root' : 'cons_pc_db'));
-    $pass = app_env('DB_PASS', defined('DB_PASS') ? DB_PASS : ($isLocal ? '' : 'e3sEe1sf!g6+uoak'));
+    $pass = app_env('DB_PASS', defined('DB_PASS') ? DB_PASS : ($isLocal ? '' : '%wE!*-vMg4GCbB#3'));
     $name = app_env('DB_NAME', defined('DB_NAME') ? DB_NAME : ($isLocal ? 'pc_db' : 'cons_pc_db'));
     $port = (int)(app_env('DB_PORT', getenv('DB_PORT')) ?: 3306);
     if ($port <= 0) $port = 3306;

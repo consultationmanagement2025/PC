@@ -34,7 +34,7 @@ require 'DATABASE/feedback.php';
 require_once 'UTILS/security.php';
 require_once 'DATABASE/document-management.php';
 require_once 'UTILS/pdf_generator.php';
-require_once 'config/email_config.php';
+require_once __DIR__ . '/email_config.php';
 
 
 
@@ -3397,7 +3397,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                    <section id="audit-section" class="audit-section">
+                    <section id="audit-section" class="audit-section mb-6" style="display: none;">
 
 
 
@@ -6576,7 +6576,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-    <script src="app-features.js?v=<?php echo urlencode((string)@filemtime(__DIR__ . '/app-features.js')); ?>&build=cm-export-20260310"></script>
+    <script src="app-features.js?v=<?php echo time(); ?>"></script>
 
 
 

@@ -121,7 +121,7 @@ define('EMAIL_FROM', (string) app_env('EMAIL_FROM', 'Valenzuela City Government'
 // Database Configuration - Defaults match production credentials when not on localhost
 define('DB_HOST', (string) app_env('DB_HOST', 'localhost'));
 define('DB_USER', (string) app_env('DB_USER', IS_LOCALHOST ? 'root' : 'cons_pc_db'));
-define('DB_PASS', (string) app_env('DB_PASS', IS_LOCALHOST ? '' : 'e3sEe1sf!g6+uoak'));
+define('DB_PASS', (string) app_env('DB_PASS', IS_LOCALHOST ? '' : '%wE!*-vMg4GCbB#3'));
 define('DB_NAME', (string) app_env('DB_NAME', IS_LOCALHOST ? 'pc_db' : 'cons_pc_db'));
 // Security settings
 define('SESSION_LIFETIME', 120); // 2 minutes

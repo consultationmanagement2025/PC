@@ -9,40 +9,42 @@ require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
 require_once __DIR__ . '/PHPMailer/src/SMTP.php';
 
 // Load environment variables
-function loadEnv($file = '.env') {
-    $filePath = __DIR__ . '/' . $file;
-    if (!file_exists($filePath)) {
-        $parentPath = dirname(__DIR__) . '/' . $file;
-        if (file_exists($parentPath)) {
-            $filePath = $parentPath;
-        } else {
-            return false;
-        }
-    }
-    
-    $lines = file($filePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        if (strpos(trim($line), '#') === 0) continue;
-        
-        [$name, $value] = array_pad(explode('=', $line, 2), 2, '');
-        $name = trim($name);
-        $value = trim($value);
-
-        if (strlen($value) >= 2) {
-            $first = substr($value, 0, 1);
-            $last = substr($value, -1);
-            if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
-                $value = substr($value, 1, -1);
+if (!function_exists('loadEnv')) {
+    function loadEnv($file = '.env') {
+        $filePath = __DIR__ . '/' . $file;
+        if (!file_exists($filePath)) {
+            $parentPath = dirname(__DIR__) . '/' . $file;
+            if (file_exists($parentPath)) {
+                $filePath = $parentPath;
+            } else {
+                return false;
             }
         }
         
-        if (!array_key_exists($name, $_SERVER) && !array_key_exists($name, $_ENV)) {
-            putenv(sprintf('%s=%s', $name, $value));
-            $_ENV[$name] = $value;
-            $_SERVER[$name] = $value;
+        $lines = file($filePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            if (strpos(trim($line), '#') === 0) continue;
+            
+            [$name, $value] = array_pad(explode('=', $line, 2), 2, '');
+            $name = trim($name);
+            $value = trim($value);
+
+            if (strlen($value) >= 2) {
+                $first = substr($value, 0, 1);
+                $last = substr($value, -1);
+                if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
+                    $value = substr($value, 1, -1);
+                }
+            }
+            
+            if (!array_key_exists($name, $_SERVER) && !array_key_exists($name, $_ENV)) {
+                @putenv(sprintf('%s=%s', $name, $value));
+                $_ENV[$name] = $value;
+                $_SERVER[$name] = $value;
+            }
         }
+        return true;
     }
-    return true;
 }
 
 // Load environment variables

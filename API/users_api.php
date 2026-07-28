@@ -199,17 +199,92 @@ try {
             $stmt->close();
             break;
             
+        case 'toggle_status':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $id = (int)($data['id'] ?? 0);
+            $newStatus = trim($data['status'] ?? '');
+            
+            if (!$id || !in_array($newStatus, ['active', 'inactive', 'pending'], true)) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Invalid ID or status value']);
+                exit;
+            }
+            
+            $stmt = $conn->prepare("UPDATE users SET status = ? WHERE id = ?");
+            $stmt->bind_param('si', $newStatus, $id);
+            if ($stmt->execute()) {
+                require_once '../DATABASE/audit-log.php';
+                logAction(
+                    $_SESSION['user_id'] ?? 0,
+                    $_SESSION['fullname'] ?? $_SESSION['username'] ?? 'admin',
+                    'toggle_user_status',
+                    'user',
+                    $id,
+                    null,
+                    json_encode(['status' => $newStatus]),
+                    'success',
+                    "Updated user #{$id} status to '{$newStatus}'"
+                );
+                echo json_encode(['success' => true]);
+            } else {
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Failed to update status: ' . $stmt->error]);
+            }
+            $stmt->close();
+            break;
+
+        case 'delete':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $id = (int)($data['id'] ?? $_GET['id'] ?? 0);
+            
+            if (!$id) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'User ID required']);
+                exit;
+            }
+            
+            // Prevent self-deletion
+            if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] === $id) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Cannot delete your own account']);
+                exit;
+            }
+            
+            $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
+            $stmt->bind_param('i', $id);
+            if ($stmt->execute()) {
+                require_once '../DATABASE/audit-log.php';
+                logAction(
+                    $_SESSION['user_id'] ?? 0,
+                    $_SESSION['fullname'] ?? $_SESSION['username'] ?? 'admin',
+                    'delete_user',
+                    'user',
+                    $id,
+                    null,
+                    null,
+                    'warning',
+                    "Deleted user account #{$id}"
+                );
+                echo json_encode(['success' => true]);
+            } else {
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Failed to delete user: ' . $stmt->error]);
+            }
+            $stmt->close();
+            break;
+
         case 'stats':
             $sql = "SELECT 
                     COUNT(*) as total_users,
-                    SUM(CASE WHEN role = 'Administrator' THEN 1 ELSE 0 END) as admin_count,
-                    SUM(CASE WHEN role = 'Citizen' THEN 1 ELSE 0 END) as citizen_count,
+                    SUM(CASE WHEN LOWER(role) IN ('admin', 'administrator', 'super admin', 'superadmin') THEN 1 ELSE 0 END) as admin_count,
+                    SUM(CASE WHEN LOWER(role) = 'citizen' THEN 1 ELSE 0 END) as citizen_count,
+                    SUM(CASE WHEN LOWER(role) IN ('resource person', 'resource_person', 'staff') THEN 1 ELSE 0 END) as staff_count,
                     SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_count,
                     SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) as inactive_count
                     FROM users";
             
             $result = $conn->query($sql);
-            $stats = $result->fetch_assoc();
+            $stats = $result ? $result->fetch_assoc() : [];
             
             echo json_encode(['success' => true, 'data' => $stats]);
             break;

@@ -8,8 +8,9 @@ require_once __DIR__ . '/PHPMailer/src/Exception.php';
 require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
 require_once __DIR__ . '/PHPMailer/src/SMTP.php';
 
-// Load environment variables
-function loadEnv($file = '.env') {
+// Load environment variables for root module
+if (!function_exists('loadEnv')) {
+    function loadEnv($file = '.env') {
     $filePath = __DIR__ . '/' . $file;
     if (!file_exists($filePath)) {
         return false;
@@ -38,6 +39,7 @@ function loadEnv($file = '.env') {
         }
     }
     return true;
+    }
 }
 
 // Load environment variables

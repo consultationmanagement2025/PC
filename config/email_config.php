@@ -8,28 +8,30 @@ require_once __DIR__ . '/../PHPMailer/src/Exception.php';
 require_once __DIR__ . '/../PHPMailer/src/PHPMailer.php';
 require_once __DIR__ . '/../PHPMailer/src/SMTP.php';
 
-// Load environment variables
-function loadEnv($file = '.env') {
-    $filePath = __DIR__ . '/../' . $file;
-    if (!file_exists($filePath)) {
-        return false;
-    }
-    
-    $lines = file($filePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        if (strpos(trim($line), '#') === 0) continue;
-        
-        [$name, $value] = array_pad(explode('=', $line, 2), 2, '');
-        $name = trim($name);
-        $value = trim($value);
-        
-        if (!array_key_exists($name, $_SERVER) && !array_key_exists($name, $_ENV)) {
-            putenv(sprintf('%s=%s', $name, $value));
-            $_ENV[$name] = $value;
-            $_SERVER[$name] = $value;
+// Load environment variables for config module
+if (!function_exists('loadEnv')) {
+    function loadEnv($file = '.env') {
+        $filePath = __DIR__ . '/../' . $file;
+        if (!file_exists($filePath)) {
+            return false;
         }
+        
+        $lines = file($filePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            if (strpos(trim($line), '#') === 0) continue;
+            
+            [$name, $value] = array_pad(explode('=', $line, 2), 2, '');
+            $name = trim($name);
+            $value = trim($value);
+            
+            if (!array_key_exists($name, $_SERVER) && !array_key_exists($name, $_ENV)) {
+                putenv(sprintf('%s=%s', $name, $value));
+                $_ENV[$name] = $value;
+                $_SERVER[$name] = $value;
+            }
+        }
+        return true;
     }
-    return true;
 }
 
 // Load environment variables

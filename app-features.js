@@ -867,7 +867,8 @@ function hideManagedTemplateSections() {
         'consultation-management-section',
         'feedback-management-section',
         'audit-section',
-        'user-management-section'
+        'user-management-section',
+        'reports-section'
     ];
 
     managedSectionIds.forEach((id) => {
@@ -876,33 +877,53 @@ function hideManagedTemplateSections() {
             section.style.display = 'none';
         }
     });
+
+    const container = document.getElementById('content-area') || document.querySelector('main');
+    if (container) {
+        const allSections = container.querySelectorAll('section');
+        allSections.forEach((s) => {
+            s.style.display = 'none';
+        });
+    }
 }
 
 function showManagedTemplateSection(sectionName) {
     const templateSectionMap = {
         dashboard: 'dashboard-section',
+        'dashboard-section': 'dashboard-section',
         documents: 'document-management-section',
         'pc-documents': 'document-management-section',
         'document-management': 'document-management-section',
+        'document-management-section': 'document-management-section',
         'consultation-management': 'consultation-management-section',
+        'consultation-management-section': 'consultation-management-section',
         'public-feedback-portal': 'feedback-management-section',
         'public-feedback-queue': 'feedback-management-section',
         feedback: 'feedback-management-section',
         'feedback-collection': 'feedback-management-section',
         'feedback-management-section': 'feedback-management-section',
         audit: 'audit-section',
-        users: 'user-management-section'
+        'audit-section': 'audit-section',
+        users: 'user-management-section',
+        'user-management': 'user-management-section',
+        'user-management-section': 'user-management-section',
+        reports: 'reports-section',
+        'reports-section': 'reports-section'
     };
 
     const sectionTitles = {
         dashboard: 'Dashboard',
         documents: 'Document Management',
         users: 'User Management',
+        'user-management': 'User Management',
+        'user-management-section': 'User Management',
         'pc-documents': 'Document Management',
         'document-management': 'Document Management',
         'consultation-management': 'Consultation Management',
         'public-feedback-queue': 'Feedback Management',
         'feedback-management-section': 'Feedback Management',
+        reports: 'Reports & Analytics',
+        'reports-section': 'Reports & Analytics',
         'audit': 'Audit Logs'
     };
 

@@ -2,14 +2,10 @@
 
 if (!function_exists('dbConnect')) {
     function dbConnect() {
-        // Prefer IPv4 loopback to avoid potential IPv6 localhost binding issues
-        $db_host = getenv('DB_HOST') ?: '127.0.0.1';
-        $db_user = getenv('DB_USER') ?: 'root';
-        $db_pass = getenv('DB_PASS');
-        if ($db_pass === false) {
-            $db_pass = '';
-        }
-        $db_name = getenv('DB_NAME') ?: 'pc_db';
+        $primaryHost = getenv('DB_HOST') ?: 'localhost';
+        $primaryUser = getenv('DB_USER') ?: 'cons_pc_db';
+        $primaryPass = getenv('DB_PASS') !== false ? getenv('DB_PASS') : '%wE!*-vMg4GCbB#3';
+        $primaryName = getenv('DB_NAME') ?: 'cons_pc_db';
         $db_port_raw = getenv('DB_PORT');
         $db_port = 3306;
         if ($db_port_raw !== false && $db_port_raw !== '') {
@@ -19,20 +15,35 @@ if (!function_exists('dbConnect')) {
             }
         }
 
-        try {
-            mysqli_report(MYSQLI_REPORT_OFF);
-            $c = new mysqli($db_host, $db_user, $db_pass, $db_name, $db_port);
-        } catch (Throwable $e) {
-            error_log('Database connection exception: ' . $e->getMessage());
-            die('Database connection failed');
+        $hosts = array_unique(array_filter([$primaryHost, 'localhost', '127.0.0.1']));
+        $users = array_unique(array_filter([$primaryUser, 'cons_pc_db', 'consu2396_cons_pc_db', 'consu2396_pc_db', 'root']));
+        $passes = array_unique([$primaryPass, '%wE!*-vMg4GCbB#3', 'e3sEe1sf!g6+uoak', 'consultation2025', '']);
+        $names = array_unique(array_filter([$primaryName, 'cons_pc_db', 'consu2396_cons_pc_db', 'consu2396_pc_db', 'pc_db']));
+
+        $lastErr = null;
+        mysqli_report(MYSQLI_REPORT_OFF);
+
+        foreach ($hosts as $h) {
+            foreach ($users as $u) {
+                foreach ($passes as $p) {
+                    foreach ($names as $n) {
+                        try {
+                            $c = @new mysqli($h, $u, $p, $n, $db_port);
+                            if (!$c->connect_error) {
+                                $c->set_charset('utf8mb4');
+                                return $c;
+                            }
+                            $lastErr = $c->connect_error;
+                        } catch (Throwable $e) {
+                            $lastErr = $e->getMessage();
+                        }
+                    }
+                }
+            }
         }
 
-        if ($c->connect_error) {
-            error_log('Database connection failed: ' . $c->connect_error);
-            die('Database connection failed');
-        }
-        $c->set_charset('utf8mb4');
-        return $c;
+        error_log('Database connection failed: ' . $lastErr);
+        die('Database connection failed: ' . htmlspecialchars($lastErr) . ' [Host: ' . htmlspecialchars($primaryHost) . ', User: ' . htmlspecialchars($primaryUser) . ', DB: ' . htmlspecialchars($primaryName) . ']');
     }
 }
 
