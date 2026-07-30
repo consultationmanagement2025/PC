@@ -9,6 +9,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $address = trim($_POST['address'] ?? '');
+    $district = trim($_POST['district'] ?? '');
+    $barangay = trim($_POST['barangay'] ?? '');
     $password = $_POST['password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
     $terms = isset($_POST['terms']);
@@ -53,13 +55,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $role = 'citizen';
             $username = explode('@', $email)[0];
             
-            $stmt = $conn->prepare("INSERT INTO users (fullname, username, email, password, role, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
+            $stmt = $conn->prepare("INSERT INTO users (fullname, username, email, password, role, district, barangay, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())");
             if ($stmt) {
-                $stmt->bind_param('sssss', $fullname, $username, $email, $hashed_password, $role);
+                $stmt->bind_param('sssssss', $fullname, $username, $email, $hashed_password, $role, $district, $barangay);
             } else {
-                $stmt = $conn->prepare("INSERT INTO users (full_name, email, password, role, created_at) VALUES (?, ?, ?, ?, NOW())");
+                $stmt = $conn->prepare("INSERT INTO users (fullname, email, password, role, district, barangay, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
                 if ($stmt) {
-                    $stmt->bind_param('ssss', $fullname, $email, $hashed_password, $role);
+                    $stmt->bind_param('ssssss', $fullname, $email, $hashed_password, $role, $district, $barangay);
                 }
             }
             
@@ -258,6 +260,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <textarea id="address" name="address" rows="2" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-valenzuela-blue focus:border-valenzuela-blue outline-none transition-all text-sm resize-none" placeholder="Your address in Valenzuela"><?php echo isset($_POST['address']) ? htmlspecialchars($_POST['address']) : ''; ?></textarea>
                         </div>
 
+                        <!-- Valenzuela Residency & District Verification -->
+                        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-map-location-dot text-valenzuela-blue"></i>
+                                <h3 class="text-sm font-bold text-slate-800">Valenzuela District & Barangay Verification</h3>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label for="district" class="block text-xs font-semibold text-slate-700 mb-1">Legislative District</label>
+                                    <select id="district" name="district" class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-valenzuela-blue outline-none text-sm bg-white" onchange="onDistrictSelectChange()">
+                                        <option value="">-- Select District --</option>
+                                        <option value="District 1" <?php echo (isset($_POST['district']) && $_POST['district'] === 'District 1') ? 'selected' : ''; ?>>District 1 (1st District)</option>
+                                        <option value="District 2" <?php echo (isset($_POST['district']) && $_POST['district'] === 'District 2') ? 'selected' : ''; ?>>District 2 (2nd District)</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label for="barangay" class="block text-xs font-semibold text-slate-700 mb-1">Barangay</label>
+                                    <select id="barangay" name="barangay" class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-valenzuela-blue outline-none text-sm bg-white" onchange="onBarangaySelectChange()">
+                                        <option value="">-- Select Barangay --</option>
+                                        <optgroup label="District 1 (24 Barangays)" id="optgroup-d1">
+                                            <option value="Arkong Bato" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Arkong Bato') ? 'selected' : ''; ?>>Arkong Bato</option>
+                                            <option value="Balangkas" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Balangkas') ? 'selected' : ''; ?>>Balangkas</option>
+                                            <option value="Bignay" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Bignay') ? 'selected' : ''; ?>>Bignay</option>
+                                            <option value="Bisig" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Bisig') ? 'selected' : ''; ?>>Bisig</option>
+                                            <option value="Canumay East" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Canumay East') ? 'selected' : ''; ?>>Canumay East</option>
+                                            <option value="Canumay West" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Canumay West') ? 'selected' : ''; ?>>Canumay West</option>
+                                            <option value="Coloong" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Coloong') ? 'selected' : ''; ?>>Coloong</option>
+                                            <option value="Dalandanan" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Dalandanan') ? 'selected' : ''; ?>>Dalandanan</option>
+                                            <option value="Isla" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Isla') ? 'selected' : ''; ?>>Isla</option>
+                                            <option value="Lawang Bato" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Lawang Bato') ? 'selected' : ''; ?>>Lawang Bato</option>
+                                            <option value="Lingunan" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Lingunan') ? 'selected' : ''; ?>>Lingunan</option>
+                                            <option value="Mabolo" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Mabolo') ? 'selected' : ''; ?>>Mabolo</option>
+                                            <option value="Malanday" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Malanday') ? 'selected' : ''; ?>>Malanday</option>
+                                            <option value="Malinta" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Malinta') ? 'selected' : ''; ?>>Malinta</option>
+                                            <option value="Mapulang Lupa" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Mapulang Lupa') ? 'selected' : ''; ?>>Mapulang Lupa</option>
+                                            <option value="Palasan" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Palasan') ? 'selected' : ''; ?>>Palasan</option>
+                                            <option value="Pariancillo Villa" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Pariancillo Villa') ? 'selected' : ''; ?>>Pariancillo Villa</option>
+                                            <option value="Pasolo" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Pasolo') ? 'selected' : ''; ?>>Pasolo</option>
+                                            <option value="Poblacion" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Poblacion') ? 'selected' : ''; ?>>Poblacion</option>
+                                            <option value="Punturin" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Punturin') ? 'selected' : ''; ?>>Punturin</option>
+                                            <option value="Rincon" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Rincon') ? 'selected' : ''; ?>>Rincon</option>
+                                            <option value="Tagalag" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Tagalag') ? 'selected' : ''; ?>>Tagalag</option>
+                                            <option value="Veinte Reales" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Veinte Reales') ? 'selected' : ''; ?>>Veinte Reales</option>
+                                            <option value="Wawang Pulo" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Wawang Pulo') ? 'selected' : ''; ?>>Wawang Pulo</option>
+                                        </optgroup>
+                                        <optgroup label="District 2 (9 Barangays)" id="optgroup-d2">
+                                            <option value="Bagbaguin" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Bagbaguin') ? 'selected' : ''; ?>>Bagbaguin</option>
+                                            <option value="Gen. T. de Leon" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Gen. T. de Leon') ? 'selected' : ''; ?>>Gen. T. de Leon</option>
+                                            <option value="Karuhatan" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Karuhatan') ? 'selected' : ''; ?>>Karuhatan</option>
+                                            <option value="Marulas" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Marulas') ? 'selected' : ''; ?>>Marulas</option>
+                                            <option value="Maysan" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Maysan') ? 'selected' : ''; ?>>Maysan</option>
+                                            <option value="Parada" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Parada') ? 'selected' : ''; ?>>Parada</option>
+                                            <option value="Paso de Blas" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Paso de Blas') ? 'selected' : ''; ?>>Paso de Blas</option>
+                                            <option value="Ugong" <?php echo (isset($_POST['barangay']) && $_POST['barangay'] === 'Ugong') ? 'selected' : ''; ?>>Ugong</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Live Verification Badge -->
+                            <div id="district-verification-badge" class="hidden p-2.5 rounded-lg bg-green-50 border border-green-200 text-green-800 text-xs flex items-center gap-2">
+                                <i class="fa-solid fa-circle-check text-green-600 text-sm"></i>
+                                <span><strong id="verified-barangay-text">Barangay</strong> verified under <strong id="verified-district-text">District 1</strong> of Valenzuela City.</span>
+                            </div>
+                        </div>
+
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label for="password" class="block text-sm font-semibold text-slate-700 mb-1">Password <span class="text-red-500">*</span></label>
@@ -313,6 +383,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         mobileMenu.classList.add('hidden');
                     });
                 });
+            }
+
+            // District & Barangay Verification Logic
+            window.DISTRICT_MAP = {
+                'Arkong Bato': 'District 1', 'Balangkas': 'District 1', 'Bignay': 'District 1', 'Bisig': 'District 1',
+                'Canumay East': 'District 1', 'Canumay West': 'District 1', 'Coloong': 'District 1', 'Dalandanan': 'District 1',
+                'Isla': 'District 1', 'Lawang Bato': 'District 1', 'Lingunan': 'District 1', 'Mabolo': 'District 1',
+                'Malanday': 'District 1', 'Malinta': 'District 1', 'Mapulang Lupa': 'District 1', 'Palasan': 'District 1',
+                'Pariancillo Villa': 'District 1', 'Pasolo': 'District 1', 'Poblacion': 'District 1', 'Punturin': 'District 1',
+                'Rincon': 'District 1', 'Tagalag': 'District 1', 'Veinte Reales': 'District 1', 'Wawang Pulo': 'District 1',
+                'Bagbaguin': 'District 2', 'Gen. T. de Leon': 'District 2', 'Karuhatan': 'District 2', 'Marulas': 'District 2',
+                'Maysan': 'District 2', 'Parada': 'District 2', 'Paso de Blas': 'District 2', 'Ugong': 'District 2'
+            };
+
+            window.onBarangaySelectChange = function() {
+                const barangaySelect = document.getElementById('barangay');
+                const districtSelect = document.getElementById('district');
+                const badge = document.getElementById('district-verification-badge');
+                const selectedBarangay = barangaySelect ? barangaySelect.value : '';
+
+                if (selectedBarangay && window.DISTRICT_MAP[selectedBarangay]) {
+                    const detectedDistrict = window.DISTRICT_MAP[selectedBarangay];
+                    if (districtSelect) districtSelect.value = detectedDistrict;
+                    const bEl = document.getElementById('verified-barangay-text');
+                    const dEl = document.getElementById('verified-district-text');
+                    if (bEl) bEl.textContent = selectedBarangay;
+                    if (dEl) dEl.textContent = detectedDistrict;
+                    if (badge) badge.classList.remove('hidden');
+                } else if (badge) {
+                    badge.classList.add('hidden');
+                }
+            };
+
+            window.onDistrictSelectChange = function() {
+                const districtSelect = document.getElementById('district');
+                const barangaySelect = document.getElementById('barangay');
+                const selectedDistrict = districtSelect ? districtSelect.value : '';
+                
+                if (barangaySelect && barangaySelect.value) {
+                    if (window.DISTRICT_MAP[barangaySelect.value] !== selectedDistrict) {
+                        barangaySelect.value = '';
+                        const badge = document.getElementById('district-verification-badge');
+                        if (badge) badge.classList.add('hidden');
+                    }
+                }
+            };
+
+            // Initial trigger if values pre-populated
+            if (document.getElementById('barangay')?.value) {
+                window.onBarangaySelectChange();
             }
 
             // File Upload Display Name

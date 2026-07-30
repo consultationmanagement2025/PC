@@ -1,5 +1,13 @@
 // LRMS System JavaScript - Updated with Mobile Support and Responsive Features
 
+window.showToast = window.showToast || function(message, type = 'info') {
+    if (typeof showNotification === 'function') {
+        showNotification(message, type);
+    } else {
+        console.log(`[Toast ${type}]`, message);
+    }
+};
+
 // Theme Toggle
 function initThemeToggle() {
     const html = document.documentElement;

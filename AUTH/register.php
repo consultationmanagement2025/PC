@@ -7,6 +7,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $fullname = trim($_POST['fullname']);
     $email = trim($_POST['email']);
     $password = $_POST['password'];
+    $district = trim($_POST['district'] ?? '');
+    $barangay = trim($_POST['barangay'] ?? '');
+
     if (!$fullname || !$email || !$password) {
         $message = "All fields required";
     } else {
@@ -23,9 +26,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $role = 'citizen'; // Default role for all new users
 
             $stmt = $conn->prepare(
-                "INSERT INTO users (fullname, email, password, role) VALUES (?, ?, ?, ?)"
+                "INSERT INTO users (fullname, email, password, role, district, barangay) VALUES (?, ?, ?, ?, ?, ?)"
             );
-            $stmt->bind_param("ssss", $fullname, $email, $hash, $role);
+            $stmt->bind_param("ssssss", $fullname, $email, $hash, $role, $district, $barangay);
 
             $message = $stmt->execute()
                 ? "Account created. You may login."
@@ -99,6 +102,70 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
                     <input type="email" name="email" placeholder="your.email@lgu.gov.ph" class="w-full px-3 md:px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition text-base" required>
                 </div>
+                
+                <!-- District & Barangay Verification -->
+                <div class="p-3.5 bg-gray-50 border border-gray-200 rounded-xl space-y-2.5">
+                    <div class="flex items-center gap-1.5 text-xs font-bold text-gray-700">
+                        <i class="bi bi-geo-alt-fill text-red-600"></i>
+                        <span>District & Barangay Verification</span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Legislative District</label>
+                            <select id="auth-district" name="district" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-red-500 outline-none" onchange="onAuthDistrictChange()">
+                                <option value="">-- Select District --</option>
+                                <option value="District 1">District 1 (1st District)</option>
+                                <option value="District 2">District 2 (2nd District)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Barangay</label>
+                            <select id="auth-barangay" name="barangay" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-red-500 outline-none" onchange="onAuthBarangayChange()">
+                                <option value="">-- Select Barangay --</option>
+                                <optgroup label="District 1 (24 Barangays)">
+                                    <option value="Arkong Bato">Arkong Bato</option>
+                                    <option value="Balangkas">Balangkas</option>
+                                    <option value="Bignay">Bignay</option>
+                                    <option value="Bisig">Bisig</option>
+                                    <option value="Canumay East">Canumay East</option>
+                                    <option value="Canumay West">Canumay West</option>
+                                    <option value="Coloong">Coloong</option>
+                                    <option value="Dalandanan">Dalandanan</option>
+                                    <option value="Isla">Isla</option>
+                                    <option value="Lawang Bato">Lawang Bato</option>
+                                    <option value="Lingunan">Lingunan</option>
+                                    <option value="Mabolo">Mabolo</option>
+                                    <option value="Malanday">Malanday</option>
+                                    <option value="Malinta">Malinta</option>
+                                    <option value="Mapulang Lupa">Mapulang Lupa</option>
+                                    <option value="Palasan">Palasan</option>
+                                    <option value="Pariancillo Villa">Pariancillo Villa</option>
+                                    <option value="Pasolo">Pasolo</option>
+                                    <option value="Poblacion">Poblacion</option>
+                                    <option value="Punturin">Punturin</option>
+                                    <option value="Rincon">Rincon</option>
+                                    <option value="Tagalag">Tagalag</option>
+                                    <option value="Veinte Reales">Veinte Reales</option>
+                                    <option value="Wawang Pulo">Wawang Pulo</option>
+                                </optgroup>
+                                <optgroup label="District 2 (9 Barangays)">
+                                    <option value="Bagbaguin">Bagbaguin</option>
+                                    <option value="Gen. T. de Leon">Gen. T. de Leon</option>
+                                    <option value="Karuhatan">Karuhatan</option>
+                                    <option value="Marulas">Marulas</option>
+                                    <option value="Maysan">Maysan</option>
+                                    <option value="Parada">Parada</option>
+                                    <option value="Paso de Blas">Paso de Blas</option>
+                                    <option value="Ugong">Ugong</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="auth-district-badge" class="hidden p-2 rounded-lg bg-green-50 border border-green-200 text-green-700 text-xs flex items-center gap-1.5">
+                        <i class="bi bi-check-circle-fill text-green-600"></i>
+                        <span><strong id="auth-verified-barangay">Barangay</strong> verified under <strong id="auth-verified-district">District 1</strong></span>
+                    </div>
+                </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
                     <div class="relative">
@@ -130,6 +197,46 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     </div>
 
     <script>
+        const AUTH_DISTRICT_MAP = {
+            'Arkong Bato': 'District 1', 'Balangkas': 'District 1', 'Bignay': 'District 1', 'Bisig': 'District 1',
+            'Canumay East': 'District 1', 'Canumay West': 'District 1', 'Coloong': 'District 1', 'Dalandanan': 'District 1',
+            'Isla': 'District 1', 'Lawang Bato': 'District 1', 'Lingunan': 'District 1', 'Mabolo': 'District 1',
+            'Malanday': 'District 1', 'Malinta': 'District 1', 'Mapulang Lupa': 'District 1', 'Palasan': 'District 1',
+            'Pariancillo Villa': 'District 1', 'Pasolo': 'District 1', 'Poblacion': 'District 1', 'Punturin': 'District 1',
+            'Rincon': 'District 1', 'Tagalag': 'District 1', 'Veinte Reales': 'District 1', 'Wawang Pulo': 'District 1',
+            'Bagbaguin': 'District 2', 'Gen. T. de Leon': 'District 2', 'Karuhatan': 'District 2', 'Marulas': 'District 2',
+            'Maysan': 'District 2', 'Parada': 'District 2', 'Paso de Blas': 'District 2', 'Ugong': 'District 2'
+        };
+
+        function onAuthBarangayChange() {
+            const bSelect = document.getElementById('auth-barangay');
+            const dSelect = document.getElementById('auth-district');
+            const badge = document.getElementById('auth-district-badge');
+            const val = bSelect ? bSelect.value : '';
+
+            if (val && AUTH_DISTRICT_MAP[val]) {
+                const dist = AUTH_DISTRICT_MAP[val];
+                if (dSelect) dSelect.value = dist;
+                document.getElementById('auth-verified-barangay').textContent = val;
+                document.getElementById('auth-verified-district').textContent = dist;
+                if (badge) badge.classList.remove('hidden');
+            } else if (badge) {
+                badge.classList.add('hidden');
+            }
+        }
+
+        function onAuthDistrictChange() {
+            const dSelect = document.getElementById('auth-district');
+            const bSelect = document.getElementById('auth-barangay');
+            const dist = dSelect ? dSelect.value : '';
+
+            if (bSelect && bSelect.value && AUTH_DISTRICT_MAP[bSelect.value] !== dist) {
+                bSelect.value = '';
+                const badge = document.getElementById('auth-district-badge');
+                if (badge) badge.classList.add('hidden');
+            }
+        }
+
         function togglePasswordVisibility() {
             const password = document.querySelector('input[name="password"]');
             const eyeIcon = document.getElementById('eye-icon');

@@ -32,9 +32,21 @@ if (!$topic || !$preferred_datetime) {
 
 // Store user-submitted consultation requests into the existing consultations table
 // (admin publishes official consultations by setting status to 'active')
-$user_name = trim($_SESSION['fullname'] ?? '');
-if ($user_name === '') {
-    $user_name = 'Citizen';
+$raw_session_name = trim($_SESSION['fullname'] ?? ($_SESSION['full_name'] ?? ''));
+$is_admin_identity = (
+    (isset($_SESSION['role']) && in_array(strtolower(trim($_SESSION['role'])), ['admin', 'super_admin', 'superadmin', 'staff'], true)) ||
+    (strpos(strtolower($raw_session_name), 'system administrator') !== false) ||
+    (strpos(strtolower($raw_session_name), 'admin') !== false)
+);
+
+$guest_name_input = trim($_POST['guest_name'] ?? ($_POST['user_name'] ?? ''));
+
+if (!empty($guest_name_input)) {
+    $user_name = $guest_name_input;
+} elseif ($is_admin_identity) {
+    $user_name = 'Citizen (Admin Test)';
+} else {
+    $user_name = !empty($raw_session_name) ? $raw_session_name : 'Citizen';
 }
 
 $full_description = "Preferred Date/Time: " . $preferred_datetime . "\n\n" . $description;

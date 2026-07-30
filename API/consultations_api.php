@@ -323,8 +323,9 @@ try {
                 $data['survey_option_b'] ?? 'Disagree',
                 !empty($data['allow_guest_quick_vote']) ? 1 : 0,
                 !empty($data['allow_guest_verified_vote']) ? 1 : 0,
-                $createErr
-
+                $createErr,
+                $data['district'] ?? null,
+                $data['barangay'] ?? null
             );
 
             
@@ -439,8 +440,9 @@ try {
                 $data['survey_option_a'] ?? 'Agree',
                 $data['survey_option_b'] ?? 'Disagree',
                 !empty($data['allow_guest_quick_vote']) ? 1 : 0,
-                !empty($data['allow_guest_verified_vote']) ? 1 : 0
-
+                !empty($data['allow_guest_verified_vote']) ? 1 : 0,
+                $data['district'] ?? null,
+                $data['barangay'] ?? null
             );
 
             

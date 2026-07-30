@@ -384,7 +384,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_consultation']
         $submission_error = 'Please fill in all required fields (Title, Category, Description).';
     } else {
         $user_id = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null;
-        $user_name = isset($_SESSION['fullname']) ? $_SESSION['fullname'] : (isset($_SESSION['full_name']) ? $_SESSION['full_name'] : trim($_POST['guest_name'] ?? 'Anonymous Citizen'));
+
+        $raw_session_name = $_SESSION['fullname'] ?? ($_SESSION['full_name'] ?? '');
+        $is_admin_identity = (
+            (isset($_SESSION['role']) && in_array(strtolower(trim($_SESSION['role'])), ['admin', 'super_admin', 'superadmin', 'staff'], true)) ||
+            (strpos(strtolower($raw_session_name), 'system administrator') !== false) ||
+            (strpos(strtolower($raw_session_name), 'admin') !== false)
+        );
+
+        $guest_name_input = trim($_POST['guest_name'] ?? ($_POST['user_name'] ?? ''));
+
+        if (!empty($guest_name_input)) {
+            $user_name = $guest_name_input;
+        } elseif ($is_admin_identity) {
+            $user_name = 'Citizen (Admin Test)';
+        } else {
+            $user_name = !empty($raw_session_name) ? $raw_session_name : 'Anonymous Citizen';
+        }
         $user_email = isset($_SESSION['email']) ? $_SESSION['email'] : trim($_POST['guest_email'] ?? 'citizen@valenzuela.gov.ph');
 
         // File upload handling

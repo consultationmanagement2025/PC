@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS `users` (
     `email` VARCHAR(255) NOT NULL,
     `password` VARCHAR(255) NOT NULL,
     `role` VARCHAR(50) NOT NULL DEFAULT 'citizen',
+    `district` VARCHAR(50) DEFAULT NULL,
+    `barangay` VARCHAR(100) DEFAULT NULL,
     `status` VARCHAR(20) NOT NULL DEFAULT 'active',
     `last_login` DATETIME DEFAULT NULL,
     `profile_photo` VARCHAR(500) DEFAULT NULL,
@@ -56,6 +58,8 @@ CREATE TABLE IF NOT EXISTS `consultations` (
     `topic` VARCHAR(255) DEFAULT NULL,
     `description` LONGTEXT NOT NULL,
     `category` VARCHAR(100) DEFAULT NULL,
+    `district` VARCHAR(50) DEFAULT NULL,
+    `barangay` VARCHAR(100) DEFAULT NULL,
     `status` ENUM(
         'draft','pending','active','viewed','replied','completed','closed',
         'archived','approved','rejected','disapproved','scheduled'
@@ -168,8 +172,8 @@ CREATE TABLE IF NOT EXISTS `announcements` (
     `visibility` VARCHAR(50) NOT NULL DEFAULT 'public',
     `status` VARCHAR(50) NOT NULL DEFAULT 'published',
     `allow_comments` TINYINT(1) NOT NULL DEFAULT 1,
-    `liked_by` LONGTEXT DEFAULT '[]',
-    `saved_by` LONGTEXT DEFAULT '[]',
+    `liked_by` LONGTEXT DEFAULT NULL,
+    `saved_by` LONGTEXT DEFAULT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),

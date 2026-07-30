@@ -402,6 +402,94 @@ function buildModuleReportData($module, $conn) {
     ];
 }
 
+function generateNativePDF($report_data, $file_path) {
+    $title = $report_data['title'] ?? 'System Report';
+    $generated = $report_data['generated_at'] ?? date('Y-m-d H:i:s');
+    $module = ucfirst($report_data['module'] ?? 'Module');
+
+    $escape = function($str) {
+        $str = strip_tags((string)$str);
+        return str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $str);
+    };
+
+    $stream = "BT\n";
+    $stream .= "/F1 18 Tf\n";
+    $stream .= "50 740 Td\n";
+    $stream .= "(" . $escape($title) . ") Tj\n";
+    
+    $stream .= "/F2 10 Tf\n";
+    $stream .= "0 -22 Td\n";
+    $stream .= "(Generated: " . $escape($generated) . "  |  Module: " . $escape($module) . ") Tj\n";
+    
+    $stream .= "0 -15 Td\n";
+    $stream .= "(----------------------------------------------------------------------------------------------------) Tj\n";
+    $stream .= "0 -25 Td\n";
+
+    $stream .= "/F1 14 Tf\n";
+    $stream .= "(SUMMARY) Tj\n";
+    $stream .= "0 -20 Td\n";
+    $stream .= "/F2 11 Tf\n";
+
+    foreach ($report_data['summary'] as $item) {
+        $label = $escape($item['label']);
+        $value = $escape($item['value']);
+        $stream .= "(" . $label . ": " . $value . ") Tj\n";
+        $stream .= "0 -16 Td\n";
+    }
+
+    if (!empty($report_data['details'])) {
+        $stream .= "0 -15 Td\n";
+        $stream .= "/F1 14 Tf\n";
+        $stream .= "(ADDITIONAL DETAILS) Tj\n";
+        $stream .= "0 -20 Td\n";
+        $stream .= "/F2 11 Tf\n";
+        foreach ($report_data['details'] as $item) {
+            $label = $escape($item['label']);
+            $value = $escape($item['value']);
+            $stream .= "(" . $label . ": " . $value . ") Tj\n";
+            $stream .= "0 -16 Td\n";
+        }
+    }
+
+    $stream .= "0 -35 Td\n";
+    $stream .= "/F2 9 Tf\n";
+    $stream .= "(Official System Generated Report - Valenzuela City Public Consultation System) Tj\n";
+    $stream .= "ET\n";
+
+    $obj1 = "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
+    $obj2 = "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n";
+    $obj3 = "3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /MediaBox [0 0 612 792] /Contents 6 0 R >>\nendobj\n";
+    $obj4 = "4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj\n";
+    $obj5 = "5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n";
+    
+    $streamLen = strlen($stream);
+    $obj6 = "6 0 obj\n<< /Length " . $streamLen . " >>\nstream\n" . $stream . "endstream\nendobj\n";
+
+    $o1 = strlen("%PDF-1.4\n");
+    $o2 = $o1 + strlen($obj1);
+    $o3 = $o2 + strlen($obj2);
+    $o4 = $o3 + strlen($obj3);
+    $o5 = $o4 + strlen($obj4);
+    $o6 = $o5 + strlen($obj5);
+
+    $pdf = "%PDF-1.4\n" . $obj1 . $obj2 . $obj3 . $obj4 . $obj5 . $obj6;
+
+    $xrefOffset = strlen($pdf);
+    $pdf .= "xref\n0 7\n";
+    $pdf .= "0000000000 65535 f \n";
+    $pdf .= sprintf("%010d 00000 n \n", $o1);
+    $pdf .= sprintf("%010d 00000 n \n", $o2);
+    $pdf .= sprintf("%010d 00000 n \n", $o3);
+    $pdf .= sprintf("%010d 00000 n \n", $o4);
+    $pdf .= sprintf("%010d 00000 n \n", $o5);
+    $pdf .= sprintf("%010d 00000 n \n", $o6);
+
+    $pdf .= "trailer\n<< /Size 7 /Root 1 0 R >>\n";
+    $pdf .= "startxref\n" . $xrefOffset . "\n%%EOF\n";
+
+    return file_put_contents($file_path, $pdf) !== false;
+}
+
 function generateModuleReportFile($module, $format, $conn, $user_name = null) {
     $module = strtolower(trim((string)$module));
     $format = strtolower(trim((string)$format));
@@ -426,13 +514,24 @@ function generateModuleReportFile($module, $format, $conn, $user_name = null) {
         mkdir($report_dir, 0755, true);
     }
 
-    $filename = $safe_module . '_report_' . $timestamp . '.' . ($format === 'excel' ? 'xls' : ($format === 'word' ? 'doc' : 'pdf'));
+    $ext = 'pdf';
+    if ($format === 'excel' || $format === 'xls' || $format === 'xlsx') {
+        $ext = 'xls';
+    } elseif ($format === 'word' || $format === 'doc' || $format === 'docx') {
+        $ext = 'doc';
+    } elseif ($format === 'csv') {
+        $ext = 'csv';
+    } elseif ($format === 'text' || $format === 'txt') {
+        $ext = 'txt';
+    }
+
+    $filename = $safe_module . '_report_' . $timestamp . '.' . $ext;
     $file_path = $report_dir . $filename;
     
     error_log('Report file path: ' . $file_path);
 
     $write_success = false;
-    if ($format === 'excel') {
+    if ($format === 'excel' || $format === 'xls' || $format === 'xlsx') {
         $html = '<html><head><meta charset="UTF-8"></head><body>';
         $html .= '<h2>' . htmlspecialchars($report_data['title'], ENT_QUOTES, 'UTF-8') . '</h2>';
         $html .= '<p>Generated: ' . htmlspecialchars($report_data['generated_at'], ENT_QUOTES, 'UTF-8') . '</p>';
@@ -450,8 +549,7 @@ function generateModuleReportFile($module, $format, $conn, $user_name = null) {
         }
         $html .= '</body></html>';
         $write_success = file_put_contents($file_path, $html) !== false;
-        error_log('Excel write success: ' . ($write_success ? 'yes' : 'no'));
-    } elseif ($format === 'word') {
+    } elseif ($format === 'word' || $format === 'doc' || $format === 'docx') {
         $html = '<html><head><meta charset="UTF-8"></head><body>';
         $html .= '<h1>' . htmlspecialchars($report_data['title'], ENT_QUOTES, 'UTF-8') . '</h1>';
         $html .= '<p><strong>Generated:</strong> ' . htmlspecialchars($report_data['generated_at'], ENT_QUOTES, 'UTF-8') . '</p>';
@@ -469,9 +567,28 @@ function generateModuleReportFile($module, $format, $conn, $user_name = null) {
         }
         $html .= '</body></html>';
         $write_success = file_put_contents($file_path, $html) !== false;
-        error_log('Word write success: ' . ($write_success ? 'yes' : 'no'));
-    } else {
-        // Generate simple text-based report instead of PDF
+    } elseif ($format === 'csv') {
+        $fp = fopen($file_path, 'w');
+        if ($fp) {
+            fputcsv($fp, [$report_data['title']]);
+            fputcsv($fp, ['Generated', $report_data['generated_at']]);
+            fputcsv($fp, ['Module', ucfirst($report_data['module'])]);
+            fputcsv($fp, []);
+            fputcsv($fp, ['SUMMARY METRIC', 'VALUE']);
+            foreach ($report_data['summary'] as $item) {
+                fputcsv($fp, [$item['label'], $item['value']]);
+            }
+            if (!empty($report_data['details'])) {
+                fputcsv($fp, []);
+                fputcsv($fp, ['ADDITIONAL DETAILS', 'VALUE']);
+                foreach ($report_data['details'] as $item) {
+                    fputcsv($fp, [$item['label'], $item['value']]);
+                }
+            }
+            fclose($fp);
+            $write_success = true;
+        }
+    } elseif ($format === 'text' || $format === 'txt') {
         $lines = [$report_data['title'], 'Generated: ' . $report_data['generated_at'], 'Module: ' . ucfirst($report_data['module']), ''];
         foreach ($report_data['summary'] as $item) {
             $lines[] = $item['label'] . ': ' . $item['value'];
@@ -483,15 +600,10 @@ function generateModuleReportFile($module, $format, $conn, $user_name = null) {
                 $lines[] = $item['label'] . ': ' . $item['value'];
             }
         }
-        
-        // Save as text file with .txt extension (more reliable than basic PDF)
-        $filename = $safe_module . '_report_' . $timestamp . '.txt';
-        $file_path = $report_dir . $filename;
         $write_success = file_put_contents($file_path, implode("\n", $lines)) !== false;
-        error_log('Text report write success: ' . ($write_success ? 'yes' : 'no'));
-        
-        // Update format for download
-        $format = 'text';
+    } else {
+        // PDF default format
+        $write_success = generateNativePDF($report_data, $file_path);
     }
 
     // Verify file was actually created

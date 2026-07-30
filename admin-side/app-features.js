@@ -119,12 +119,23 @@ function currentUserIsAdminRole() {
     return ['admin', 'administrator', 'super admin', 'superadmin', 'staff', 'barangay staff', 'barangay_staff', 'barangay'].indexOf(normalized) !== -1 || (typeof window !== 'undefined' && window.__IS_SUPER_ADMIN__ === true);
 }
 
+function getApiUrl(resource) {
+    if (typeof resource !== 'string') return resource;
+    if (resource.startsWith('API/')) {
+        const path = window.location.pathname;
+        if (path.includes('/admin/') || path.includes('/admin-side/')) {
+            return '../' + resource;
+        }
+    }
+    return resource;
+}
+
 function fetchWithTimeout(resource, options = {}, timeout = 5000) {
     const controller = new AbortController();
     const signal = controller.signal;
     const finalOptions = { ...options, signal };
     const timer = setTimeout(() => controller.abort(), timeout);
-    return fetch(resource, finalOptions)
+    return fetch(getApiUrl(resource), finalOptions)
         .finally(() => clearTimeout(timer));
 }
 
@@ -254,7 +265,7 @@ function savePreferences() {
 // Initialize App
 
 async function bootstrapAppDataAndRenderInitialSection() {
-    const initialSection = 'dashboard';
+    const initialSection = 'public-consultation';
 
     showSection(initialSection);
 
@@ -888,6 +899,26 @@ function hideManagedTemplateSections() {
 
 function showManagedTemplateSection(sectionName) {
     window._currentActiveSection = sectionName;
+
+    const sectionTitles = {
+        'public-consultation': 'Consultation Dashboard',
+        'consultation-dashboard': 'Consultation Dashboard',
+        dashboard: 'Dashboard',
+        documents: 'Document Management',
+        'pc-documents': 'Document Management',
+        'document-management': 'Document Management',
+        'consultation-management': 'Consultation Management',
+        'public-feedback-queue': 'Feedback Management',
+        'public-feedback-portal': 'Feedback Management',
+        feedback: 'Feedback Management',
+        users: 'User Management',
+        'user-management': 'User Management',
+        reports: 'Reports & Analytics',
+        audit: 'Audit Logs',
+        profile: 'User Profile',
+        settings: 'Settings'
+    };
+
     const templateSectionMap = {
         dashboard: 'dashboard-section',
         'dashboard-section': 'dashboard-section',
@@ -911,114 +942,65 @@ function showManagedTemplateSection(sectionName) {
         'reports-section': 'reports-section'
     };
 
-    const sectionTitles = {
-        dashboard: 'Dashboard',
-        documents: 'Document Management',
-        users: 'User Management',
-        'user-management': 'User Management',
-        'user-management-section': 'User Management',
-        'pc-documents': 'Document Management',
-        'document-management': 'Document Management',
-        'consultation-management': 'Consultation Management',
-        'public-feedback-queue': 'Feedback Management',
-        'feedback-management-section': 'Feedback Management',
-        reports: 'Reports & Analytics',
-        'reports-section': 'Reports & Analytics',
-        'audit': 'Audit Logs'
-    };
-
     let targetSectionId = templateSectionMap[sectionName];
 
-    hideManagedTemplateSections();
+    // Only use static template element if it exists in DOM AND contains child nodes
+    if (targetSectionId && document.getElementById(targetSectionId)) {
+        const targetSection = document.getElementById(targetSectionId);
+        if (targetSection && targetSection.children && targetSection.children.length > 0) {
+            hideManagedTemplateSections();
+            targetSection.style.display = 'block';
 
-    // If mapping not found or element missing, try sensible fallbacks
-    if (!targetSectionId || !document.getElementById(targetSectionId)) {
-        const fallbacks = [
-            sectionName,
-            sectionName + '-section'
-        ];
-        if (sectionName.includes('doc')) {
-            fallbacks.push('document-management-section', 'documents-module-section', 'documents-section', 'pc-documents-section');
-        }
-        for (const f of fallbacks) {
-            if (f && document.getElementById(f)) {
-                targetSectionId = f;
-                break;
+            try {
+                const contentArea = document.getElementById('content-area');
+                if (contentArea && contentArea.firstChild !== targetSection) {
+                    contentArea.insertBefore(targetSection, contentArea.firstChild);
+                }
+            } catch (e) {}
+
+            const breadcrumbCurrent = document.getElementById('breadcrumb-current') || document.querySelector('.breadcrumb-current');
+            if (breadcrumbCurrent) {
+                breadcrumbCurrent.textContent = sectionTitles[sectionName] || 'Dashboard';
             }
-        }
-    }
 
-    if (!targetSectionId) {
-        console.debug('showManagedTemplateSection: no targetSectionId for', sectionName);
-        return false;
-    }
-
-    const targetSection = document.getElementById(targetSectionId);
-    if (!targetSection) {
-        console.debug('showManagedTemplateSection: mapped id exists but element not found', targetSectionId);
-        return false;
-    }
-
-    targetSection.style.display = 'block';
-
-    // Move the managed template section to the top of the content area
-    // so it appears above other content (professional layout).
-    try {
-        const contentArea = document.getElementById('content-area');
-        if (contentArea && contentArea.firstChild !== targetSection) {
-            contentArea.insertBefore(targetSection, contentArea.firstChild);
-        }
-        // Smoothly scroll the target into view for better UX
-        targetSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } catch (e) {
-        console.warn('Could not reposition managed section:', e);
-    }
-
-    const breadcrumbCurrent = document.getElementById('breadcrumb-current');
-    const titleText = sectionTitles[sectionName] || 'Dashboard';
-
-    if (breadcrumbCurrent) {
-        breadcrumbCurrent.textContent = titleText;
-    }
-
-    // If there's a dedicated renderer for this logical section, prefer that
-    const rendererMap = {
-        dashboard: 'renderDashboard',
-        'consultation-management': 'renderConsultationManagement',
-        documents: 'renderPCDocuments',
-        'document-management': 'renderPCDocuments',
-        'pc-documents': 'renderPCDocuments',
-        users: 'renderUsers',
-        audit: 'renderAudit',
-        'public-feedback-queue': 'renderPublicFeedbackPortal',
-        'public-feedback-portal': 'renderPublicFeedbackPortal',
-        feedback: 'renderPublicFeedbackPortal'
-    };
-
-    try {
-        const rendererName = rendererMap[sectionName];
-        if (rendererName && typeof window[rendererName] === 'function') {
-            // Call the renderer which will populate contentArea dynamically
-            window[rendererName]();
+            if (sectionName === 'audit' && typeof loadAuditLogsFromDatabase === 'function') {
+                try { loadAuditLogsFromDatabase(); } catch (e) {}
+            }
             return true;
         }
-    } catch (e) {
-        console.warn('showManagedTemplateSection: renderer call failed', e);
     }
 
-    return true;
+    return false;
 }
 
 function showSection(sectionName) {
+    if (!sectionName || sectionName === 'index' || sectionName === 'home') {
+        sectionName = 'public-consultation';
+    }
 
     if (sectionName === 'public-feedback-portal' || sectionName === 'feedback' || sectionName === 'feedback-collection') {
         sectionName = 'public-feedback-queue';
     }
 
-    if (sectionName === 'documents') {
+    if (sectionName === 'documents' || sectionName === 'pc-documents' || sectionName === 'document-management-section') {
         sectionName = 'document-management';
     }
 
+    if (sectionName === 'consultation-management-section') {
+        sectionName = 'consultation-management';
+    }
+
+    if (sectionName === 'user-management-section' || sectionName === 'user-management') {
+        sectionName = 'users';
+    }
+
+    if (sectionName === 'audit-section') {
+        sectionName = 'audit';
+    }
+
+    if (sectionName === 'reports-section') {
+        sectionName = 'analytics';
+    }
 
     const contentArea = document.getElementById('content-area');
 
@@ -1031,328 +1013,175 @@ function showSection(sectionName) {
         console.warn('Failed to toggle section class on body', e);
     }
 
-
-    
-
-
-    // Safety check
-
-
     if (!contentArea) {
-
-
         console.error('Content area not found!');
-
-
         return;
-
-
     }
-
-
-    
-
 
     // Update active nav item
-
-
-    document.querySelectorAll('.nav-item').forEach(item => {
-
-
+    document.querySelectorAll('.nav-item, [data-section]').forEach(item => {
         item.classList.remove('active');
-
-
-        if (item.dataset.section === sectionName) {
-
-
+        if (item.dataset.section === sectionName || (item.getAttribute('onclick') && item.getAttribute('onclick').includes("'" + sectionName + "'"))) {
             item.classList.add('active');
-
-
         }
-
-
     });
 
-
-    
-
-
     // Close mobile sidebar
-
-
     if (window.innerWidth < 768) {
-
-
         const toggleBtn = document.getElementById('mobile-menu-btn');
-
-
         if (toggleBtn) {
-
-
             toggleBtn.click();
-
-
         }
-
-
     }
 
-
-    
-
-
-    // Load section content
-
+    // Senior Dev Primary Execution: Invoke JS dynamic renderer first for rich UI
+    window._currentActiveSection = sectionName;
+    if (typeof hideManagedTemplateSections === 'function') {
+        hideManagedTemplateSections();
+    }
 
     try {
-
-
-        if (showManagedTemplateSection(sectionName)) {
-            startHeaderClock();
-            return;
-        }
-
         switch(sectionName) {
-
-
-            case 'dashboard':
-
-
-                renderDashboard();
-
-
-                break;
-
-
-            case 'documents':
-                if (!currentUserCanAccessDocuments()) {
-                    showNotification('Document Management is only available for Admin and Super Admin.', 'warning');
-                    renderDashboard();
-                    break;
-                }
-
-                renderDocuments();
-
-
-                break;
-
-
-            case 'search':
-
-
-                renderSearch();
-
-
-                break;
-
-
-            case 'analytics':
-
-
-                renderAnalytics();
-
-
-                break;
-
-
-            // Public Consultation placeholders
-
-
             case 'public-consultation':
-
-
-                renderPublicConsultation();
-
-
+            case 'consultation-dashboard':
+                if (typeof renderPublicConsultation === 'function') {
+                    renderPublicConsultation();
+                    startHeaderClock();
+                    return;
+                }
                 break;
-
-
+            case 'dashboard':
+                if (typeof renderDashboard === 'function') {
+                    renderDashboard();
+                    startHeaderClock();
+                    return;
+                }
+                break;
             case 'consultation-management':
-
-
-                renderConsultationManagement();
-
-
+                if (typeof renderConsultationManagement === 'function') {
+                    renderConsultationManagement();
+                    startHeaderClock();
+                    return;
+                }
                 break;
-
-
-            case 'public-feedback-portal':
             case 'public-feedback-queue':
-
-
-                renderPublicFeedbackPortal();
-
-
+            case 'public-feedback-portal':
+            case 'feedback':
+                if (typeof renderPublicFeedbackPortal === 'function') {
+                    renderPublicFeedbackPortal();
+                    startHeaderClock();
+                    return;
+                }
                 break;
-
             case 'pc-documents':
-
-
             case 'document-management':
-                if (!currentUserCanAccessDocuments()) {
-                    showNotification('Document Management is only available for Admin and Super Admin.', 'warning');
-                    renderDashboard();
-                    break;
+            case 'documents':
+                if (typeof renderPCDocuments === 'function') {
+                    if (!currentUserCanAccessDocuments()) {
+                        showNotification('Document Management is only available for Admin and Super Admin.', 'warning');
+                        renderDashboard();
+                    } else {
+                        renderPCDocuments();
+                    }
+                    startHeaderClock();
+                    return;
                 }
-
-                renderPCDocuments();
-
-
                 break;
-
-
             case 'users':
-
-
-                renderUsers();
-
-
-                break;
-
-
-            case 'audit':
-                if (!currentUserIsAdminRole()) {
-                    showNotification('Audit Log is available for Admin and Barangay Staff only.', 'warning');
-                    renderDashboard();
-                    break;
+            case 'user-management':
+                if (typeof renderUsers === 'function') {
+                    renderUsers();
+                    startHeaderClock();
+                    return;
                 }
-
-                renderAudit();
-
-
                 break;
-
-
+            case 'audit':
+                if (typeof renderAudit === 'function') {
+                    if (!currentUserIsAdminRole()) {
+                        showNotification('Audit Log is available for Admin and Barangay Staff only.', 'warning');
+                        renderDashboard();
+                    } else {
+                        renderAudit();
+                    }
+                    startHeaderClock();
+                    return;
+                }
+                break;
+            case 'analytics':
+            case 'reports':
+                if (typeof renderAnalytics === 'function') {
+                    renderAnalytics();
+                    startHeaderClock();
+                    return;
+                }
+                break;
+            case 'search':
+                if (typeof renderSearch === 'function') {
+                    renderSearch();
+                    startHeaderClock();
+                    return;
+                }
+                break;
             case 'profile':
-
-
-                renderProfile();
-
-
+                if (typeof renderProfile === 'function') {
+                    renderProfile();
+                    startHeaderClock();
+                    return;
+                }
                 break;
-
-
             case 'settings':
-
-
-                renderSettings();
-
-
+                if (typeof renderSettings === 'function') {
+                    renderSettings();
+                    startHeaderClock();
+                    return;
+                }
                 break;
-
-
             case 'help':
-
-
             case 'help-support':
-
-
-                renderHelp();
-
-
+                if (typeof renderHelp === 'function') {
+                    renderHelp();
+                    startHeaderClock();
+                    return;
+                }
                 break;
-
-
             case 'notifications':
-
-
-                renderNotifications();
-
-
+                if (typeof renderNotifications === 'function') {
+                    renderNotifications();
+                    startHeaderClock();
+                    return;
+                }
                 break;
-
-
             case 'announcements':
-
-
-                renderAnnouncements();
-
-
+                if (typeof renderAnnouncements === 'function') {
+                    renderAnnouncements();
+                    startHeaderClock();
+                    return;
+                }
                 break;
-
-
-            default:
-
-
-                contentArea.innerHTML = `
-
-
-                    <div class="text-center py-12">
-
-
-                        <div class="text-6xl text-gray-300 mb-4">📋</div>
-
-
-                        <p class="text-gray-600 text-lg font-semibold">Section not found</p>
-
-
-                        <p class="text-gray-400 mt-2">The section "${sectionName}" could not be loaded.</p>
-
-
-                        <p class="text-gray-400 text-sm mt-4">Please select a valid section from the menu.</p>
-
-
-                        <button onclick="showSection('public-consultation')" class="mt-6 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
-
-
-                            Back to Dashboard
-
-
-                        </button>
-
-
-                    </div>
-
-
-                `;
-
-
         }
-
-
-    } catch (error) {
-
-
-        console.error('Error rendering section:', error);
-
-
-        contentArea.innerHTML = `
-
-
-            <div class="text-center py-12">
-
-
-                <div class="text-6xl text-red-300 mb-4">⚠️</div>
-
-
-                <p class="text-red-600 text-lg font-semibold">Error Loading Section</p>
-
-
-                <p class="text-gray-600 mt-2">${error.message}</p>
-
-
-                <button onclick="showSection('public-consultation')" class="mt-6 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
-
-
-                    Back to Dashboard
-
-
-                </button>
-
-
-            </div>
-
-
-        `;
-
-
+    } catch (e) {
+        console.warn('Primary renderer execution failed for ' + sectionName + ':', e);
     }
 
+    // Secondary Fallback: Managed Template Section (if static section exists in DOM)
+    if (showManagedTemplateSection(sectionName)) {
+        startHeaderClock();
+        return;
+    }
 
+    // Tertiary Failsafe: Guarantee non-blank content
+    try {
+        if (typeof renderPublicConsultation === 'function') {
+            renderPublicConsultation();
+        } else if (typeof renderDashboard === 'function') {
+            renderDashboard();
+        }
+    } catch (err) {
+        console.error('Failsafe renderer failed:', err);
+    }
+
+    startHeaderClock();
 }
-
-
-
 
 function updateHeaderUserDisplays() {
 
@@ -3545,15 +3374,42 @@ function renderUsers(skipLoad = false) {
                                 <label class="block text-xs font-semibold text-gray-700 mb-1.5">Filter Barangay</label>
                                 <select id="citizen-barangay" class="w-full px-3 py-2 text-xs rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 outline-none" onchange="renderCitizensTable()">
                                     <option value="">All 33 Barangays</option>
-                                    <option value="Gen. T. de Leon">Gen. T. de Leon</option>
-                                    <option value="Marulas">Marulas</option>
-                                    <option value="Karuhatan">Karuhatan</option>
-                                    <option value="Poblacion">Poblacion</option>
-                                    <option value="Malinta">Malinta</option>
-                                    <option value="Ugong">Ugong</option>
-                                    <option value="Dalandanan">Dalandanan</option>
-                                    <option value="Maysan">Maysan</option>
-                                    <option value="Paso de Blas">Paso de Blas</option>
+                                    <optgroup label="District 1 (24 Barangays)">
+                                        <option value="Arkong Bato">Arkong Bato</option>
+                                        <option value="Balangkas">Balangkas</option>
+                                        <option value="Bignay">Bignay</option>
+                                        <option value="Bisig">Bisig</option>
+                                        <option value="Canumay East">Canumay East</option>
+                                        <option value="Canumay West">Canumay West</option>
+                                        <option value="Coloong">Coloong</option>
+                                        <option value="Dalandanan">Dalandanan</option>
+                                        <option value="Isla">Isla</option>
+                                        <option value="Lawang Bato">Lawang Bato</option>
+                                        <option value="Lingunan">Lingunan</option>
+                                        <option value="Mabolo">Mabolo</option>
+                                        <option value="Malanday">Malanday</option>
+                                        <option value="Malinta">Malinta</option>
+                                        <option value="Mapulang Lupa">Mapulang Lupa</option>
+                                        <option value="Palasan">Palasan</option>
+                                        <option value="Pariancillo Villa">Pariancillo Villa</option>
+                                        <option value="Pasolo">Pasolo</option>
+                                        <option value="Poblacion">Poblacion</option>
+                                        <option value="Punturin">Punturin</option>
+                                        <option value="Rincon">Rincon</option>
+                                        <option value="Tagalag">Tagalag</option>
+                                        <option value="Veinte Reales">Veinte Reales</option>
+                                        <option value="Wawang Pulo">Wawang Pulo</option>
+                                    </optgroup>
+                                    <optgroup label="District 2 (9 Barangays)">
+                                        <option value="Bagbaguin">Bagbaguin</option>
+                                        <option value="Gen. T. de Leon">Gen. T. de Leon</option>
+                                        <option value="Karuhatan">Karuhatan</option>
+                                        <option value="Marulas">Marulas</option>
+                                        <option value="Maysan">Maysan</option>
+                                        <option value="Parada">Parada</option>
+                                        <option value="Paso de Blas">Paso de Blas</option>
+                                        <option value="Ugong">Ugong</option>
+                                    </optgroup>
                                 </select>
                             </div>
 
@@ -10181,7 +10037,7 @@ async function renderPublicConsultation() {
 
         // Render charts
     setTimeout(() => {
-        const filtered = getFilteredPublicConsultations();
+        const filtered = Array.isArray(AppData.consultations) ? AppData.consultations : [];
         renderPCStatusChart(filtered);
         renderPCFeedbackSentimentChart();
         refreshPCSurveySelector(filtered);
@@ -10195,11 +10051,11 @@ async function renderPublicConsultation() {
             loadIssuesFromApi()
         ]).then(() => {
             renderPCFeedbackSentimentChart();
-            renderPCSurveyAnswersChart(getFilteredPublicConsultations());
+            renderPCSurveyAnswersChart(Array.isArray(AppData.consultations) ? AppData.consultations : []);
         }).catch((e) => {
             console.error(e);
             renderPCFeedbackSentimentChart();
-            renderPCSurveyAnswersChart(getFilteredPublicConsultations());
+            renderPCSurveyAnswersChart(Array.isArray(AppData.consultations) ? AppData.consultations : []);
         });
     } catch (e) {
         console.error(e);
@@ -11910,9 +11766,22 @@ function renderPCFeedbackSentimentChart() {
 }
 
 function isSurveyFormConsultation(consultation) {
-    const mode = String(consultation && consultation.response_mode ? consultation.response_mode : '').toLowerCase().trim();
-    const question = String(consultation && consultation.survey_question ? consultation.survey_question : '').trim();
-    return mode === 'survey' || (question !== '' && mode !== 'feedback');
+    if (!consultation) return false;
+    const mode = String(consultation.response_mode || '').toLowerCase().trim();
+    const type = String(consultation.type || '').toLowerCase().trim();
+    const question = String(consultation.survey_question || '').trim();
+    const voteStats = consultation.vote_stats || null;
+    const hasVotes = voteStats && (Number(voteStats.total_votes || 0) > 0 || Number(voteStats.agree_votes || 0) > 0 || Number(voteStats.disagree_votes || 0) > 0);
+
+    if (mode === 'feedback' && !hasVotes) {
+        return false;
+    }
+
+    if (mode === 'survey' || type === 'survey') {
+        return true;
+    }
+
+    return (mode === 'hybrid' || mode === '' || mode === 'both') && (question !== '' || hasVotes);
 }
 
 function getSurveyConsultations(consultations) {
@@ -11961,34 +11830,47 @@ function refreshPCSurveySelector(consultations) {
 }
 
 function handlePCSurveySelectionChange() {
-    renderPCSurveyAnswersChart(getFilteredPublicConsultations());
+    renderPCSurveyAnswersChart(Array.isArray(AppData.consultations) ? AppData.consultations : []);
 }
 
 async function fetchSurveyVoteTotals(consultations) {
-    const surveys = getSurveyConsultations(consultations);
-    if (!surveys.length) {
+    const targetSurveys = Array.isArray(consultations) ? consultations : getSurveyConsultations(consultations);
+    if (!targetSurveys.length) {
         return { agree: 0, disagree: 0, total: 0, surveyCount: 0 };
     }
 
-    const requests = surveys.map((c) => {
+    const requests = targetSurveys.map((c) => {
         const cid = Number(c && c.id ? c.id : 0);
         if (!cid) return Promise.resolve(null);
-        return fetch(`API/consultation_feedback.php?action=get_vote_stats&consultation_id=${encodeURIComponent(String(cid))}`, {
-            headers: { 'Accept': 'application/json' }
-        })
-            .then((res) => (res.ok ? res.json() : null))
+        const relUrl = `API/consultation_feedback.php?action=get_vote_stats&consultation_id=${encodeURIComponent(String(cid))}`;
+        const targetUrl = typeof getApiUrl === 'function' ? getApiUrl(relUrl) : relUrl;
+        return fetch(targetUrl, { headers: { 'Accept': 'application/json' } })
+            .then((res) => {
+                if (res.ok) return res.json();
+                // Try fallback relative path if first path returned 404
+                const altUrl = targetUrl.startsWith('../') ? relUrl : ('../' + relUrl);
+                return fetch(altUrl, { headers: { 'Accept': 'application/json' } })
+                    .then((r2) => (r2.ok ? r2.json() : null))
+                    .catch(() => null);
+            })
             .catch(() => null);
     });
 
     const rows = await Promise.all(requests);
     let agree = 0;
     let disagree = 0;
-    for (const row of rows) {
-        if (!row || !row.success || !row.data) continue;
-        agree += Number(row.data.agree_votes || 0);
-        disagree += Number(row.data.disagree_votes || 0);
+    for (let i = 0; i < targetSurveys.length; i++) {
+        const c = targetSurveys[i];
+        const row = rows[i];
+        if (row && row.success && row.data) {
+            agree += Number(row.data.agree_votes || 0);
+            disagree += Number(row.data.disagree_votes || 0);
+        } else if (c && c.vote_stats) {
+            agree += Number(c.vote_stats.agree_votes || 0);
+            disagree += Number(c.vote_stats.disagree_votes || 0);
+        }
     }
-    return { agree, disagree, total: agree + disagree, surveyCount: surveys.length };
+    return { agree, disagree, total: agree + disagree, surveyCount: targetSurveys.length };
 }
 
 async function renderPCSurveyAnswersChart(consultations) {
@@ -12012,7 +11894,9 @@ async function renderPCSurveyAnswersChart(consultations) {
     const selectEl = document.getElementById('pc-survey-select');
     const selectedId = String(selectEl && selectEl.value ? selectEl.value : 'all');
     const surveys = getSurveyConsultations(consultations);
-    const selectedSurvey = selectedId === 'all' ? null : surveys.find((s) => String(Number(s && s.id ? s.id : 0)) === selectedId);
+    const selectedSurvey = selectedId === 'all'
+        ? null
+        : (surveys.find((s) => String(Number(s && s.id ? s.id : 0)) === selectedId) || (Array.isArray(consultations) ? consultations.find((s) => String(Number(s && s.id ? s.id : 0)) === selectedId) : null));
     const scope = selectedSurvey ? [selectedSurvey] : surveys;
     const totals = await fetchSurveyVoteTotals(scope);
 
@@ -12020,7 +11904,7 @@ async function renderPCSurveyAnswersChart(consultations) {
     if (agreeEl) agreeEl.textContent = `Agree: ${totals.agree}`;
     if (disagreeEl) disagreeEl.textContent = `Disagree: ${totals.disagree}`;
     if (respondentTotalEl) respondentTotalEl.textContent = String(totals.total);
-    if (surveyCountEl) surveyCountEl.textContent = String(totals.surveyCount || surveys.length || 0);
+    if (surveyCountEl) surveyCountEl.textContent = String(totals.surveyCount || (selectedSurvey ? 1 : surveys.length) || 0);
     if (respondentScopeEl) {
         if (selectedSurvey) {
             respondentScopeEl.textContent = `Showing respondents for ${getSurveyDisplayTitle(selectedSurvey)}`;
@@ -12045,13 +11929,18 @@ async function renderPCSurveyAnswersChart(consultations) {
         try { window.pcSurveyAnswersChart.destroy(); } catch (e) {}
     }
 
+    const hasData = totals.total > 0;
+    const chartData = hasData ? [totals.agree, totals.disagree] : [1];
+    const chartColors = hasData ? ['#22c55e', '#ef4444'] : ['#e2e8f0'];
+    const chartLabels = hasData ? ['Agree', 'Disagree'] : ['No responses recorded yet'];
+
     window.pcSurveyAnswersChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['Agree', 'Disagree'],
+            labels: chartLabels,
             datasets: [{
-                data: [totals.agree, totals.disagree],
-                backgroundColor: ['#22c55e', '#ef4444'],
+                data: chartData,
+                backgroundColor: chartColors,
                 borderColor: '#fff',
                 borderWidth: 2
             }]
@@ -12062,8 +11951,10 @@ async function renderPCSurveyAnswersChart(consultations) {
             plugins: {
                 legend: { position: 'bottom' },
                 tooltip: {
+                    enabled: hasData,
                     callbacks: {
                         label: function(context) {
+                            if (!hasData) return 'No responses recorded yet';
                             const label = context.label || '';
                             const value = Number(context.parsed || 0);
                             const total = Array.isArray(context.dataset?.data)
@@ -12697,7 +12588,7 @@ function renderConsultationManagement() {
                                     <th class="px-6 py-3 text-left font-semibold text-gray-700">Scheduled Date & Time</th>
                                     <th class="px-6 py-3 text-left font-semibold text-gray-700">Status</th>
                                     <th class="px-6 py-3 text-center font-semibold text-gray-700">Documents</th>
-                                    <th class="px-6 py-3 text-left font-semibold text-gray-700">Message</th>
+                                    <th class="px-6 py-3 text-center font-semibold text-gray-700">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="consultations-user-table-body"></tbody>
@@ -12806,6 +12697,59 @@ function renderConsultationManagement() {
                             <option value="Market & Slaughterhouse">Market & Slaughterhouse</option>
                             <option value="Rules & Privileges">Rules & Privileges</option>
                         </select>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Target District</label>
+                            <select id="consultation-district" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500" onchange="onConsultationDistrictChange()">
+                                <option value="">-- All Districts (Citywide) --</option>
+                                <option value="District 1">District 1 (1st District)</option>
+                                <option value="District 2">District 2 (2nd District)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">Target Barangay</label>
+                            <select id="consultation-barangay" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500" onchange="onConsultationBarangayChange()">
+                                <option value="">-- All Barangays (Citywide) --</option>
+                                <optgroup label="District 1 (24 Barangays)">
+                                    <option value="Arkong Bato">Arkong Bato</option>
+                                    <option value="Balangkas">Balangkas</option>
+                                    <option value="Bignay">Bignay</option>
+                                    <option value="Bisig">Bisig</option>
+                                    <option value="Canumay East">Canumay East</option>
+                                    <option value="Canumay West">Canumay West</option>
+                                    <option value="Coloong">Coloong</option>
+                                    <option value="Dalandanan">Dalandanan</option>
+                                    <option value="Isla">Isla</option>
+                                    <option value="Lawang Bato">Lawang Bato</option>
+                                    <option value="Lingunan">Lingunan</option>
+                                    <option value="Mabolo">Mabolo</option>
+                                    <option value="Malanday">Malanday</option>
+                                    <option value="Malinta">Malinta</option>
+                                    <option value="Mapulang Lupa">Mapulang Lupa</option>
+                                    <option value="Palasan">Palasan</option>
+                                    <option value="Pariancillo Villa">Pariancillo Villa</option>
+                                    <option value="Pasolo">Pasolo</option>
+                                    <option value="Poblacion">Poblacion</option>
+                                    <option value="Punturin">Punturin</option>
+                                    <option value="Rincon">Rincon</option>
+                                    <option value="Tagalag">Tagalag</option>
+                                    <option value="Veinte Reales">Veinte Reales</option>
+                                    <option value="Wawang Pulo">Wawang Pulo</option>
+                                </optgroup>
+                                <optgroup label="District 2 (9 Barangays)">
+                                    <option value="Bagbaguin">Bagbaguin</option>
+                                    <option value="Gen. T. de Leon">Gen. T. de Leon</option>
+                                    <option value="Karuhatan">Karuhatan</option>
+                                    <option value="Marulas">Marulas</option>
+                                    <option value="Maysan">Maysan</option>
+                                    <option value="Parada">Parada</option>
+                                    <option value="Paso de Blas">Paso de Blas</option>
+                                    <option value="Ugong">Ugong</option>
+                                </optgroup>
+                            </select>
+                        </div>
                     </div>
 
                     <div>
@@ -12925,29 +12869,22 @@ function renderConsultationManagement() {
 
 
         <!-- Consultation Details Modal -->
-
-
-        <div id="consultation-details-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-
-
-
-            <div class="bg-white rounded-2xl shadow-xl max-w-5xl w-full max-h-[85vh] overflow-hidden">
-
-                <div class="bg-gradient-to-r from-red-600 to-red-800 text-white p-6 flex justify-between items-center">
-
-                    <h2 id="details-modal-title" class="text-2xl font-bold">Consultation Details</h2>
-
-                    <button onclick="closeDetailsModal()" class="text-white hover:text-red-100 text-2xl">&times;</button>
-
+        <div id="consultation-details-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 transition-all duration-300">
+            <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-gray-100 flex flex-col">
+                <!-- Modal Top Header Bar -->
+                <div class="bg-gradient-to-r from-red-800 via-red-700 to-red-900 text-white px-6 py-5 flex justify-between items-center relative overflow-hidden shadow-md">
+                    <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-white/5 rounded-full blur-xl pointer-events-none"></div>
+                    <div id="details-modal-title" class="flex-1 pr-4">
+                        <h2 class="text-xl font-bold tracking-tight text-white">Consultation Details</h2>
+                    </div>
+                    <button onclick="closeDetailsModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition shrink-0" title="Close">
+                        <i class="bi bi-x-lg text-sm"></i>
+                    </button>
                 </div>
-
-                <div id="details-modal-content" class="p-6 space-y-6 overflow-y-auto" style="max-height:calc(85vh - 120px);">
-
+                <!-- Modal Body Content -->
+                <div id="details-modal-content" class="p-6 space-y-5 overflow-y-auto" style="max-height:calc(90vh - 85px);">
                 </div>
-
             </div>
-
-
         </div>
 
 
@@ -13162,18 +13099,14 @@ function mapDbConsultationToUi(row) {
         survey_question: row.survey_question || '',
         survey_option_a: row.survey_option_a || 'Agree',
         survey_option_b: row.survey_option_b || 'Disagree',
+        vote_stats: row.vote_stats || null,
 
         feedbackCount: Number(row.posts_count || 0),
 
         // preserve DB created timestamp for client-side rules
         created_at: row.created_at || null,
-        createdAt: row.created_at || null,
-
-        documentsAttached: 0
-
+        createdAt: row.created_at || null
     };
-
-
 }
 
 
@@ -13256,6 +13189,8 @@ async function loadConsultationsFromApi() {
 
 
         renderConsultationsTable();
+        refreshPCSurveySelector(AppData.consultations);
+        renderPCSurveyAnswersChart(AppData.consultations);
 
 
 
@@ -13602,7 +13537,10 @@ function renderConsultationsTable() {
                 : `<button onclick="editConsultation(${consultation.id})" class="text-yellow-600 hover:text-yellow-800" title="Edit"><i class="bi bi-pencil"></i></button>`);
 
         if (srcType === 'user') {
-            const citizenName = String(consultation.userName || 'Citizen');
+            let citizenName = String(consultation.userName || consultation.user_name || 'Citizen');
+            if (citizenName.toLowerCase().includes('system administrator') || citizenName.toLowerCase().includes('admin')) {
+                citizenName = 'Citizen Submission';
+            }
             const consultationType = String(consultation.title || '-');
             const scheduledDateTime = consultation.date ? new Date(consultation.date).toLocaleString() : '-';
             userRows.push(`
@@ -13613,7 +13551,14 @@ function renderConsultationsTable() {
                     <td class="px-6 py-4 text-gray-600">${scheduledDateTime}</td>
                     <td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColor}">${st ? (st.charAt(0).toUpperCase() + st.slice(1)) : 'Pending'}</span></td>
                     <td class="px-6 py-4 text-center"><span class="inline-flex items-center gap-1 text-gray-600"><i class="bi bi-file-text"></i>${consultation.documentsAttached || 0}</span></td>
-                    <td class="px-6 py-4 text-sm text-gray-700">${escapeHtml(getUserSubmissionMessage(consultation))}</td>
+                    <td class="px-6 py-4 text-center">
+                        <div class="flex gap-2 justify-center">
+                            <button onclick="viewConsultationDetails(${consultation.id})" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs font-semibold transition border border-red-200" title="View Details">
+                                <i class="bi bi-eye font-bold"></i> View
+                            </button>
+                            ${editButton}
+                        </div>
+                    </td>
                 </tr>
             `);
         } else {
@@ -13881,6 +13826,46 @@ function refreshConsultationModeConfigVisibility() {
 
 
 
+window.onConsultationBarangayChange = function() {
+    const bSelect = document.getElementById('consultation-barangay');
+    const dSelect = document.getElementById('consultation-district');
+    if (!bSelect || !dSelect) return;
+    const val = bSelect.value;
+    const map = window.DISTRICT_MAP || {
+        'Arkong Bato': 'District 1', 'Balangkas': 'District 1', 'Bignay': 'District 1', 'Bisig': 'District 1',
+        'Canumay East': 'District 1', 'Canumay West': 'District 1', 'Coloong': 'District 1', 'Dalandanan': 'District 1',
+        'Isla': 'District 1', 'Lawang Bato': 'District 1', 'Lingunan': 'District 1', 'Mabolo': 'District 1',
+        'Malanday': 'District 1', 'Malinta': 'District 1', 'Mapulang Lupa': 'District 1', 'Palasan': 'District 1',
+        'Pariancillo Villa': 'District 1', 'Pasolo': 'District 1', 'Poblacion': 'District 1', 'Punturin': 'District 1',
+        'Rincon': 'District 1', 'Tagalag': 'District 1', 'Veinte Reales': 'District 1', 'Wawang Pulo': 'District 1',
+        'Bagbaguin': 'District 2', 'Gen. T. de Leon': 'District 2', 'Karuhatan': 'District 2', 'Marulas': 'District 2',
+        'Maysan': 'District 2', 'Parada': 'District 2', 'Paso de Blas': 'District 2', 'Ugong': 'District 2'
+    };
+    if (val && map[val]) {
+        dSelect.value = map[val];
+    }
+};
+
+window.onConsultationDistrictChange = function() {
+    const bSelect = document.getElementById('consultation-barangay');
+    const dSelect = document.getElementById('consultation-district');
+    if (!bSelect || !dSelect) return;
+    const dist = dSelect.value;
+    const map = window.DISTRICT_MAP || {
+        'Arkong Bato': 'District 1', 'Balangkas': 'District 1', 'Bignay': 'District 1', 'Bisig': 'District 1',
+        'Canumay East': 'District 1', 'Canumay West': 'District 1', 'Coloong': 'District 1', 'Dalandanan': 'District 1',
+        'Isla': 'District 1', 'Lawang Bato': 'District 1', 'Lingunan': 'District 1', 'Mabolo': 'District 1',
+        'Malanday': 'District 1', 'Malinta': 'District 1', 'Mapulang Lupa': 'District 1', 'Palasan': 'District 1',
+        'Pariancillo Villa': 'District 1', 'Pasolo': 'District 1', 'Poblacion': 'District 1', 'Punturin': 'District 1',
+        'Rincon': 'District 1', 'Tagalag': 'District 1', 'Veinte Reales': 'District 1', 'Wawang Pulo': 'District 1',
+        'Bagbaguin': 'District 2', 'Gen. T. de Leon': 'District 2', 'Karuhatan': 'District 2', 'Marulas': 'District 2',
+        'Maysan': 'District 2', 'Parada': 'District 2', 'Paso de Blas': 'District 2', 'Ugong': 'District 2'
+    };
+    if (bSelect.value && map[bSelect.value] && map[bSelect.value] !== dist) {
+        bSelect.value = '';
+    }
+};
+
 function editConsultation(id) {
     if (currentUserIsSuperAdmin()) {
         showNotification('Read-only role: action not allowed for super admin.', 'warning');
@@ -13909,6 +13894,10 @@ function editConsultation(id) {
     document.getElementById('consultation-title').value = consultation.title || '';
 
     document.getElementById('consultation-category').value = consultation.category || '';
+    const distEl = document.getElementById('consultation-district');
+    const brgyEl = document.getElementById('consultation-barangay');
+    if (distEl) distEl.value = consultation.district || '';
+    if (brgyEl) brgyEl.value = consultation.barangay || '';
 
     const startDateInput = document.getElementById('consultation-start-date');
     const endDateInput = document.getElementById('consultation-end-date');
@@ -14030,6 +14019,10 @@ async function saveConsultation() {
         formData.append('description', description);
 
         formData.append('category', category);
+        const distVal = document.getElementById('consultation-district') ? document.getElementById('consultation-district').value : '';
+        const brgyVal = document.getElementById('consultation-barangay') ? document.getElementById('consultation-barangay').value : '';
+        formData.append('district', distVal);
+        formData.append('barangay', brgyVal);
 
         formData.append('start_date', startDate);
 
@@ -14130,97 +14123,50 @@ function previewConsultationImage(input) {
 
 
 function viewConsultationDetails(id) {
-
-
-    const consultation = AppData.consultations.find(c => c.id === id);
-
-
+    const consultation = AppData.consultations.find(c => Number(c.id) === Number(id));
     if (!consultation) return;
 
-
-
-
     const titleEl = document.getElementById('details-modal-title');
-
-
     const contentEl = document.getElementById('details-modal-content');
-
-
     const modalEl = document.getElementById('consultation-details-modal');
 
-
     if (!titleEl || !contentEl || !modalEl) {
-
-
         showNotification('Details view is not available on this screen. Opening Consultation Management...', 'info');
-
-
         showSection('consultation-management');
-
-
         setTimeout(() => {
-
-
             try { viewConsultationDetails(id); } catch (e) { console.error(e); }
-
-
         }, 200);
-
-
         return;
-
-
     }
 
-
-
-
-    const relatedFeedback = AppData.feedback.filter(f => f.consultationId === id);
-
+    const relatedFeedback = AppData.feedback.filter(f => Number(f.consultationId || f.consultation_id) === Number(id));
 
     const feedbackHTML = relatedFeedback.length > 0 
-
-
         ? relatedFeedback.map(f => `
-
-
-            <div class="bg-gray-50 p-4 rounded-lg border-l-4 border-red-500">
-
-
-                <div class="font-semibold text-gray-900">${f.author}</div>
-
-
-                <div class="text-gray-600 text-sm mt-1">${f.message}</div>
-
-
-                <div class="text-gray-400 text-xs mt-2">${f.date}</div>
-
-
+            <div class="bg-gray-50/80 p-4 rounded-xl border border-gray-200 hover:border-red-200 transition">
+                <div class="flex items-center justify-between mb-1.5">
+                    <div class="font-semibold text-gray-900 text-xs flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-[10px]">${escapeHtml((f.author || 'C').charAt(0).toUpperCase())}</span>
+                        ${escapeHtml(f.author || f.guest_name || 'Anonymous Citizen')}
+                    </div>
+                    <span class="text-[11px] text-gray-400">${escapeHtml(f.date || f.created_at || '')}</span>
+                </div>
+                <div class="text-gray-600 text-xs leading-relaxed pl-8">${escapeHtml(f.message || '')}</div>
             </div>
-
-
         `).join('')
-
-
-        : '<p class="text-gray-500">No feedback yet</p>';
-
-
-
+        : `<div class="text-center py-6 text-gray-400 text-xs bg-gray-50/60 rounded-xl border border-dashed border-gray-200">
+            <i class="bi bi-chat-square-dots text-2xl text-gray-300 block mb-1"></i>
+            No public feedback or comments submitted yet for this item.
+           </div>`;
 
     const st = String(consultation.status || '').toLowerCase();
-
-
-    const statusColor = st === 'active' ? 'bg-green-100 text-green-800' : (st === 'draft' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800');
-
-
-    const statusLabel = st ? (st.charAt(0).toUpperCase() + st.slice(1)) : 'Draft';
-
-
-
+    const statusBadgeClass = st === 'active' 
+        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+        : (st === 'draft' || st === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-gray-100 text-gray-700 border-gray-200');
+    const statusLabel = st ? (st.charAt(0).toUpperCase() + st.slice(1)) : 'Pending';
 
     const isUserSubmission = typeof isUserConsultation === 'function' ? isUserConsultation(consultation) : (String(consultation.type || '').toLowerCase() === 'user');
-    // Editing policy: disallow edits when consultation is closed or older than editWindowDays
-    const editWindowDays = 7; // allow edits within 7 days from creation by default
+    const editWindowDays = 7;
     const createdRaw = consultation.createdAt || consultation.created_at || consultation.date || consultation.start_date || null;
     let createdDate = null;
     if (createdRaw) {
@@ -14230,159 +14176,154 @@ function viewConsultationDetails(id) {
     const ageMs = createdDate ? (Date.now() - createdDate.getTime()) : null;
     const pastWindow = ageMs ? (ageMs > editWindowDays * 24 * 60 * 60 * 1000) : false;
     const canEdit = !isUserSubmission && !currentUserIsSuperAdmin() && !isConsultationClosed(consultation) && !pastWindow;
+    
     const aiRoutingNote = String(consultation.remarks || '').trim();
     const aiRoutingHtml = aiRoutingNote ? `
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
-            <label class="text-xs font-semibold text-blue-700 uppercase">AI Review</label>
-            <p class="text-sm text-blue-900 mt-1 whitespace-pre-line">${escapeHtml(aiRoutingNote)}</p>
+        <div class="bg-indigo-50/80 border border-indigo-200/80 rounded-xl p-4 shadow-xs">
+            <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-700 mb-1.5">
+                <i class="bi bi-cpu-fill text-indigo-600"></i> AI Executive Review & Classification
+            </div>
+            <p class="text-xs text-indigo-900 leading-relaxed whitespace-pre-line">${escapeHtml(aiRoutingNote)}</p>
         </div>
     ` : '';
 
-    const userEmail = String(consultation.userEmail || '').trim();
-
-
-    const mailtoSubject = encodeURIComponent('Regarding your Public Consultation submission');
-
-
+    let rawCitizenName = String(consultation.userName || consultation.user_name || 'Citizen');
+    if (rawCitizenName.toLowerCase().includes('system administrator') || rawCitizenName.toLowerCase().includes('admin')) {
+        rawCitizenName = 'Citizen Submission';
+    }
+    const userEmail = String(consultation.userEmail || consultation.user_email || '').trim();
+    const mailtoSubject = encodeURIComponent('Regarding your Public Consultation submission - LGU Valenzuela');
     const mailtoBody = encodeURIComponent(
-
-
-        `Hello ${String(consultation.userName || 'there')},\n\n` +
-
-
+        `Hello ${rawCitizenName},\n\n` +
         `We received your consultation submission titled: ${String(consultation.title || '')}\n` +
-
-
-        `Reference ID: ${String(consultation.id || '')}\n\n` +
-
-
-        `Message:\n`
-
-
+        `Reference ID: CONSULT-${String(consultation.id || '').padStart(6, '0')}\n\n` +
+        `Response:\n`
     );
-
-
     const mailtoHref = userEmail ? `mailto:${encodeURIComponent(userEmail)}?subject=${mailtoSubject}&body=${mailtoBody}` : '';
 
+    const displayType = isUserSubmission ? 'Citizen Proposal' : 'LGU Consultation';
+    const displayCategory = consultation.category || 'General Governance';
+    const displayRef = 'CONSULT-' + String(consultation.id || '').padStart(6, '0');
+    const formattedDate = createdDate ? createdDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : (consultation.date || '-');
 
-
-
-    titleEl.textContent = consultation.title;
-
+    titleEl.innerHTML = `
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-red-700/80 border border-red-500/50 flex items-center justify-center text-white shadow-inner">
+                <i class="bi bi-file-text-fill text-xl"></i>
+            </div>
+            <div>
+                <div class="text-xs font-semibold text-red-200 tracking-wide uppercase flex items-center gap-2">
+                    <span>${displayType}</span>
+                    <span class="inline-block w-1 h-1 rounded-full bg-red-300"></span>
+                    <span class="font-mono">${displayRef}</span>
+                </div>
+                <h2 class="text-lg font-bold text-white leading-tight mt-0.5">${escapeHtml(consultation.title || 'Consultation Details')}</h2>
+            </div>
+        </div>
+    `;
 
     contentEl.innerHTML = `
-
-
-        <div class="grid grid-cols-2 gap-4">
-
-
-            <div>
-
-
-                <label class="text-xs font-semibold text-gray-500 uppercase">Type</label>
-
-
-                <p class="text-gray-900 font-semibold mt-1">${consultation.type}</p>
-
-
+        <!-- Overview Metadata Metrics Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+            <div class="bg-gray-50/80 border border-gray-200/70 rounded-xl p-3 flex items-center gap-3 shadow-xs">
+                <div class="w-9 h-9 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-base font-bold shrink-0">
+                    <i class="bi bi-layers-fill"></i>
+                </div>
+                <div class="min-w-0">
+                    <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Category</label>
+                    <span class="text-xs font-bold text-gray-800 truncate block mt-0.5" title="${escapeHtml(displayCategory)}">${escapeHtml(displayCategory)}</span>
+                </div>
             </div>
 
-
-            <div>
-
-
-                <label class="text-xs font-semibold text-gray-500 uppercase">Date</label>
-
-
-                <p class="text-gray-900 font-semibold mt-1">${new Date(consultation.date).toLocaleDateString()}</p>
-
-
+            <div class="bg-gray-50/80 border border-gray-200/70 rounded-xl p-3 flex items-center gap-3 shadow-xs">
+                <div class="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-base font-bold shrink-0">
+                    <i class="bi bi-calendar-event"></i>
+                </div>
+                <div class="min-w-0">
+                    <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Submitted Date</label>
+                    <span class="text-xs font-bold text-gray-800 block mt-0.5">${escapeHtml(formattedDate)}</span>
+                </div>
             </div>
 
-
-            <div>
-
-
-                <label class="text-xs font-semibold text-gray-500 uppercase">Status</label>
-
-
-                <p class="mt-1"><span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColor}">${statusLabel}</span></p>
-
-
+            <div class="bg-gray-50/80 border border-gray-200/70 rounded-xl p-3 flex items-center gap-3 shadow-xs">
+                <div class="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-base font-bold shrink-0">
+                    <i class="bi bi-patch-check"></i>
+                </div>
+                <div class="min-w-0">
+                    <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Status</label>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${statusBadgeClass} mt-0.5">
+                        ${escapeHtml(statusLabel)}
+                    </span>
+                </div>
             </div>
 
-
-            <div>
-
-
-                <label class="text-xs font-semibold text-gray-500 uppercase">Feedback Count</label>
-
-
-                <p class="text-gray-900 font-semibold mt-1">${consultation.feedbackCount || 0}</p>
-
-
+            <div class="bg-gray-50/80 border border-gray-200/70 rounded-xl p-3 flex items-center gap-3 shadow-xs">
+                <div class="w-9 h-9 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-base font-bold shrink-0">
+                    <i class="bi bi-chat-left-text"></i>
+                </div>
+                <div class="min-w-0">
+                    <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Feedback</label>
+                    <span class="text-xs font-bold text-gray-800 block mt-0.5">${consultation.feedbackCount || relatedFeedback.length} Responses</span>
+                </div>
             </div>
-
-
         </div>
 
-
-
-
-        ${consultation.description ? `
-
-
-            <div>
-
-
-                <label class="text-xs font-semibold text-gray-500 uppercase">Description</label>
-
-
-                <p class="text-gray-700 mt-2">${consultation.description}</p>
-
-
+        <!-- Citizen Submitter Profile Card (if User Submission) -->
+        ${isUserSubmission ? `
+            <div class="bg-gradient-to-r from-red-50/90 via-white to-red-50/40 border border-red-200/80 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-red-600 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0">
+                        ${escapeHtml(rawCitizenName.charAt(0).toUpperCase())}
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold text-gray-900 flex items-center gap-2">
+                            ${escapeHtml(rawCitizenName)}
+                            <span class="px-2 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700 rounded-full">Citizen Submitter</span>
+                        </div>
+                        <div class="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
+                            <i class="bi bi-envelope"></i> ${escapeHtml(userEmail || 'No email provided')}
+                        </div>
+                    </div>
+                </div>
+                ${mailtoHref ? `
+                    <a href="${mailtoHref}" class="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-xs transition shrink-0">
+                        <i class="bi bi-reply-fill"></i> Email Submitter
+                    </a>
+                ` : ''}
             </div>
+        ` : ''}
 
-
+        <!-- Description Card -->
+        ${consultation.description ? `
+            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
+                <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
+                    <i class="bi bi-text-paragraph text-red-600 text-sm"></i> Description & Proposal Details
+                </div>
+                <div class="text-xs text-gray-700 leading-relaxed whitespace-pre-line bg-gray-50/50 p-3.5 rounded-lg border border-gray-100">${escapeHtml(consultation.description)}</div>
+            </div>
         ` : ''}
 
         ${aiRoutingHtml}
 
-        <div>
-
-
-            <label class="text-xs font-semibold text-gray-500 uppercase mb-3 block">Feedback Responses</label>
-
-
-            <div class="space-y-3">${feedbackHTML}</div>
-
-
+        <!-- Feedback Responses Section -->
+        <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
+                    <i class="bi bi-chat-square-quote-fill text-red-600 text-sm"></i> Public Feedback & Comments
+                </span>
+                <span class="text-[11px] font-semibold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">${relatedFeedback.length} Item(s)</span>
+            </div>
+            <div class="space-y-2.5">${feedbackHTML}</div>
         </div>
 
-
-
-
-        <div class="flex gap-2 pt-4 border-t">
-
-
-            ${canEdit ? `<button onclick="editConsultation(${consultation.id}); closeDetailsModal()" class="flex-1 btn-primary">Edit</button>` : ''}
-
-
-            ${isUserSubmission && mailtoHref ? `<a href="${mailtoHref}" class="flex-1 btn-primary text-center">Email User</a>` : ''}
-
-
-            <button onclick="closeDetailsModal()" class="flex-1 btn-secondary">Close</button>
-
-
+        <!-- Action Footer -->
+        <div class="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-200/80">
+            ${canEdit ? `<button onclick="editConsultation(${consultation.id}); closeDetailsModal()" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-semibold shadow-xs transition flex items-center gap-1.5"><i class="bi bi-pencil"></i> Edit Consultation</button>` : ''}
+            <button onclick="closeDetailsModal()" class="px-5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold transition">Close</button>
         </div>
-
-
     `;
 
-
     modalEl.classList.remove('hidden');
-
-
 }
 
 
@@ -16388,6 +16329,13 @@ function pfpGetFilteredFeedback() {
     } else {
         rows = rows.filter(f => Number(f.is_archived) !== 1);
     }
+
+    // Exclude consultation proposals, ordinance suggestions, and survey votes from Feedback Queue
+    rows = rows.filter(f => {
+        const subType = String(f.submission_type || f.type || '').toLowerCase();
+        const category = String(f.category || '').toLowerCase();
+        return subType !== 'proposal' && subType !== 'consultation' && category !== 'ordinance suggestion' && category !== 'proposal' && category !== 'survey vote';
+    });
 
     if (q) {
         rows = rows.filter(f => {
@@ -19670,7 +19618,7 @@ function generateReport() {
                 size: 0,
                 downloads: 0,
                 views: 0,
-                uploadedBy: currentUser && currentUser.name ? currentUser.name : 'System',
+                uploadedBy: (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : ((typeof AppData !== 'undefined' && AppData.currentUser && AppData.currentUser.name) ? AppData.currentUser.name : 'System'),
                 uploadedAt: new Date().toISOString(),
                 date: new Date().toISOString().split('T')[0],
                 description: `Generated report: ${typeLabel} for ${category.value === 'all' ? 'all categories' : category.value} with status ${status.value === 'all' ? 'all statuses' : status.value}`,
@@ -19688,6 +19636,14 @@ function generateReport() {
             AppData.documents.unshift(report);
             renderDocumentsTable();
             closeGenerateReportModal();
+            if (data.download_url) {
+                const downloadLink = document.createElement('a');
+                downloadLink.href = data.download_url;
+                downloadLink.setAttribute('download', data.filename || '');
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+            }
             showNotification('Report generated successfully', 'success');
         } else {
             const err = (data && data.message) ? data.message : 'Report generation failed.';

@@ -712,6 +712,7 @@ function getConsultations($status = null, $limit = 50, $offset = 0) {
             $post_count = getConsultationPostsCount($row['id']);
 
             $row['posts_count'] = $post_count;
+            $row['vote_stats'] = getConsultationVoteStats((int)$row['id']);
 
             $consultations[] = $row;
 

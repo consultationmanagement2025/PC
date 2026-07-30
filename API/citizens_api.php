@@ -19,15 +19,27 @@ try {
     switch ($action) {
         case 'list':
             $citizens = [];
+            $adminEmails = ['consultationmanagement2025@gmail.com', 'admin@pcms.local', 'taengtubol69@gmail.com'];
 
-            // 1. Fetch registered users with citizen or empty roles
             if (isset($conn) && $conn) {
+                // Fetch admin emails to exclude from citizen list
+                $adminRes = $conn->query("SELECT email FROM users WHERE LOWER(role) IN ('admin', 'administrator', 'superadmin', 'super admin', 'staff', 'barangay staff', 'barangay_staff')");
+                if ($adminRes) {
+                    while ($aRow = $adminRes->fetch_assoc()) {
+                        if (!empty($aRow['email'])) {
+                            $adminEmails[] = strtolower(trim($aRow['email']));
+                        }
+                    }
+                }
+                $adminEmails = array_unique($adminEmails);
+
+                // 1. Fetch registered users with citizen or empty roles
                 $uSql = "SELECT id, fullname, username, email, role, status, created_at FROM users WHERE role IS NULL OR LOWER(role) IN ('citizen', 'user', '') OR role = ''";
                 $uRes = $conn->query($uSql);
                 if ($uRes) {
                     while ($uRow = $uRes->fetch_assoc()) {
                         $em = strtolower(trim($uRow['email']));
-                        if (empty($em)) continue;
+                        if (empty($em) || in_array($em, $adminEmails, true) || strpos($em, 'taengtubol') !== false) continue;
                         $citizens[$em] = [
                             'user_id' => (int)$uRow['id'],
                             'name' => !empty($uRow['fullname']) ? $uRow['fullname'] : (!empty($uRow['username']) ? $uRow['username'] : 'Citizen'),
@@ -52,6 +64,7 @@ try {
                 if ($r1) {
                     while ($row = $r1->fetch_assoc()) {
                         $em = strtolower(trim($row['email']));
+                        if (empty($em) || in_array($em, $adminEmails, true) || strpos($em, 'taengtubol') !== false) continue;
                         if (isset($citizens[$em])) {
                             $citizens[$em]['consultation_count'] = (int)$row['consultation_count'];
                             if ($row['last_consultation'] > $citizens[$em]['last_activity']) {
@@ -83,6 +96,7 @@ try {
                 if ($r2) {
                     while ($row = $r2->fetch_assoc()) {
                         $em = strtolower(trim($row['email']));
+                        if (empty($em) || in_array($em, $adminEmails, true) || strpos($em, 'taengtubol') !== false) continue;
                         $isSurvey = (strtolower($row['category']) === 'survey vote');
                         
                         if (isset($citizens[$em])) {

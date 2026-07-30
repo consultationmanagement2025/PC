@@ -576,7 +576,7 @@ if (!function_exists('normalizeDateForMysql')) {
 }
 
 // Create new consultation
-function createConsultation($title, $description, $category, $start_date, $end_date, $admin_id, $expected_posts = 0, $image_path = null, $user_name = null, $user_email = null, $allow_email_notifications = 1, $type = 'admin', $status_override = null, $source_url = null, $response_mode = 'hybrid', $survey_question = null, $survey_option_a = 'Agree', $survey_option_b = 'Disagree', $allow_guest_quick_vote = 1, $allow_guest_verified_vote = 1, &$errorMsg = null) {
+function createConsultation($title, $description, $category, $start_date, $end_date, $admin_id, $expected_posts = 0, $image_path = null, $user_name = null, $user_email = null, $allow_email_notifications = 1, $type = 'admin', $status_override = null, $source_url = null, $response_mode = 'hybrid', $survey_question = null, $survey_option_a = 'Agree', $survey_option_b = 'Disagree', $allow_guest_quick_vote = 1, $allow_guest_verified_vote = 1, &$errorMsg = null, $district = null, $barangay = null) {
 
     global $conn;
 
@@ -592,6 +592,8 @@ function createConsultation($title, $description, $category, $start_date, $end_d
     $uname = $user_name ?? '';
     $uemail = $user_email ?? '';
     $src_url = $source_url ?? '';
+    $dist_val = $district ? trim((string)$district) : null;
+    $brgy_val = $barangay ? trim((string)$barangay) : null;
 
     $status = $status_override ? $status_override : (($type === 'user') ? 'pending' : deriveConsultationStatus($start_date, $end_date, 'active'));
     $response_mode = in_array($response_mode, ['feedback', 'survey', 'hybrid'], true) ? $response_mode : 'hybrid';
@@ -601,11 +603,8 @@ function createConsultation($title, $description, $category, $start_date, $end_d
     $allow_guest_quick_vote = (int)$allow_guest_quick_vote ? 1 : 0;
     $allow_guest_verified_vote = (int)$allow_guest_verified_vote ? 1 : 0;
 
-
-
-    $stmt = $conn->prepare("INSERT INTO consultations (title, description, category, start_date, end_date, admin_id, expected_posts, status, type, image_path, user_name, user_email, allow_email_notifications, source_url, response_mode, survey_question, survey_option_a, survey_option_b, allow_guest_quick_vote, allow_guest_verified_vote)
-
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO consultations (title, description, category, district, barangay, start_date, end_date, admin_id, expected_posts, status, type, image_path, user_name, user_email, allow_email_notifications, source_url, response_mode, survey_question, survey_option_a, survey_option_b, allow_guest_quick_vote, allow_guest_verified_vote)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     if (!$stmt) {
         $errorMsg = "Prepare failed: " . ($conn ? $conn->error : 'No DB connection');
@@ -613,9 +612,7 @@ function createConsultation($title, $description, $category, $start_date, $end_d
         return false;
     }
 
-
-
-    $stmt->bind_param('sssssiisssssisssssii', $title, $description, $category, $start_date, $end_date, $admin_id_val, $expected_posts, $status, $type, $img, $uname, $uemail, $allow_email_notifications, $src_url, $response_mode, $survey_question, $survey_option_a, $survey_option_b, $allow_guest_quick_vote, $allow_guest_verified_vote);
+    $stmt->bind_param('sssssssiisssssisssssii', $title, $description, $category, $dist_val, $brgy_val, $start_date, $end_date, $admin_id_val, $expected_posts, $status, $type, $img, $uname, $uemail, $allow_email_notifications, $src_url, $response_mode, $survey_question, $survey_option_a, $survey_option_b, $allow_guest_quick_vote, $allow_guest_verified_vote);
 
 
 
@@ -718,6 +715,7 @@ function getConsultations($status = null, $limit = 50, $offset = 0) {
             $post_count = getConsultationPostsCount($row['id']);
 
             $row['posts_count'] = $post_count;
+            $row['vote_stats'] = getConsultationVoteStats((int)$row['id']);
 
             $consultations[] = $row;
 
@@ -864,11 +862,9 @@ function getConsultationPostsCount($consultation_id) {
 
 // Update consultation
 
-function updateConsultation($id, $title, $description, $category, $status, $start_date, $end_date, $response_mode = 'hybrid', $survey_question = null, $survey_option_a = 'Agree', $survey_option_b = 'Disagree', $allow_guest_quick_vote = 1, $allow_guest_verified_vote = 1) {
+function updateConsultation($id, $title, $description, $category, $status, $start_date, $end_date, $response_mode = 'hybrid', $survey_question = null, $survey_option_a = 'Agree', $survey_option_b = 'Disagree', $allow_guest_quick_vote = 1, $allow_guest_verified_vote = 1, $district = null, $barangay = null) {
 
     global $conn;
-
-    
 
     $id = (int)$id;
     $response_mode = in_array($response_mode, ['feedback', 'survey', 'hybrid'], true) ? $response_mode : 'hybrid';
@@ -878,48 +874,32 @@ function updateConsultation($id, $title, $description, $category, $status, $star
     $allow_guest_quick_vote = (int)$allow_guest_quick_vote ? 1 : 0;
     $allow_guest_verified_vote = (int)$allow_guest_verified_vote ? 1 : 0;
     $status = deriveConsultationStatus($start_date, $end_date, 'active');
-
-
+    $dist_val = $district ? trim((string)$district) : null;
+    $brgy_val = $barangay ? trim((string)$barangay) : null;
 
     $stmt = $conn->prepare("UPDATE consultations 
-
             SET title = ?,
-
                 description = ?,
-
                 category = ?,
-
+                district = ?,
+                barangay = ?,
                 status = ?,
-
                 start_date = ?,
-
                 end_date = ?,
-
                 response_mode = ?,
-
                 survey_question = ?,
-
                 survey_option_a = ?,
-
                 survey_option_b = ?,
-
                 allow_guest_quick_vote = ?,
-
                 allow_guest_verified_vote = ?
-
             WHERE id = ?");
 
     if (!$stmt) {
-
         error_log("Error preparing updateConsultation: " . $conn->error);
-
         return false;
-
     }
 
-
-
-    $stmt->bind_param('sssssssssssii', $title, $description, $category, $status, $start_date, $end_date, $response_mode, $survey_question, $survey_option_a, $survey_option_b, $allow_guest_quick_vote, $allow_guest_verified_vote, $id);
+    $stmt->bind_param('sssssssssssiiii', $title, $description, $category, $dist_val, $brgy_val, $status, $start_date, $end_date, $response_mode, $survey_question, $survey_option_a, $survey_option_b, $allow_guest_quick_vote, $allow_guest_verified_vote, $id);
 
     $ok = $stmt->execute();
 
