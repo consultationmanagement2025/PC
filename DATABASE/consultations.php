@@ -334,34 +334,27 @@ function getConsultationVoteStats($consultation_id) {
 
 
     $stmt = $conn->prepare("SELECT
-
             (SELECT COUNT(*) FROM consultation_votes WHERE consultation_id = ? AND vote_option = 'agree')
-            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ? AND vote_option = 'agree') AS agree_votes,
+            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ? AND vote_option = 'agree')
+            + (SELECT COUNT(*) FROM feedback WHERE consultation_id = ? AND (LOWER(category) LIKE '%survey%' OR LOWER(message) LIKE '%agree%' OR rating >= 4)) AS agree_votes,
 
             (SELECT COUNT(*) FROM consultation_votes WHERE consultation_id = ? AND vote_option = 'disagree')
-            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ? AND vote_option = 'disagree') AS disagree_votes,
+            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ? AND vote_option = 'disagree')
+            + (SELECT COUNT(*) FROM feedback WHERE consultation_id = ? AND (LOWER(category) LIKE '%survey%' AND (LOWER(message) LIKE '%disagree%' OR rating <= 2))) AS disagree_votes,
 
             (SELECT COUNT(*) FROM consultation_votes WHERE consultation_id = ?)
-            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ?) AS total_votes");
+            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ?)
+            + (SELECT COUNT(*) FROM feedback WHERE consultation_id = ? AND (LOWER(category) LIKE '%survey%' OR rating IS NOT NULL)) AS total_votes");
 
     if (!$stmt) {
-
         error_log("Error preparing getConsultationVoteStats: " . $conn->error);
-
         return ['agree_votes' => 0, 'disagree_votes' => 0, 'total_votes' => 0, 'agree_percent' => 0, 'disagree_percent' => 0];
-
     }
 
-
-
-    $stmt->bind_param('iiiiii', $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id);
-
+    $stmt->bind_param('iiiiiiiii', $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id);
     $stmt->execute();
-
     $result = $stmt->get_result();
-
     $row = $result ? $result->fetch_assoc() : null;
-
     $stmt->close();
 
 

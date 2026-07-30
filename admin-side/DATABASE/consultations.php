@@ -77,7 +77,6 @@ function initializeConsultationsTable() {
     // Check and add missing columns
     $required_columns = [
         'admin_id' => "INT",
-        'assigned_to' => "INT DEFAULT NULL",
         'type' => "ENUM('admin','user') DEFAULT 'admin'",
         'user_name' => "VARCHAR(255)",
         'user_email' => "VARCHAR(255)",
@@ -335,34 +334,27 @@ function getConsultationVoteStats($consultation_id) {
 
 
     $stmt = $conn->prepare("SELECT
-
             (SELECT COUNT(*) FROM consultation_votes WHERE consultation_id = ? AND vote_option = 'agree')
-            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ? AND vote_option = 'agree') AS agree_votes,
+            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ? AND vote_option = 'agree')
+            + (SELECT COUNT(*) FROM feedback WHERE consultation_id = ? AND (LOWER(category) LIKE '%survey%' OR LOWER(message) LIKE '%agree%' OR rating >= 4)) AS agree_votes,
 
             (SELECT COUNT(*) FROM consultation_votes WHERE consultation_id = ? AND vote_option = 'disagree')
-            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ? AND vote_option = 'disagree') AS disagree_votes,
+            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ? AND vote_option = 'disagree')
+            + (SELECT COUNT(*) FROM feedback WHERE consultation_id = ? AND (LOWER(category) LIKE '%survey%' AND (LOWER(message) LIKE '%disagree%' OR rating <= 2))) AS disagree_votes,
 
             (SELECT COUNT(*) FROM consultation_votes WHERE consultation_id = ?)
-            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ?) AS total_votes");
+            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ?)
+            + (SELECT COUNT(*) FROM feedback WHERE consultation_id = ? AND (LOWER(category) LIKE '%survey%' OR rating IS NOT NULL)) AS total_votes");
 
     if (!$stmt) {
-
         error_log("Error preparing getConsultationVoteStats: " . $conn->error);
-
         return ['agree_votes' => 0, 'disagree_votes' => 0, 'total_votes' => 0, 'agree_percent' => 0, 'disagree_percent' => 0];
-
     }
 
-
-
-    $stmt->bind_param('iiiiii', $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id);
-
+    $stmt->bind_param('iiiiiiiii', $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id);
     $stmt->execute();
-
     $result = $stmt->get_result();
-
     $row = $result ? $result->fetch_assoc() : null;
-
     $stmt->close();
 
 
@@ -551,6 +543,8 @@ function submitConsultationGuestVote($consultation_id, $device_token, $vote_opti
     return $ok;
 }
 
+
+
 if (!function_exists('normalizeDateForMysql')) {
     function normalizeDateForMysql($dateStr, $isEnd = false) {
         if (empty($dateStr)) return date('Y-m-d H:i:s');
@@ -575,8 +569,7 @@ if (!function_exists('normalizeDateForMysql')) {
 }
 
 // Create new consultation
-
-function createConsultation($title, $description, $category, $start_date, $end_date, $admin_id, $expected_posts = 0, $image_path = null, $user_name = null, $user_email = null, $allow_email_notifications = 1, $type = 'admin', $status_override = null, $source_url = null, $response_mode = 'hybrid', $survey_question = null, $survey_option_a = 'Agree', $survey_option_b = 'Disagree', $allow_guest_quick_vote = 1, $allow_guest_verified_vote = 1, &$errorMsg = null) {
+function createConsultation($title, $description, $category, $start_date, $end_date, $admin_id, $expected_posts = 0, $image_path = null, $user_name = null, $user_email = null, $allow_email_notifications = 1, $type = 'admin', $status_override = null, $source_url = null, $response_mode = 'hybrid', $survey_question = null, $survey_option_a = 'Agree', $survey_option_b = 'Disagree', $allow_guest_quick_vote = 1, $allow_guest_verified_vote = 1, &$errorMsg = null, $district = null, $barangay = null) {
 
     global $conn;
 
@@ -592,6 +585,8 @@ function createConsultation($title, $description, $category, $start_date, $end_d
     $uname = $user_name ?? '';
     $uemail = $user_email ?? '';
     $src_url = $source_url ?? '';
+    $dist_val = $district ? trim((string)$district) : null;
+    $brgy_val = $barangay ? trim((string)$barangay) : null;
 
     $status = $status_override ? $status_override : (($type === 'user') ? 'pending' : deriveConsultationStatus($start_date, $end_date, 'active'));
     $response_mode = in_array($response_mode, ['feedback', 'survey', 'hybrid'], true) ? $response_mode : 'hybrid';
@@ -601,9 +596,8 @@ function createConsultation($title, $description, $category, $start_date, $end_d
     $allow_guest_quick_vote = (int)$allow_guest_quick_vote ? 1 : 0;
     $allow_guest_verified_vote = (int)$allow_guest_verified_vote ? 1 : 0;
 
-    $stmt = $conn->prepare("INSERT INTO consultations (title, description, category, start_date, end_date, admin_id, expected_posts, status, type, image_path, user_name, user_email, allow_email_notifications, source_url, response_mode, survey_question, survey_option_a, survey_option_b, allow_guest_quick_vote, allow_guest_verified_vote)
-
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO consultations (title, description, category, district, barangay, start_date, end_date, admin_id, expected_posts, status, type, image_path, user_name, user_email, allow_email_notifications, source_url, response_mode, survey_question, survey_option_a, survey_option_b, allow_guest_quick_vote, allow_guest_verified_vote)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     if (!$stmt) {
         $errorMsg = "Prepare failed: " . ($conn ? $conn->error : 'No DB connection');
@@ -611,7 +605,9 @@ function createConsultation($title, $description, $category, $start_date, $end_d
         return false;
     }
 
-    $stmt->bind_param('sssssiisssssisssssii', $title, $description, $category, $start_date, $end_date, $admin_id_val, $expected_posts, $status, $type, $img, $uname, $uemail, $allow_email_notifications, $src_url, $response_mode, $survey_question, $survey_option_a, $survey_option_b, $allow_guest_quick_vote, $allow_guest_verified_vote);
+    $stmt->bind_param('sssssssiisssssisssssii', $title, $description, $category, $dist_val, $brgy_val, $start_date, $end_date, $admin_id_val, $expected_posts, $status, $type, $img, $uname, $uemail, $allow_email_notifications, $src_url, $response_mode, $survey_question, $survey_option_a, $survey_option_b, $allow_guest_quick_vote, $allow_guest_verified_vote);
+
+
 
     if ($stmt->execute()) {
 
@@ -859,11 +855,9 @@ function getConsultationPostsCount($consultation_id) {
 
 // Update consultation
 
-function updateConsultation($id, $title, $description, $category, $status, $start_date, $end_date, $response_mode = 'hybrid', $survey_question = null, $survey_option_a = 'Agree', $survey_option_b = 'Disagree', $allow_guest_quick_vote = 1, $allow_guest_verified_vote = 1) {
+function updateConsultation($id, $title, $description, $category, $status, $start_date, $end_date, $response_mode = 'hybrid', $survey_question = null, $survey_option_a = 'Agree', $survey_option_b = 'Disagree', $allow_guest_quick_vote = 1, $allow_guest_verified_vote = 1, $district = null, $barangay = null) {
 
     global $conn;
-
-    
 
     $id = (int)$id;
     $response_mode = in_array($response_mode, ['feedback', 'survey', 'hybrid'], true) ? $response_mode : 'hybrid';
@@ -873,48 +867,32 @@ function updateConsultation($id, $title, $description, $category, $status, $star
     $allow_guest_quick_vote = (int)$allow_guest_quick_vote ? 1 : 0;
     $allow_guest_verified_vote = (int)$allow_guest_verified_vote ? 1 : 0;
     $status = deriveConsultationStatus($start_date, $end_date, 'active');
-
-
+    $dist_val = $district ? trim((string)$district) : null;
+    $brgy_val = $barangay ? trim((string)$barangay) : null;
 
     $stmt = $conn->prepare("UPDATE consultations 
-
             SET title = ?,
-
                 description = ?,
-
                 category = ?,
-
+                district = ?,
+                barangay = ?,
                 status = ?,
-
                 start_date = ?,
-
                 end_date = ?,
-
                 response_mode = ?,
-
                 survey_question = ?,
-
                 survey_option_a = ?,
-
                 survey_option_b = ?,
-
                 allow_guest_quick_vote = ?,
-
                 allow_guest_verified_vote = ?
-
             WHERE id = ?");
 
     if (!$stmt) {
-
         error_log("Error preparing updateConsultation: " . $conn->error);
-
         return false;
-
     }
 
-
-
-    $stmt->bind_param('sssssssssssii', $title, $description, $category, $status, $start_date, $end_date, $response_mode, $survey_question, $survey_option_a, $survey_option_b, $allow_guest_quick_vote, $allow_guest_verified_vote, $id);
+    $stmt->bind_param('sssssssssssiiii', $title, $description, $category, $dist_val, $brgy_val, $status, $start_date, $end_date, $response_mode, $survey_question, $survey_option_a, $survey_option_b, $allow_guest_quick_vote, $allow_guest_verified_vote, $id);
 
     $ok = $stmt->execute();
 
@@ -926,6 +904,26 @@ function updateConsultation($id, $title, $description, $category, $status, $star
 
     $stmt->close();
 
+    if ($ok) {
+        try {
+            require_once __DIR__ . '/../includes/integration_outbound.php';
+            $row = ['id' => $id, 'title' => $title, 'status' => $status, 'phms_hearing_id' => null, 'external_ref' => null];
+            $chk = $conn->prepare('SELECT id, title, status, phms_hearing_id, external_ref FROM consultations WHERE id = ? LIMIT 1');
+            if ($chk) {
+                $chk->bind_param('i', $id);
+                $chk->execute();
+                $fetched = $chk->get_result()->fetch_assoc();
+                $chk->close();
+                if ($fetched) {
+                    $row = $fetched;
+                }
+            }
+            pcms_integration_on_consultation_updated($row);
+        } catch (Throwable $e) {
+            error_log('PCMS consultation update integration failed: ' . $e->getMessage());
+        }
+    }
+
     return $ok;
 
 }
@@ -933,21 +931,34 @@ function updateConsultation($id, $title, $description, $category, $status, $star
 
 
 // Close consultation
-
 function closeConsultation($id) {
-
     global $conn;
 
-    
-
     $id = (int)$id;
+    $row = null;
+    $chk = $conn->prepare('SELECT id, title, status, phms_hearing_id, external_ref FROM consultations WHERE id = ? LIMIT 1');
+    if ($chk) {
+        $chk->bind_param('i', $id);
+        $chk->execute();
+        $row = $chk->get_result()->fetch_assoc();
+        $chk->close();
+    }
 
     $sql = "UPDATE consultations SET status = 'closed' WHERE id = $id";
+    $ok = $conn->query($sql) === TRUE;
 
-    
+    if ($ok) {
+        try {
+            require_once __DIR__ . '/../includes/integration_outbound.php';
+            $payload = $row ?: ['id' => $id, 'status' => 'closed'];
+            $payload['status'] = 'closed';
+            pcms_integration_on_consultation_closed($payload);
+        } catch (Throwable $e) {
+            error_log('PCMS closeConsultation integration failed: ' . $e->getMessage());
+        }
+    }
 
-    return $conn->query($sql) === TRUE;
-
+    return $ok;
 }
 
 

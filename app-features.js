@@ -841,13 +841,21 @@ async function loadUsersFromApi() {
 
 let headerClockInterval = null;
 
-function formatLiveTime() {
-    return new Date().toLocaleTimeString('en-PH', {
+function formatLiveDateTime() {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
-        hour12: false
+        hour12: true
     });
+    const dateStr = now.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+    });
+    return { timeStr, dateStr };
 }
 
 function startHeaderClock() {
@@ -857,7 +865,21 @@ function startHeaderClock() {
         clearInterval(headerClockInterval);
     }
     const updateTitle = () => {
-        pageTitle.textContent = formatLiveTime();
+        const { timeStr, dateStr } = formatLiveDateTime();
+        pageTitle.className = 'page-title text-base md:text-xl font-bold text-gray-800 flex items-center';
+        pageTitle.innerHTML = `
+            <div class="inline-flex items-center gap-2.5 px-3 py-1.5 bg-gray-50/90 hover:bg-gray-100/90 border border-gray-200/80 rounded-xl shadow-2xs transition-all">
+                <div class="flex items-center gap-1.5 font-mono font-bold text-xs md:text-sm text-gray-900 tracking-tight">
+                    <i class="bi bi-clock-fill text-red-600 text-xs"></i>
+                    <span>${timeStr}</span>
+                </div>
+                <div class="h-3.5 w-px bg-gray-300"></div>
+                <div class="flex items-center gap-1.5 text-xs text-gray-600 font-medium">
+                    <i class="bi bi-calendar3 text-red-500 text-[11px]"></i>
+                    <span class="font-semibold text-gray-700">${dateStr}</span>
+                </div>
+            </div>
+        `;
     };
     updateTitle();
     headerClockInterval = setInterval(updateTitle, 1000);
@@ -11767,21 +11789,7 @@ function renderPCFeedbackSentimentChart() {
 
 function isSurveyFormConsultation(consultation) {
     if (!consultation) return false;
-    const mode = String(consultation.response_mode || '').toLowerCase().trim();
-    const type = String(consultation.type || '').toLowerCase().trim();
-    const question = String(consultation.survey_question || '').trim();
-    const voteStats = consultation.vote_stats || null;
-    const hasVotes = voteStats && (Number(voteStats.total_votes || 0) > 0 || Number(voteStats.agree_votes || 0) > 0 || Number(voteStats.disagree_votes || 0) > 0);
-
-    if (mode === 'feedback' && !hasVotes) {
-        return false;
-    }
-
-    if (mode === 'survey' || type === 'survey') {
-        return true;
-    }
-
-    return (mode === 'hybrid' || mode === '' || mode === 'both') && (question !== '' || hasVotes);
+    return true;
 }
 
 function getSurveyConsultations(consultations) {
@@ -11847,7 +11855,6 @@ async function fetchSurveyVoteTotals(consultations) {
         return fetch(targetUrl, { headers: { 'Accept': 'application/json' } })
             .then((res) => {
                 if (res.ok) return res.json();
-                // Try fallback relative path if first path returned 404
                 const altUrl = targetUrl.startsWith('../') ? relUrl : ('../' + relUrl);
                 return fetch(altUrl, { headers: { 'Accept': 'application/json' } })
                     .then((r2) => (r2.ok ? r2.json() : null))
@@ -11859,18 +11866,30 @@ async function fetchSurveyVoteTotals(consultations) {
     const rows = await Promise.all(requests);
     let agree = 0;
     let disagree = 0;
+    let total = 0;
+
     for (let i = 0; i < targetSurveys.length; i++) {
         const c = targetSurveys[i];
         const row = rows[i];
+        let cAgree = 0;
+        let cDisagree = 0;
+        let cTotal = 0;
+
         if (row && row.success && row.data) {
-            agree += Number(row.data.agree_votes || 0);
-            disagree += Number(row.data.disagree_votes || 0);
+            cAgree = Number(row.data.agree_votes || 0);
+            cDisagree = Number(row.data.disagree_votes || 0);
+            cTotal = Number(row.data.total_votes || (cAgree + cDisagree));
         } else if (c && c.vote_stats) {
-            agree += Number(c.vote_stats.agree_votes || 0);
-            disagree += Number(c.vote_stats.disagree_votes || 0);
+            cAgree = Number(c.vote_stats.agree_votes || 0);
+            cDisagree = Number(c.vote_stats.disagree_votes || 0);
+            cTotal = Number(c.vote_stats.total_votes || (cAgree + cDisagree));
         }
+
+        agree += cAgree;
+        disagree += cDisagree;
+        total += Math.max(cTotal, cAgree + cDisagree);
     }
-    return { agree, disagree, total: agree + disagree, surveyCount: targetSurveys.length };
+    return { agree, disagree, total, surveyCount: targetSurveys.length };
 }
 
 async function renderPCSurveyAnswersChart(consultations) {
@@ -14305,6 +14324,46 @@ function viewConsultationDetails(id) {
 
         ${aiRoutingHtml}
 
+        <!-- LGU 2 System Integrations Card (PHS & LRS) -->
+        <div class="bg-gradient-to-r from-blue-50/90 via-slate-50 to-emerald-50/90 border border-blue-200/80 rounded-xl p-4 shadow-xs space-y-3">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                    <i class="bi bi-diagram-3-fill text-blue-600 text-sm"></i> LGU 2 System Integrations (PHS & LRS)
+                </span>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1">
+                    <i class="bi bi-shield-check"></i> Integration Active
+                </span>
+            </div>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <!-- PHS Integration Button -->
+                <div class="p-3 bg-white rounded-lg border border-gray-200 flex flex-col justify-between space-y-2.5 shadow-xs">
+                    <div>
+                        <div class="font-bold text-gray-900 flex items-center gap-1.5">
+                            <i class="bi bi-broadcast text-blue-600"></i> PHS (Public Hearing System)
+                        </div>
+                        <p class="text-[11px] text-gray-500 mt-0.5 leading-normal">Cross-reference live hearing & registrant queue order.</p>
+                    </div>
+                    <button onclick="triggerSystemIntegration(${consultation.id}, 'PHS')" id="sync-phs-btn-${consultation.id}" class="w-full py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition text-xs flex items-center justify-center gap-1.5 shadow-xs">
+                        <i class="bi bi-send-fill"></i> Sync with PHS
+                    </button>
+                </div>
+
+                <!-- LRS Integration Button -->
+                <div class="p-3 bg-white rounded-lg border border-gray-200 flex flex-col justify-between space-y-2.5 shadow-xs">
+                    <div>
+                        <div class="font-bold text-gray-900 flex items-center gap-1.5">
+                            <i class="bi bi-archive-fill text-emerald-600"></i> LRS (Legislative Records System)
+                        </div>
+                        <p class="text-[11px] text-gray-500 mt-0.5 leading-normal">Archive Public Input Summary PDF & feedback metrics.</p>
+                    </div>
+                    <button onclick="triggerSystemIntegration(${consultation.id}, 'LRS')" id="sync-lrs-btn-${consultation.id}" class="w-full py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition text-xs flex items-center justify-center gap-1.5 shadow-xs">
+                        <i class="bi bi-file-earmark-arrow-up-fill"></i> Export Summary to LRS
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Feedback Responses Section -->
         <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
             <div class="flex items-center justify-between mb-3">
@@ -14317,9 +14376,19 @@ function viewConsultationDetails(id) {
         </div>
 
         <!-- Action Footer -->
-        <div class="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-200/80">
-            ${canEdit ? `<button onclick="editConsultation(${consultation.id}); closeDetailsModal()" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-semibold shadow-xs transition flex items-center gap-1.5"><i class="bi bi-pencil"></i> Edit Consultation</button>` : ''}
-            <button onclick="closeDetailsModal()" class="px-5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold transition">Close</button>
+        <div class="flex flex-wrap items-center justify-between gap-2.5 pt-4 border-t border-gray-200/80">
+            <div class="flex items-center gap-2">
+                <button onclick="triggerSystemIntegration(${consultation.id}, 'PHS')" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
+                    <i class="bi bi-broadcast text-blue-600"></i> PHS Sync
+                </button>
+                <button onclick="triggerSystemIntegration(${consultation.id}, 'LRS')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
+                    <i class="bi bi-archive-fill text-emerald-600"></i> LRS Export
+                </button>
+            </div>
+            <div class="flex items-center gap-2">
+                ${canEdit ? `<button onclick="editConsultation(${consultation.id}); closeDetailsModal()" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-semibold shadow-xs transition flex items-center gap-1.5"><i class="bi bi-pencil"></i> Edit Consultation</button>` : ''}
+                <button onclick="closeDetailsModal()" class="px-5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold transition">Close</button>
+            </div>
         </div>
     `;
 
@@ -14330,12 +14399,49 @@ function viewConsultationDetails(id) {
 
 
 function closeDetailsModal() {
-
-
     document.getElementById('consultation-details-modal').classList.add('hidden');
-
-
 }
+
+window.triggerSystemIntegration = async function(consultationId, targetSystem) {
+    const btnPhs = document.getElementById(`sync-phs-btn-${consultationId}`);
+    const btnLrs = document.getElementById(`sync-lrs-btn-${consultationId}`);
+    const activeBtn = targetSystem === 'PHS' ? btnPhs : btnLrs;
+    const origHtml = activeBtn ? activeBtn.innerHTML : '';
+
+    if (activeBtn) {
+        activeBtn.disabled = true;
+        activeBtn.innerHTML = '<i class="bi bi-hourglass-split animate-spin"></i> Transmitting...';
+    }
+
+    try {
+        const res = await fetch('API/consultation_integration_trigger.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ consultation_id: consultationId, target_system: targetSystem })
+        });
+        const data = await res.json();
+
+        if (data && data.success) {
+            showNotification(data.message || `Successfully transmitted payload to ${targetSystem}!`, 'success');
+            if (activeBtn) {
+                activeBtn.className = activeBtn.className.replace(/bg-\w+-600/, 'bg-green-600').replace(/hover:bg-\w+-700/, 'hover:bg-green-700');
+                activeBtn.innerHTML = `<i class="bi bi-check-circle-fill"></i> Synced to ${targetSystem}`;
+            }
+        } else {
+            showNotification(data?.message || `Failed to transmit payload to ${targetSystem}`, 'error');
+            if (activeBtn) {
+                activeBtn.disabled = false;
+                activeBtn.innerHTML = origHtml;
+            }
+        }
+    } catch (err) {
+        showNotification(`Integration error: ${err.message}`, 'error');
+        if (activeBtn) {
+            activeBtn.disabled = false;
+            activeBtn.innerHTML = origHtml;
+        }
+    }
+};
 
 
 

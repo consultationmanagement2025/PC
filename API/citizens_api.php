@@ -124,6 +124,45 @@ try {
                         }
                     }
                 }
+
+                // 4. Aggregate from consultation_votes (logged-in citizens)
+                $vSql = "SELECT u.email, COUNT(*) AS v_count, MAX(cv.created_at) AS last_v 
+                         FROM consultation_votes cv 
+                         JOIN users u ON cv.user_id = u.id 
+                         WHERE u.email IS NOT NULL AND u.email != '' 
+                         GROUP BY u.email";
+                $vRes = $conn->query($vSql);
+                if ($vRes) {
+                    while ($vRow = $vRes->fetch_assoc()) {
+                        $em = strtolower(trim($vRow['email']));
+                        if (empty($em) || in_array($em, $adminEmails, true) || strpos($em, 'taengtubol') !== false) continue;
+                        if (isset($citizens[$em])) {
+                            $citizens[$em]['survey_vote_count'] += (int)$vRow['v_count'];
+                            if ($vRow['last_v'] > $citizens[$em]['last_activity']) {
+                                $citizens[$em]['last_activity'] = $vRow['last_v'];
+                            }
+                        }
+                    }
+                }
+
+                // 5. Aggregate from consultation_guest_votes
+                $gvSql = "SELECT guest_email AS email, COUNT(*) AS gv_count, MAX(created_at) AS last_gv 
+                          FROM consultation_guest_votes 
+                          WHERE guest_email IS NOT NULL AND guest_email != '' 
+                          GROUP BY guest_email";
+                $gvRes = $conn->query($gvSql);
+                if ($gvRes) {
+                    while ($gvRow = $gvRes->fetch_assoc()) {
+                        $em = strtolower(trim($gvRow['email']));
+                        if (empty($em) || in_array($em, $adminEmails, true) || strpos($em, 'taengtubol') !== false) continue;
+                        if (isset($citizens[$em])) {
+                            $citizens[$em]['survey_vote_count'] += (int)$gvRow['gv_count'];
+                            if ($gvRow['last_gv'] > $citizens[$em]['last_activity']) {
+                                $citizens[$em]['last_activity'] = $gvRow['last_gv'];
+                            }
+                        }
+                    }
+                }
             }
 
             // Convert to list & sort by last_activity DESC

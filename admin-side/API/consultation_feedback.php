@@ -4,14 +4,17 @@
  * Handles submission and retrieval of public consultation feedback
  */
 header('Content-Type: application/json');
-require_once '../db.php';
-require_once '../DATABASE/consultations.php';
-require_once '../DATABASE/user-logs.php';
-require_once '../UTILS/security.php';
-require_once '../UTILS/consultation_feedback_utils.php';
-require_once '../email_config_simple.php';
+$base_dir = __DIR__ . '/..';
+if (file_exists($base_dir . '/db.php')) require_once $base_dir . '/db.php';
+if (file_exists($base_dir . '/DATABASE/consultations.php')) require_once $base_dir . '/DATABASE/consultations.php';
+if (file_exists($base_dir . '/DATABASE/user-logs.php')) require_once $base_dir . '/DATABASE/user-logs.php';
+if (file_exists($base_dir . '/UTILS/security.php')) require_once $base_dir . '/UTILS/security.php';
+if (file_exists($base_dir . '/UTILS/consultation_feedback_utils.php')) require_once $base_dir . '/UTILS/consultation_feedback_utils.php';
+if (file_exists($base_dir . '/email_config_simple.php')) require_once $base_dir . '/email_config_simple.php';
 
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 $action = $_GET['action'] ?? ($_POST['action'] ?? '');
 
