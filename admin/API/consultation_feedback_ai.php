@@ -310,6 +310,268 @@ try {
             ]);
             break;
 
+        case 'compile_committee_brief':
+            $consultationId = (int)($_GET['consultation_id'] ?? $_POST['consultation_id'] ?? 0);
+            $force = (int)($_GET['force'] ?? 0) === 1;
+
+            if ($consultationId <= 0) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'consultation_id is required']);
+                exit;
+            }
+
+            // Retrieve consultation info
+            $consultation = null;
+            $cStmt = $conn->prepare("SELECT * FROM consultations WHERE id = ? LIMIT 1");
+            if ($cStmt) {
+                $cStmt->bind_param('i', $consultationId);
+                $cStmt->execute();
+                $cRes = $cStmt->get_result();
+                $consultation = $cRes ? $cRes->fetch_assoc() : null;
+                $cStmt->close();
+            }
+
+            if (!$consultation) {
+                http_response_code(404);
+                echo json_encode(['success' => false, 'message' => 'Consultation not found']);
+                exit;
+            }
+
+            $cStatus = strtolower(trim((string)($consultation['status'] ?? '')));
+            if ($cStatus !== 'closed' && $cStatus !== 'completed' && !$force) {
+                http_response_code(403);
+                echo json_encode([
+                    'success' => false,
+                    'is_gated' => true,
+                    'status' => $cStatus,
+                    'message' => "Consultation is currently '{$consultation['status']}'. Feedback can only be compiled into an AI Brief and forwarded to the Committee after the consultation is officially Closed."
+                ]);
+                exit;
+            }
+
+            // Gather all feedback entries (from feedback & posts tables)
+            $allFeedback = [];
+
+            // 1. Query feedback table
+            $fStmt = $conn->prepare("SELECT guest_name as author, guest_email as email, category, message as content, rating, sentiment_tag, created_at FROM feedback WHERE consultation_id = ? ORDER BY created_at DESC");
+            if ($fStmt) {
+                $fStmt->bind_param('i', $consultationId);
+                $fStmt->execute();
+                $fRes = $fStmt->get_result();
+                while ($r = $fRes->fetch_assoc()) {
+                    $allFeedback[] = $r;
+                }
+                $fStmt->close();
+            }
+
+            // 2. Query posts table
+            $pStmt = $conn->prepare("SELECT user_name as author, user_email as email, category, content, created_at FROM posts WHERE consultation_id = ? AND (status IS NULL OR status = 'approved') ORDER BY created_at DESC");
+            if ($pStmt) {
+                $pStmt->bind_param('i', $consultationId);
+                $pStmt->execute();
+                $pRes = $pStmt->get_result();
+                while ($r = $pRes->fetch_assoc()) {
+                    $allFeedback[] = $r;
+                }
+                $pStmt->close();
+            }
+
+            $totalCount = count($allFeedback);
+
+            // Group problems and solutions using AI NLP analysis
+            $problems = [];
+            $solutions = [];
+            $sentiments = ['positive' => 0, 'neutral' => 0, 'negative' => 0];
+
+            $categoryIssues = [];
+            foreach ($allFeedback as $fb) {
+                $text = $fb['content'] ?? '';
+                $cat = trim((string)($fb['category'] ?? 'General Services'));
+                if (!$cat || $cat === 'General Feedback') $cat = 'Public Policy & Service Quality';
+
+                $analysis = analyzeText($text);
+                $tag = $analysis['sentiment'];
+                if (isset($sentiments[$tag])) $sentiments[$tag]++;
+
+                if (!isset($categoryIssues[$cat])) {
+                    $categoryIssues[$cat] = ['negative_count' => 0, 'total' => 0, 'samples' => []];
+                }
+                $categoryIssues[$cat]['total']++;
+                if ($tag === 'negative' || $analysis['urgency'] === 'high' || $analysis['urgency'] === 'critical') {
+                    $categoryIssues[$cat]['negative_count']++;
+                    if (count($categoryIssues[$cat]['samples']) < 3) {
+                        $categoryIssues[$cat]['samples'][] = mb_substr($text, 0, 150) . (mb_strlen($text) > 150 ? '...' : '');
+                    }
+                }
+            }
+
+            if (empty($categoryIssues)) {
+                $problems[] = [
+                    'category' => 'Public Consultation Participation',
+                    'issue' => 'No critical citizen grievances recorded during consultation period.',
+                    'severity' => 'low'
+                ];
+                $solutions[] = [
+                    'category' => 'Public Consultation Participation',
+                    'recommendation' => 'Proceed with standard policy review and monitor post-implementation feedback.'
+                ];
+            } else {
+                foreach ($categoryIssues as $cat => $data) {
+                    $issueSample = !empty($data['samples']) ? implode('; ', $data['samples']) : "Recorded concerns regarding {$cat}.";
+                    $problems[] = [
+                        'category' => $cat,
+                        'issue' => $issueSample,
+                        'frequency' => $data['total'],
+                        'severity' => $data['negative_count'] > 2 ? 'high' : ($data['negative_count'] > 0 ? 'medium' : 'low')
+                    ];
+
+                    $solutions[] = [
+                        'category' => $cat,
+                        'recommendation' => "Establish targeted LGU departmental guidelines for {$cat}, address identified citizen bottlenecks, and institute weekly compliance monitoring."
+                    ];
+                }
+            }
+
+            $dominantSentiment = 'neutral';
+            if ($sentiments['negative'] > $sentiments['positive'] && $sentiments['negative'] >= $sentiments['neutral']) {
+                $dominantSentiment = 'negative';
+            } elseif ($sentiments['positive'] > $sentiments['negative'] && $sentiments['positive'] >= $sentiments['neutral']) {
+                $dominantSentiment = 'positive';
+            }
+
+            $assignedCommittee = $consultation['category'] ?? 'Rules & Governance';
+            if (strpos(strtolower($assignedCommittee), 'environment') !== false || strpos(strtolower($consultation['title']), 'waste') !== false) {
+                $assignedCommittee = 'Environment Committee';
+            } elseif (strpos(strtolower($assignedCommittee), 'health') !== false) {
+                $assignedCommittee = 'Health Committee';
+            } elseif (strpos(strtolower($assignedCommittee), 'urban') !== false || strpos(strtolower($consultation['title']), 'planning') !== false) {
+                $assignedCommittee = 'Urban Planning Committee';
+            } elseif (strpos(strtolower($assignedCommittee), 'finance') !== false) {
+                $assignedCommittee = 'Finance Committee';
+            } else {
+                $assignedCommittee = 'Rules & Governance Committee';
+            }
+
+            $conclusionText = "Following formal closure of Public Consultation #{$consultationId} (\"{$consultation['title']}\"), the PCMS AI Engine consolidated {$totalCount} citizen submission(s). The general public sentiment is classified as '{$dominantSentiment}'. It is formally recommended that the {$assignedCommittee} adopt the synthesized policy resolutions prior to final ordinance enactment.";
+
+            $brief = [
+                'consultation_id' => $consultationId,
+                'title' => $consultation['title'],
+                'category' => $consultation['category'] ?? 'General Policy',
+                'committee_assigned' => $assignedCommittee,
+                'status' => $consultation['status'],
+                'compiled_at' => date('Y-m-d H:i:s'),
+                'stats' => [
+                    'total_submissions' => $totalCount,
+                    'sentiments' => $sentiments,
+                    'dominant_sentiment' => $dominantSentiment
+                ],
+                'problems' => $problems,
+                'solutions' => $solutions,
+                'conclusion' => $conclusionText,
+                'transmittal_note' => "Compiled by PCMS System AI for formal transmittal to the LGU {$assignedCommittee}."
+            ];
+
+            // Persist brief to consultations table
+            $briefJson = json_encode($brief);
+            $uStmt = $conn->prepare("UPDATE consultations SET ai_committee_brief = ?, committee_assigned = ? WHERE id = ?");
+            if ($uStmt) {
+                $uStmt->bind_param('ssi', $briefJson, $assignedCommittee, $consultationId);
+                $uStmt->execute();
+                $uStmt->close();
+            }
+
+            echo json_encode([
+                'success' => true,
+                'data' => $brief
+            ]);
+            break;
+
+        case 'forward_brief_to_committee':
+            if (!isAdminRole($_SESSION['role'] ?? '')) {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+                exit;
+            }
+
+            $data = json_decode(file_get_contents('php://input'), true);
+            $consultationId = (int)($data['consultation_id'] ?? 0);
+            $committeeName = trim((string)($data['committee'] ?? ''));
+
+            if ($consultationId <= 0) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'consultation_id is required']);
+                exit;
+            }
+
+            // Verify consultation is closed
+            $cRow = null;
+            $chkStmt = $conn->prepare("SELECT status, committee_assigned, title FROM consultations WHERE id = ? LIMIT 1");
+            if ($chkStmt) {
+                $chkStmt->bind_param('i', $consultationId);
+                $chkStmt->execute();
+                $cRes = $chkStmt->get_result();
+                $cRow = $cRes ? $cRes->fetch_assoc() : null;
+                $chkStmt->close();
+            }
+
+            if (!$cRow) {
+                http_response_code(404);
+                echo json_encode(['success' => false, 'message' => 'Consultation not found']);
+                exit;
+            }
+
+            $cStatus = strtolower(trim((string)$cRow['status']));
+            if ($cStatus !== 'closed' && $cStatus !== 'completed') {
+                http_response_code(403);
+                echo json_encode([
+                    'success' => false,
+                    'message' => "Cannot forward: Consultation #{$consultationId} must be Closed before forwarding to committee."
+                ]);
+                exit;
+            }
+
+            if (!$committeeName) {
+                $committeeName = $cRow['committee_assigned'] ?: 'Rules & Governance Committee';
+            }
+
+            // Mark consultation as forwarded
+            $fwdStmt = $conn->prepare("UPDATE consultations SET committee_assigned = ?, committee_forwarded_at = NOW() WHERE id = ?");
+            if ($fwdStmt) {
+                $fwdStmt->bind_param('si', $committeeName, $consultationId);
+                $fwdStmt->execute();
+                $fwdStmt->close();
+            }
+
+            // Update all linked feedback entries
+            $fbFwdStmt = $conn->prepare("UPDATE feedback SET status = 'forwarded', lifecycle_stage = 'considered_in_policy', committee_assigned = ? WHERE consultation_id = ?");
+            if ($fbFwdStmt) {
+                $fbFwdStmt->bind_param('si', $committeeName, $consultationId);
+                $fbFwdStmt->execute();
+                $fbFwdStmt->close();
+            }
+
+            // Audit log
+            if (function_exists('logAction')) {
+                logAction(
+                    $_SESSION['user_id'] ?? null,
+                    $_SESSION['fullname'] ?? 'Admin',
+                    'forward_ai_committee_brief',
+                    'consultation',
+                    $consultationId,
+                    null,
+                    null,
+                    'success',
+                    "Forwarded compiled AI Committee Brief for Consultation #{$consultationId} to LGU {$committeeName}"
+                );
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' => "AI Committee Brief for Consultation #{$consultationId} successfully forwarded to LGU {$committeeName}."
+            ]);
+            break;
+
         default:
             http_response_code(400);
             echo json_encode(['success' => false, 'message' => 'Invalid action']);

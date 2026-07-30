@@ -3,9 +3,12 @@ header('Content-Type: application/json');
 session_start();
 require_once '../db.php';
 require_once '../DATABASE/feedback.php';
+if (file_exists('../email_config_simple.php')) {
+    require_once '../email_config_simple.php';
+}
 
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
-$is_staff = in_array($current_role, ['staff', 'resource person', 'resource_person'], true);
+$is_staff = in_array($current_role, ['staff', 'barangay staff', 'barangay_staff', 'barangay'], true);
 if ($current_role !== 'admin' && $current_role !== 'administrator' && $current_role !== 'super admin' && $current_role !== 'superadmin' && !$is_staff) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
@@ -63,6 +66,55 @@ try {
             echo json_encode(['success' => true, 'data' => $feedback]);
             break;
 
+        case 'phms_list':
+            $limit = (int)($_GET['limit'] ?? 200);
+            $offset = (int)($_GET['offset'] ?? 0);
+            $filters = [];
+            if (!empty($_GET['status'])) {
+                $filters['status'] = $_GET['status'];
+            }
+            if (!empty($_GET['search'])) {
+                $filters['search'] = $_GET['search'];
+            }
+            $phmsItems = getPhmsFeedbackQueue($filters, $limit, $offset);
+            echo json_encode(['success' => true, 'data' => $phmsItems]);
+            break;
+
+        case 'phms_sync':
+            seedPhmsHearingQueueIfEmpty(true);
+            $phmsItems = getPhmsFeedbackQueue([], 200, 0);
+            echo json_encode(['success' => true, 'message' => 'PHMS feedback data successfully synchronized from PHMS integration.', 'data' => $phmsItems]);
+            break;
+
+        case 'phms_update_status':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $queue_id = (int)($data['queue_id'] ?? $data['id'] ?? 0);
+            $status = trim((string)($data['status'] ?? ''));
+            if (!$queue_id || $status === '') {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Queue ID and status required']);
+                exit;
+            }
+            $ok = updatePhmsQueueStatus($queue_id, $status);
+            echo json_encode(['success' => (bool)$ok]);
+            break;
+
+        case 'get':
+            $id = (int)($_GET['id'] ?? 0);
+            if (!$id) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Feedback ID required']);
+                exit;
+            }
+            $feedback = getFeedback(['id' => $id], 1, 0);
+            if (!empty($feedback[0])) {
+                echo json_encode(['success' => true, 'data' => $feedback[0]]);
+            } else {
+                http_response_code(404);
+                echo json_encode(['success' => false, 'message' => 'Feedback not found']);
+            }
+            break;
+
         case 'update_status':
             $data = json_decode(file_get_contents('php://input'), true);
             $id = (int)($data['id'] ?? 0);
@@ -76,6 +128,88 @@ try {
 
             $ok = updateFeedbackStatus($id, $status);
             echo json_encode(['success' => (bool)$ok]);
+            break;
+
+        case 'respond':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $id = (int)($data['id'] ?? 0);
+            $response = trim((string)($data['response'] ?? ''));
+            $send_email = !empty($data['send_email']);
+            $admin_id = (int)($_SESSION['user_id'] ?? 1);
+
+            if (!$id || $response === '') {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Feedback ID and response message required']);
+                exit;
+            }
+
+            $ok = respondToFeedback($id, $response, $admin_id);
+            if ($ok) {
+                $fbList = getFeedback(['id' => $id], 1, 0);
+                $fb = $fbList[0] ?? null;
+                $emailSent = false;
+
+                if ($send_email && $fb && !empty($fb['guest_email'])) {
+                    $to = $fb['guest_email'];
+                    $subject = "Official Response to your Consultation Feedback - LGU Public Portal";
+                    $body = "Dear " . ($fb['guest_name'] ?: 'Citizen') . ",\n\n";
+                    $body .= "Thank you for participating in our Public Consultation.\n\n";
+                    $body .= "YOUR FEEDBACK:\n\"" . $fb['message'] . "\"\n\n";
+                    $body .= "OFFICIAL LGU RESPONSE:\n\"" . $response . "\"\n\n";
+                    $body .= "Best regards,\nLocal Government Unit / Public Consultation Team";
+
+                    if (function_exists('sendGmailEmailSimple')) {
+                        $sentResult = sendGmailEmailSimple($to, $subject, $body, false);
+                        $emailSent = ($sentResult === true);
+                    }
+                }
+
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Response recorded successfully' . ($emailSent ? ' and email sent to citizen.' : '.'),
+                    'email_sent' => $emailSent
+                ]);
+            } else {
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Failed to record response']);
+            }
+            break;
+
+        case 'archive':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $id = (int)($data['id'] ?? 0);
+            if (!$id) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Feedback ID required']);
+                exit;
+            }
+            $ok = archiveFeedback($id);
+            echo json_encode(['success' => (bool)$ok]);
+            break;
+
+        case 'forward':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $id = (int)($data['id'] ?? 0);
+            $committee = trim((string)($data['committee'] ?? ''));
+            $notes = trim((string)($data['notes'] ?? ''));
+            $admin_id = (int)($_SESSION['user_id'] ?? 1);
+
+            if (!$id || $committee === '') {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Feedback ID and target Committee are required']);
+                exit;
+            }
+
+            $ok = forwardFeedbackToCommittee($id, $committee, $admin_id, $notes);
+            if ($ok) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => "Feedback successfully routed & forwarded to {$committee}."
+                ]);
+            } else {
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Failed to forward feedback to committee']);
+            }
             break;
 
         default:

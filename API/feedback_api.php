@@ -66,6 +66,39 @@ try {
             echo json_encode(['success' => true, 'data' => $feedback]);
             break;
 
+        case 'phms_list':
+            $limit = (int)($_GET['limit'] ?? 200);
+            $offset = (int)($_GET['offset'] ?? 0);
+            $filters = [];
+            if (!empty($_GET['status'])) {
+                $filters['status'] = $_GET['status'];
+            }
+            if (!empty($_GET['search'])) {
+                $filters['search'] = $_GET['search'];
+            }
+            $phmsItems = getPhmsFeedbackQueue($filters, $limit, $offset);
+            echo json_encode(['success' => true, 'data' => $phmsItems]);
+            break;
+
+        case 'phms_sync':
+            seedPhmsHearingQueueIfEmpty(true);
+            $phmsItems = getPhmsFeedbackQueue([], 200, 0);
+            echo json_encode(['success' => true, 'message' => 'PHMS feedback data successfully synchronized from PHMS integration.', 'data' => $phmsItems]);
+            break;
+
+        case 'phms_update_status':
+            $data = json_decode(file_get_contents('php://input'), true);
+            $queue_id = (int)($data['queue_id'] ?? $data['id'] ?? 0);
+            $status = trim((string)($data['status'] ?? ''));
+            if (!$queue_id || $status === '') {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Queue ID and status required']);
+                exit;
+            }
+            $ok = updatePhmsQueueStatus($queue_id, $status);
+            echo json_encode(['success' => (bool)$ok]);
+            break;
+
         case 'get':
             $id = (int)($_GET['id'] ?? 0);
             if (!$id) {

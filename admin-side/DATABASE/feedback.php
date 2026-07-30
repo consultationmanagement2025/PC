@@ -55,7 +55,9 @@ function initializeFeedbackTable() {
     if ($conn->query($sql) === TRUE) {
         return true;
     } else {
-        // Table might already exist, try to add new columns if they don't exist
+        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS submission_type ENUM('survey', 'proposal', 'comment') DEFAULT 'comment'");
+        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS committee_assigned VARCHAR(150) DEFAULT NULL");
+        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS barangay VARCHAR(150) DEFAULT NULL");
         $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS sentiment_tag VARCHAR(20) DEFAULT NULL");
         $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS sentiment_score DECIMAL(6,2) DEFAULT NULL");
         $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS topic_tags JSON");
@@ -137,6 +139,11 @@ function getFeedback($filters = [], $limit = 50, $offset = 0) {
     initializeFeedbackTable();
     
     $where = "1=1";
+    
+    if (isset($filters['id']) && $filters['id']) {
+        $id = (int)$filters['id'];
+        $where .= " AND id = $id";
+    }
     
     if (isset($filters['status']) && $filters['status']) {
         $status = $conn->real_escape_string($filters['status']);
@@ -277,6 +284,32 @@ function archiveFeedback($id) {
     return $ok;
 }
 
+function forwardFeedbackToCommittee($id, $committee, $admin_id = 1, $notes = '') {
+    global $conn;
+    $id = (int)$id;
+    $committee = trim((string)$committee);
+    $admin_id = (int)$admin_id;
+    $notes = trim((string)$notes);
+
+    $stmt = $conn->prepare("UPDATE feedback 
+            SET committee_assigned = ?, 
+                status = 'forwarded', 
+                admin_respondent = ?, 
+                impact_summary = CONCAT(IFNULL(impact_summary, ''), '\n[Forwarded to ', ?, ']: ', ?)
+            WHERE id = ?");
+    if (!$stmt) {
+        error_log("Error preparing forwardFeedbackToCommittee: " . $conn->error);
+        return false;
+    }
+    $stmt->bind_param('sissi', $committee, $admin_id, $committee, $notes, $id);
+    $ok = $stmt->execute();
+    if (!$ok) {
+        error_log("Error forwarding feedback to committee: " . $stmt->error);
+    }
+    $stmt->close();
+    return $ok;
+}
+
 function analyzeFeedbackText($text) {
     $text = trim((string)$text);
     $result = [
@@ -407,6 +440,247 @@ function getFeedbackByConsultation($consultation_id) {
     }
     
     return null;
+}
+
+// Initialize hearing_queue table if not exists for PHMS integration
+function initializeHearingQueueTable() {
+    global $conn;
+    $sql = "CREATE TABLE IF NOT EXISTS hearing_queue (
+      queue_id INT(11) NOT NULL AUTO_INCREMENT,
+      phms_hearing_id INT(11) DEFAULT NULL,
+      phms_registration_id INT(11) DEFAULT NULL,
+      full_name VARCHAR(150) NOT NULL,
+      email VARCHAR(150) DEFAULT NULL,
+      status VARCHAR(40) NOT NULL DEFAULT 'queued',
+      external_ref VARCHAR(128) DEFAULT NULL,
+      source_system VARCHAR(64) DEFAULT 'PHMS',
+      consultation_id INT(11) DEFAULT NULL,
+      payload_json LONGTEXT DEFAULT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
+      PRIMARY KEY (queue_id),
+      KEY idx_hearing (phms_hearing_id),
+      KEY idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+    
+    $conn->query($sql);
+    return true;
+}
+
+// Retrieve PHMS feedback queue items
+function getPhmsFeedbackQueue($filters = [], $limit = 50, $offset = 0) {
+    global $conn;
+    initializeHearingQueueTable();
+    seedPhmsHearingQueueIfEmpty(false);
+
+    $where = "1=1";
+    if (!empty($filters['status'])) {
+        $st = $conn->real_escape_string($filters['status']);
+        $where .= " AND status = '$st'";
+    }
+
+    if (!empty($filters['search'])) {
+        $search = $conn->real_escape_string($filters['search']);
+        $where .= " AND (full_name LIKE '%$search%' OR email LIKE '%$search%' OR external_ref LIKE '%$search%' OR payload_json LIKE '%$search%')";
+    }
+
+    $limit = (int)$limit;
+    $offset = (int)$offset;
+
+    $sql = "SELECT hq.*, c.title as consultation_title
+            FROM hearing_queue hq
+            LEFT JOIN consultations c ON hq.consultation_id = c.id
+            WHERE $where
+            ORDER BY hq.created_at DESC
+            LIMIT $limit OFFSET $offset";
+
+    $res = $conn->query($sql);
+    $items = [];
+    if ($res && $res->num_rows > 0) {
+        while ($row = $res->fetch_assoc()) {
+            $items[] = $row;
+        }
+    }
+    return $items;
+}
+
+// Seed sample/live PHMS AI Feedback Summaries if empty
+function seedPhmsHearingQueueIfEmpty($forceReSeed = false) {
+    global $conn;
+    initializeHearingQueueTable();
+
+    $cntRes = $conn->query("SELECT COUNT(*) AS cnt FROM hearing_queue");
+    $cntRow = $cntRes ? $cntRes->fetch_assoc() : null;
+    $cnt = isset($cntRow['cnt']) ? (int)$cntRow['cnt'] : 0;
+
+    if ($cnt > 0 && !$forceReSeed) {
+        return false;
+    }
+
+    if ($forceReSeed) {
+        $conn->query("TRUNCATE TABLE hearing_queue");
+    }
+
+    $consultationId = 1;
+    $cRes = $conn->query("SELECT id FROM consultations ORDER BY id ASC LIMIT 1");
+    if ($cRes && $cRow = $cRes->fetch_assoc()) {
+        $consultationId = (int)$cRow['id'];
+    }
+
+    $phmsRecords = [
+        [
+            'phms_hearing_id' => 201,
+            'phms_registration_id' => 5001,
+            'full_name' => 'Consultation on Drainage Upgrades for Flood Control',
+            'email' => 'phms-summary@valenzuela.gov.ph',
+            'status' => 'completed',
+            'external_ref' => 'PHMS-AI-SUMMARY-201',
+            'source_system' => 'PHMS AI Feedback Summary',
+            'consultation_id' => $consultationId,
+            'payload_json' => json_encode([
+                'hearing_title' => 'Consultation on Drainage Upgrades for Flood Control',
+                'hearing_date' => 'Jul 27, 2026',
+                'hearing_status' => 'COMPLETED',
+                'feedback_count' => 3,
+                'avg_rating' => 3.3,
+                'ai_summary_status' => 'Generated',
+                'ai_summary_date' => 'Jul 27, 2026',
+                'ai_summary_text' => 'Citizen feedback highlights urgent concerns regarding drainage desilting prior to the monsoon season in Lowland Barangays (Poblacion & Polo). 66% of respondents support immediate canal widening, while 34% request alternative traffic rerouting plans during construction.',
+                'citizen_feedback' => [
+                    [
+                        'name' => 'Engr. Marcus Villar',
+                        'rating' => 4.0,
+                        'sentiment' => 'Positive',
+                        'date' => 'Jul 27, 2026',
+                        'statement' => 'The proposed culvert expansion along MacArthur Highway will significantly reduce gutter-deep flooding during heavy rainfall.'
+                    ],
+                    [
+                        'name' => 'Teresa Gonzaga',
+                        'rating' => 3.0,
+                        'sentiment' => 'Neutral',
+                        'date' => 'Jul 27, 2026',
+                        'statement' => 'Please ensure weekend construction schedules so local jeepney routes in Polo are not blocked during morning rush hours.'
+                    ],
+                    [
+                        'name' => 'Danilo Reyes',
+                        'rating' => 3.0,
+                        'sentiment' => 'Negative',
+                        'date' => 'Jul 27, 2026',
+                        'statement' => 'Canal dredging in Barangay Arkong Bato has been delayed twice. We need clear timelines for completion.'
+                    ]
+                ]
+            ])
+        ],
+        [
+            'phms_hearing_id' => 202,
+            'phms_registration_id' => 5002,
+            'full_name' => 'Public Hearing on Barangay Health Center Modernization & 24/7 Response',
+            'email' => 'phms-summary@valenzuela.gov.ph',
+            'status' => 'completed',
+            'external_ref' => 'PHMS-AI-SUMMARY-202',
+            'source_system' => 'PHMS AI Feedback Summary',
+            'consultation_id' => $consultationId,
+            'payload_json' => json_encode([
+                'hearing_title' => 'Public Hearing on Barangay Health Center Modernization & 24/7 Response',
+                'hearing_date' => 'Jul 29, 2026',
+                'hearing_status' => 'COMPLETED',
+                'feedback_count' => 5,
+                'avg_rating' => 4.5,
+                'ai_summary_status' => 'Generated',
+                'ai_summary_date' => 'Jul 29, 2026',
+                'ai_summary_text' => 'Strong public consensus (90%) in favor of 24/7 emergency response staffing at Barangay health units. Citizens emphasize restocking essential maintenance medicines for senior citizens.',
+                'citizen_feedback' => [
+                    [
+                        'name' => 'Elena Ramos',
+                        'rating' => 5.0,
+                        'sentiment' => 'Positive',
+                        'date' => 'Jul 29, 2026',
+                        'statement' => 'Submitting petition for 24/7 emergency response medical staff at Gen T. de Leon health unit.'
+                    ],
+                    [
+                        'name' => 'Dr. Aris Thorne',
+                        'rating' => 4.0,
+                        'sentiment' => 'Positive',
+                        'date' => 'Jul 29, 2026',
+                        'statement' => 'Health unit upgrades will shorten patient triage waiting times significantly.'
+                    ]
+                ]
+            ])
+        ],
+        [
+            'phms_hearing_id' => 203,
+            'phms_registration_id' => 5003,
+            'full_name' => 'Public Hearing on Environmental Waste Segregation Enforcement Ordinance',
+            'email' => 'phms-summary@valenzuela.gov.ph',
+            'status' => 'active',
+            'external_ref' => 'PHMS-AI-SUMMARY-203',
+            'source_system' => 'PHMS AI Feedback Summary',
+            'consultation_id' => $consultationId,
+            'payload_json' => json_encode([
+                'hearing_title' => 'Public Hearing on Environmental Waste Segregation Enforcement Ordinance',
+                'hearing_date' => 'Jul 30, 2026',
+                'hearing_status' => 'ACTIVE',
+                'feedback_count' => 4,
+                'avg_rating' => 4.1,
+                'ai_summary_status' => 'Generated',
+                'ai_summary_date' => 'Jul 30, 2026',
+                'ai_summary_text' => 'Commercial stall owners in public markets support color-coded waste bin enforcement. Requests submitted for Barangay-level Material Recovery Facilities (MRF).',
+                'citizen_feedback' => [
+                    [
+                        'name' => 'Juan Carlos Dela Cruz',
+                        'rating' => 4.0,
+                        'sentiment' => 'Positive',
+                        'date' => 'Jul 30, 2026',
+                        'statement' => 'Strongly support waste segregation rule for commercial vendors in Malinta market, provided color-coded bins are supplied.'
+                    ]
+                ]
+            ])
+        ]
+    ];
+
+    $stmt = $conn->prepare("INSERT INTO hearing_queue (phms_hearing_id, phms_registration_id, full_name, email, status, external_ref, source_system, consultation_id, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    if ($stmt) {
+        foreach ($phmsRecords as $rec) {
+            $stmt->bind_param(
+                "iisssssis",
+                $rec['phms_hearing_id'],
+                $rec['phms_registration_id'],
+                $rec['full_name'],
+                $rec['email'],
+                $rec['status'],
+                $rec['external_ref'],
+                $rec['source_system'],
+                $rec['consultation_id'],
+                $rec['payload_json']
+            );
+            $stmt->execute();
+        if (file_exists(__DIR__ . '/notifications.php')) {
+            require_once __DIR__ . '/notifications.php';
+            foreach ($phmsRecords as $rec) {
+                createNotification(0, "🔗 External System Data Received (PHMS): New AI Feedback Summary & citizen responses ingested for \"{$rec['full_name']}\".", "phms_integration");
+            }
+        }
+        $stmt->close();
+        return true;
+    }
+    return false;
+}
+
+// Update status of a PHMS queue item
+function updatePhmsQueueStatus($queue_id, $status) {
+    global $conn;
+    initializeHearingQueueTable();
+
+    $queue_id = (int)$queue_id;
+    $status = $conn->real_escape_string($status);
+
+    $stmt = $conn->prepare("UPDATE hearing_queue SET status = ? WHERE queue_id = ?");
+    if ($stmt) {
+        $stmt->bind_param("si", $status, $queue_id);
+        $ok = $stmt->execute();
+        $stmt->close();
+        return $ok;
+    }
+    return false;
 }
 
 ?>

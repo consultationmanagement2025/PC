@@ -1131,8 +1131,8 @@ function showSection(sectionName) {
                 break;
             case 'analytics':
             case 'reports':
-                if (typeof renderAnalytics === 'function') {
-                    renderAnalytics();
+                if (typeof renderSystemReportsSection === 'function') {
+                    renderSystemReportsSection();
                     startHeaderClock();
                     return;
                 }
@@ -16467,6 +16467,12 @@ function pfpGetFilteredFeedback() {
             );
         });
     }
+    const consultationId = String(document.getElementById('pfq-consultation')?.value || '').trim();
+
+    if (consultationId) {
+        rows = rows.filter(f => String(f.consultationId || f.consultation_id || '') === consultationId);
+    }
+
     if (status) {
         rows = rows.filter(f => String(f.status || '').toLowerCase() === status);
     }
@@ -16776,29 +16782,52 @@ function openFeedbackResponseModal(id) {
                     </div>
 
                     <!-- Stage 4: Committee Routing & Assignment Section -->
-                    <div class="p-4 bg-purple-50/70 border border-purple-200 rounded-lg space-y-3">
-                        <div class="flex items-center justify-between">
-                            <label class="font-bold text-purple-900 text-sm flex items-center">
-                                <i class="bi bi-diagram-3 mr-1 text-purple-700"></i> Stage 4: LGU Committee Routing
-                            </label>
-                            ${f.committee_assigned ? `<span class="text-xs font-bold px-2 py-0.5 bg-purple-200 text-purple-900 rounded">Assigned: ${escapeHtml(f.committee_assigned)}</span>` : '<span class="text-xs text-purple-600 font-medium">Currently Unassigned</span>'}
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            <div class="sm:col-span-2">
-                                <select id="pfq-modal-committee-select" class="w-full px-3 py-1.5 border border-purple-300 rounded text-xs font-medium focus:ring-purple-500">
-                                    <option value="">-- Select Target LGU Committee --</option>
-                                    <option value="Urban Planning & Infrastructure">Urban Planning & Infrastructure</option>
-                                    <option value="Environmental Management & Sanitation">Environmental Management & Sanitation</option>
-                                    <option value="Health & Social Services">Health & Social Services</option>
-                                    <option value="Finance, Budget & Appropriations">Finance, Budget & Appropriations</option>
-                                    <option value="Rules, Laws & Governance">Rules, Laws & Governance</option>
-                                </select>
+                    ${(f.consultationId || f.consultation_id) ? `
+                        <div class="p-4 bg-purple-50/70 border border-purple-200 rounded-lg space-y-2">
+                            <div class="flex items-center justify-between">
+                                <label class="font-bold text-purple-900 text-xs flex items-center gap-1.5 uppercase tracking-wider">
+                                    <i class="bi bi-diagram-3-fill text-purple-700"></i> LGU Committee Routing Policy
+                                </label>
+                                ${f.committee_assigned ? `<span class="text-xs font-bold px-2 py-0.5 bg-purple-200 text-purple-900 rounded">Assigned: ${escapeHtml(f.committee_assigned)}</span>` : '<span class="text-xs text-purple-600 font-medium">Pending Consultation Brief</span>'}
                             </div>
-                            <button onclick="submitForwardToCommittee(${Number(f.id)})" class="w-full px-3 py-1.5 bg-purple-700 text-white rounded text-xs font-bold hover:bg-purple-800 shadow">
-                                <i class="bi bi-send-check mr-1"></i> Forward to Committee
-                            </button>
+                            <p class="text-xs text-purple-950 font-medium leading-relaxed">
+                                <i class="bi bi-info-circle-fill text-purple-600 mr-1"></i>
+                                Feedback submissions for consultation policies are <strong>not forwarded individually</strong>. All citizen responses for this consultation policy are compiled <strong>collectively into an official AI Synthesis Brief</strong> for the committee when the consultation is closed.
+                            </p>
+                            ${consultation ? `
+                                <div class="pt-2 border-t border-purple-200/80 flex items-center justify-between text-xs">
+                                    <span class="text-purple-800 font-semibold">Consultation Status: <strong class="uppercase text-purple-950">${escapeHtml(consultation.status || 'Active')}</strong></span>
+                                    <button onclick="closeFeedbackModal(); pfpShowAiCommitteeBriefModal(${consultation.id})" class="px-2.5 py-1 bg-purple-700 hover:bg-purple-800 text-white font-extrabold rounded text-[11px] transition shadow-sm flex items-center gap-1">
+                                        <i class="bi bi-robot"></i> View Consultation AI Brief
+                                    </button>
+                                </div>
+                            ` : ''}
                         </div>
-                    </div>
+                    ` : `
+                        <div class="p-4 bg-purple-50/70 border border-purple-200 rounded-lg space-y-3">
+                            <div class="flex items-center justify-between">
+                                <label class="font-bold text-purple-900 text-sm flex items-center">
+                                    <i class="bi bi-diagram-3 mr-1 text-purple-700"></i> Stage 4: LGU Committee Routing
+                                </label>
+                                ${f.committee_assigned ? `<span class="text-xs font-bold px-2 py-0.5 bg-purple-200 text-purple-900 rounded">Assigned: ${escapeHtml(f.committee_assigned)}</span>` : '<span class="text-xs text-purple-600 font-medium">Currently Unassigned</span>'}
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div class="sm:col-span-2">
+                                    <select id="pfq-modal-committee-select" class="w-full px-3 py-1.5 border border-purple-300 rounded text-xs font-medium focus:ring-purple-500">
+                                        <option value="">-- Select Target LGU Committee --</option>
+                                        <option value="Urban Planning & Infrastructure">Urban Planning & Infrastructure</option>
+                                        <option value="Environmental Management & Sanitation">Environmental Management & Sanitation</option>
+                                        <option value="Health & Social Services">Health & Social Services</option>
+                                        <option value="Finance, Budget & Appropriations">Finance, Budget & Appropriations</option>
+                                        <option value="Rules, Laws & Governance">Rules, Laws & Governance</option>
+                                    </select>
+                                </div>
+                                <button onclick="submitForwardToCommittee(${Number(f.id)})" class="w-full px-3 py-1.5 bg-purple-700 text-white rounded text-xs font-bold hover:bg-purple-800 shadow">
+                                    <i class="bi bi-send-check mr-1"></i> Forward to Committee
+                                </button>
+                            </div>
+                        </div>
+                    `}
 
                     ${f.analysis_summary ? `
                         <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
@@ -17129,114 +17158,812 @@ async function renderPublicFeedbackPortal() {
                 <input id="pfq-to-date" type="hidden">
             </div>
 
-            <!-- Clean Single-Row Filter Bar -->
-            <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-3">
-                <div class="flex flex-wrap items-center gap-3">
-                    <!-- Search Input -->
-                    <div class="flex-1 min-w-[240px]">
-                        <div class="relative">
-                            <i class="bi bi-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
-                            <input id="pfq-search" type="text" placeholder="Search by citizen name, reference #, or feedback message..." class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-red-500 focus:border-red-500" oninput="pfpRenderTable()">
-                        </div>
-                    </div>
-
-                    <!-- Submission Type Dropdown -->
-                    <select id="pfq-type" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderTable()">
-                        <option value="">All Submission Types</option>
-                        <option value="survey">Surveys Only</option>
-                        <option value="proposal">Proposals Only</option>
-                        <option value="comment">Comments Only</option>
-                    </select>
-
-                    <!-- Queue Status Dropdown -->
-                    <select id="pfq-status" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderTable()">
-                        <option value="">All Statuses</option>
-                        <option value="pending">Pending</option>
-                        <option value="reviewed">Reviewed</option>
-                        <option value="responded">Responded</option>
-                        <option value="forwarded">Forwarded</option>
-                        <option value="closed">Closed</option>
-                    </select>
-
-                    <!-- Committee Dropdown -->
-                    <select id="pfq-committee" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderTable()">
-                        <option value="">All LGU Committees</option>
-                        <option value="Urban Planning">Urban Planning</option>
-                        <option value="Environmental">Environment</option>
-                        <option value="Health">Health</option>
-                        <option value="Finance">Finance</option>
-                        <option value="Rules">Rules & Governance</option>
-                    </select>
-
-                    <button onclick="pfpResetFilters()" class="px-3 py-2 text-xs font-semibold text-gray-500 hover:text-gray-800">
-                        Reset Filters
+            <!-- Interactive Queue System Tab Bar -->
+            <div class="border-b border-gray-200 bg-white rounded-t-xl px-4 pt-3 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+                <div class="flex items-center gap-2 overflow-x-auto">
+                    <button id="pfq-tab-pcms" onclick="switchPublicFeedbackTab('pcms')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-red-600 text-red-600 flex items-center gap-2 transition focus:outline-none">
+                        <i class="bi bi-chat-left-text-fill"></i>
+                        <span>PCMS Portal Feedback Queue</span>
+                        <span id="pfq-tab-pcms-badge" class="px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-[10px] font-extrabold">0</span>
+                    </button>
+                    <button id="pfq-tab-phms" onclick="switchPublicFeedbackTab('phms')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none">
+                        <i class="bi bi-building-gear"></i>
+                        <span>PHMS System Feedback</span>
+                        <span id="pfq-tab-phms-badge" class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-extrabold">0</span>
+                    </button>
+                    <button id="pfq-tab-reports" onclick="switchPublicFeedbackTab('reports')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none">
+                        <i class="bi bi-robot text-purple-600"></i>
+                        <span>AI Committee Reports & Briefs</span>
+                        <span id="pfq-tab-reports-badge" class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-extrabold">0</span>
                     </button>
                 </div>
+                <div class="text-xs text-gray-400 font-medium hidden sm:flex items-center gap-1.5 py-2">
+                    <i class="bi bi-info-circle"></i>
+                    <span>PCMS & PHMS System Integration</span>
+                </div>
+            </div>
 
-                <!-- Sub-bar: Archive Mode & Bulk Actions -->
-                <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100 text-xs">
-                    <div class="flex items-center gap-3">
-                        <div class="flex items-center gap-2">
-                            <span class="text-gray-500 font-semibold">Queue View:</span>
-                            <select id="pfq-archive-mode" class="px-2.5 py-1 border border-purple-200 bg-purple-50 text-purple-900 font-bold rounded-md text-xs" onchange="pfpRenderTable()">
-                                <option value="active">Active Submissions Queue</option>
-                                <option value="archived">Archived Searchable Vault</option>
-                            </select>
+            <!-- TAB 1: PCMS Portal Feedback Queue Container -->
+            <div id="pfq-pcms-container" class="space-y-4">
+                <!-- Clean Single-Row Filter Bar -->
+                <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-3">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <!-- Search Input -->
+                        <div class="flex-1 min-w-[240px]">
+                            <div class="relative">
+                                <i class="bi bi-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+                                <input id="pfq-search" type="text" placeholder="Search by citizen name, reference #, or feedback message..." class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-red-500 focus:border-red-500" oninput="pfpRenderTable()">
+                            </div>
                         </div>
-                        <span class="text-gray-300">|</span>
-                        <div class="flex items-center gap-1">
-                            <span class="text-gray-500 font-medium">Barangay:</span>
-                            <input id="pfq-barangay" type="text" placeholder="e.g. Poblacion" class="px-2.5 py-1 border border-gray-300 rounded-md text-xs w-32" oninput="pfpRenderTable()">
-                        </div>
+
+                        <!-- Consultation Policy Dropdown -->
+                        <select id="pfq-consultation" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white max-w-[220px]" onchange="pfpRenderTable()">
+                            <option value="">All Consultation Policies</option>
+                        </select>
+
+                        <!-- Submission Type Dropdown -->
+                        <select id="pfq-type" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderTable()">
+                            <option value="">All Submission Types</option>
+                            <option value="survey">Surveys Only</option>
+                            <option value="proposal">Proposals Only</option>
+                            <option value="comment">Comments Only</option>
+                        </select>
+
+                        <!-- Queue Status Dropdown -->
+                        <select id="pfq-status" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderTable()">
+                            <option value="">All Statuses</option>
+                            <option value="pending">Pending</option>
+                            <option value="reviewed">Reviewed</option>
+                            <option value="responded">Responded</option>
+                            <option value="forwarded">Forwarded</option>
+                            <option value="closed">Closed</option>
+                        </select>
+
+                        <!-- Committee Dropdown -->
+                        <select id="pfq-committee" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderTable()">
+                            <option value="">All LGU Committees</option>
+                            <option value="Urban Planning">Urban Planning</option>
+                            <option value="Environmental">Environment</option>
+                            <option value="Health">Health</option>
+                            <option value="Finance">Finance</option>
+                            <option value="Rules">Rules & Governance</option>
+                        </select>
+
+                        <button onclick="pfpResetFilters()" class="px-3 py-2 text-xs font-semibold text-gray-500 hover:text-gray-800">
+                            Reset Filters
+                        </button>
                     </div>
 
-                    <div class="flex items-center gap-2">
-                        <select id="pfq-bulk-status" class="px-2.5 py-1 border border-gray-300 rounded-md text-xs">
-                            <option value="">Bulk status action...</option>
-                            <option value="reviewed">Mark as Reviewed</option>
-                            <option value="responded">Mark as Responded</option>
-                            <option value="closed">Close & Archive</option>
-                        </select>
-                        <button onclick="pfpApplyBulkStatus()" class="px-3 py-1 bg-gray-800 text-white font-semibold rounded-md text-xs hover:bg-gray-900 transition">
-                            Apply
-                        </button>
-                        <span id="pfq-items-count" class="text-gray-500 font-bold ml-2">0 item(s)</span>
+                    <!-- Sub-bar: Archive Mode & Bulk Actions -->
+                    <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100 text-xs">
+                        <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-2">
+                                <span class="text-gray-500 font-semibold">Queue View:</span>
+                                <select id="pfq-archive-mode" class="px-2.5 py-1 border border-purple-200 bg-purple-50 text-purple-900 font-bold rounded-md text-xs" onchange="pfpRenderTable()">
+                                    <option value="active">Active Submissions Queue</option>
+                                    <option value="archived">Archived Searchable Vault</option>
+                                </select>
+                            </div>
+                            <span class="text-gray-300">|</span>
+                            <div class="flex items-center gap-1">
+                                <span class="text-gray-500 font-medium">Barangay:</span>
+                                <input id="pfq-barangay" type="text" placeholder="e.g. Poblacion" class="px-2.5 py-1 border border-gray-300 rounded-md text-xs w-32" oninput="pfpRenderTable()">
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <select id="pfq-bulk-status" class="px-2.5 py-1 border border-gray-300 rounded-md text-xs">
+                                <option value="">Bulk status action...</option>
+                                <option value="reviewed">Mark as Reviewed</option>
+                                <option value="responded">Mark as Responded</option>
+                                <option value="closed">Close & Archive</option>
+                            </select>
+                            <button onclick="pfpApplyBulkStatus()" class="px-3 py-1 bg-gray-800 text-white font-semibold rounded-md text-xs hover:bg-gray-900 transition">
+                                Apply
+                            </button>
+                            <button onclick="pfpTriggerAiCommitteeCompile()" class="px-3 py-1 bg-gradient-to-r from-red-700 to-red-900 text-white font-extrabold rounded-md text-xs hover:from-red-800 hover:to-black transition shadow flex items-center gap-1">
+                                <i class="bi bi-robot"></i> Compile AI Committee Brief
+                            </button>
+                            <span id="pfq-items-count" class="text-gray-500 font-bold ml-2">0 item(s)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Queue Submissions Table -->
+                <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-sm">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-gray-50 border-b border-gray-200 uppercase tracking-wider text-[11px] font-bold text-gray-700">
+                            <tr>
+                                <th class="px-3.5 py-3"><input id="pfq-check-all" type="checkbox" onchange="pfpToggleSelectAll()" class="rounded border-gray-300"></th>
+                                <th class="px-3.5 py-3 font-bold text-gray-900">Ref #</th>
+                                <th class="px-3.5 py-3 font-bold text-gray-900">Citizen</th>
+                                <th class="px-3.5 py-3 font-bold text-gray-900">Submission Type</th>
+                                <th class="px-3.5 py-3 font-bold text-gray-900">Consultation Policy / Committee</th>
+                                <th class="px-3.5 py-3 font-bold text-gray-900">Priority & Sentiment</th>
+                                <th class="px-3.5 py-3 font-bold text-gray-900">Status</th>
+                                <th class="px-3.5 py-3 font-bold text-gray-900">Submitted Date</th>
+                                <th class="px-3.5 py-3 font-bold text-gray-900">Aging</th>
+                                <th class="px-3.5 py-3 font-bold text-gray-900 text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pfq-table-body"></tbody>
+                    </table>
+                    <div class="px-4 py-3 border-t border-gray-100 text-xs text-gray-500 flex items-center justify-between">
+                        <span><strong>Active Barangays Participating:</strong> <span id="pfq-top-barangay">-</span></span>
+                        <span>Click <strong>"View / Forward"</strong> on any row to open the review drawer and take action.</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Queue Submissions Table -->
-            <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-sm">
-                <table class="w-full text-xs text-left">
-                    <thead class="bg-gray-50 border-b border-gray-200 uppercase tracking-wider text-[11px] font-bold text-gray-700">
-                        <tr>
-                            <th class="px-3.5 py-3"><input id="pfq-check-all" type="checkbox" onchange="pfpToggleSelectAll()" class="rounded border-gray-300"></th>
-                            <th class="px-3.5 py-3 font-bold text-gray-900">Ref #</th>
-                            <th class="px-3.5 py-3 font-bold text-gray-900">Citizen</th>
-                            <th class="px-3.5 py-3 font-bold text-gray-900">Submission Type</th>
-                            <th class="px-3.5 py-3 font-bold text-gray-900">Consultation Policy / Committee</th>
-                            <th class="px-3.5 py-3 font-bold text-gray-900">Priority & Sentiment</th>
-                            <th class="px-3.5 py-3 font-bold text-gray-900">Status</th>
-                            <th class="px-3.5 py-3 font-bold text-gray-900">Submitted Date</th>
-                            <th class="px-3.5 py-3 font-bold text-gray-900">Aging</th>
-                            <th class="px-3.5 py-3 font-bold text-gray-900 text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pfq-table-body"></tbody>
-                </table>
-                <div class="px-4 py-3 border-t border-gray-100 text-xs text-gray-500 flex items-center justify-between">
-                    <span><strong>Active Barangays Participating:</strong> <span id="pfq-top-barangay">-</span></span>
-                    <span>Click <strong>"View / Forward"</strong> on any row to open the review drawer and take action.</span>
+            <!-- TAB 2: PHMS System Feedback Container -->
+            <div id="pfq-phms-container" class="space-y-4 hidden">
+                <div class="bg-white rounded-xl border border-blue-200 p-4 shadow-sm space-y-3 bg-blue-50/20">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex-1 min-w-[240px]">
+                            <div class="relative">
+                                <i class="bi bi-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+                                <input id="pfq-phms-search" type="text" placeholder="Search PHMS registrant name, email, or external reference..." class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500" oninput="pfpRenderPhmsTable()">
+                            </div>
+                        </div>
+
+                        <!-- PHMS Consultation / Hearing Dropdown -->
+                        <select id="pfq-phms-consultation" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white max-w-[220px]" onchange="pfpRenderPhmsTable()">
+                            <option value="">All PHMS Hearings / Policies</option>
+                        </select>
+                        <select id="pfq-phms-status" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderPhmsTable()">
+                            <option value="">All PHMS Statuses</option>
+                            <option value="queued">Queued</option>
+                            <option value="reviewed">Reviewed</option>
+                            <option value="processed">Processed</option>
+                            <option value="closed">Closed</option>
+                        </select>
+                        <button onclick="loadPhmsFeedbackFromApi(true)" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition shadow flex items-center gap-1.5">
+                            <i class="bi bi-arrow-repeat"></i> Sync PHMS Data
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-sm">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-slate-50 border-b border-gray-200 uppercase tracking-wider text-[11px] font-extrabold text-gray-600">
+                            <tr>
+                                <th class="px-4 py-3 text-gray-900">HEARING</th>
+                                <th class="px-4 py-3 text-gray-900">DATE</th>
+                                <th class="px-4 py-3 text-gray-900 text-center">FEEDBACK</th>
+                                <th class="px-4 py-3 text-gray-900 text-center">AVG. RATING</th>
+                                <th class="px-4 py-3 text-gray-900">AI SUMMARY</th>
+                                <th class="px-4 py-3 text-gray-900 text-center">ACTIONS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pfq-phms-table-body">
+                            <tr>
+                                <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                                    <i class="bi bi-arrow-repeat animate-spin text-xl mb-1 block"></i> Loading PHMS AI Feedback Summaries...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="px-4 py-3 border-t border-gray-100 text-xs text-gray-500 flex items-center justify-between">
+                        <span><strong>PHMS AI Intelligence:</strong> Synchronized with PHMS Public Hearing Management System</span>
+                        <span>Click <strong>"View"</strong> to inspect AI summary analysis & citizen feedback responses.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: AI Committee Reports & Briefs Section -->
+            <div id="pfq-reports-container" class="space-y-4 hidden">
+                <div class="bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 text-white p-5 rounded-xl shadow-md flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-base font-bold flex items-center gap-2">
+                            <i class="bi bi-robot text-purple-400 text-lg"></i> AI Committee Synthesis Reports & Transmittal Vault
+                        </h2>
+                        <p class="text-purple-200 text-xs mt-0.5">
+                            Consolidated resolution briefs synthesized from closed public consultations for formal transmittal to LGU committees.
+                        </p>
+                    </div>
+                    <button onclick="pfpRenderReportsVaultTable()" class="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-lg border border-white/20 transition flex items-center gap-1.5">
+                        <i class="bi bi-arrow-repeat"></i> Refresh Reports Vault
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-xl border border-purple-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3 bg-purple-50/20">
+                    <div class="flex-1 min-w-[240px]">
+                        <div class="relative">
+                            <i class="bi bi-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+                            <input id="pfq-reports-search" type="text" placeholder="Search report title, consultation #, or committee..." class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 focus:border-purple-500" oninput="pfpRenderReportsVaultTable()">
+                        </div>
+                    </div>
+                    <select id="pfq-reports-filter-committee" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderReportsVaultTable()">
+                        <option value="">All LGU Committees</option>
+                        <option value="Environment">Environment Committee</option>
+                        <option value="Health">Health Committee</option>
+                        <option value="Urban Planning">Urban Planning Committee</option>
+                        <option value="Finance">Finance Committee</option>
+                        <option value="Rules">Rules & Governance Committee</option>
+                    </select>
+                    <select id="pfq-reports-filter-status" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderReportsVaultTable()">
+                        <option value="">All Report Statuses</option>
+                        <option value="closed">Closed Consultations (Ready / Transmitted)</option>
+                        <option value="active">Active Consultations (Pending Closure)</option>
+                    </select>
+                </div>
+
+                <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-sm">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-purple-50/70 border-b border-purple-200 uppercase tracking-wider text-[11px] font-bold text-gray-700">
+                            <tr>
+                                <th class="px-3.5 py-3 font-bold text-gray-900">Consultation ID & Title</th>
+                                <th class="px-3.5 py-3 font-bold text-gray-900">Target LGU Committee</th>
+                                <th class="px-3.5 py-3 font-bold text-gray-900">Feedback Volume</th>
+                                <th class="px-3.5 py-3 font-bold text-gray-900">Public Sentiment</th>
+                                <th class="px-3.5 py-3 font-bold text-gray-900">Consultation Status</th>
+                                <th class="px-3.5 py-3 font-bold text-gray-900">AI Report Transmittal</th>
+                                <th class="px-3.5 py-3 font-bold text-gray-900 text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pfq-reports-table-body">
+                            <tr>
+                                <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                                    <i class="bi bi-arrow-repeat animate-spin text-xl mb-1 block"></i> Loading Committee Reports Vault...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="px-4 py-3 border-t border-gray-100 text-xs text-gray-500 flex items-center justify-between">
+                        <span><strong>AI Synthesis Engine:</strong> Consolidated Problems, Solutions, and Conclusion Documents</span>
+                        <span>Click <strong>"View AI Document"</strong> to open, export, or pass report to committee.</span>
+                    </div>
                 </div>
             </div>
         </div>
     `;
 
+    pfpPopulateConsultationDropdowns();
     pfpRenderStats();
     pfpRenderTable();
+    loadPhmsFeedbackFromApi();
+
     if (!AppData.feedback.length || !AppData.consultations.length) {
         pfpRefreshData();
     }
+}
+
+window.__current_pfq_tab__ = 'pcms';
+if (!AppData.phmsFeedback) {
+    AppData.phmsFeedback = [];
+}
+
+function switchPublicFeedbackTab(tabName) {
+    window.__current_pfq_tab__ = tabName;
+
+    const pcmsBtn = document.getElementById('pfq-tab-pcms');
+    const phmsBtn = document.getElementById('pfq-tab-phms');
+    const reportsBtn = document.getElementById('pfq-tab-reports');
+    const pcmsContainer = document.getElementById('pfq-pcms-container');
+    const phmsContainer = document.getElementById('pfq-phms-container');
+    const reportsContainer = document.getElementById('pfq-reports-container');
+
+    // Reset button states
+    if (pcmsBtn) pcmsBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none';
+    if (phmsBtn) phmsBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none';
+    if (reportsBtn) reportsBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none';
+
+    if (pcmsContainer) pcmsContainer.classList.add('hidden');
+    if (phmsContainer) phmsContainer.classList.add('hidden');
+    if (reportsContainer) reportsContainer.classList.add('hidden');
+
+    if (tabName === 'reports') {
+        if (reportsBtn) reportsBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-purple-600 text-purple-600 flex items-center gap-2 transition focus:outline-none';
+        if (reportsContainer) reportsContainer.classList.remove('hidden');
+        pfpRenderReportsVaultTable();
+    } else if (tabName === 'phms') {
+        if (phmsBtn) phmsBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-blue-600 text-blue-600 flex items-center gap-2 transition focus:outline-none';
+        if (phmsContainer) phmsContainer.classList.remove('hidden');
+        pfpRenderPhmsTable();
+    } else {
+        if (pcmsBtn) pcmsBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-red-600 text-red-600 flex items-center gap-2 transition focus:outline-none';
+        if (pcmsContainer) pcmsContainer.classList.remove('hidden');
+        pfpRenderTable();
+    }
+}
+
+function pfpRenderReportsVaultTable() {
+    const tbody = document.getElementById('pfq-reports-table-body');
+    if (!tbody) return;
+
+    const q = String(document.getElementById('pfq-reports-search')?.value || '').toLowerCase().trim();
+    const commFilter = String(document.getElementById('pfq-reports-filter-committee')?.value || '').toLowerCase().trim();
+    const statusFilter = String(document.getElementById('pfq-reports-filter-status')?.value || '').toLowerCase().trim();
+
+    let consultations = Array.isArray(AppData.consultations) ? [...AppData.consultations] : [];
+
+    if (q) {
+        consultations = consultations.filter(c => {
+            return (
+                String(c.id || '').toLowerCase().includes(q) ||
+                String(c.title || '').toLowerCase().includes(q) ||
+                String(c.category || '').toLowerCase().includes(q) ||
+                String(c.committee_assigned || '').toLowerCase().includes(q)
+            );
+        });
+    }
+
+    if (commFilter) {
+        consultations = consultations.filter(c => {
+            const comm = String(c.committee_assigned || c.category || '').toLowerCase();
+            return comm.includes(commFilter);
+        });
+    }
+
+    if (statusFilter === 'closed') {
+        consultations = consultations.filter(c => ['closed', 'completed'].includes(String(c.status || '').toLowerCase()));
+    } else if (statusFilter === 'active') {
+        consultations = consultations.filter(c => !['closed', 'completed'].includes(String(c.status || '').toLowerCase()));
+    }
+
+    const badgeEl = document.getElementById('pfq-tab-reports-badge');
+    if (badgeEl) {
+        const closedCount = consultations.filter(c => ['closed', 'completed'].includes(String(c.status || '').toLowerCase())).length;
+        badgeEl.textContent = String(closedCount);
+    }
+
+    if (!consultations.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">No matching consultation reports found in the vault.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = consultations.map(c => {
+        const cid = Number(c.id);
+        const cStatus = String(c.status || 'active').toLowerCase();
+        const isClosed = cStatus === 'closed' || cStatus === 'completed';
+        
+        // Count feedback linked to this consultation
+        const feedbackCount = AppData.feedback.filter(f => Number(f.consultationId || f.consultation_id) === cid).length;
+        
+        const committee = c.committee_assigned || (c.category ? `${c.category} Committee` : 'Rules & Governance Committee');
+
+        let statusBadge = `<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold uppercase text-[10px]">Active</span>`;
+        if (isClosed) {
+            statusBadge = `<span class="px-2 py-0.5 rounded-full bg-slate-800 text-white font-extrabold uppercase text-[10px]">Closed</span>`;
+        }
+
+        let transmittalBadge = `<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-semibold text-[10px]">Pending Closure</span>`;
+        if (c.committee_forwarded_at) {
+            const dateStr = new Date(c.committee_forwarded_at).toLocaleDateString();
+            transmittalBadge = `<span class="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-900 font-extrabold text-[10px]"><i class="bi bi-check-all"></i> Transmitted (${dateStr})</span>`;
+        } else if (isClosed) {
+            transmittalBadge = `<span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-extrabold text-[10px]"><i class="bi bi-robot"></i> AI Brief Ready</span>`;
+        }
+
+        return `
+            <tr class="border-b border-gray-100 hover:bg-purple-50/40 transition">
+                <td class="px-3.5 py-3">
+                    <div class="font-extrabold text-gray-900">#${cid} - ${escapeHtml(c.title || 'Consultation')}</div>
+                    <div class="text-[11px] text-gray-500 font-medium">Category: ${escapeHtml(c.category || 'General Policy')}</div>
+                </td>
+                <td class="px-3.5 py-3">
+                    <span class="inline-block px-2 py-0.5 bg-purple-50 text-purple-900 font-bold rounded border border-purple-200 text-xs">
+                        <i class="bi bi-diagram-3 mr-1"></i>${escapeHtml(committee)}
+                    </span>
+                </td>
+                <td class="px-3.5 py-3 font-black text-gray-800 text-sm">
+                    ${feedbackCount} submission(s)
+                </td>
+                <td class="px-3.5 py-3">
+                    <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-semibold text-xs capitalize">General Consensus</span>
+                </td>
+                <td class="px-3.5 py-3">${statusBadge}</td>
+                <td class="px-3.5 py-3">${transmittalBadge}</td>
+                <td class="px-3.5 py-3 text-center">
+                    ${isClosed ? `
+                        <button onclick="pfpShowAiCommitteeBriefModal(${cid})" class="inline-flex items-center justify-center px-3 py-1 bg-purple-700 hover:bg-purple-800 text-white font-extrabold rounded-lg text-xs shadow-sm gap-1 transition" title="View AI Report Document">
+                            <i class="bi bi-file-earmark-text-fill"></i> View AI Report Document
+                        </button>
+                    ` : `
+                        <button onclick="pfpShowAiCommitteeBriefModal(${cid})" class="inline-flex items-center justify-center px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold rounded-lg text-xs gap-1 border border-amber-300 transition" title="View Status Notice">
+                            <i class="bi bi-lock-fill"></i> Pending (Active)
+                        </button>
+                    `}
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function loadPhmsFeedbackFromApi(isSync = false) {
+    try {
+        const action = isSync ? 'phms_sync' : 'phms_list';
+        const res = await fetchWithTimeout(`API/feedback_api.php?action=${action}&limit=200&offset=0`, {
+            headers: { 'Accept': 'application/json' }
+        }, 5000);
+
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && Array.isArray(data.data)) {
+                AppData.phmsFeedback = data.data;
+
+                // Push external system data receipt notification to in-app system notifications
+                if (data.data.length > 0) {
+                    if (!Array.isArray(AppData.notifications)) AppData.notifications = [];
+                    const notifTitle = '🔗 External System Data Received (PHMS)';
+                    const exists = AppData.notifications.some(n => n.title === notifTitle);
+                    if (!exists) {
+                        AppData.notifications.unshift({
+                            id: Date.now(),
+                            title: notifTitle,
+                            message: `Successfully received ${data.data.length} PHMS AI Feedback Summaries & citizen responses from the PHMS Public Hearing System.`,
+                            category: 'External Integration',
+                            priority: 'high',
+                            read: false,
+                            time: 'Just now',
+                            timestamp: new Date().toISOString()
+                        });
+
+                        // Update notification badge if function exists
+                        if (typeof updateNotificationBadge === 'function') {
+                            try { updateNotificationBadge(); } catch (_) {}
+                        }
+                    }
+                }
+
+                if (isSync && typeof showNotification === 'function') {
+                    showNotification(`✅ PHMS Integration: ${data.data.length} hearing feedback items synchronized. System notification logged.`, 'success');
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('PHMS feedback load failed:', e);
+    }
+
+    const badgeEl = document.getElementById('pfq-tab-phms-badge');
+    if (badgeEl) {
+        badgeEl.textContent = String(AppData.phmsFeedback ? AppData.phmsFeedback.length : 0);
+    }
+
+    pfpRenderPhmsTable();
+}
+
+function pfpPopulateConsultationDropdowns() {
+    const pcmsSelect = document.getElementById('pfq-consultation');
+    const phmsSelect = document.getElementById('pfq-phms-consultation');
+    const consultations = Array.isArray(AppData.consultations) ? AppData.consultations : [];
+
+    if (pcmsSelect) {
+        const curVal = pcmsSelect.value || '';
+        pcmsSelect.innerHTML = '<option value="">All Consultation Policies</option>' +
+            consultations.map(c => {
+                const title = escapeHtml(c.title || `Consultation #${c.id}`);
+                const truncated = title.length > 40 ? title.substring(0, 37) + '...' : title;
+                return `<option value="${c.id}" ${String(c.id) === curVal ? 'selected' : ''}>#${c.id} - ${truncated}</option>`;
+            }).join('');
+    }
+
+    if (phmsSelect) {
+        const curVal = phmsSelect.value || '';
+        phmsSelect.innerHTML = '<option value="">All PHMS Hearings / Policies</option>' +
+            consultations.map(c => {
+                const title = escapeHtml(c.title || `Consultation #${c.id}`);
+                const hearingTag = c.phms_hearing_id ? ` [Hearing #${c.phms_hearing_id}]` : '';
+                const truncated = title.length > 35 ? title.substring(0, 32) + '...' : title;
+                return `<option value="${c.id}" ${String(c.id) === curVal ? 'selected' : ''}>#${c.id}${hearingTag} - ${truncated}</option>`;
+            }).join('');
+    }
+}
+
+function pfpResetFilters() {
+    ['pfq-search', 'pfq-type', 'pfq-status', 'pfq-committee', 'pfq-consultation', 'pfq-barangay', 'pfq-phms-search', 'pfq-phms-status', 'pfq-phms-consultation'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    const archiveMode = document.getElementById('pfq-archive-mode');
+    if (archiveMode) archiveMode.value = 'active';
+    pfpRenderTable();
+    pfpRenderPhmsTable();
+}
+
+function pfpRenderPhmsTable() {
+    const tbody = document.getElementById('pfq-phms-table-body');
+    if (!tbody) return;
+
+    const q = String(document.getElementById('pfq-phms-search')?.value || '').toLowerCase().trim();
+    const statusFilter = String(document.getElementById('pfq-phms-status')?.value || '').toLowerCase().trim();
+    const phmsConsultationId = String(document.getElementById('pfq-phms-consultation')?.value || '').trim();
+
+    let rows = Array.isArray(AppData.phmsFeedback) ? [...AppData.phmsFeedback] : [];
+
+    if (q) {
+        rows = rows.filter(r => {
+            let payloadStr = '';
+            try { payloadStr = JSON.stringify(r.payload_json || ''); } catch(_) {}
+            return (
+                String(r.queue_id || '').toLowerCase().includes(q) ||
+                String(r.full_name || '').toLowerCase().includes(q) ||
+                String(r.external_ref || '').toLowerCase().includes(q) ||
+                payloadStr.toLowerCase().includes(q)
+            );
+        });
+    }
+
+    if (phmsConsultationId) {
+        rows = rows.filter(r => String(r.consultation_id || r.phms_hearing_id || '') === phmsConsultationId);
+    }
+
+    if (statusFilter) {
+        rows = rows.filter(r => String(r.status || '').toLowerCase() === statusFilter);
+    }
+
+    const badgeEl = document.getElementById('pfq-tab-phms-badge');
+    if (badgeEl) {
+        badgeEl.textContent = String(rows.length);
+    }
+
+    if (rows.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="px-6 py-10 text-center text-gray-500">
+                    <i class="bi bi-inbox text-3xl text-gray-300 mb-2 block"></i>
+                    <p class="font-medium text-sm text-gray-600">No PHMS AI Feedback Summaries found.</p>
+                    <p class="text-xs text-gray-400 mt-1">Click "Sync PHMS Data" to pull latest citizen feedback from the PHMS Public Hearing System.</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = rows.map(r => {
+        const queueId = r.queue_id || 0;
+        let payload = {};
+        try {
+            payload = typeof r.payload_json === 'string' ? JSON.parse(r.payload_json) : (r.payload_json || {});
+        } catch (_) {}
+
+        const hearingTitle = escapeHtml(payload.hearing_title || r.full_name || 'Public Hearing');
+        const hearingDate = escapeHtml(payload.hearing_date || r.created_at || 'Jul 27, 2026');
+        const hearingStatus = escapeHtml(payload.hearing_status || r.status || 'COMPLETED').toUpperCase();
+        const feedbackCount = payload.feedback_count || (payload.citizen_feedback ? payload.citizen_feedback.length : 3);
+        const avgRating = payload.avg_rating || 3.3;
+        const summaryDate = escapeHtml(payload.ai_summary_date || 'Jul 27, 2026');
+
+        let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-800 text-white uppercase">COMPLETED</span>';
+        if (hearingStatus === 'ACTIVE' || hearingStatus === 'OPEN') {
+            statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 uppercase">ACTIVE</span>';
+        }
+
+        return `
+            <tr class="border-b border-gray-100 hover:bg-slate-50 transition">
+                <td class="px-4 py-3.5">
+                    <div class="font-extrabold text-gray-900 text-xs">${hearingTitle}</div>
+                    <div class="mt-1">${statusBadge}</div>
+                </td>
+                <td class="px-4 py-3.5 font-medium text-gray-600 text-xs">${hearingDate}</td>
+                <td class="px-4 py-3.5 text-center">
+                    <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-900 font-black text-xs">
+                        ${feedbackCount}
+                    </span>
+                </td>
+                <td class="px-4 py-3.5 text-center">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 font-extrabold text-xs">
+                        <i class="bi bi-star-fill text-amber-500 text-[11px]"></i> ${avgRating}
+                    </span>
+                </td>
+                <td class="px-4 py-3.5">
+                    <span class="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                        Generated <span class="text-gray-500 font-normal">(${summaryDate})</span>
+                    </span>
+                </td>
+                <td class="px-4 py-3.5 text-center">
+                    <div class="flex items-center justify-center gap-1.5">
+                        <button onclick="pfpShowPhmsDetailModal(${queueId})" class="px-3 py-1 bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold rounded-lg text-xs transition shadow-sm flex items-center gap-1">
+                            <i class="bi bi-eye-fill"></i> View
+                        </button>
+                        <button onclick="loadPhmsFeedbackFromApi(true)" class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs transition flex items-center gap-1">
+                            <i class="bi bi-arrow-repeat"></i> Refresh
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function pfpShowPhmsDetailModal(queueId) {
+    const item = Array.isArray(AppData.phmsFeedback) ? AppData.phmsFeedback.find(r => Number(r.queue_id) === Number(queueId)) : null;
+    if (!item) return;
+
+    let modal = document.getElementById('phms-detail-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'phms-detail-modal';
+        modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4';
+        document.body.appendChild(modal);
+    }
+
+    let payload = {};
+    try {
+        payload = typeof item.payload_json === 'string' ? JSON.parse(item.payload_json) : (item.payload_json || {});
+    } catch (_) {}
+
+    const hearingTitle = escapeHtml(payload.hearing_title || item.full_name || 'Public Hearing');
+    const hearingDate = escapeHtml(payload.hearing_date || 'Jul 27, 2026');
+    const hearingStatus = escapeHtml(payload.hearing_status || 'COMPLETED');
+    const aiSummaryText = escapeHtml(payload.ai_summary_text || 'No AI summary statement available.');
+    const citizenFeedback = Array.isArray(payload.citizen_feedback) ? payload.citizen_feedback : [];
+
+    const feedbackHtml = citizenFeedback.map((fb, idx) => `
+        <tr class="border-b border-gray-100">
+            <td class="px-3 py-2.5 font-bold text-gray-900">${idx + 1}. ${escapeHtml(fb.name || 'Anonymous Citizen')}</td>
+            <td class="px-3 py-2.5 text-center">
+                <span class="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-extrabold text-[11px]">
+                    ⭐ ${fb.rating || '3.5'}
+                </span>
+            </td>
+            <td class="px-3 py-2.5 text-center">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${fb.sentiment === 'Positive' ? 'bg-emerald-100 text-emerald-800' : (fb.sentiment === 'Negative' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700')}">
+                    ${escapeHtml(fb.sentiment || 'Neutral')}
+                </span>
+            </td>
+            <td class="px-3 py-2.5 text-gray-700">${escapeHtml(fb.statement || '-')}</td>
+            <td class="px-3 py-2.5 text-gray-400 text-[11px]">${escapeHtml(fb.date || hearingDate)}</td>
+        </tr>
+    `).join('');
+
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in duration-150 border border-gray-200">
+            <!-- Modal Header -->
+            <div class="bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white p-6 flex items-center justify-between">
+                <div>
+                    <span class="px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-extrabold uppercase tracking-wider">
+                        <i class="bi bi-robot"></i> PHMS AI Feedback Summary
+                    </span>
+                    <h2 class="text-base font-extrabold mt-1 text-white">
+                        ${hearingTitle}
+                    </h2>
+                    <p class="text-xs text-red-100 mt-0.5">Hearing Date: <strong>${hearingDate}</strong> | Status: <strong>${hearingStatus}</strong></p>
+                </div>
+                <button onclick="document.getElementById('phms-detail-modal').remove()" class="text-white hover:text-red-200 text-2xl font-bold">&times;</button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 space-y-5 text-xs max-h-[75vh] overflow-y-auto">
+                <!-- AI Summary Statement Box -->
+                <div class="p-4 bg-purple-50/70 rounded-xl border border-purple-200">
+                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-purple-900 flex items-center gap-1.5 mb-1.5">
+                        <i class="bi bi-robot text-purple-700"></i> PHMS AI Synthesized Feedback Summary
+                    </h3>
+                    <p class="text-xs text-purple-950 font-medium leading-relaxed">${aiSummaryText}</p>
+                </div>
+
+                <!-- Citizen Feedback Responses Table -->
+                <div>
+                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-gray-700 flex items-center gap-1.5 mb-2">
+                        <i class="bi bi-chat-left-text-fill text-blue-600"></i> Individual Citizen Hearing Responses (${citizenFeedback.length})
+                    </h3>
+                    <div class="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-gray-50 border-b border-gray-200 text-[11px] uppercase font-bold text-gray-600">
+                                <tr>
+                                    <th class="px-3 py-2">Citizen</th>
+                                    <th class="px-3 py-2 text-center">Rating</th>
+                                    <th class="px-3 py-2 text-center">Tone</th>
+                                    <th class="px-3 py-2">Testimony / Statement</th>
+                                    <th class="px-3 py-2">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${feedbackHtml || '<tr><td colspan="5" class="p-4 text-center text-gray-400">No individual responses recorded.</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+                <button onclick="window.print()" class="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-bold rounded-lg text-xs transition flex items-center gap-1.5">
+                    <i class="bi bi-printer"></i> Print Summary
+                </button>
+                <button onclick="document.getElementById('phms-detail-modal').remove()" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+async function pfpUpdatePhmsStatus(queueId, newStatus) {
+    if (!newStatus || !queueId) return;
+    try {
+        const res = await fetchWithTimeout('API/feedback_api.php?action=phms_update_status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ queue_id: queueId, status: newStatus })
+        }, 5000);
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.success) {
+                showNotification(`PHMS queue item #${queueId} updated to ${newStatus}.`, 'success');
+                const item = AppData.phmsFeedback.find(r => Number(r.queue_id) === Number(queueId));
+                if (item) item.status = newStatus;
+                pfpRenderPhmsTable();
+            }
+        }
+    } catch (e) {
+        showNotification(`Failed to update status: ${e.message}`, 'error');
+    }
+}
+
+function pfpShowPhmsDetailModal(queueId) {
+    const item = Array.isArray(AppData.phmsFeedback) ? AppData.phmsFeedback.find(r => Number(r.queue_id) === Number(queueId)) : null;
+    if (!item) return;
+
+    let modal = document.getElementById('phms-detail-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'phms-detail-modal';
+        modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
+        document.body.appendChild(modal);
+    }
+
+    let payloadFormatted = '-';
+    if (item.payload_json) {
+        try {
+            const parsed = JSON.parse(item.payload_json);
+            payloadFormatted = `<pre class="bg-gray-900 text-green-400 p-3 rounded text-[11px] font-mono overflow-x-auto max-h-48">${escapeHtml(JSON.stringify(parsed, null, 2))}</pre>`;
+        } catch (_) {
+            payloadFormatted = `<p class="text-xs text-gray-700 bg-gray-100 p-3 rounded font-mono">${escapeHtml(item.payload_json)}</p>`;
+        }
+    }
+
+    modal.innerHTML = `
+        <div class="bg-white rounded-xl shadow-2xl max-w-xl w-full overflow-hidden animate-in fade-in zoom-in duration-150">
+            <div class="bg-gradient-to-r from-blue-700 to-blue-800 text-white p-5 flex items-center justify-between">
+                <div>
+                    <h3 class="text-base font-bold flex items-center gap-2">
+                        <i class="bi bi-building-gear"></i> PHMS Ingestion Queue Item #${item.queue_id}
+                    </h3>
+                    <p class="text-xs text-blue-100 mt-0.5">External Reference: ${escapeHtml(item.external_ref || 'N/A')}</p>
+                </div>
+                <button onclick="document.getElementById('phms-detail-modal').remove()" class="text-white hover:text-blue-200 text-xl font-bold">&times;</button>
+            </div>
+            <div class="p-6 space-y-4 text-xs text-gray-700 max-h-[75vh] overflow-y-auto">
+                <div class="grid grid-cols-2 gap-3 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
+                    <div>
+                        <span class="text-gray-400 font-semibold block text-[10px] uppercase">Citizen Full Name</span>
+                        <span class="font-bold text-gray-900 text-sm">${escapeHtml(item.full_name || 'N/A')}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-400 font-semibold block text-[10px] uppercase">Email Address</span>
+                        <span class="font-bold text-blue-700 text-sm">${escapeHtml(item.email || 'N/A')}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-400 font-semibold block text-[10px] uppercase">PHMS Hearing ID</span>
+                        <span class="font-bold text-gray-800">${item.phms_hearing_id ? '#' + item.phms_hearing_id : 'N/A'}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-400 font-semibold block text-[10px] uppercase">Source System</span>
+                        <span class="font-bold text-purple-700">${escapeHtml(item.source_system || 'PHMS')}</span>
+                    </div>
+                </div>
+
+                <div>
+                    <span class="text-gray-500 font-bold block mb-1">Associated Consultation Title:</span>
+                    <p class="bg-gray-50 p-2.5 rounded border border-gray-200 font-medium text-gray-800">${escapeHtml(item.consultation_title || 'General Public Hearing Registration')}</p>
+                </div>
+
+                <div>
+                    <span class="text-gray-500 font-bold block mb-1">Raw Integration Event Payload (JSON):</span>
+                    ${payloadFormatted}
+                </div>
+            </div>
+            <div class="bg-gray-50 px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+                <span class="text-[11px] text-gray-400">Ingested on: ${item.created_at ? new Date(item.created_at).toLocaleString() : '-'}</span>
+                <button onclick="document.getElementById('phms-detail-modal').remove()" class="px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg text-xs transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    `;
 }
 
 async function renderPCDocuments() {
@@ -17292,9 +18019,6 @@ async function renderPCDocuments() {
                         <button onclick="openAddDocumentModal()" class="btn-primary flex items-center gap-2 bg-white text-red-600 hover:bg-red-50">
                             <i class="bi bi-file-earmark-plus"></i> Upload Document
                         </button>
-                        <button onclick="openGenerateReportModal()" class="bg-white text-red-700 hover:bg-red-50 px-4 py-2 rounded-lg font-medium shadow-sm transition flex items-center gap-2">
-                            <i class="bi bi-file-earmark-bar-graph"></i> Generate Report
-                        </button>
                     </div>` : `<span class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/20 text-red-100 text-sm">Read-only access</span>`}
                 </div>
 
@@ -17317,7 +18041,7 @@ async function renderPCDocuments() {
                 </div>
             </div>
 
-            <!-- Four Section Tabs: Consultation, Feedback, Survey, Reports -->
+            <!-- Section Tabs: Consultation, Feedback, Survey -->
             <div class="flex flex-wrap gap-2 mt-6 border-b border-gray-200">
                 <button onclick="filterDocumentsByGroup('consultation')" class="px-6 py-3 font-semibold text-sm border-b-2 border-red-600 text-red-600 hover:bg-red-50 doc-group-tab active" data-group="consultation">
                     <i class="bi bi-chat-left-quote mr-2"></i>Consultation
@@ -17327,9 +18051,6 @@ async function renderPCDocuments() {
                 </button>
                 <button onclick="filterDocumentsByGroup('survey')" class="px-6 py-3 font-semibold text-sm border-b-2 border-gray-200 text-gray-600 hover:border-green-600 hover:text-green-600 transition doc-group-tab" data-group="survey">
                     <i class="bi bi-bar-chart mr-2"></i>Survey
-                </button>
-                <button onclick="filterDocumentsByGroup('reports')" class="px-6 py-3 font-semibold text-sm border-b-2 border-gray-200 text-gray-600 hover:border-purple-600 hover:text-purple-600 transition doc-group-tab" data-group="reports">
-                    <i class="bi bi-file-earmark-text mr-2"></i>Reports
                 </button>
             </div>
 
@@ -19787,11 +20508,580 @@ function generateReport() {
     });
 }
 
+function pfpTriggerAiCommitteeCompile() {
+    const selCid = String(document.getElementById('pfq-consultation')?.value || '').trim();
+    if (!selCid) {
+        showNotification('Please select a specific Consultation Policy from the dropdown first.', 'info');
+        return;
+    }
+    pfpShowAiCommitteeBriefModal(selCid);
+}
 
+function pfpShowGatedConsultationModal(consultation) {
+    let modal = document.getElementById('pfq-gated-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'pfq-gated-modal';
+        modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4';
+        document.body.appendChild(modal);
+    }
 
+    const cid = Number(consultation.id || 0);
+    const title = escapeHtml(consultation.title || 'Consultation');
+    const status = escapeHtml(consultation.status || 'Active').toUpperCase();
 
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-amber-200 animate-in fade-in zoom-in duration-150">
+            <!-- Modal Header Banner -->
+            <div class="bg-gradient-to-r from-amber-500 to-amber-600 text-white p-5 flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0 text-2xl shadow-inner">
+                    <i class="bi bi-lock-fill"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-extrabold text-white leading-tight">
+                        Closed Consultation Required
+                    </h3>
+                    <p class="text-xs text-amber-100 mt-0.5 font-medium">LGU Committee Workflow Rule</p>
+                </div>
+            </div>
 
+            <!-- Modal Content -->
+            <div class="p-6 space-y-4 text-xs text-gray-700">
+                <div class="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200/80 space-y-1.5">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-amber-800 font-bold uppercase tracking-wider">Target Consultation</span>
+                        <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-[10px]">${status}</span>
+                    </div>
+                    <p class="font-bold text-gray-900 text-sm">#${cid} - ${title}</p>
+                </div>
 
+                <div class="space-y-2 text-gray-600 leading-relaxed">
+                    <p>
+                        Citizen feedback for this consultation cannot be compiled into an AI Brief or forwarded to an LGU committee while the consultation is still <strong>${status}</strong>.
+                    </p>
+                    <p class="bg-gray-50 p-3 rounded-lg border border-gray-200 text-gray-700">
+                        <i class="bi bi-info-circle-fill text-blue-600 mr-1"></i>
+                        Please mark the consultation status as <strong>Closed</strong> first to ensure all citizen responses, survey votes, and comments are finalized before AI synthesis.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
+                <button onclick="document.getElementById('pfq-gated-modal').remove()" class="px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg text-xs transition shadow-sm">
+                    Understand & Close Notice
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+async function pfpShowAiCommitteeBriefModal(consultationId) {
+    const cid = Number(consultationId || 0);
+    const consultation = AppData.consultations.find(c => Number(c.id) === cid);
+
+    if (!consultation) {
+        showNotification('Consultation not found.', 'error');
+        return;
+    }
+
+    const cStatus = String(consultation.status || '').toLowerCase().trim();
+
+    // Enforce workflow gating: Consultation must be Closed
+    if (cStatus !== 'closed' && cStatus !== 'completed') {
+        pfpShowGatedConsultationModal(consultation);
+        return;
+    }
+
+    // Display loading notification
+    showNotification('AI Engine is analyzing feedback and compiling Committee Brief...', 'info');
+
+    try {
+        const res = await fetchWithTimeout(`API/consultation_feedback_ai.php?action=compile_committee_brief&consultation_id=${cid}`, {
+            headers: { 'Accept': 'application/json' }
+        }, 10000);
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => null);
+            if (errData && errData.is_gated) {
+                pfpShowGatedConsultationModal(consultation);
+                return;
+            }
+            throw new Error(errData?.message || `HTTP ${res.status}`);
+        }
+
+        const json = await res.json();
+        if (!json.success || !json.data) {
+            throw new Error(json.message || 'Failed to compile AI Brief.');
+        }
+
+        const brief = json.data;
+        renderAiCommitteeBriefModalHtml(brief);
+
+    } catch (e) {
+        console.error('AI Brief compilation failed:', e);
+        showNotification(`AI Compilation failed: ${e.message}`, 'error');
+    }
+}
+
+function renderAiCommitteeBriefModalHtml(brief) {
+    let modal = document.getElementById('pfq-ai-brief-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'pfq-ai-brief-modal';
+        modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4';
+        document.body.appendChild(modal);
+    }
+
+    const problemsHtml = (brief.problems || []).map((p, idx) => `
+        <tr class="border-b border-gray-100">
+            <td class="px-3 py-2 font-bold text-gray-800">${idx + 1}. ${escapeHtml(p.category)}</td>
+            <td class="px-3 py-2 text-gray-700">${escapeHtml(p.issue)}</td>
+            <td class="px-3 py-2 text-center">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${p.severity === 'high' ? 'bg-red-100 text-red-800' : (p.severity === 'medium' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700')}">
+                    ${escapeHtml(p.severity || 'normal').toUpperCase()}
+                </span>
+            </td>
+        </tr>
+    `).join('');
+
+    const solutionsHtml = (brief.solutions || []).map((s, idx) => `
+        <div class="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100">
+            <div class="font-bold text-emerald-900 text-xs flex items-center gap-1.5 mb-1">
+                <i class="bi bi-check-circle-fill text-emerald-600"></i> ${idx + 1}. Policy Recommendation (${escapeHtml(s.category)})
+            </div>
+            <p class="text-xs text-gray-700 leading-relaxed">${escapeHtml(s.recommendation)}</p>
+        </div>
+    `).join('');
+
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden animate-in fade-in zoom-in duration-150 border border-gray-200">
+            <!-- Modal Header -->
+            <div class="bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white p-6 flex items-center justify-between">
+                <div>
+                    <span class="px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-bold uppercase tracking-wider">
+                        <i class="bi bi-robot"></i> Official AI Committee Synthesis Document
+                    </span>
+                    <h2 class="text-lg font-extrabold mt-1 text-white">
+                        ${escapeHtml(brief.title || 'Consultation Feedback Brief')}
+                    </h2>
+                    <p class="text-xs text-red-100 mt-0.5">Assigned LGU Committee: <strong>${escapeHtml(brief.committee_assigned)}</strong> | Status: <strong>CLOSED</strong></p>
+                </div>
+                <button onclick="document.getElementById('pfq-ai-brief-modal').remove()" class="text-white hover:text-red-200 text-2xl font-bold">&times;</button>
+            </div>
+
+            <!-- Modal Content -->
+            <div class="p-6 space-y-6 text-xs max-h-[75vh] overflow-y-auto">
+                <!-- Summary Metadata Box -->
+                <div class="grid grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-center">
+                    <div>
+                        <span class="text-gray-400 font-semibold uppercase text-[10px] block">Total Citizen Feedback</span>
+                        <span class="text-2xl font-black text-gray-900">${brief.stats?.total_submissions || 0}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-400 font-semibold uppercase text-[10px] block">Dominant Public Tone</span>
+                        <span class="text-base font-extrabold capitalize ${brief.stats?.dominant_sentiment === 'negative' ? 'text-red-600' : 'text-emerald-600'}">
+                            ${brief.stats?.dominant_sentiment || 'Neutral'}
+                        </span>
+                    </div>
+                    <div>
+                        <span class="text-gray-400 font-semibold uppercase text-[10px] block">Transmittal Target</span>
+                        <span class="text-xs font-bold text-purple-800 block truncate" title="${escapeHtml(brief.committee_assigned)}">${escapeHtml(brief.committee_assigned)}</span>
+                    </div>
+                </div>
+
+                <!-- Section 1: Identified Problems -->
+                <div>
+                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-red-700 flex items-center gap-1.5 mb-2">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Section 1: Identified Citizen Problems & Grievances
+                    </h3>
+                    <div class="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-gray-50 border-b border-gray-200 text-[11px] uppercase font-bold text-gray-600">
+                                <tr>
+                                    <th class="px-3 py-2">Category</th>
+                                    <th class="px-3 py-2">Identified Grievance / Issues</th>
+                                    <th class="px-3 py-2 text-center">Severity</th>
+                                </tr>
+                            </thead>
+                            <tbody>${problemsHtml}</tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Section 2: AI Recommended Solutions -->
+                <div>
+                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5 mb-2">
+                        <i class="bi bi-lightbulb-fill"></i> Section 2: AI Synthesized Solutions & Actionable Policy Steps
+                    </h3>
+                    <div class="space-y-2">${solutionsHtml}</div>
+                </div>
+
+                <!-- Section 3: Executive Conclusion -->
+                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200">
+                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-blue-900 flex items-center gap-1.5 mb-1.5">
+                        <i class="bi bi-file-earmark-check-fill"></i> Section 3: Executive Conclusion & Transmittal Note
+                    </h3>
+                    <p class="text-xs text-blue-950 font-medium leading-relaxed">${escapeHtml(brief.conclusion)}</p>
+                    <p class="text-[11px] text-blue-700 font-semibold mt-2 border-t border-blue-200/60 pt-2">${escapeHtml(brief.transmittal_note)}</p>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                <button onclick="window.print()" class="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-bold rounded-lg text-xs transition flex items-center gap-1.5">
+                    <i class="bi bi-printer"></i> Print / Save PDF
+                </button>
+                <div class="flex items-center gap-2">
+                    <button onclick="document.getElementById('pfq-ai-brief-modal').remove()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg text-xs transition">
+                        Cancel
+                    </button>
+                    <button onclick="pfpForwardBriefToCommittee(${brief.consultation_id}, '${escapeHtml(brief.committee_assigned)}')" class="px-5 py-2 bg-red-700 hover:bg-red-800 text-white font-extrabold rounded-lg text-xs transition shadow flex items-center gap-1.5">
+                        <i class="bi bi-send-fill"></i> Pass Document to Committee
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+async function pfpForwardBriefToCommittee(consultationId, committeeName) {
+    if (!consultationId) return;
+    try {
+        const res = await fetchWithTimeout('API/consultation_feedback_ai.php?action=forward_brief_to_committee', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ consultation_id: consultationId, committee: committeeName })
+        }, 5000);
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showNotification(`✅ Document successfully passed to LGU ${committeeName}!`, 'success', 6000);
+            const modal = document.getElementById('pfq-ai-brief-modal');
+            if (modal) modal.remove();
+            pfpRefreshData();
+        } else {
+            showNotification(data.message || 'Failed to forward to committee.', 'error');
+        }
+    } catch (e) {
+        showNotification(`Error: ${e.message}`, 'error');
+    }
+}
+
+async function renderReportsSection() {
+    return await renderSystemReportsSection();
+}
+
+async function renderSystemReportsSection() {
+    const contentArea = document.getElementById('content-area');
+    const pageTitle = document.getElementById('page-title');
+    const breadcrumbCurrent = document.getElementById('breadcrumb-current') || document.querySelector('.breadcrumb-current');
+    if (pageTitle) pageTitle.textContent = 'System Reports & Analytics';
+    if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'Reports';
+    if (!contentArea) return;
+
+    contentArea.innerHTML = '<div class="p-8 text-center text-gray-500"><i class="bi bi-arrow-repeat animate-spin text-2xl mb-2 block"></i>Loading system reports...</div>';
+
+    try {
+        await Promise.all([
+            loadFeedbackFromApi().catch(() => {}),
+            loadConsultationsFromApi().catch(() => {}),
+            loadDocumentsFromApi().catch(() => {})
+        ]);
+    } catch (e) {
+        console.warn('System reports data load warning:', e);
+    }
+
+    const totalConsultations = AppData.consultations.length;
+    const closedConsultations = AppData.consultations.filter(c => ['closed', 'completed'].includes(String(c.status || '').toLowerCase())).length;
+    const totalFeedback = AppData.feedback.length;
+    const totalDocs = AppData.documents.length;
+
+    contentArea.innerHTML = `
+        <div class="space-y-6">
+            <!-- Header Banner -->
+            <div class="bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white p-7 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <span class="px-3 py-1 rounded-full bg-white/20 text-white text-[11px] font-extrabold uppercase tracking-wider">
+                        <i class="bi bi-bar-chart-line-fill mr-1"></i> System Governance & Intelligence Hub
+                    </span>
+                    <h1 class="text-2xl font-black text-white mt-1.5 flex items-center gap-2">
+                        System Reports & Intelligence Center
+                    </h1>
+                    <p class="text-xs text-red-100 mt-1 max-w-2xl">
+                        Centralized administrative analytics & official reports across all modules including AI policy briefs, public consultations, citizen sentiment, document governance, and security audit trails.
+                    </p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="window.print()" class="px-4 py-2.5 bg-white text-gray-900 hover:bg-gray-100 text-xs font-bold rounded-xl transition shadow flex items-center gap-1.5">
+                        <i class="bi bi-printer"></i> Print Executive Summary
+                    </button>
+                    <button onclick="renderSystemReportsSection()" class="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl transition border border-white/20 flex items-center gap-1.5">
+                        <i class="bi bi-arrow-repeat"></i> Refresh Data
+                    </button>
+                </div>
+            </div>
+
+            <!-- Top Summary Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                    <div class="flex items-center justify-between text-gray-400 text-[11px] font-bold uppercase tracking-wider">
+                        <span>AI Policy Reports</span>
+                        <i class="bi bi-robot text-purple-600 text-base"></i>
+                    </div>
+                    <p class="text-3xl font-black text-gray-900 mt-1.5">${closedConsultations}</p>
+                    <p class="text-[11px] text-purple-700 font-semibold mt-1">Closed briefs ready</p>
+                </div>
+                <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                    <div class="flex items-center justify-between text-gray-400 text-[11px] font-bold uppercase tracking-wider">
+                        <span>Public Consultations</span>
+                        <i class="bi bi-journal-text text-red-600 text-base"></i>
+                    </div>
+                    <p class="text-3xl font-black text-gray-900 mt-1.5">${totalConsultations}</p>
+                    <p class="text-[11px] text-gray-500 font-medium mt-1">Total policy consultations</p>
+                </div>
+                <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                    <div class="flex items-center justify-between text-gray-400 text-[11px] font-bold uppercase tracking-wider">
+                        <span>Citizen Submissions</span>
+                        <i class="bi bi-chat-left-text text-blue-600 text-base"></i>
+                    </div>
+                    <p class="text-3xl font-black text-gray-900 mt-1.5">${totalFeedback}</p>
+                    <p class="text-[11px] text-gray-500 font-medium mt-1">Total logged feedback</p>
+                </div>
+                <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                    <div class="flex items-center justify-between text-gray-400 text-[11px] font-bold uppercase tracking-wider">
+                        <span>Managed Documents</span>
+                        <i class="bi bi-folder2-open text-emerald-600 text-base"></i>
+                    </div>
+                    <p class="text-3xl font-black text-gray-900 mt-1.5">${totalDocs}</p>
+                    <p class="text-[11px] text-gray-500 font-medium mt-1">Governance files</p>
+                </div>
+            </div>
+
+            <!-- Main Reports Navigation Tabs -->
+            <div class="border-b border-gray-200 bg-white rounded-t-xl px-4 pt-3 flex items-center gap-2 overflow-x-auto shadow-sm">
+                <button id="sys-report-tab-ai" onclick="switchSystemReportTab('ai')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-red-600 text-red-600 flex items-center gap-2 transition focus:outline-none sys-report-tab">
+                    <i class="bi bi-robot"></i> AI Committee Policy Reports
+                </button>
+                <button id="sys-report-tab-consultation" onclick="switchSystemReportTab('consultation')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none sys-report-tab">
+                    <i class="bi bi-journal-text"></i> Consultation & Survey Reports
+                </button>
+                <button id="sys-report-tab-feedback" onclick="switchSystemReportTab('feedback')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none sys-report-tab">
+                    <i class="bi bi-chat-square-quote"></i> Feedback & Sentiment Reports
+                </button>
+                <button id="sys-report-tab-documents" onclick="switchSystemReportTab('documents')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none sys-report-tab">
+                    <i class="bi bi-folder2"></i> Document Governance Reports
+                </button>
+                <button id="sys-report-tab-audit" onclick="switchSystemReportTab('audit')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none sys-report-tab">
+                    <i class="bi bi-shield-check"></i> System Audit & Activity Log
+                </button>
+            </div>
+
+            <!-- Active Report View Container -->
+            <div id="sys-reports-tab-body" class="bg-white rounded-b-xl border border-t-0 border-gray-200 p-6 min-h-[400px]">
+                <!-- Populated by switchSystemReportTab -->
+            </div>
+        </div>
+    `;
+
+    switchSystemReportTab('ai');
+}
+
+function switchSystemReportTab(tabName) {
+    const tabBtns = document.querySelectorAll('.sys-report-tab');
+    tabBtns.forEach(btn => {
+        btn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none sys-report-tab';
+    });
+
+    const activeBtn = document.getElementById(`sys-report-tab-${tabName}`);
+    if (activeBtn) {
+        activeBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-red-600 text-red-600 flex items-center gap-2 transition focus:outline-none sys-report-tab';
+    }
+
+    const container = document.getElementById('sys-reports-tab-body');
+    if (!container) return;
+
+    if (tabName === 'ai') {
+        container.innerHTML = `
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-base font-bold text-gray-900 flex items-center gap-2">
+                            <i class="bi bi-robot text-purple-600"></i> AI Committee Synthesis Briefs Vault
+                        </h3>
+                        <p class="text-xs text-gray-500">Official 3-part synthesis reports (Problems, Solutions, Conclusion) ready for committee transmittal.</p>
+                    </div>
+                </div>
+
+                <div class="border border-gray-200 rounded-xl overflow-hidden">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-gray-50 border-b border-gray-200 font-bold uppercase text-gray-600 text-[11px]">
+                            <tr>
+                                <th class="px-4 py-3">Consultation Policy</th>
+                                <th class="px-4 py-3">Assigned Committee</th>
+                                <th class="px-4 py-3 text-center">Submissions</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3 text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${AppData.consultations.map(c => {
+                                const cid = Number(c.id);
+                                const isClosed = ['closed', 'completed'].includes(String(c.status || '').toLowerCase());
+                                const feedbackCount = AppData.feedback.filter(f => Number(f.consultationId || f.consultation_id) === cid).length;
+                                return `
+                                    <tr class="border-b border-gray-100 hover:bg-slate-50">
+                                        <td class="px-4 py-3">
+                                            <div class="font-extrabold text-gray-900">#${cid} - ${escapeHtml(c.title || 'Consultation')}</div>
+                                            <div class="text-[11px] text-gray-500">${escapeHtml(c.category || 'General Policy')}</div>
+                                        </td>
+                                        <td class="px-4 py-3 font-semibold text-purple-900">
+                                            <span class="px-2 py-0.5 bg-purple-50 rounded border border-purple-200 text-xs">
+                                                ${escapeHtml(c.committee_assigned || 'Rules & Governance Committee')}
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-3 text-center font-bold text-gray-800">${feedbackCount}</td>
+                                        <td class="px-4 py-3">
+                                            ${isClosed ? '<span class="px-2 py-0.5 rounded-full bg-slate-800 text-white font-extrabold text-[10px]">CLOSED</span>' : '<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">ACTIVE</span>'}
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            ${isClosed ? `
+                                                <button onclick="pfpShowAiCommitteeBriefModal(${cid})" class="px-3 py-1 bg-purple-700 hover:bg-purple-800 text-white font-extrabold rounded-lg text-xs transition">
+                                                    <i class="bi bi-file-earmark-text"></i> View AI Brief
+                                                </button>
+                                            ` : `
+                                                <button onclick="pfpShowAiCommitteeBriefModal(${cid})" class="px-3 py-1 bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-lg text-xs">
+                                                    <i class="bi bi-lock-fill"></i> Pending (Active)
+                                                </button>
+                                            `}
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('') || '<tr><td colspan="5" class="p-6 text-center text-gray-500">No consultation records found.</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } else if (tabName === 'consultation') {
+        const activeCount = AppData.consultations.filter(c => !['closed', 'completed'].includes(String(c.status || '').toLowerCase())).length;
+        const closedCount = AppData.consultations.filter(c => ['closed', 'completed'].includes(String(c.status || '').toLowerCase())).length;
+        container.innerHTML = `
+            <div class="space-y-4">
+                <h3 class="text-base font-bold text-gray-900"><i class="bi bi-journal-text text-red-600"></i> Public Consultations & Survey Analytics Report</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                        <div class="text-xs font-bold text-gray-600 uppercase mb-2">Consultation Lifecycle Breakdown</div>
+                        <div class="flex items-center justify-between py-2 border-b border-gray-200 text-xs">
+                            <span>Active / Open Consultations</span>
+                            <span class="font-bold text-emerald-700">${activeCount}</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-b border-gray-200 text-xs">
+                            <span>Closed / Completed Consultations</span>
+                            <span class="font-bold text-slate-800">${closedCount}</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 text-xs">
+                            <span>Total Consultations Logged</span>
+                            <span class="font-bold text-gray-900">${AppData.consultations.length}</span>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                        <div class="text-xs font-bold text-gray-600 uppercase mb-2">Policy Category Representation</div>
+                        ${Array.from(new Set(AppData.consultations.map(c => c.category || 'General'))).map(cat => {
+                            const count = AppData.consultations.filter(c => (c.category || 'General') === cat).length;
+                            return `
+                                <div class="flex items-center justify-between py-1.5 border-b border-gray-200/60 text-xs">
+                                    <span class="text-gray-700">${escapeHtml(cat)}</span>
+                                    <span class="font-bold text-red-700">${count} policy(s)</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    } else if (tabName === 'feedback') {
+        const positiveCount = AppData.feedback.filter(f => String(f.sentiment || '').toLowerCase() === 'positive').length;
+        const negativeCount = AppData.feedback.filter(f => String(f.sentiment || '').toLowerCase() === 'negative').length;
+        const neutralCount = AppData.feedback.length - positiveCount - negativeCount;
+        container.innerHTML = `
+            <div class="space-y-4">
+                <h3 class="text-base font-bold text-gray-900"><i class="bi bi-chat-square-quote text-blue-600"></i> Citizen Feedback & Sentiment Intelligence Report</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                    <div class="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
+                        <span class="text-xs font-bold text-emerald-800 uppercase block">Positive Citizen Sentiment</span>
+                        <span class="text-2xl font-black text-emerald-700">${positiveCount}</span>
+                    </div>
+                    <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                        <span class="text-xs font-bold text-slate-800 uppercase block">Neutral / Inquiries</span>
+                        <span class="text-2xl font-black text-slate-700">${neutralCount}</span>
+                    </div>
+                    <div class="p-4 bg-red-50 rounded-xl border border-red-200">
+                        <span class="text-xs font-bold text-red-800 uppercase block">Grievances / Concerns</span>
+                        <span class="text-2xl font-black text-red-700">${negativeCount}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else if (tabName === 'documents') {
+        container.innerHTML = `
+            <div class="space-y-4">
+                <h3 class="text-base font-bold text-gray-900"><i class="bi bi-folder2 text-emerald-600"></i> Document Governance & Storage Analytics</h3>
+                <div class="border border-gray-200 rounded-xl overflow-hidden">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-gray-50 border-b border-gray-200 font-bold uppercase text-gray-600 text-[11px]">
+                            <tr>
+                                <th class="px-4 py-3">Document Title</th>
+                                <th class="px-4 py-3">Type</th>
+                                <th class="px-4 py-3 text-center">Size</th>
+                                <th class="px-4 py-3 text-center">Downloads</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${AppData.documents.map(d => `
+                                <tr class="border-b border-gray-100">
+                                    <td class="px-4 py-3 font-bold text-gray-900">${escapeHtml(d.title || d.name || 'Untitled Document')}</td>
+                                    <td class="px-4 py-3 text-gray-600">${escapeHtml(d.type || 'PDF')}</td>
+                                    <td class="px-4 py-3 text-center text-gray-600">${formatFileSize(d.size || 0)}</td>
+                                    <td class="px-4 py-3 text-center font-bold text-blue-700">${d.downloads || 0}</td>
+                                </tr>
+                            `).join('') || '<tr><td colspan="4" class="p-6 text-center text-gray-500">No documents found.</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } else if (tabName === 'audit') {
+        container.innerHTML = `
+            <div class="space-y-4">
+                <h3 class="text-base font-bold text-gray-900"><i class="bi bi-shield-check text-orange-600"></i> Administrative Audit Log & Activity Trail</h3>
+                <p class="text-xs text-gray-500">Detailed security log of administrative operations across public consultation and feedback management.</p>
+                <div class="border border-gray-200 rounded-xl overflow-hidden max-h-[400px] overflow-y-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-gray-50 border-b border-gray-200 font-bold uppercase text-gray-600 text-[11px] sticky top-0">
+                            <tr>
+                                <th class="px-4 py-2.5">Timestamp</th>
+                                <th class="px-4 py-2.5">User</th>
+                                <th class="px-4 py-2.5">Action</th>
+                                <th class="px-4 py-2.5">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${(AppData.auditLogs || []).map(log => `
+                                <tr class="border-b border-gray-100 hover:bg-gray-50">
+                                    <td class="px-4 py-2 font-mono text-gray-500 text-[11px]">${escapeHtml(log.timestamp || log.created_at || 'Recently')}</td>
+                                    <td class="px-4 py-2 font-bold text-gray-800">${escapeHtml(log.userName || log.user || 'Admin')}</td>
+                                    <td class="px-4 py-2 uppercase font-extrabold text-[10px] text-red-700">${escapeHtml(log.action || 'UPDATE')}</td>
+                                    <td class="px-4 py-2 text-gray-700">${escapeHtml(log.details || log.description || '-')}</td>
+                                </tr>
+                            `).join('') || '<tr><td colspan="4" class="p-6 text-center text-gray-500">No recent audit activity logged.</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+}
 
 
 

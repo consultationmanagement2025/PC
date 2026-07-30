@@ -2561,23 +2561,17 @@ $totalPages = ceil($totalLogs / $pageSize);
 
             </a>
 
-            <!-- Reports link removed per request -->
-
             <?php if ($is_admin_or_super || $is_resource_person): ?>
             <a href="#" onclick="showSection('pc-documents')" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
-
-
-
                 <i class="bi bi-folder2-open mr-3 text-lg"></i>
-
-
-
                 <span>Document Management</span>
-
-
-
             </a>
             <?php endif; ?>
+
+            <a href="#" onclick="renderReportsSection()" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
+                <i class="bi bi-file-earmark-bar-graph mr-3 text-lg"></i>
+                <span>Reports</span>
+            </a>
 
 
 
@@ -2890,23 +2884,17 @@ $totalPages = ceil($totalLogs / $pageSize);
 
                     </a>
 
-                    <!-- Reports link removed per request -->
-
                     <?php if ($is_admin_or_super || $is_resource_person): ?>
                     <a href="#" onclick="showSection('pc-documents')" class="nav-item" data-section="pc-documents">
-
-
-
                         <i class="bi bi-folder2-open"></i>
-
-
-
                         <span class="sidebar-text">Document Management</span>
-
-
-
                     </a>
                     <?php endif; ?>
+
+                    <a href="#" onclick="renderReportsSection()" class="nav-item" data-section="reports">
+                        <i class="bi bi-file-earmark-bar-graph"></i>
+                        <span class="sidebar-text">Reports</span>
+                    </a>
 
 
 
