@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head><title>Survey Debug</title></head>
+<body>
+<h2>Survey Vote Debug Tool</h2>
+<pre id="output">Loading...</pre>
+<script>
+async function run() {
+    const out = document.getElementById('output');
+    let log = '';
+
+    function addLog(msg) {
+        log += msg + '\n';
+        out.textContent = log;
+    }
+
+    // Step 1: Test consultations_api.php list endpoint
+    addLog('=== STEP 1: Fetch consultations_api.php?action=list ===');
+    try {
+        const urls = [
+            'API/consultations_api.php?action=list&limit=200&offset=0',
+            '../API/consultations_api.php?action=list&limit=200&offset=0'
+        ];
+        for (const url of urls) {
+            addLog('  Trying: ' + url);
+            try {
+                const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                addLog('  Status: ' + res.status + ' ' + res.statusText);
+                if (res.ok) {
+                    const text = await res.text();
+                    addLog('  Response length: ' + text.length);
+                    addLog('  First 200 chars: ' + text.substring(0, 200));
+                    try {
+                        const json = JSON.parse(text);
+                        addLog('  JSON parsed: success=' + json.success + ', data count=' + (json.data ? json.data.length : 'null'));
+                        if (json.data && json.data.length > 0) {
+                            const first = json.data[0];
+                            addLog('  First consultation ID: ' + first.id);
+                            addLog('  First consultation title: ' + first.title);
+                            addLog('  First consultation response_mode: ' + first.response_mode);
+                            addLog('  First consultation survey_question: ' + first.survey_question);
+                            addLog('  First consultation vote_stats TYPE: ' + typeof first.vote_stats);
+                            addLog('  First consultation vote_stats VALUE: ' + JSON.stringify(first.vote_stats));
+                            if (first.vote_stats) {
+                                addLog('  vote_stats.agree_votes: ' + first.vote_stats.agree_votes);
+                                addLog('  vote_stats.disagree_votes: ' + first.vote_stats.disagree_votes);
+                                addLog('  vote_stats.total_votes: ' + first.vote_stats.total_votes);
+                            }
+                        }
+                    } catch (e) {
+                        addLog('  JSON PARSE ERROR: ' + e.message);
+                        addLog('  RAW TEXT (first 500): ' + text.substring(0, 500));
+                    }
+                    break; // success, stop trying
+                }
+            } catch (e) {
+                addLog('  Fetch error: ' + e.message);
+            }
+        }
+    } catch (e) {
+        addLog('STEP 1 ERROR: ' + e.message);
+    }
+
+    // Step 2: Test get_vote_stats endpoint
+    addLog('\n=== STEP 2: Fetch consultation_feedback.php?action=get_vote_stats&consultation_id=1 ===');
+    try {
+        const urls = [
+            'API/consultation_feedback.php?action=get_vote_stats&consultation_id=1',
+            '../API/consultation_feedback.php?action=get_vote_stats&consultation_id=1'
+        ];
+        for (const url of urls) {
+            addLog('  Trying: ' + url);
+            try {
+                const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                addLog('  Status: ' + res.status + ' ' + res.statusText);
+                if (res.ok) {
+                    const text = await res.text();
+                    addLog('  Response: ' + text.substring(0, 500));
+                    break;
+                }
+            } catch (e) {
+                addLog('  Fetch error: ' + e.message);
+            }
+        }
+    } catch (e) {
+        addLog('STEP 2 ERROR: ' + e.message);
+    }
+
+    // Step 3: Test get_all_vote_stats endpoint
+    addLog('\n=== STEP 3: Fetch consultation_feedback.php?action=get_all_vote_stats ===');
+    try {
+        const urls = [
+            'API/consultation_feedback.php?action=get_all_vote_stats',
+            '../API/consultation_feedback.php?action=get_all_vote_stats'
+        ];
+        for (const url of urls) {
+            addLog('  Trying: ' + url);
+            try {
+                const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                addLog('  Status: ' + res.status + ' ' + res.statusText);
+                if (res.ok) {
+                    const text = await res.text();
+                    addLog('  Response: ' + text.substring(0, 500));
+                    break;
+                }
+            } catch (e) {
+                addLog('  Fetch error: ' + e.message);
+            }
+        }
+    } catch (e) {
+        addLog('STEP 3 ERROR: ' + e.message);
+    }
+
+    // Step 4: Check window.location
+    addLog('\n=== STEP 4: Browser URL Info ===');
+    addLog('  window.location.href: ' + window.location.href);
+    addLog('  window.location.pathname: ' + window.location.pathname);
+
+    addLog('\n=== DONE ===');
+}
+run();
+</script>
+</body>
+</html>

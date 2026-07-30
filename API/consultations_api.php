@@ -2,13 +2,15 @@
 
 header('Content-Type: application/json');
 
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-require_once '../db.php';
+require_once __DIR__ . '/../db.php';
 
-require_once '../UTILS/security.php';
+require_once __DIR__ . '/../UTILS/security.php';
 
-require_once '../DATABASE/consultations.php';
+require_once __DIR__ . '/../DATABASE/consultations.php';
 require_once __DIR__ . '/../DATABASE/document-management.php';
 require_once __DIR__ . '/../UTILS/pdf_generator.php';
 require_once __DIR__ . '/../email_config.php';
@@ -95,6 +97,21 @@ try {
 
             echo json_encode(['success' => true, 'data' => $consultations]);
 
+            break;
+
+        case 'get_vote_stats':
+            $consultation_id = (int)($_GET['consultation_id'] ?? $_GET['id'] ?? 0);
+            if (!$consultation_id) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Consultation ID required']);
+                exit;
+            }
+            require_once __DIR__ . '/../DATABASE/consultations.php';
+            $stats = getConsultationVoteStats($consultation_id);
+            echo json_encode([
+                'success' => true,
+                'data' => $stats
+            ]);
             break;
 
             

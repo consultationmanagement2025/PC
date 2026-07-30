@@ -522,6 +522,36 @@ try {
             ]);
             break;
 
+        case 'get_all_vote_stats':
+            $res = $conn->query("
+                SELECT consultation_id, vote_option, COUNT(*) as total
+                FROM (
+                    SELECT consultation_id, LOWER(vote_option) as vote_option FROM consultation_votes
+                    UNION ALL
+                    SELECT consultation_id, LOWER(vote_option) as vote_option FROM consultation_guest_votes
+                ) all_votes
+                GROUP BY consultation_id, vote_option
+            ");
+            $byConsultation = [];
+            if ($res) {
+                while ($row = $res->fetch_assoc()) {
+                    $cid = (int)$row['consultation_id'];
+                    $opt = strtolower(trim($row['vote_option']));
+                    $cnt = (int)$row['total'];
+                    if (!isset($byConsultation[$cid])) {
+                        $byConsultation[$cid] = ['agree_votes' => 0, 'disagree_votes' => 0, 'total_votes' => 0];
+                    }
+                    if ($opt === 'agree') {
+                        $byConsultation[$cid]['agree_votes'] += $cnt;
+                    } else if ($opt === 'disagree') {
+                        $byConsultation[$cid]['disagree_votes'] += $cnt;
+                    }
+                    $byConsultation[$cid]['total_votes'] += $cnt;
+                }
+            }
+            echo json_encode(['success' => true, 'data' => $byConsultation]);
+            break;
+
         // Get consultation survey vote stats
         case 'get_vote_stats':
             $consultation_id = (int)($_GET['consultation_id'] ?? 0);

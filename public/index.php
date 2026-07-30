@@ -63,6 +63,14 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
             exit;
         }
 
+        // Verify consultation type is 'admin'
+        $typeCheck = $conn->query("SELECT type FROM consultations WHERE id = $consultation_id LIMIT 1");
+        $typeRow = $typeCheck ? $typeCheck->fetch_assoc() : null;
+        if ($typeRow && strtolower(trim($typeRow['type'])) === 'user') {
+            echo json_encode(['success' => false, 'message' => 'Feedback is only accepted on official Admin Consultations, not on citizen proposals.']);
+            exit;
+        }
+
         // Generate feedback tracking token
         $tracking_token = 'FDBK-' . date('Y') . '-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 6));
 
@@ -87,146 +95,61 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
     if ($action === 'submit_survey_vote') {
         try {
             $survey_id = (int)($_POST['survey_id'] ?? 0);
-            $option_chosen = trim($_POST['option_chosen'] ?? '');
+            $option_chosen = strtolower(trim($_POST['option_chosen'] ?? ''));
+            if ($option_chosen !== 'agree' && $option_chosen !== 'disagree') {
+                $sRes = $conn->query("SELECT survey_option_a, survey_option_b FROM consultations WHERE id = $survey_id LIMIT 1");
+                if ($sRes && $sRow = $sRes->fetch_assoc()) {
+                    if (!empty($sRow['survey_option_b']) && strtolower(trim($sRow['survey_option_b'])) === strtolower(trim($_POST['option_chosen']))) {
+                        $option_chosen = 'disagree';
+                    } else {
+                        $option_chosen = 'agree';
+                    }
+                } else {
+                    $option_chosen = 'agree';
+                }
+            }
 
-            if ($survey_id <= 0 || empty($option_chosen)) {
+            if ($survey_id <= 0) {
                 echo json_encode(['success' => false, 'message' => 'Invalid survey vote.']);
                 exit;
             }
 
-            $user_name = isset($_SESSION['fullname']) ? $_SESSION['fullname'] : (isset($_SESSION['full_name']) ? $_SESSION['full_name'] : 'Citizen');
-            $user_email = isset($_SESSION['email']) ? $_SESSION['email'] : 'guest@valenzuela.gov.ph';
-
-            $safeEmail = $conn->real_escape_string($user_email);
-            $safeName = $conn->real_escape_string($user_name);
-            $safeOption = $conn->real_escape_string($option_chosen);
-
-            $confirm_change = !empty($_POST['confirm_change']) && ($_POST['confirm_change'] === '1' || $_POST['confirm_change'] === 'true');
-
-            // 1. Check if citizen has already cast a vote for this survey
-            if (!empty($user_email) && $user_email !== 'guest@valenzuela.gov.ph') {
-                $checkRes = $conn->query("SELECT id, message FROM feedback WHERE consultation_id = $survey_id AND guest_email = '$safeEmail' AND category = 'Survey Vote' LIMIT 1");
-                if ($checkRes && $cRow = $checkRes->fetch_assoc()) {
-                    $prevVote = $cRow['message'];
-
-                    if ($prevVote === $option_chosen) {
-                        echo json_encode([
-                            'success' => false,
-                            'already_voted_same' => true,
-                            'previous_vote' => $prevVote,
-                            'message' => "You have already cast your vote ('$prevVote') for this survey."
-                        ]);
-                        exit;
-                    }
-
-                    if (!$confirm_change) {
-                        echo json_encode([
-                            'success' => false,
-                            'can_change_vote' => true,
-                            'previous_vote' => $prevVote,
-                            'new_vote' => $option_chosen,
-                            'message' => "You previously voted '$prevVote'. Do you want to change your vote to '$option_chosen'?"
-                        ]);
-                        exit;
-                    } else {
-                        // Update existing vote in database
-                        $feedback_id = (int)$cRow['id'];
-                        $conn->query("UPDATE feedback SET message = '$safeOption', updated_at = NOW() WHERE id = $feedback_id");
-                        
-                        // Recalculate survey stats
-                        $sRes = $conn->query("SELECT survey_option_a, survey_option_b FROM consultations WHERE id = $survey_id LIMIT 1");
-                        $optA = 'Agree'; $optB = 'Disagree';
-                        if ($sRes && $sRow = $sRes->fetch_assoc()) {
-                            $optA = !empty($sRow['survey_option_a']) ? $sRow['survey_option_a'] : 'Agree';
-                            $optB = !empty($sRow['survey_option_b']) ? $sRow['survey_option_b'] : 'Disagree';
-                        }
-                        $safeOptA = $conn->real_escape_string($optA);
-                        $safeOptB = $conn->real_escape_string($optB);
-
-                        $vARes = $conn->query("SELECT COUNT(*) as count_a FROM feedback WHERE consultation_id = $survey_id AND category = 'Survey Vote' AND message = '$safeOptA'");
-                        $count_a = ($vARes && $vARow = $vARes->fetch_assoc()) ? (int)$vARow['count_a'] : 0;
-
-                        $vBRes = $conn->query("SELECT COUNT(*) as count_b FROM feedback WHERE consultation_id = $survey_id AND category = 'Survey Vote' AND message = '$safeOptB'");
-                        $count_b = ($vBRes && $vBRow = $vBRes->fetch_assoc()) ? (int)$vBRow['count_b'] : 0;
-
-                        $total = max(1, $count_a + $count_b);
-                        $pct_a = round(($count_a / $total) * 100);
-                        $pct_b = round(($count_b / $total) * 100);
-
-                        echo json_encode([
-                            'success' => true,
-                            'updated_vote' => true,
-                            'message' => "Your vote has been successfully changed to '$option_chosen'!",
-                            'count_a' => $count_a,
-                            'count_b' => $count_b,
-                            'total_votes' => $count_a + $count_b,
-                            'pct_a' => $pct_a,
-                            'pct_b' => $pct_b,
-                            'option_voted' => $option_chosen
-                        ]);
-                        exit;
-                    }
-                }
+            // Check if consultation is an Admin consultation
+            $cCheck = $conn->query("SELECT type FROM consultations WHERE id = $survey_id LIMIT 1");
+            $cRow = $cCheck ? $cCheck->fetch_assoc() : null;
+            if ($cRow && strtolower(trim($cRow['type'])) === 'user') {
+                echo json_encode(['success' => false, 'message' => 'Voting is only available on official Admin Consultations.']);
+                exit;
             }
 
-            $tracking_token = 'VOTE-' . date('Y') . '-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 6));
+            $user_id = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 0;
+            $user_email = isset($_SESSION['email']) ? strtolower(trim($_SESSION['email'])) : trim($_POST['guest_email'] ?? '');
+            $device_token = trim($_POST['device_token'] ?? ('DEV-' . md5($_SERVER['REMOTE_ADDR'] . ($_SERVER['HTTP_USER_AGENT'] ?? ''))));
 
-            // Attempt auto-migration of tracking_token column if missing in database
-            @$conn->query("ALTER TABLE feedback ADD COLUMN tracking_token VARCHAR(64) NULL");
-
-            // Primary insert with tracking_token
-            $insertSql = "INSERT INTO feedback (consultation_id, guest_name, guest_email, category, message, rating, tracking_token, status, created_at) VALUES ($survey_id, '$safeName', '$safeEmail', 'Survey Vote', '$safeOption', 5, '$tracking_token', 'new', NOW())";
-            
-            $inserted = @$conn->query($insertSql);
-            if (!$inserted) {
-                // Fallback insert using standard columns
-                $fallbackSql = "INSERT INTO feedback (consultation_id, guest_name, guest_email, category, message, rating, status, created_at) VALUES ($survey_id, '$safeName', '$safeEmail', 'Survey Vote', '$safeOption', 5, 'new', NOW())";
-                $inserted = $conn->query($fallbackSql);
-            }
-
-            if ($inserted) {
-                // Update posts_count on consultations
-                $conn->query("UPDATE consultations SET posts_count = posts_count + 1 WHERE id = " . $survey_id);
-
-                // Fetch survey options
-                $sRes = $conn->query("SELECT survey_option_a, survey_option_b FROM consultations WHERE id = $survey_id LIMIT 1");
-                $optA = 'Agree';
-                $optB = 'Disagree';
-                if ($sRes && $sRow = $sRes->fetch_assoc()) {
-                    $optA = !empty($sRow['survey_option_a']) ? $sRow['survey_option_a'] : 'Agree';
-                    $optB = !empty($sRow['survey_option_b']) ? $sRow['survey_option_b'] : 'Disagree';
-                }
-
-                $safeOptA = $conn->real_escape_string($optA);
-                $safeOptB = $conn->real_escape_string($optB);
-
-                $vARes = $conn->query("SELECT COUNT(*) as count_a FROM feedback WHERE consultation_id = $survey_id AND category = 'Survey Vote' AND message = '$safeOptA'");
-                $count_a = ($vARes && $vARow = $vARes->fetch_assoc()) ? (int)$vARow['count_a'] : 0;
-
-                $vBRes = $conn->query("SELECT COUNT(*) as count_b FROM feedback WHERE consultation_id = $survey_id AND category = 'Survey Vote' AND message = '$safeOptB'");
-                $count_b = ($vBRes && $vBRow = $vBRes->fetch_assoc()) ? (int)$vBRow['count_b'] : 0;
-
-                $total = max(1, $count_a + $count_b);
-                $pct_a = round(($count_a / $total) * 100);
-                $pct_b = round(($count_b / $total) * 100);
-
-                echo json_encode([
-                    'success' => true,
-                    'message' => 'Vote recorded successfully!',
-                    'count_a' => $count_a,
-                    'count_b' => $count_b,
-                    'total_votes' => $count_a + $count_b,
-                    'pct_a' => $pct_a,
-                    'pct_b' => $pct_b,
-                    'option_voted' => $option_chosen
-                ]);
+            require_once __DIR__ . '/../DATABASE/consultations.php';
+            if ($user_id > 0) {
+                submitConsultationVote($survey_id, $user_id, $option_chosen);
             } else {
-                echo json_encode(['success' => false, 'message' => 'Database query failed: ' . $conn->error]);
+                submitConsultationGuestVote($survey_id, $device_token, $option_chosen, $user_email, null, null, 1);
             }
+
+            $stats = getConsultationVoteStats($survey_id);
+
+            echo json_encode([
+                'success' => true,
+                'message' => 'Your vote has been recorded successfully!',
+                'count_a' => $stats['agree_votes'],
+                'count_b' => $stats['disagree_votes'],
+                'total_votes' => $stats['total_votes'],
+                'pct_a' => (int)$stats['agree_percent'],
+                'pct_b' => (int)$stats['disagree_percent'],
+                'option_voted' => $option_chosen
+            ]);
+            exit;
         } catch (Throwable $e) {
-            echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+            exit;
         }
-        exit;
     }
 
     if ($action === 'get_my_activity') {
@@ -494,33 +417,16 @@ $sRes = $conn->query($survey_query);
 if ($sRes) {
     while ($sRow = $sRes->fetch_assoc()) {
         // Get vote counts for option A and option B
-        $sId = (int)$sRow['id'];
-        $optA = $sRow['survey_option_a'] ?? 'Agree';
-        $optB = $sRow['survey_option_b'] ?? 'Disagree';
-
-        $vA = 0; $vB = 0;
-        $vAStmt = $conn->query("SELECT COUNT(*) as count_a FROM feedback WHERE consultation_id = $sId AND category = 'Survey Vote' AND message = '" . $conn->real_escape_string($optA) . "'");
-        if ($vAStmt && $vARow = $vAStmt->fetch_assoc()) {
-            $vA = (int)$vARow['count_a'];
-        }
-        $vBStmt = $conn->query("SELECT COUNT(*) as count_b FROM feedback WHERE consultation_id = $sId AND category = 'Survey Vote' AND message = '" . $conn->real_escape_string($optB) . "'");
-        if ($vBStmt && $vBRow = $vBStmt->fetch_assoc()) {
-            $vB = (int)$vBRow['count_b'];
-        }
-        $tot = max(1, $vA + $vB);
-        $sRow['count_a'] = $vA;
-        $sRow['count_b'] = $vB;
-        $sRow['total_votes'] = $vA + $vB;
-        $sRow['pct_a'] = round(($vA / $tot) * 100);
-        $sRow['pct_b'] = round(($vB / $tot) * 100);
+        $vStats = getConsultationVoteStats($sId);
+        $sRow['count_a'] = $vStats['agree_votes'];
+        $sRow['count_b'] = $vStats['disagree_votes'];
+        $sRow['total_votes'] = $vStats['total_votes'];
+        $sRow['pct_a'] = (int)$vStats['agree_percent'];
+        $sRow['pct_b'] = (int)$vStats['disagree_percent'];
 
         $user_vote = null;
-        if (!empty($_SESSION['email'])) {
-            $eMail = $conn->real_escape_string($_SESSION['email']);
-            $uvStmt = $conn->query("SELECT message FROM feedback WHERE consultation_id = $sId AND guest_email = '$eMail' AND category = 'Survey Vote' LIMIT 1");
-            if ($uvStmt && $uvRow = $uvStmt->fetch_assoc()) {
-                $user_vote = $uvRow['message'];
-            }
+        if (isset($_SESSION['user_id'])) {
+            $user_vote = getUserConsultationVote($sId, (int)$_SESSION['user_id']);
         }
         $sRow['user_vote'] = $user_vote;
 

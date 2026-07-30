@@ -9590,9 +9590,8 @@ async function renderPublicConsultation() {
 
     const closedConsults = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'closed').length;
 
-
-    const totalFeedback = AppData.feedback.length;
-
+    const validFeedbackList = getFilteredValidFeedback();
+    const totalFeedback = validFeedbackList.length;
 
     const avgFeedback = totalConsults > 0 ? Math.round(totalFeedback / totalConsults) : 0;
 
@@ -10057,14 +10056,15 @@ async function renderPublicConsultation() {
     
 
 
-        // Render charts
+        // Render charts — must wait for DOM injection at line ~10045 to complete
     setTimeout(() => {
         const filtered = Array.isArray(AppData.consultations) ? AppData.consultations : [];
+        console.log('[renderPublicConsultation] setTimeout fired, rendering charts with', filtered.length, 'consultations');
         renderPCStatusChart(filtered);
         renderPCFeedbackSentimentChart();
         refreshPCSurveySelector(filtered);
         renderPCSurveyAnswersChart(filtered);
-    }, 120);
+    }, 300);
 
     // Refresh feedback and issue analytics using latest DB data
     try {
@@ -11659,9 +11659,28 @@ function resetPublicConsultationFilters() {
 
 
 
+function getFilteredValidFeedback() {
+    const feedbackRows = Array.isArray(AppData.feedback) ? AppData.feedback : [];
+    const adminConsultations = Array.isArray(AppData.consultations) ? AppData.consultations.filter(c => String(c.type || '').toLowerCase() !== 'user') : [];
+    const adminConsultationIds = new Set(adminConsultations.map(c => Number(c.id)));
+
+    return feedbackRows.filter(f => {
+        if (!f) return false;
+        if (f.consultationId && adminConsultationIds.size > 0 && !adminConsultationIds.has(Number(f.consultationId))) {
+            return false;
+        }
+        const subType = String(f.submission_type || f.type || '').toLowerCase();
+        const category = String(f.category || '').toLowerCase();
+        if (subType === 'proposal' || subType === 'consultation' || category === 'ordinance suggestion' || category === 'proposal' || category === 'survey vote') {
+            return false;
+        }
+        return true;
+    });
+}
+
 function getFeedbackSentimentStats() {
     const stats = { positive: 0, neutral: 0, negative: 0, rated: 0 };
-    const feedbackRows = Array.isArray(AppData.feedback) ? AppData.feedback : [];
+    const feedbackRows = getFilteredValidFeedback();
 
     for (const row of feedbackRows) {
         const rating = Number(row && row.rating);
@@ -11676,7 +11695,7 @@ function getFeedbackSentimentStats() {
 }
 
 function getTopicThemeBreakdown() {
-    const feedbackRows = Array.isArray(AppData.feedback) ? AppData.feedback : [];
+    const feedbackRows = getFilteredValidFeedback();
     const issueRows = Array.isArray(AppData.issueReports) ? AppData.issueReports : [];
     const buckets = new Map();
     const addBucket = (label, count = 1) => {
@@ -11738,8 +11757,9 @@ function renderPCFeedbackSentimentChart() {
     if (neuEl) neuEl.textContent = `Neutral: ${stats.neutral}`;
     if (negEl) negEl.textContent = `Negative: ${stats.negative}`;
     if (summaryEl) {
-        const totalFeedback = Array.isArray(AppData.feedback) ? AppData.feedback.length : 0;
-        const avgRating = totalFeedback > 0 ? (Array.isArray(AppData.feedback) ? AppData.feedback.reduce((sum, item) => sum + (Number(item && item.rating) > 0 ? Number(item.rating) : 0), 0) / totalFeedback : 0) : 0;
+        const validFeedbackList = getFilteredValidFeedback();
+        const totalFeedback = validFeedbackList.length;
+        const avgRating = totalFeedback > 0 ? (validFeedbackList.reduce((sum, item) => sum + (Number(item && item.rating) > 0 ? Number(item.rating) : 0), 0) / totalFeedback) : 0;
         summaryEl.innerHTML = `Total feedback: <strong>${totalFeedback}</strong> · Avg rating: <strong>${avgRating.toFixed(1)}</strong>`;
     }
     if (topicListEl) {
@@ -11789,11 +11809,22 @@ function renderPCFeedbackSentimentChart() {
 
 function isSurveyFormConsultation(consultation) {
     if (!consultation) return false;
+    const type = String(consultation.type || '').toLowerCase().trim();
+    if (type === 'user') {
+        return false;
+    }
+    const mode = String(consultation.response_mode || '').toLowerCase().trim();
+    const voteStats = consultation.vote_stats || null;
+    const hasVotes = voteStats && (Number(voteStats.total_votes || 0) > 0 || Number(voteStats.agree_votes || 0) > 0 || Number(voteStats.disagree_votes || 0) > 0);
+
+    if (mode === 'feedback' && !hasVotes) {
+        return false;
+    }
     return true;
 }
 
 function getSurveyConsultations(consultations) {
-    const source = Array.isArray(consultations) ? consultations : (Array.isArray(AppData.consultations) ? AppData.consultations : []);
+    const source = Array.isArray(consultations) && consultations.length > 0 ? consultations : (Array.isArray(AppData.consultations) ? AppData.consultations : []);
     return source.filter(isSurveyFormConsultation);
 }
 
@@ -11841,94 +11872,68 @@ function handlePCSurveySelectionChange() {
     renderPCSurveyAnswersChart(Array.isArray(AppData.consultations) ? AppData.consultations : []);
 }
 
-async function fetchSurveyVoteTotals(consultations) {
-    const targetSurveys = Array.isArray(consultations) ? consultations : getSurveyConsultations(consultations);
-    if (!targetSurveys.length) {
-        return { agree: 0, disagree: 0, total: 0, surveyCount: 0 };
-    }
-
-    const requests = targetSurveys.map((c) => {
-        const cid = Number(c && c.id ? c.id : 0);
-        if (!cid) return Promise.resolve(null);
-        const relUrl = `API/consultation_feedback.php?action=get_vote_stats&consultation_id=${encodeURIComponent(String(cid))}`;
-        const targetUrl = typeof getApiUrl === 'function' ? getApiUrl(relUrl) : relUrl;
-        return fetch(targetUrl, { headers: { 'Accept': 'application/json' } })
-            .then((res) => {
-                if (res.ok) return res.json();
-                const altUrl = targetUrl.startsWith('../') ? relUrl : ('../' + relUrl);
-                return fetch(altUrl, { headers: { 'Accept': 'application/json' } })
-                    .then((r2) => (r2.ok ? r2.json() : null))
-                    .catch(() => null);
-            })
-            .catch(() => null);
-    });
-
-    const rows = await Promise.all(requests);
-    let agree = 0;
-    let disagree = 0;
-    let total = 0;
-
-    for (let i = 0; i < targetSurveys.length; i++) {
-        const c = targetSurveys[i];
-        const row = rows[i];
-        let cAgree = 0;
-        let cDisagree = 0;
-        let cTotal = 0;
-
-        if (row && row.success && row.data) {
-            cAgree = Number(row.data.agree_votes || 0);
-            cDisagree = Number(row.data.disagree_votes || 0);
-            cTotal = Number(row.data.total_votes || (cAgree + cDisagree));
-        } else if (c && c.vote_stats) {
-            cAgree = Number(c.vote_stats.agree_votes || 0);
-            cDisagree = Number(c.vote_stats.disagree_votes || 0);
-            cTotal = Number(c.vote_stats.total_votes || (cAgree + cDisagree));
+function getVoteTotalsFromConsultations(surveyList) {
+    let agree = 0, disagree = 0, total = 0;
+    console.log('[getVoteTotals] Processing', surveyList.length, 'surveys');
+    for (let i = 0; i < surveyList.length; i++) {
+        const c = surveyList[i];
+        const vs = c.vote_stats || c.voteStats || c.stats || null;
+        console.log('[getVoteTotals] Survey #' + i + ' id=' + c.id + ' vote_stats=', vs, 'type=' + typeof vs);
+        if (vs && typeof vs === 'object') {
+            const a = Number(vs.agree_votes) || Number(vs.agree) || 0;
+            const d = Number(vs.disagree_votes) || Number(vs.disagree) || 0;
+            const t = Number(vs.total_votes) || Number(vs.total) || 0;
+            console.log('[getVoteTotals]   parsed: agree=' + a + ' disagree=' + d + ' total=' + t);
+            agree += a;
+            disagree += d;
+            total += Math.max(t, a + d);
+        } else {
+            console.warn('[getVoteTotals]   vote_stats is null/empty for consultation id=' + c.id);
         }
-
-        agree += cAgree;
-        disagree += cDisagree;
-        total += Math.max(cTotal, cAgree + cDisagree);
     }
-    return { agree, disagree, total, surveyCount: targetSurveys.length };
+    total = Math.max(total, agree + disagree);
+    console.log('[getVoteTotals] RESULT: agree=' + agree + ' disagree=' + disagree + ' total=' + total);
+    return { agree, disagree, total, surveyCount: surveyList.length };
 }
 
-async function renderPCSurveyAnswersChart(consultations) {
+function renderPCSurveyAnswersChart(consultations) {
     const ctx = document.getElementById('pcSurveyAnswersChart');
+    console.log('[renderPCSurveyChart] canvas found:', !!ctx);
     if (!ctx) return;
 
     const respondentTotalEl = document.getElementById('pc-respondent-total');
     const surveyCountEl = document.getElementById('pc-survey-count-summary');
     const respondentScopeEl = document.getElementById('pc-respondent-scope');
-
     const totalEl = document.getElementById('pc-survey-total-count');
     const agreeEl = document.getElementById('pc-survey-agree-count');
     const disagreeEl = document.getElementById('pc-survey-disagree-count');
     const sourceEl = document.getElementById('pc-survey-source');
 
-    if (totalEl) totalEl.textContent = '...';
-    if (agreeEl) agreeEl.textContent = 'Agree: ...';
-    if (disagreeEl) disagreeEl.textContent = 'Disagree: ...';
-    if (sourceEl) sourceEl.textContent = 'Loading survey scope...';
-
     const selectEl = document.getElementById('pc-survey-select');
     const selectedId = String(selectEl && selectEl.value ? selectEl.value : 'all');
     const surveys = getSurveyConsultations(consultations);
+    console.log('[renderPCSurveyChart] surveys found:', surveys.length, 'selectedId:', selectedId);
+
     const selectedSurvey = selectedId === 'all'
         ? null
         : (surveys.find((s) => String(Number(s && s.id ? s.id : 0)) === selectedId) || (Array.isArray(consultations) ? consultations.find((s) => String(Number(s && s.id ? s.id : 0)) === selectedId) : null));
     const scope = selectedSurvey ? [selectedSurvey] : surveys;
-    const totals = await fetchSurveyVoteTotals(scope);
+
+    // Get vote totals SYNCHRONOUSLY from in-memory data — NO API calls
+    const totals = getVoteTotalsFromConsultations(scope);
+
+    console.log('[renderPCSurveyChart] totals:', JSON.stringify(totals));
 
     if (totalEl) totalEl.textContent = String(totals.total);
-    if (agreeEl) agreeEl.textContent = `Agree: ${totals.agree}`;
-    if (disagreeEl) disagreeEl.textContent = `Disagree: ${totals.disagree}`;
+    if (agreeEl) agreeEl.textContent = 'Agree: ' + totals.agree;
+    if (disagreeEl) disagreeEl.textContent = 'Disagree: ' + totals.disagree;
     if (respondentTotalEl) respondentTotalEl.textContent = String(totals.total);
     if (surveyCountEl) surveyCountEl.textContent = String(totals.surveyCount || (selectedSurvey ? 1 : surveys.length) || 0);
     if (respondentScopeEl) {
         if (selectedSurvey) {
-            respondentScopeEl.textContent = `Showing respondents for ${getSurveyDisplayTitle(selectedSurvey)}`;
+            respondentScopeEl.textContent = 'Showing respondents for ' + getSurveyDisplayTitle(selectedSurvey);
         } else if (surveys.length) {
-            respondentScopeEl.textContent = `Across ${surveys.length} active survey forms`;
+            respondentScopeEl.textContent = 'Across ' + surveys.length + ' active survey forms';
         } else {
             respondentScopeEl.textContent = 'No survey responses available yet.';
         }
@@ -11936,10 +11941,10 @@ async function renderPCSurveyAnswersChart(consultations) {
     if (sourceEl) {
         const count = Number(totals.surveyCount || 0);
         if (selectedSurvey) {
-            sourceEl.textContent = `Showing: ${getSurveyDisplayTitle(selectedSurvey)}`;
+            sourceEl.textContent = 'Showing: ' + getSurveyDisplayTitle(selectedSurvey);
         } else {
             sourceEl.textContent = count > 0
-                ? `Across ${count} survey consultation${count === 1 ? '' : 's'}`
+                ? 'Across ' + count + ' survey consultation' + (count === 1 ? '' : 's')
                 : 'No survey consultations found';
         }
     }
@@ -11980,7 +11985,7 @@ async function renderPCSurveyAnswersChart(consultations) {
                                 ? context.dataset.data.reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0)
                                 : 0;
                             const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
-                            return `${label}: ${value} (${percentage}%)`;
+                            return label + ': ' + value + ' (' + percentage + '%)';
                         }
                     }
                 }
@@ -13137,13 +13142,13 @@ async function loadConsultationsFromApi() {
     try {
 
 
-        const res = await fetch('API/consultations_api.php?action=list&limit=200&offset=0', {
+        const res = await fetchWithTimeout('API/consultations_api.php?action=list&limit=200&offset=0', {
 
 
             headers: { 'Accept': 'application/json' }
 
 
-        });
+        }, 5000);
 
 
 
@@ -13200,6 +13205,11 @@ async function loadConsultationsFromApi() {
 
         AppData.consultations = data.data.map(mapDbConsultationToUi);
 
+        // DEBUG: Log vote_stats for each consultation
+        console.log('[loadConsultationsFromApi] Loaded ' + AppData.consultations.length + ' consultations');
+        for (const c of AppData.consultations) {
+            console.log('[loadConsultationsFromApi] id=' + c.id + ' title=' + (c.title || '').substring(0, 40) + ' vote_stats=' + JSON.stringify(c.vote_stats) + ' response_mode=' + c.response_mode);
+        }
 
         recomputeConsultationFeedbackCounts();
 
@@ -13208,8 +13218,10 @@ async function loadConsultationsFromApi() {
 
 
         renderConsultationsTable();
-        refreshPCSurveySelector(AppData.consultations);
-        renderPCSurveyAnswersChart(AppData.consultations);
+        // NOTE: Do NOT call refreshPCSurveySelector or renderPCSurveyAnswersChart here.
+        // The <canvas id="pcSurveyAnswersChart"> does NOT exist in the DOM yet at this point.
+        // It gets injected later by renderPublicConsultation() at line ~10045.
+        // The setTimeout at line ~10065 handles the chart rendering AFTER the DOM is ready.
 
 
 

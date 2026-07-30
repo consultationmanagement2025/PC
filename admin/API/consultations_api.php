@@ -2,114 +2,20 @@
 
 header('Content-Type: application/json');
 
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-require_once '../db.php';
+require_once __DIR__ . '/../db.php';
 
-require_once '../UTILS/security.php';
+require_once __DIR__ . '/../UTILS/security.php';
 
-require_once '../DATABASE/consultations.php';
+require_once __DIR__ . '/../DATABASE/consultations.php';
 require_once __DIR__ . '/../DATABASE/document-management.php';
 require_once __DIR__ . '/../UTILS/pdf_generator.php';
 require_once __DIR__ . '/../email_config.php';
 
-/**
- * Resize image to specified dimensions
- * @param string $source Path to source image
- * @param string $destination Path to save resized image
- * @param int $maxWidth Maximum width
- * @param int $maxHeight Maximum height
- * @param string $extension Image extension
- * @return bool Success status
- */
-function resizeImage($source, $destination, $maxWidth, $maxHeight, $extension) {
-    try {
-        // Get image info
-        $imageInfo = getimagesize($source);
-        if (!$imageInfo) {
-            error_log('Failed to get image info');
-            return false;
-        }
 
-        list($width, $height) = $imageInfo;
-        $mime = $imageInfo['mime'];
-
-        // Calculate new dimensions maintaining aspect ratio
-        $ratio = min($maxWidth / $width, $maxHeight / $height);
-        $newWidth = (int)($width * $ratio);
-        $newHeight = (int)($height * $ratio);
-
-        // Create image resource based on mime type
-        switch ($mime) {
-            case 'image/jpeg':
-                $sourceImage = imagecreatefromjpeg($source);
-                break;
-            case 'image/png':
-                $sourceImage = imagecreatefrompng($source);
-                break;
-            case 'image/gif':
-                $sourceImage = imagecreatefromgif($source);
-                break;
-            case 'image/webp':
-                $sourceImage = imagecreatefromwebp($source);
-                break;
-            default:
-                error_log('Unsupported image type: ' . $mime);
-                return false;
-        }
-
-        if (!$sourceImage) {
-            error_log('Failed to create image resource');
-            return false;
-        }
-
-        // Create new image with true color support
-        $destinationImage = imagecreatetruecolor($newWidth, $newHeight);
-
-        // Handle transparency for PNG and GIF
-        if ($mime === 'image/png' || $mime === 'image/gif') {
-            imagealphablending($destinationImage, false);
-            imagesavealpha($destinationImage, true);
-            $transparent = imagecolorallocatealpha($destinationImage, 255, 255, 255, 127);
-            imagefilledrectangle($destinationImage, 0, 0, $newWidth, $newHeight, $transparent);
-        }
-
-        // Resize image
-        imagecopyresampled($destinationImage, $sourceImage, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
-
-        // Save resized image
-        $success = false;
-        switch ($extension) {
-            case 'jpg':
-            case 'jpeg':
-                $success = imagejpeg($destinationImage, $destination, 90);
-                break;
-            case 'png':
-                $success = imagepng($destinationImage, $destination, 9);
-                break;
-            case 'gif':
-                $success = imagegif($destinationImage, $destination);
-                break;
-            case 'webp':
-                $success = imagewebp($destinationImage, $destination, 90);
-                break;
-        }
-
-        // Free memory
-        imagedestroy($sourceImage);
-        imagedestroy($destinationImage);
-
-        if (!$success) {
-            error_log('Failed to save resized image');
-            return false;
-        }
-
-        return true;
-    } catch (Exception $e) {
-        error_log('Image resize error: ' . $e->getMessage());
-        return false;
-    }
-}
 
 // Allow admin or staff roles to access create/update consultation endpoints
 
@@ -125,7 +31,7 @@ if (!$is_authenticated) {
 
 
 $is_super_admin = ($current_role === 'super admin' || $current_role === 'superadmin');
-$is_staff = in_array($current_role, ['staff', 'resource person', 'resource_person'], true);
+$is_staff = in_array($current_role, ['staff', 'barangay staff', 'barangay_staff', 'barangay'], true);
 
 $action = $_POST['action'] ?? ($_GET['action'] ?? 'list');
 
@@ -191,6 +97,21 @@ try {
 
             echo json_encode(['success' => true, 'data' => $consultations]);
 
+            break;
+
+        case 'get_vote_stats':
+            $consultation_id = (int)($_GET['consultation_id'] ?? $_GET['id'] ?? 0);
+            if (!$consultation_id) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Consultation ID required']);
+                exit;
+            }
+            require_once __DIR__ . '/../DATABASE/consultations.php';
+            $stats = getConsultationVoteStats($consultation_id);
+            echo json_encode([
+                'success' => true,
+                'data' => $stats
+            ]);
             break;
 
             
@@ -356,11 +277,12 @@ try {
 
                 $filepath = $uploadDir . $filename;
 
-                // Resize image to 600x600px before saving
-                $resized = resizeImage($file['tmp_name'], $filepath, 600, 600, $ext);
+                
 
-                if ($resized) {
+                if (move_uploaded_file($file['tmp_name'], $filepath)) {
+
                     $image_path = 'ASSETS/images/consultations/' . $filename;
+
                 }
 
             }
@@ -418,8 +340,9 @@ try {
                 $data['survey_option_b'] ?? 'Disagree',
                 !empty($data['allow_guest_quick_vote']) ? 1 : 0,
                 !empty($data['allow_guest_verified_vote']) ? 1 : 0,
-                $createErr
-
+                $createErr,
+                $data['district'] ?? null,
+                $data['barangay'] ?? null
             );
 
             
@@ -467,7 +390,7 @@ try {
                             $file_size = (int)$file_size;
                             $stmtDoc->bind_param('isssissss',
                                 $id, $reference_number, $original_filename,
-                                $stored_filename, $file_size, $uploaded_by,
+                                $stored_filename, $file_type, $file_size, $uploaded_by,
                                 $document_type, $document_description
                             );
                             $stmtDoc->execute();
@@ -534,8 +457,9 @@ try {
                 $data['survey_option_a'] ?? 'Agree',
                 $data['survey_option_b'] ?? 'Disagree',
                 !empty($data['allow_guest_quick_vote']) ? 1 : 0,
-                !empty($data['allow_guest_verified_vote']) ? 1 : 0
-
+                !empty($data['allow_guest_verified_vote']) ? 1 : 0,
+                $data['district'] ?? null,
+                $data['barangay'] ?? null
             );
 
             
