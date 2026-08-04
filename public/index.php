@@ -30,7 +30,7 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
             $conn->query("UPDATE consultations SET views = views + 1 WHERE id = " . $id);
             
             // Fetch feedback / comments for this consultation
-            $fStmt = $conn->prepare("SELECT id, guest_name, category, rating, message, created_at, admin_response, responded_at, status FROM feedback WHERE consultation_id = ? ORDER BY created_at DESC");
+            $fStmt = $conn->prepare("SELECT id, guest_name, guest_email, category, rating, message, created_at, admin_response, responded_at, status FROM feedback WHERE consultation_id = ? ORDER BY created_at DESC");
             $fStmt->bind_param('i', $id);
             $fStmt->execute();
             $fRes = $fStmt->get_result();
@@ -478,6 +478,11 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
     <link rel="icon" type="image/png" href="../images/valenzuela-logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+        window.__CURRENT_USER_NAME__ = <?php echo json_encode($_SESSION['fullname'] ?? $_SESSION['full_name'] ?? $_SESSION['username'] ?? ''); ?>;
+        window.__CURRENT_USER_EMAIL__ = <?php echo json_encode($_SESSION['email'] ?? ''); ?>;
+        window.__CURRENT_USER_ID__ = <?php echo json_encode((int)($_SESSION['user_id'] ?? 0)); ?>;
+        window.__IS_LOGGED_IN__ = <?php echo json_encode($is_logged_in); ?>;
+
         tailwind.config = {
             theme: {
                 extend: {
@@ -695,59 +700,59 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
     <main class="flex-grow max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12 w-full">
 
         <!-- Hero / Welcome Section -->
-        <header class="hero-gradient rounded-3xl p-6 sm:p-10 text-white shadow-xl relative overflow-hidden flex flex-col lg:flex-row items-center justify-between gap-8">
-            <!-- Decorative Accent Circle -->
-            <div class="absolute -right-16 -top-16 w-80 h-80 bg-red-600/20 rounded-full blur-3xl pointer-events-none"></div>
-            <div class="absolute -left-16 -bottom-16 w-80 h-80 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"></div>
+        <header class="bg-gradient-to-r from-red-950 via-slate-900 to-blue-950 rounded-3xl p-6 sm:p-10 text-white shadow-2xl relative overflow-hidden flex flex-col lg:flex-row items-center justify-between gap-8 border border-white/10">
+            <!-- Subtle Background Accents -->
+            <div class="absolute -right-20 -top-20 w-96 h-96 bg-red-600/20 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -left-20 -bottom-20 w-96 h-96 bg-blue-600/15 rounded-full blur-3xl pointer-events-none"></div>
 
             <div class="z-10 max-w-2xl">
                 <?php if (isset($_GET['login']) && $_GET['login'] === 'success'): ?>
-                    <div class="inline-flex items-center gap-2 bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-semibold px-3 py-1 rounded-full mb-3 backdrop-blur-md">
-                        <i class="fa-solid fa-circle-check"></i> Welcome back, <?php echo htmlspecialchars($current_user_name ?? 'Citizen'); ?>!
+                    <div class="inline-flex items-center gap-2 bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-bold px-3.5 py-1.5 rounded-full mb-3 backdrop-blur-md shadow-inner">
+                        <i class="fa-solid fa-circle-check text-emerald-400"></i> Welcome back, <?php echo htmlspecialchars($current_user_name ?? 'Citizen'); ?>!
                     </div>
                 <?php endif; ?>
 
-                <span class="inline-block bg-white/10 text-blue-200 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-3">
-                    Valenzuela City Legislative Office
+                <span class="inline-flex items-center gap-1.5 bg-white/10 text-blue-200 text-[11px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider mb-3 border border-white/15 backdrop-blur-md">
+                    <i class="fa-solid fa-building-columns text-red-400"></i> Valenzuela City Legislative Office
                 </span>
 
                 <h2 class="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight mb-4">
                     Shape City Ordinances & Community Policies
                 </h2>
 
-                <p class="text-blue-100/90 text-sm sm:text-base leading-relaxed mb-6">
+                <p class="text-slate-300 text-xs sm:text-sm leading-relaxed mb-6">
                     Participate directly in local governance. Voice your thoughts on active city consultations, vote on community surveys, and submit citizen proposal topics to the City Council.
                 </p>
 
                 <!-- Search Bar -->
-                <form action="#active-consultations" method="GET" class="flex flex-col sm:flex-row gap-2 bg-white/10 p-2 rounded-2xl backdrop-blur-md border border-white/20">
+                <form action="#active-consultations" method="GET" class="flex flex-col sm:flex-row gap-2 bg-white/10 p-2 rounded-2xl backdrop-blur-md border border-white/20 shadow-inner">
                     <div class="relative flex-grow">
-                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-blue-200 text-sm"></i>
-                        <input type="text" name="search" value="<?php echo htmlspecialchars($search_query); ?>" placeholder="Search consultations by ordinance title or keyword..." class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/10 text-white placeholder-blue-200/60 focus:bg-white/20 focus:outline-none text-sm border-none">
+                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-slate-300 text-sm"></i>
+                        <input type="text" name="search" value="<?php echo htmlspecialchars($search_query); ?>" placeholder="Search consultations by ordinance title or keyword..." class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/10 text-white placeholder-slate-400 focus:bg-white/20 focus:outline-none text-sm border-none">
                     </div>
-                    <button type="submit" class="bg-valenzuela-red hover:bg-red-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-all shrink-0">
+                    <button type="submit" class="bg-gradient-to-r from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 text-white font-extrabold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all shrink-0 shadow-md">
                         Search Topics
                     </button>
                 </form>
             </div>
 
             <!-- Live Dashboard Stats Cards -->
-            <div class="z-10 grid grid-cols-2 gap-4 w-full lg:w-auto shrink-0">
-                <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center flex flex-col justify-center min-w-[130px]">
+            <div class="z-10 grid grid-cols-2 gap-3.5 w-full lg:w-auto shrink-0">
+                <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center flex flex-col justify-center min-w-[135px] shadow-lg hover:bg-white/15 transition-all">
                     <span class="text-3xl sm:text-4xl font-black text-amber-400"><?php echo $stats['active_consultations']; ?></span>
-                    <span class="text-[11px] text-blue-200 uppercase font-bold tracking-wider mt-1">Active<br>Topics</span>
+                    <span class="text-[10px] text-slate-200 uppercase font-extrabold tracking-wider mt-1.5">Active<br>Topics</span>
                 </div>
-                <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center flex flex-col justify-center min-w-[130px]">
+                <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center flex flex-col justify-center min-w-[135px] shadow-lg hover:bg-white/15 transition-all">
                     <span class="text-3xl sm:text-4xl font-black text-emerald-400"><?php echo $stats['new_surveys']; ?></span>
-                    <span class="text-[11px] text-blue-200 uppercase font-bold tracking-wider mt-1">Open<br>Surveys</span>
+                    <span class="text-[10px] text-slate-200 uppercase font-extrabold tracking-wider mt-1.5">Open<br>Surveys</span>
                 </div>
-                <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center flex flex-col justify-center min-w-[130px]">
+                <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center flex flex-col justify-center min-w-[135px] shadow-lg hover:bg-white/15 transition-all">
                     <span class="text-3xl sm:text-4xl font-black text-blue-300"><?php echo number_format($stats['total_citizens']); ?></span>
-                    <span class="text-[11px] text-blue-200 uppercase font-bold tracking-wider mt-1">Registered<br>Citizens</span>
+                    <span class="text-[10px] text-slate-200 uppercase font-extrabold tracking-wider mt-1.5">Registered<br>Citizens</span>
                 </div>
-                <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center flex flex-col justify-center min-w-[130px]">
+                <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center flex flex-col justify-center min-w-[135px] shadow-lg hover:bg-white/15 transition-all">
                     <span class="text-3xl sm:text-4xl font-black text-rose-400"><?php echo number_format($stats['feedback_submitted']); ?></span>
-                    <span class="text-[11px] text-blue-200 uppercase font-bold tracking-wider mt-1">Feedback<br>Submitted</span>
+                    <span class="text-[10px] text-slate-200 uppercase font-extrabold tracking-wider mt-1.5">Feedback<br>Submitted</span>
                 </div>
             </div>
         </header>
@@ -755,17 +760,17 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
         <!-- City Announcements Section (If Available) -->
         <?php if (!empty($announcements)): ?>
         <section id="announcements" class="scroll-mt-24">
-            <div class="bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent border-l-4 border-amber-500 p-4 rounded-xl flex items-center justify-between gap-4">
+            <div class="bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent border-l-4 border-amber-500 p-4 rounded-2xl flex items-center justify-between gap-4 border border-amber-200/50 shadow-xs">
                 <div class="flex items-center gap-3 overflow-hidden">
-                    <span class="bg-amber-500 text-white text-xs font-bold px-2.5 py-1 rounded uppercase tracking-wider shrink-0 flex items-center gap-1">
+                    <span class="bg-amber-500 text-white text-[11px] font-black px-3 py-1 rounded-lg uppercase tracking-wider shrink-0 flex items-center gap-1.5 shadow-xs">
                         <i class="fa-solid fa-bullhorn"></i> Announcement
                     </span>
-                    <p class="text-sm font-semibold text-slate-800 truncate">
+                    <p class="text-xs sm:text-sm font-bold text-slate-800 truncate">
                         <?php echo htmlspecialchars($announcements[0]['title']); ?> — 
                         <span class="font-normal text-slate-600"><?php echo htmlspecialchars(substr(strip_tags($announcements[0]['content']), 0, 100)); ?>...</span>
                     </p>
                 </div>
-                <span class="text-xs text-slate-400 shrink-0 hidden sm:inline">
+                <span class="text-xs text-slate-400 font-semibold shrink-0 hidden sm:inline">
                     <?php echo date('M d, Y', strtotime($announcements[0]['created_at'])); ?>
                 </span>
             </div>
@@ -776,11 +781,13 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
         <section id="active-consultations" class="scroll-mt-24">
             <div class="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
                 <div>
-                    <span class="text-xs font-bold text-valenzuela-blue uppercase tracking-wider">Public Consultation Portal</span>
-                    <h3 class="text-2xl sm:text-3xl font-extrabold text-slate-900 flex items-center gap-2">
-                        <i class="fa-solid fa-comments text-valenzuela-blue"></i> Active Public Consultations
+                    <span class="text-xs font-extrabold text-red-600 uppercase tracking-widest bg-red-50 border border-red-200 px-3 py-1 rounded-full inline-block mb-1.5">
+                        <i class="fa-solid fa-comments text-red-600 mr-1"></i> Public Consultation Portal
+                    </span>
+                    <h3 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                        Active Public Consultations
                     </h3>
-                    <p class="text-slate-500 text-sm mt-1">Review proposed ordinances and contribute your feedback to the City Council.</p>
+                    <p class="text-slate-500 text-xs sm:text-sm mt-1">Review proposed ordinances and contribute your feedback to the City Council.</p>
                 </div>
 
                 <!-- Category Filters -->
@@ -798,10 +805,10 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
                     foreach ($categories as $key => $label):
                         $isActive = ($category_filter === $key) || (empty($category_filter) && $key === 'all');
                         $btnClass = $isActive 
-                            ? 'bg-valenzuela-blue text-white font-bold shadow-sm' 
-                            : 'bg-white text-slate-600 hover:bg-slate-100 font-semibold border border-slate-200';
+                            ? 'bg-red-700 text-white font-extrabold shadow-md' 
+                            : 'bg-white text-slate-700 hover:bg-slate-100 font-bold border border-slate-200/80';
                     ?>
-                        <a href="?category=<?php echo $key; ?>#active-consultations" class="<?php echo $btnClass; ?> text-xs px-3.5 py-1.5 rounded-full transition-all">
+                        <a href="?category=<?php echo $key; ?>#active-consultations" class="<?php echo $btnClass; ?> text-xs px-4 py-2 rounded-xl transition-all">
                             <?php echo $label; ?>
                         </a>
                     <?php endforeach; ?>
@@ -811,11 +818,11 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
             <!-- Consultation Cards Grid -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <?php if (empty($consultations)): ?>
-                    <div class="col-span-full bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center text-slate-400">
+                    <div class="col-span-full bg-white rounded-3xl border border-dashed border-slate-300 p-12 text-center text-slate-400">
                         <i class="fa-solid fa-box-open text-5xl mb-3 text-slate-300"></i>
                         <h4 class="text-lg font-bold text-slate-700">No Consultations Found</h4>
                         <p class="text-sm text-slate-500 max-w-md mx-auto mt-1">There are currently no active public consultations matching your search filter. Try clearing your search parameters.</p>
-                        <a href="index.php#active-consultations" class="inline-block mt-4 bg-valenzuela-blue text-white text-xs font-bold px-4 py-2 rounded-lg">View All Consultations</a>
+                        <a href="index.php#active-consultations" class="inline-block mt-4 bg-red-700 text-white text-xs font-extrabold px-5 py-2.5 rounded-xl shadow-md">View All Consultations</a>
                     </div>
                 <?php else: foreach ($consultations as $c): ?>
                     <?php 
@@ -832,48 +839,48 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
                         $days_left = !empty($c['end_date']) ? max(1, ceil((strtotime($c['end_date']) - time()) / 86400)) : 30;
                         $tracking_code = !empty($c['tracking_number']) ? $c['tracking_number'] : ('TRK-' . str_pad($c['id'], 6, '0', STR_PAD_LEFT));
                     ?>
-                    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col card-hover group">
+                    <div class="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col card-hover group hover:shadow-xl transition-all duration-300">
                         
                         <!-- Top Banner Image if available -->
                         <?php if (!empty($c['image_path']) && file_exists(__DIR__ . '/../' . $c['image_path'])): ?>
-                            <div class="h-40 w-full overflow-hidden bg-slate-100 relative">
+                            <div class="h-44 w-full overflow-hidden bg-slate-100 relative">
                                 <img src="../<?php echo htmlspecialchars($c['image_path']); ?>" alt="Consultation Image" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                                <div class="absolute top-3 right-3 bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-bold text-slate-700 shadow-sm">
-                                    <i class="fa-regular fa-clock text-valenzuela-blue"></i> <?php echo $days_left; ?>d remaining
+                                <div class="absolute top-3 right-3 bg-white/95 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-extrabold text-slate-800 shadow-md">
+                                    <i class="fa-regular fa-clock text-red-600 mr-1"></i> <?php echo $days_left; ?>d remaining
                                 </div>
                             </div>
                         <?php else: ?>
-                            <div class="h-3 w-full bg-gradient-to-r from-valenzuela-blue to-valenzuela-red"></div>
+                            <div class="h-3 w-full bg-gradient-to-r from-red-700 via-slate-800 to-blue-900"></div>
                         <?php endif; ?>
 
                         <div class="p-6 flex-grow flex flex-col justify-between">
                             <div>
                                 <div class="flex items-center justify-between gap-2 mb-3">
-                                    <span class="text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md border <?php echo $badgeStyle; ?>">
+                                    <span class="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-lg border <?php echo $badgeStyle; ?>">
                                         <?php echo htmlspecialchars($c['category'] ?? 'General Governance'); ?>
                                     </span>
                                     <?php if (empty($c['image_path'])): ?>
-                                        <span class="text-[11px] font-medium text-slate-400 flex items-center gap-1">
+                                        <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1">
                                             <i class="fa-regular fa-clock"></i> Closes in <?php echo $days_left; ?>d
                                         </span>
                                     <?php endif; ?>
                                 </div>
 
-                                <h4 class="text-lg font-bold text-slate-900 group-hover:text-valenzuela-blue transition-colors line-clamp-2 mb-2">
+                                <h4 class="text-base font-extrabold text-slate-900 group-hover:text-red-700 transition-colors line-clamp-2 mb-2 leading-snug">
                                     <?php echo htmlspecialchars($c['title'] ?? 'Untitled Consultation'); ?>
                                 </h4>
 
-                                <p class="text-slate-600 text-xs sm:text-sm line-clamp-3 mb-4 leading-relaxed">
+                                <p class="text-slate-600 text-xs line-clamp-3 mb-4 leading-relaxed font-medium">
                                     <?php echo htmlspecialchars($c['description'] ?? 'No detailed description provided.'); ?>
                                 </p>
                             </div>
 
                             <div class="pt-4 border-t border-slate-100 flex items-center justify-between mt-2">
-                                <div class="text-[11px] text-slate-500 flex items-center gap-3">
-                                    <span><i class="fa-solid fa-eye text-slate-400"></i> <?php echo (int)($c['views'] ?? 0); ?> views</span>
-                                    <span><i class="fa-solid fa-comment-dots text-slate-400"></i> <?php echo (int)($c['posts_count'] ?? 0); ?> responses</span>
+                                <div class="text-[11px] text-slate-500 font-semibold flex items-center gap-3">
+                                    <span><i class="fa-solid fa-eye text-slate-400 mr-1"></i><?php echo (int)($c['views'] ?? 0); ?></span>
+                                    <span><i class="fa-solid fa-comment-dots text-slate-400 mr-1"></i><?php echo (int)($c['posts_count'] ?? 0); ?></span>
                                 </div>
-                                <button onclick="openConsultationModal(<?php echo (int)$c['id']; ?>)" class="bg-valenzuela-blue hover:bg-blue-800 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center gap-1.5">
+                                <button onclick="openConsultationModal(<?php echo (int)$c['id']; ?>)" class="bg-gradient-to-r from-red-700 to-red-900 hover:from-red-800 hover:to-black text-white text-xs font-black px-4 py-2 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer">
                                     Participate <i class="fa-solid fa-arrow-right text-[10px]"></i>
                                 </button>
                             </div>
@@ -1438,6 +1445,20 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
             }, 4000);
         }
 
+        function anonymizeName(name) {
+            if (!name || typeof name !== 'string') return 'Anonymous Citizen';
+            const trimmed = name.trim();
+            if (!trimmed || trimmed.toLowerCase() === 'anonymous' || trimmed.toLowerCase() === 'anonymous citizen') {
+                return 'Anonymous Citizen';
+            }
+
+            return trimmed.split(/\s+/).map(part => {
+                if (part.length <= 2) return part.charAt(0) + '*';
+                if (part.length === 3) return part.slice(0, 2) + '*';
+                return part.slice(0, 3) + '*'.repeat(part.length - 3);
+            }).join(' ');
+        }
+
         function copyToClipboard(text) {
             navigator.clipboard.writeText(text);
             showToast('Tracking Code copied to clipboard: ' + text);
@@ -1604,16 +1625,34 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
                         if (res.feedback.length === 0) {
                             list.innerHTML = '<p class="text-xs text-slate-400 italic">No feedback submitted yet. Be the first citizen to voice your opinion!</p>';
                         } else {
-                            list.innerHTML = res.feedback.map(f => `
-                                <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs space-y-1">
-                                    <div class="flex justify-between font-bold text-slate-800">
-                                        <span>${escapeHtml(f.guest_name || 'Anonymous Citizen')}</span>
-                                        <span class="text-[10px] text-amber-500"><i class="fa-solid fa-star"></i> ${f.rating}/5</span>
+                            list.innerHTML = res.feedback.map(f => {
+                                const rawName = f.guest_name || f.fullname || f.user_name || 'Anonymous Citizen';
+                                const rawEmail = f.guest_email || f.email || '';
+                                const fUserId = Number(f.user_id || 0);
+
+                                const currentUserId = Number(window.__CURRENT_USER_ID__ || 0);
+                                const currentEmail = String(window.__CURRENT_USER_EMAIL__ || '').toLowerCase().trim();
+                                const currentName = String(window.__CURRENT_USER_NAME__ || '').toLowerCase().trim();
+
+                                const isOwn = (fUserId > 0 && fUserId === currentUserId) ||
+                                              (rawEmail && currentEmail && rawEmail.toLowerCase().trim() === currentEmail) ||
+                                              (rawName && currentName && rawName.toLowerCase().trim() === currentName);
+
+                                const displayName = isOwn
+                                    ? `${escapeHtml(rawName)} <span class="text-[10px] text-blue-600 font-bold bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded ml-1">(You)</span>`
+                                    : escapeHtml(anonymizeName(rawName));
+
+                                return `
+                                    <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 text-xs space-y-1.5 transition hover:bg-white hover:shadow-sm">
+                                        <div class="flex justify-between items-center font-bold text-slate-800">
+                                            <span class="flex items-center gap-1">${displayName}</span>
+                                            <span class="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-semibold text-[11px]"><i class="fa-solid fa-star text-amber-500 mr-1"></i> ${f.rating}/5</span>
+                                        </div>
+                                        <p class="text-slate-600 leading-relaxed font-medium">${escapeHtml(f.message)}</p>
+                                        ${f.admin_response ? `<div class="mt-2 p-2.5 bg-blue-50/80 rounded-xl border border-blue-100 text-valenzuela-blue font-semibold text-[11px]"><i class="fa-solid fa-reply mr-1"></i> Response: ${escapeHtml(f.admin_response)}</div>` : ''}
                                     </div>
-                                    <p class="text-slate-600">${escapeHtml(f.message)}</p>
-                                    ${f.admin_response ? `<div class="mt-2 pl-3 border-l-2 border-valenzuela-blue text-valenzuela-blue font-semibold text-[11px]">Response: ${escapeHtml(f.admin_response)}</div>` : ''}
-                                </div>
-                            `).join('');
+                                `;
+                            }).join('');
                         }
 
                         document.getElementById('consultation-modal').classList.remove('hidden');

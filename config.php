@@ -123,6 +123,10 @@ define('DB_HOST', (string) app_env('DB_HOST', 'localhost'));
 define('DB_USER', (string) app_env('DB_USER', IS_LOCALHOST ? 'root' : 'cons_pc_db'));
 define('DB_PASS', (string) app_env('DB_PASS', IS_LOCALHOST ? '' : '%wE!*-vMg4GCbB#3'));
 define('DB_NAME', (string) app_env('DB_NAME', IS_LOCALHOST ? 'pc_db' : 'cons_pc_db'));
+// PHMS Integration Configuration
+define('PHMS_BASE_URL', rtrim((string) app_env('PHMS_BASE_URL', app_env('PHMS_URL', 'https://phms.spvalenzuela.com')), '/'));
+define('PCMS_INTEGRATION_TOKEN', (string) app_env('PCMS_INTEGRATION_TOKEN', app_env('LGU2_PHMS_TOKEN', 'phms_live_2d6f8a4c1e9057b3a9c5e7f2b4d80156')));
+
 // Security settings
 define('SESSION_LIFETIME', 120); // 2 minutes
 define('MAX_LOGIN_ATTEMPTS', 5);

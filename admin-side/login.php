@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // Load security utilities
 require __DIR__ . '/UTILS/security-headers.php';
 require __DIR__ . '/UTILS/security.php';
@@ -15,7 +15,9 @@ session_set_cookie_params([
     'httponly' => true,
     'samesite' => 'Lax'
 ]);
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Check session timeout (30 minutes)
 if (!checkSessionTimeout(1800)) {
@@ -25,13 +27,12 @@ if (!checkSessionTimeout(1800)) {
 
 require __DIR__ . '/db.php';
 require __DIR__ . '/DATABASE/audit-log.php';
-require_once __DIR__ . '/config/email_config.php';
-require_once __DIR__ . '/config/google_oauth_config.php';
+require_once __DIR__ . '/email_config.php';
 
 $error = "";
 $show_2fa_form = false;
 $show_email_verification = false;
-$otp_enabled = true; // Set to true to re-enable email/TOTP verification steps.
+$otp_enabled = false; // Set to true to re-enable email/TOTP verification steps.
 
 function normalizeUserRole($role) {
     $normalized = strtolower(trim((string)$role));
@@ -113,12 +114,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 // Log successful login
                 logAction($user['id'], $user['fullname'], "User Login", "user", $user['id'], null, null, 'success', "Email verified login from IP: " . $_SERVER['REMOTE_ADDR']);
                 
-                // Redirect based on role (normalize role names to catch variants like 'super admin' or 'resource person')
+                // Redirect based on role (normalize role names to catch variants like 'super admin' or 'barangay staff')
                 error_log("Redirecting user with role: " . ($user['role'] ?? 'unknown'));
                 $roleNorm = strtolower(str_replace([' ', '_'], '', ($user['role'] ?? '')));
                 // Admins and staff should land in the system template (app/dashboard area).
                 // Citizens and public users go to the public landing page.
-                if (in_array($roleNorm, ['admin', 'administrator', 'superadmin', 'staff', 'resourceperson', 'resource'], true)) {
+                if (in_array($roleNorm, ['admin', 'administrator', 'superadmin', 'staff', 'barangaystaff', 'barangay'], true)) {
                     error_log("Redirecting admin/staff to: system-template-full.php");
                     header("Location: system-template-full.php");
                 } else {
@@ -194,11 +195,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $locked_until = isset($rate_limit['locked_until']) ? date('H:i:s', $rate_limit['locked_until']) : 'unknown';
                 $error = "Account locked due to multiple failed attempts. Try again after " . $locked_until;
             } else {
-                $stmt = $conn->prepare("SELECT id, fullname, password, role, email FROM users WHERE email=?");
+                $stmt = $conn->prepare("SELECT id, fullname, password, role, email FROM users WHERE email=? OR username=?");
                 if (!$stmt) {
                     $error = "Database error: " . $conn->error;
                 } else {
-                    $stmt->bind_param("s", $email);
+                    $stmt->bind_param("ss", $email, $email);
                     $stmt->execute();
                     $result = $stmt->get_result();
 
@@ -224,7 +225,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                                 clearRateLimit($email);
                                 logAction($user['id'], $user['fullname'], "User Login", "user", $user['id'], null, null, 'success', "Password-only login from IP: " . ($_SERVER['REMOTE_ADDR'] ?? ''));
 
-                                if (in_array($normalized_db_role, ['admin', 'super admin'], true)) {
+                                if (in_array($normalized_db_role, ['admin', 'super admin', 'administrator', 'staff', 'barangay staff', 'barangay'], true)) {
                                     header("Location: system-template-full.php");
                                 } else {
                                     header("Location: index.php");
@@ -454,27 +455,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['verify_2fa_code'])) {
                     <i class="bi bi-arrow-right ml-2"></i>
                 </button>
             </form>
-            
-            <!-- Google Login Button -->
-            <div class="mt-4">
-                <div class="relative">
-                    <div class="absolute inset-0 flex items-center">
-                        <div class="w-full border-t border-gray-300"></div>
-                    </div>
-                    <div class="relative flex justify-center text-sm">
-                        <span class="px-2 bg-white text-gray-500">Or continue with</span>
-                    </div>
-                </div>
-                <a href="<?php echo getGoogleAuthUrl(); ?>" class="mt-4 w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 md:py-3 rounded-lg transition duration-200 shadow-sm hover:shadow-md flex items-center justify-center">
-                    <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24">
-                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                    </svg>
-                    <span>Sign in with Google</span>
-                </a>
-            </div>
             <?php endif; ?>
             
             <!-- Email Verification Modal -->
@@ -553,7 +533,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['verify_2fa_code'])) {
             </div>
             
             <!-- Guest Access Button -->
-            <a href="public-portal.php" class="w-full flex items-center justify-center px-4 py-2.5 border-2 border-red-600 rounded-lg hover:bg-red-50 transition font-medium text-red-600 mb-3">
+            <a href="public-portal.php" class="w-full flex items-center justify-center px-4 py-2.5 border-2 border-red-600 rounded-lg hover:bg-red-50 transition font-medium text-red-600">
                 <i class="bi bi-globe text-lg mr-2"></i>
                 <span class="text-sm">View Public Consultations</span>
             </a>

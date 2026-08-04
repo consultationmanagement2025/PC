@@ -40,6 +40,154 @@ const AppData = {
 
 };
 
+window.pfpShowPhmsDetailModal = function (hearingId) {
+    console.log('[PHMS Detail Modal] Launching for hearingId:', hearingId);
+    const oldModal = document.getElementById('phms-detail-modal');
+    if (oldModal) {
+        try { oldModal.remove(); } catch (_) { }
+    }
+
+    const escapeHtmlHelper = (str) => String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    const modal = document.createElement('div');
+    modal.id = 'phms-detail-modal';
+    modal.style.cssText = 'position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: 100vw !important; height: 100vh !important; background-color: rgba(15, 23, 42, 0.88) !important; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex !important; align-items: center !important; justify-content: center !important; z-index: 9999999 !important; padding: 1rem !important; margin: 0 !important;';
+
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-150" style="position: relative; z-index: 10000000 !important;">
+            <!-- Modal Header -->
+            <div class="bg-slate-900 text-white p-6 flex items-start justify-between">
+                <div>
+                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                        <i class="bi bi-building-gear mr-1"></i> PHMS Citizen Hearing Feedback
+                    </span>
+                    <h3 id="phms-modal-title" class="text-lg font-extrabold text-white mt-1.5">Public Hearing #${escapeHtmlHelper(hearingId)}</h3>
+                    <p id="phms-modal-date" class="text-xs text-slate-300 mt-1">Fetching hearing details from PHMS integration service...</p>
+                </div>
+                <button type="button" onclick="const m=document.getElementById('phms-detail-modal'); if(m)m.remove();" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white text-xl font-bold flex items-center justify-center transition leading-none cursor-pointer">&times;</button>
+            </div>
+
+            <!-- Modal Body -->
+            <div id="phms-modal-body" class="p-6 max-h-[70vh] overflow-y-auto space-y-4">
+                <div class="p-8 text-center text-gray-500">
+                    <i class="bi bi-arrow-repeat animate-spin text-2xl mb-2 block text-blue-600"></i> Loading citizen feedback responses from PHMS integration service...
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+                <span class="text-xs text-gray-500"><i class="bi bi-shield-check text-blue-600 mr-1"></i> Verified Citizen Testimonial Ledger</span>
+                <button type="button" onclick="const m=document.getElementById('phms-detail-modal'); if(m)m.remove();" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition cursor-pointer">
+                    Close
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const renderModalError = (msg) => {
+        const bodyEl = document.getElementById('phms-modal-body');
+        if (bodyEl) {
+            bodyEl.innerHTML = `
+                <div class="p-8 text-center text-rose-600 bg-rose-50 rounded-xl border border-rose-200 space-y-2">
+                    <i class="bi bi-exclamation-triangle-fill text-3xl block"></i>
+                    <h4 class="font-bold text-sm">Unable to load PHMS feedback.</h4>
+                    <p class="text-xs text-rose-700">${escapeHtmlHelper(msg || 'Unable to connect to PHMS server.')}</p>
+                </div>
+            `;
+        }
+    };
+
+    const renderModalContent = (hearing) => {
+        if (!hearing) {
+            renderModalError('Unable to load PHMS feedback.');
+            return;
+        }
+
+        const title = escapeHtmlHelper(hearing.hearing_title || hearing.title || hearing.full_name || `Hearing #${hearingId}`);
+        const dateStr = escapeHtmlHelper(hearing.hearing_date || hearing.created_at || 'N/A');
+        const statusStr = escapeHtmlHelper(hearing.hearing_status || hearing.status || 'completed').toUpperCase();
+        const feedbackCount = hearing.feedback_count ?? 0;
+
+        const titleEl = document.getElementById('phms-modal-title');
+        const dateEl = document.getElementById('phms-modal-date');
+        const bodyEl = document.getElementById('phms-modal-body');
+
+        if (titleEl) titleEl.textContent = title;
+        if (dateEl) dateEl.textContent = `📅 Hearing Date: ${dateStr} | Status: ${statusStr} | Total Submissions: ${feedbackCount}`;
+
+        // Rely strictly on result.data.hearings[0].citizen_responses
+        const responses = Array.isArray(hearing.citizen_responses) ? hearing.citizen_responses : [];
+
+        if (!responses.length) {
+            if (bodyEl) {
+                bodyEl.innerHTML = `
+                    <div class="p-8 text-center text-gray-500 bg-slate-50 rounded-xl border border-slate-200">
+                        <i class="bi bi-chat-left-text text-2xl block mb-2 text-gray-400"></i>
+                        No citizen feedback recorded for this hearing.
+                    </div>
+                `;
+            }
+            return;
+        }
+
+        if (!bodyEl) return;
+
+        const responsesHtml = responses.map((resp, idx) => {
+            const name = escapeHtmlHelper(resp.citizen_name || resp.name || 'Anonymous Citizen');
+            const rating = resp.rating !== undefined && resp.rating !== null ? Number(resp.rating).toFixed(1) : 'N/A';
+            const tone = resp.tone || resp.sentiment ? escapeHtmlHelper(resp.tone || resp.sentiment) : '';
+            const testimony = escapeHtmlHelper(resp.testimony || resp.statement || 'No testimony provided.');
+            const submittedAt = escapeHtmlHelper(resp.submitted_at || resp.date || 'Recently');
+            const status = escapeHtmlHelper(resp.publication_status || 'published').toLowerCase();
+
+            const statusClass = status === 'published' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-amber-100 text-amber-800 border-amber-200';
+
+            return `
+                <div class="p-4 bg-slate-50/80 rounded-xl border border-slate-200/80 shadow-sm space-y-2">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-gray-900 text-xs">${idx + 1}. ${name}</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${statusClass}">${status}</span>
+                            ${tone ? `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">${tone}</span>` : ''}
+                        </div>
+                        <div class="flex items-center gap-2 text-xs">
+                            ${rating !== 'N/A' ? `<span class="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-semibold text-[11px]">⭐ ${rating}</span>` : ''}
+                            <span class="text-gray-400 font-normal">${submittedAt}</span>
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-700 leading-relaxed font-medium bg-white p-3 rounded-lg border border-slate-200/60 select-text">
+                        "${testimony}"
+                    </p>
+                </div>
+            `;
+        }).join('');
+
+        bodyEl.innerHTML = `
+            <div class="space-y-3">
+                <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                    Submitted Citizen Testimonies (${responses.length})
+                </div>
+                ${responsesHtml}
+            </div>
+        `;
+    };
+
+    fetchWithTimeout(`API/feedback_api.php?action=phms_detail&hearing_id=${encodeURIComponent(hearingId)}`, {
+        headers: { 'Accept': 'application/json' }
+    }, 8000).then(res => res.json()).then(data => {
+        if (data && data.success && data.data && Array.isArray(data.data.hearings) && data.data.hearings.length > 0) {
+            renderModalContent(data.data.hearings[0]);
+        } else {
+            renderModalError('Unable to load PHMS feedback.');
+        }
+    }).catch(err => {
+        console.warn('PHMS detail fetch error:', err);
+        renderModalError('Unable to load PHMS feedback.');
+    });
+};
+
 
 
 
@@ -280,7 +428,7 @@ async function bootstrapAppDataAndRenderInitialSection() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
 
 
     initializeData();
@@ -296,20 +444,20 @@ document.addEventListener('DOMContentLoaded', function() {
     updateHeaderUserDisplays();
 
 
-    
+
 
 
     // Bootstrap the initial module only after the core data is ready.
     bootstrapAppDataAndRenderInitialSection();
 
 
-    
+
 
 
     // Delay notification loading slightly to ensure DOM is ready
 
 
-    setTimeout(function() {
+    setTimeout(function () {
 
 
         loadNotifications();
@@ -330,13 +478,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Do not bind listener here; using inline onclick for now
 
 
-    
+
 
 
     // Poll for new notifications every 20 seconds (real-time updates)
 
 
-    setInterval(function() {
+    setInterval(function () {
 
 
         loadNotifications();
@@ -345,13 +493,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 20000);
 
 
-    
+
 
 
     // Close notification/profile dropdowns when clicking outside
 
 
-    document.addEventListener('click', function(e) {
+    document.addEventListener('click', function (e) {
 
 
         const notifDropdown = document.getElementById('notifications-dropdown');
@@ -387,13 +535,13 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
 
-    
+
 
 
     // Keyboard shortcuts
 
 
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
 
 
         // Ctrl+K for search
@@ -417,7 +565,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
 
-    
+
 
 
     // Setup drag and drop
@@ -672,7 +820,7 @@ async function loadDocumentsFromApi() {
     let data = null;
 
 
-    try { data = await res.json(); } catch (_) {}
+    try { data = await res.json(); } catch (_) { }
 
 
 
@@ -792,7 +940,7 @@ async function loadUsersFromApi() {
     let data = null;
 
 
-    try { data = await res.json(); } catch (_) {}
+    try { data = await res.json(); } catch (_) { }
 
 
 
@@ -978,7 +1126,7 @@ function showManagedTemplateSection(sectionName) {
                 if (contentArea && contentArea.firstChild !== targetSection) {
                     contentArea.insertBefore(targetSection, contentArea.firstChild);
                 }
-            } catch (e) {}
+            } catch (e) { }
 
             const breadcrumbCurrent = document.getElementById('breadcrumb-current') || document.querySelector('.breadcrumb-current');
             if (breadcrumbCurrent) {
@@ -986,7 +1134,7 @@ function showManagedTemplateSection(sectionName) {
             }
 
             if (sectionName === 'audit' && typeof loadAuditLogsFromDatabase === 'function') {
-                try { loadAuditLogsFromDatabase(); } catch (e) {}
+                try { loadAuditLogsFromDatabase(); } catch (e) { }
             }
             return true;
         }
@@ -1020,8 +1168,8 @@ function showSection(sectionName) {
         sectionName = 'audit';
     }
 
-    if (sectionName === 'reports-section') {
-        sectionName = 'analytics';
+    if (sectionName === 'reports-section' || sectionName === 'analytics') {
+        sectionName = 'reports';
     }
 
     const contentArea = document.getElementById('content-area');
@@ -1043,7 +1191,9 @@ function showSection(sectionName) {
     // Update active nav item
     document.querySelectorAll('.nav-item, [data-section]').forEach(item => {
         item.classList.remove('active');
-        if (item.dataset.section === sectionName || (item.getAttribute('onclick') && item.getAttribute('onclick').includes("'" + sectionName + "'"))) {
+        const sec = item.dataset.section || '';
+        const onclickStr = item.getAttribute('onclick') || '';
+        if (sec === sectionName || onclickStr.includes(`'${sectionName}'`) || (sectionName === 'reports' && (sec === 'reports' || onclickStr.includes('reports') || onclickStr.includes('Reports')))) {
             item.classList.add('active');
         }
     });
@@ -1063,7 +1213,7 @@ function showSection(sectionName) {
     }
 
     try {
-        switch(sectionName) {
+        switch (sectionName) {
             case 'public-consultation':
             case 'consultation-dashboard':
                 if (typeof renderPublicConsultation === 'function') {
@@ -1266,7 +1416,7 @@ function renderDashboard() {
     const currentUserName = AppData.currentUser && AppData.currentUser.name ? AppData.currentUser.name : 'User';
 
 
-    
+
 
 
     const html = `
@@ -1685,13 +1835,13 @@ function renderDashboard() {
     `;
 
 
-    
+
 
 
     document.getElementById('content-area').innerHTML = html;
 
 
-    
+
 
 
     // Initialize chart
@@ -1714,7 +1864,7 @@ function renderDocumentTypesChart() {
     if (!ctx) return;
 
 
-    
+
 
 
     const typeCounts = {};
@@ -1729,7 +1879,7 @@ function renderDocumentTypesChart() {
     });
 
 
-    
+
 
 
     new Chart(ctx, {
@@ -2016,7 +2166,7 @@ function renderDocuments() {
     `;
 
 
-    
+
 
 
     document.getElementById('content-area').innerHTML = html;
@@ -2076,7 +2226,7 @@ function filterDocuments() {
     const searchTerm = document.getElementById('searchDocs')?.value.toLowerCase() || '';
 
 
-    
+
 
 
     let filtered = AppData.documents.filter(doc => {
@@ -2085,7 +2235,7 @@ function filterDocuments() {
         const matchesType = !typeFilter || doc.type === typeFilter;
 
 
-        const matchesSearch = !searchTerm || 
+        const matchesSearch = !searchTerm ||
 
 
             doc.title.toLowerCase().includes(searchTerm) ||
@@ -2097,7 +2247,7 @@ function filterDocuments() {
             doc.description.toLowerCase().includes(searchTerm);
 
 
-        
+
 
 
         return matchesType && matchesSearch;
@@ -2106,7 +2256,7 @@ function filterDocuments() {
     });
 
 
-    
+
 
 
     const tbody = document.getElementById('documentsList');
@@ -2115,7 +2265,7 @@ function filterDocuments() {
     if (!tbody) return;
 
 
-    
+
 
 
     if (filtered.length === 0) {
@@ -2130,7 +2280,7 @@ function filterDocuments() {
     }
 
 
-    
+
 
 
     tbody.innerHTML = filtered.map(doc => `
@@ -2253,7 +2403,7 @@ function editDocument(uid) {
     if (!doc) return;
 
 
-    
+
 
 
     showNotification('Edit functionality would open a form here', 'info');
@@ -2270,7 +2420,7 @@ function deleteDocument(id) {
     if (!confirm('Are you sure you want to delete this document?')) return;
 
 
-    
+
 
 
     const index = AppData.documents.findIndex(d => d.id === id);
@@ -2288,7 +2438,7 @@ function deleteDocument(id) {
         showNotification('Document deleted successfully', 'success');
 
 
-        
+
 
 
         // Add audit log
@@ -2495,7 +2645,7 @@ function renderSearch() {
     `;
 
 
-    
+
 
 
     document.getElementById('content-area').innerHTML = html;
@@ -2527,13 +2677,13 @@ function performAdvancedSearch() {
     const dateTo = document.getElementById('advSearchDateTo').value;
 
 
-    
+
 
 
     const results = AppData.documents.filter(doc => {
 
 
-        const matchesKeywords = !keywords || 
+        const matchesKeywords = !keywords ||
 
 
             doc.title.toLowerCase().includes(keywords) ||
@@ -2545,7 +2695,7 @@ function performAdvancedSearch() {
             doc.tags.some(tag => tag.toLowerCase().includes(keywords));
 
 
-        
+
 
 
         const matchesReference = !reference || doc.reference.toLowerCase().includes(reference);
@@ -2563,7 +2713,7 @@ function performAdvancedSearch() {
         const matchesDateTo = !dateTo || new Date(doc.date) <= new Date(dateTo);
 
 
-        
+
 
 
         return matchesKeywords && matchesReference && matchesType && matchesStatus && matchesDateFrom && matchesDateTo;
@@ -2572,13 +2722,13 @@ function performAdvancedSearch() {
     });
 
 
-    
+
 
 
     const resultsContainer = document.getElementById('searchResults');
 
 
-    
+
 
 
     if (results.length === 0) {
@@ -2608,7 +2758,7 @@ function performAdvancedSearch() {
     }
 
 
-    
+
 
 
     resultsContainer.innerHTML = `
@@ -3043,13 +3193,13 @@ function renderAnalytics() {
     `;
 
 
-    
+
 
 
     document.getElementById('content-area').innerHTML = html;
 
 
-    
+
 
 
     setTimeout(() => {
@@ -3078,7 +3228,7 @@ function renderDocumentsOverTimeChart() {
     if (!ctx) return;
 
 
-    
+
 
 
     new Chart(ctx, {
@@ -3179,7 +3329,7 @@ function renderDocumentsByStatusChart() {
     if (!ctx) return;
 
 
-    
+
 
 
     const statusCounts = {
@@ -3197,7 +3347,7 @@ function renderDocumentsByStatusChart() {
     };
 
 
-    
+
 
 
     AppData.documents.forEach(doc => {
@@ -3215,7 +3365,7 @@ function renderDocumentsByStatusChart() {
     });
 
 
-    
+
 
 
     new Chart(ctx, {
@@ -3315,6 +3465,19 @@ function renderUsers(skipLoad = false) {
     const breadcrumbCurrent = document.querySelector('.breadcrumb-current');
     if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'User Management';
 
+    const existingSection = document.getElementById('user-management-section');
+    if (existingSection && existingSection.parentNode && existingSection.parentNode.id === 'content-area') {
+        if (typeof hideManagedTemplateSections === 'function') {
+            hideManagedTemplateSections();
+        }
+        existingSection.style.display = 'block';
+        if (typeof showUserTab === 'function') {
+            const mappedTab = (_userMgmtTab === 'pending') ? 'pending' : ((_userMgmtTab === 'experts' || _userMgmtTab === 'resource-persons') ? 'resource-persons' : 'citizens');
+            showUserTab(mappedTab);
+        }
+        return;
+    }
+
     const totalCitizens = _citizenData.length;
     const totalConsultations = _citizenData.reduce((s, c) => s + (c.consultation_count || 0), 0);
     const totalFeedbacks = _citizenData.reduce((s, c) => s + (c.feedback_count || 0), 0);
@@ -3322,6 +3485,7 @@ function renderUsers(skipLoad = false) {
 
     const citizenTabActive = (_userMgmtTab === 'citizens');
     const adminTabActive = (_userMgmtTab === 'admins');
+    const pendingTabActive = (_userMgmtTab === 'pending');
     const expertTabActive = (_userMgmtTab === 'experts');
 
     const html = `
@@ -3365,16 +3529,20 @@ function renderUsers(skipLoad = false) {
 
             <!-- Role Tabs Navigation (Matching Document Management Group Tabs) -->
             <div class="flex flex-wrap gap-2 mt-6 border-b border-gray-200">
-                <button onclick="_userMgmtTab='citizens'; renderUsers(true);" class="px-6 py-3 font-semibold text-sm border-b-2 transition flex items-center gap-2 ${citizenTabActive ? 'border-red-600 text-red-600 bg-red-50/40' : 'border-gray-200 text-gray-600 hover:border-red-600 hover:text-red-600'}">
-                    <i class="bi bi-people-fill"></i> Citizen Submitters <span class="ml-1 px-2 py-0.5 rounded-full text-xs ${citizenTabActive ? 'bg-red-100 text-red-800' : 'bg-gray-200 text-gray-700'}">${totalCitizens}</span>
+                <button onclick="_userMgmtTab='citizens'; renderUsers(true);" class="px-6 py-3 font-semibold text-sm border-b-2 transition flex items-center gap-2 ${citizenTabActive ? 'border-red-600 text-red-600 bg-red-50/40 font-bold' : 'border-gray-200 text-gray-600 hover:border-red-600 hover:text-red-600'}">
+                    <i class="bi bi-people-fill"></i> Citizen Submitters <span class="ml-1 px-2 py-0.5 rounded-full text-xs ${citizenTabActive ? 'bg-red-100 text-red-800 font-bold' : 'bg-gray-200 text-gray-700'}">${totalCitizens}</span>
                 </button>
 
-                <button onclick="_userMgmtTab='admins'; renderUsers(true);" class="px-6 py-3 font-semibold text-sm border-b-2 transition flex items-center gap-2 ${adminTabActive ? 'border-red-600 text-red-600 bg-red-50/40' : 'border-gray-200 text-gray-600 hover:border-red-600 hover:text-red-600'}">
-                    <i class="bi bi-shield-lock-fill"></i> Admins & Staff <span class="ml-1 px-2 py-0.5 rounded-full text-xs ${adminTabActive ? 'bg-red-100 text-red-800' : 'bg-gray-200 text-gray-700'}">4</span>
+                <button onclick="_userMgmtTab='admins'; renderUsers(true);" class="px-6 py-3 font-semibold text-sm border-b-2 transition flex items-center gap-2 ${adminTabActive ? 'border-red-600 text-red-600 bg-red-50/40 font-bold' : 'border-gray-200 text-gray-600 hover:border-red-600 hover:text-red-600'}">
+                    <i class="bi bi-shield-lock-fill"></i> Admins & Staff <span class="ml-1 px-2 py-0.5 rounded-full text-xs ${adminTabActive ? 'bg-red-100 text-red-800 font-bold' : 'bg-gray-200 text-gray-700'}">4</span>
                 </button>
 
-                <button onclick="_userMgmtTab='experts'; renderUsers(true);" class="px-6 py-3 font-semibold text-sm border-b-2 transition flex items-center gap-2 ${expertTabActive ? 'border-red-600 text-red-600 bg-red-50/40' : 'border-gray-200 text-gray-600 hover:border-red-600 hover:text-red-600'}">
-                    <i class="bi bi-award-fill"></i> Experts & Resource Persons <span class="ml-1 px-2 py-0.5 rounded-full text-xs ${expertTabActive ? 'bg-red-100 text-red-800' : 'bg-gray-200 text-gray-700'}">3</span>
+                <button onclick="_userMgmtTab='pending'; renderUsers(true);" class="px-6 py-3 font-semibold text-sm border-b-2 transition flex items-center gap-2 ${pendingTabActive ? 'border-amber-600 text-amber-700 bg-amber-50/60 font-bold' : 'border-gray-200 text-gray-600 hover:border-amber-600 hover:text-amber-700'}">
+                    <i class="bi bi-clock-history"></i> Pending Applications <span id="user-mgmt-pending-badge" class="ml-1 px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-800 font-bold">0</span>
+                </button>
+
+                <button onclick="_userMgmtTab='experts'; renderUsers(true);" class="px-6 py-3 font-semibold text-sm border-b-2 transition flex items-center gap-2 ${expertTabActive ? 'border-red-600 text-red-600 bg-red-50/40 font-bold' : 'border-gray-200 text-gray-600 hover:border-red-600 hover:text-red-600'}">
+                    <i class="bi bi-award-fill"></i> Experts & Resource Persons <span id="approved-experts-badge" class="ml-1 px-2 py-0.5 rounded-full text-xs ${expertTabActive ? 'bg-red-100 text-red-800 font-bold' : 'bg-gray-200 text-gray-700'}">3</span>
                 </button>
             </div>
 
@@ -3473,18 +3641,53 @@ function renderUsers(skipLoad = false) {
                             </table>
                         </div>
                     </div>
+                ` : pendingTabActive ? `
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between bg-amber-50 p-4 rounded-xl border border-amber-200">
+                            <div>
+                                <h3 class="text-sm font-bold text-amber-900 flex items-center gap-2">
+                                    <i class="bi bi-clock-history text-amber-600"></i> Pending Resource Person Applications
+                                </h3>
+                                <p class="text-xs text-amber-700 mt-0.5">Review credentials and approve or reject applicant access to expert roles.</p>
+                            </div>
+                            <button onclick="loadPendingUserApplications()" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1">
+                                <i class="bi bi-arrow-clockwise"></i> Refresh
+                            </button>
+                        </div>
+                        <div id="pending-user-applications-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div class="text-center py-12 text-slate-500 col-span-full">
+                                <i class="bi bi-hourglass-split text-3xl mb-2 text-amber-500 animate-spin"></i>
+                                <p class="text-xs">Loading pending applications...</p>
+                            </div>
+                        </div>
+                    </div>
+                ` : expertTabActive ? `
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between bg-emerald-50 p-4 rounded-xl border border-emerald-200">
+                            <div>
+                                <h3 class="text-sm font-bold text-emerald-900 flex items-center gap-2">
+                                    <i class="bi bi-award text-emerald-600"></i> Verified Resource Persons & Experts
+                                </h3>
+                                <p class="text-xs text-emerald-700 mt-0.5">Active Subject Matter Experts qualified to review public consultations.</p>
+                            </div>
+                            <button onclick="loadApprovedUserExperts()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1">
+                                <i class="bi bi-arrow-clockwise"></i> Refresh
+                            </button>
+                        </div>
+                        <div id="approved-user-experts-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div class="text-center py-12 text-slate-500 col-span-full">
+                                <i class="bi bi-arrow-clockwise text-3xl mb-2 text-emerald-500 animate-spin"></i>
+                                <p class="text-xs">Loading verified experts...</p>
+                            </div>
+                        </div>
+                    </div>
                 ` : `
                     <div class="bg-white p-8 rounded-lg shadow border border-gray-200 text-center space-y-4">
                         <div class="w-16 h-16 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-2xl mx-auto">
                             <i class="bi bi-shield-lock"></i>
                         </div>
-                        <h3 class="text-lg font-bold text-gray-900">${adminTabActive ? 'Administrative Accounts' : 'Resource Persons & Experts'}</h3>
+                        <h3 class="text-lg font-bold text-gray-900">Administrative Accounts</h3>
                         <p class="text-xs text-gray-500 max-w-md mx-auto">View and manage internal credentials, committee assignments, and department authority across PCMS.</p>
-                        <div class="pt-2">
-                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold border border-gray-200">
-                                <i class="bi bi-info-circle"></i> Active Role Group
-                            </span>
-                        </div>
                     </div>
                 `}
             </div>
@@ -3518,30 +3721,19 @@ function renderUsers(skipLoad = false) {
 
     const contentArea = document.getElementById('content-area') || document.getElementById('main-content') || document.querySelector('.content-area') || document.querySelector('main');
     if (contentArea) {
-        let userSection = document.getElementById('user-management-section');
-        if (!userSection) {
-            userSection = document.createElement('section');
-            userSection.id = 'user-management-section';
-            userSection.className = 'user-management-section mb-6';
-            contentArea.appendChild(userSection);
-        }
-        
-        userSection.innerHTML = html;
-
-        if (window._currentActiveSection === 'users' || window._currentActiveSection === 'user-management') {
-            if (typeof hideManagedTemplateSections === 'function') {
-                hideManagedTemplateSections();
-            }
-            userSection.style.display = 'block';
-        } else {
-            userSection.style.display = 'none';
-        }
+        contentArea.innerHTML = html;
     }
 
     if (!skipLoad) {
-        loadCitizensFromApi().then(() => renderCitizensTable());
+        loadCitizensFromApi().then(() => {
+            if (_userMgmtTab === 'citizens') renderCitizensTable();
+            if (_userMgmtTab === 'pending') loadPendingUserApplications();
+            if (_userMgmtTab === 'experts') loadApprovedUserExperts();
+        });
     } else {
-        renderCitizensTable();
+        if (_userMgmtTab === 'citizens') renderCitizensTable();
+        if (_userMgmtTab === 'pending') loadPendingUserApplications();
+        if (_userMgmtTab === 'experts') loadApprovedUserExperts();
     }
 }
 
@@ -3571,8 +3763,8 @@ function renderCitizensTable() {
 
     const search = (document.getElementById('citizen-search')?.value || '').toLowerCase();
     if (search) {
-        citizens = citizens.filter(c => 
-            (c.name || '').toLowerCase().includes(search) || 
+        citizens = citizens.filter(c =>
+            (c.name || '').toLowerCase().includes(search) ||
             (c.email || '').toLowerCase().includes(search)
         );
     }
@@ -3669,7 +3861,7 @@ async function viewCitizenDossier(email, name) {
 
         if (data.success) {
             let html = '';
-            
+
             if ((!data.proposals || data.proposals.length === 0) && (!data.activity || data.activity.length === 0)) {
                 html = '<div class="text-center py-6 text-slate-400">No proposals or survey votes recorded for this citizen yet.</div>';
             } else {
@@ -3727,13 +3919,13 @@ function exportCitizensCsv() {
 
     let csv = 'Citizen Name,Email,Barangay,Proposals Submitted,Survey Votes,Total Engagement,Last Engagement Date\n';
     _citizenData.forEach(c => {
-        csv += `"${(c.name||'').replace(/"/g, '""')}","${(c.email||'').replace(/"/g, '""')}","${(c.barangay||'Valenzuela City').replace(/"/g, '""')}",${c.consultation_count||0},${c.survey_vote_count||0},${c.total_submissions||0},"${c.last_activity||''}"\n`;
+        csv += `"${(c.name || '').replace(/"/g, '""')}","${(c.email || '').replace(/"/g, '""')}","${(c.barangay || 'Valenzuela City').replace(/"/g, '""')}",${c.consultation_count || 0},${c.survey_vote_count || 0},${c.total_submissions || 0},"${c.last_activity || ''}"\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `Valenzuela_Citizen_Registry_${new Date().toISOString().slice(0,10)}.csv`;
+    link.download = `Valenzuela_Citizen_Registry_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
 }
 
@@ -3812,49 +4004,49 @@ function exportConsultationWithFormat(consultationId, format) {
         method: 'POST',
         body: formData
     })
-    .then(res => res.json())
-    .then(data => {
-        if (data && data.success) {
-            const msg = `
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.success) {
+                const msg = `
                 <div class="bg-green-50 border border-green-200 text-green-800 rounded p-3">
                     File generation complete. ${data.created} file(s) were added to Document Management.
                 </div>
                 <div class="mt-3 text-gray-700">Go to <strong>Document Management</strong> to download the file.</div>
             `;
-            const titleEl = document.getElementById('consultation-export-title');
-            if (titleEl) titleEl.textContent = 'Export Complete';
-            const actions = `
+                const titleEl = document.getElementById('consultation-export-title');
+                if (titleEl) titleEl.textContent = 'Export Complete';
+                const actions = `
                 <button onclick="showSection('pc-documents'); closeConsultationExportModal();" class="btn-primary">Open Document Management</button>
                 <button onclick="closeConsultationExportModal()" class="btn-outline">Close</button>
             `;
-            const body = document.getElementById('consultation-export-message');
-            const acts = document.getElementById('consultation-export-actions');
-            if (body) body.innerHTML = msg;
-            if (acts) acts.innerHTML = actions;
-            const modalEl = document.getElementById('consultation-export-modal');
-            if (modalEl) modalEl.classList.remove('hidden');
-        } else {
-            const err = (data && data.message) ? data.message : 'Export failed.';
+                const body = document.getElementById('consultation-export-message');
+                const acts = document.getElementById('consultation-export-actions');
+                if (body) body.innerHTML = msg;
+                if (acts) acts.innerHTML = actions;
+                const modalEl = document.getElementById('consultation-export-modal');
+                if (modalEl) modalEl.classList.remove('hidden');
+            } else {
+                const err = (data && data.message) ? data.message : 'Export failed.';
+                const titleEl = document.getElementById('consultation-export-title');
+                if (titleEl) titleEl.textContent = 'Export Failed';
+                const body = document.getElementById('consultation-export-message');
+                const acts = document.getElementById('consultation-export-actions');
+                if (body) body.innerHTML = `<div class="bg-red-50 border border-red-200 text-red-800 rounded p-3">${err}</div>`;
+                if (acts) acts.innerHTML = '<button onclick="closeConsultationExportModal()" class="btn-outline">Close</button>';
+                const modalEl = document.getElementById('consultation-export-modal');
+                if (modalEl) modalEl.classList.remove('hidden');
+            }
+        })
+        .catch(() => {
             const titleEl = document.getElementById('consultation-export-title');
             if (titleEl) titleEl.textContent = 'Export Failed';
             const body = document.getElementById('consultation-export-message');
             const acts = document.getElementById('consultation-export-actions');
-            if (body) body.innerHTML = `<div class="bg-red-50 border border-red-200 text-red-800 rounded p-3">${err}</div>`;
+            if (body) body.innerHTML = '<div class="bg-red-50 border border-red-200 text-red-800 rounded p-3">Export failed. Please try again.</div>';
             if (acts) acts.innerHTML = '<button onclick="closeConsultationExportModal()" class="btn-outline">Close</button>';
             const modalEl = document.getElementById('consultation-export-modal');
             if (modalEl) modalEl.classList.remove('hidden');
-        }
-    })
-    .catch(() => {
-        const titleEl = document.getElementById('consultation-export-title');
-        if (titleEl) titleEl.textContent = 'Export Failed';
-        const body = document.getElementById('consultation-export-message');
-        const acts = document.getElementById('consultation-export-actions');
-        if (body) body.innerHTML = '<div class="bg-red-50 border border-red-200 text-red-800 rounded p-3">Export failed. Please try again.</div>';
-        if (acts) acts.innerHTML = '<button onclick="closeConsultationExportModal()" class="btn-outline">Close</button>';
-        const modalEl = document.getElementById('consultation-export-modal');
-        if (modalEl) modalEl.classList.remove('hidden');
-    });
+        });
 }
 
 
@@ -3892,22 +4084,22 @@ function renderUsersTable() {
         const roleLower = String(user.role).toLowerCase();
 
 
-        const roleIcon = (roleLower === 'admin' || roleLower === 'administrator') ? 'bi-shield-lock' : 
+        const roleIcon = (roleLower === 'admin' || roleLower === 'administrator') ? 'bi-shield-lock' :
 
 
-                        roleLower === 'staff' ? 'bi-person-fill' : 'bi-eye';
+            roleLower === 'staff' ? 'bi-person-fill' : 'bi-eye';
 
 
         const roleBadge = (roleLower === 'admin' || roleLower === 'administrator') ? 'bg-red-100 text-red-800' :
 
 
-                         roleLower === 'staff' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700';
+            roleLower === 'staff' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700';
 
 
         const roleLabel = (roleLower === 'admin' || roleLower === 'administrator') ? 'Admin' :
 
 
-                         roleLower === 'staff' ? 'Staff' : 'Viewer';
+            roleLower === 'staff' ? 'Staff' : 'Viewer';
 
 
         const createdAt = user.createdAt || 'N/A';
@@ -4062,7 +4254,7 @@ function getFilteredUsers() {
     let filtered = [...AppData.users];
 
 
-    
+
 
 
     const searchTerm = document.getElementById('user-search')?.value.toLowerCase() || '';
@@ -4079,10 +4271,10 @@ function getFilteredUsers() {
     if (searchTerm) {
 
 
-        filtered = filtered.filter(u => 
+        filtered = filtered.filter(u =>
 
 
-            u.name.toLowerCase().includes(searchTerm) || 
+            u.name.toLowerCase().includes(searchTerm) ||
 
 
             u.email.toLowerCase().includes(searchTerm)
@@ -4094,7 +4286,7 @@ function getFilteredUsers() {
     }
 
 
-    
+
 
 
     if (roleFilter) {
@@ -4106,7 +4298,7 @@ function getFilteredUsers() {
     }
 
 
-    
+
 
 
     if (statusFilter) {
@@ -4376,7 +4568,7 @@ function viewUserDetails(id) {
     const roleLabel = (roleLower === 'admin' || roleLower === 'administrator') ? 'Admin' :
 
 
-                     roleLower === 'staff' ? 'Staff' : 'Viewer';
+        roleLower === 'staff' ? 'Staff' : 'Viewer';
 
 
 
@@ -4536,7 +4728,7 @@ async function toggleUserStatus(id) {
     if (!user) return;
 
 
-    
+
 
 
     const newStatus = user.status === 'active' ? 'inactive' : 'active';
@@ -4601,7 +4793,7 @@ function deleteUser(id) {
     if (!confirm('Are you sure you want to delete this staff account? This action cannot be undone.')) return;
 
 
-    
+
 
 
     const user = AppData.users.find(u => u.id === id);
@@ -4639,7 +4831,7 @@ function resetUserPassword(id) {
     if (!user) return;
 
 
-    
+
 
 
     const newPw = prompt('Enter new password for ' + user.name + ' (min 12 chars):');
@@ -4657,7 +4849,7 @@ function resetUserPassword(id) {
     }
 
 
-    
+
 
 
     fetch('API/users_api.php?action=update', {
@@ -4675,31 +4867,31 @@ function resetUserPassword(id) {
     })
 
 
-    .then(r => r.json())
+        .then(r => r.json())
 
 
-    .then(data => {
+        .then(data => {
 
 
-        if (data.success) {
+            if (data.success) {
 
 
-            showNotification(`Password reset for ${user.name}`, 'success');
+                showNotification(`Password reset for ${user.name}`, 'success');
 
 
-        } else {
+            } else {
 
 
-            showNotification(data.message || 'Failed to reset password', 'error');
+                showNotification(data.message || 'Failed to reset password', 'error');
 
 
-        }
+            }
 
 
-    })
+        })
 
 
-    .catch(err => showNotification(String(err), 'error'));
+        .catch(err => showNotification(String(err), 'error'));
 
 
 }
@@ -4890,7 +5082,7 @@ function renderAudit() {
     `;
 
 
-    
+
 
 
     document.getElementById('content-area').innerHTML = html;
@@ -4915,7 +5107,7 @@ function loadAuditLogsFromDatabase() {
 
         .then(async response => {
             let data = null;
-            try { data = await response.json(); } catch (_) {}
+            try { data = await response.json(); } catch (_) { }
 
             if (!response.ok) {
                 const msg = (data && (data.error || data.message)) ? (data.error || data.message) : `HTTP ${response.status}`;
@@ -4943,7 +5135,7 @@ function loadAuditLogsFromDatabase() {
             AppData.auditLogs = data;
 
 
-            
+
 
 
             // Update stats
@@ -4952,7 +5144,7 @@ function loadAuditLogsFromDatabase() {
             updateAuditStats();
 
 
-            
+
 
 
             // Display logs
@@ -5005,7 +5197,7 @@ function updateAuditStats() {
     const adminsSet = new Set(AppData.auditLogs.map(log => log.admin_user));
 
 
-    
+
 
 
     document.getElementById('totalLogsCount').textContent = totalCount;
@@ -5034,7 +5226,7 @@ function filterAuditLogs() {
     const dateFilter = document.getElementById('filterDate')?.value || '';
 
 
-    
+
 
 
     let filtered = AppData.auditLogs.filter(log => {
@@ -5049,7 +5241,7 @@ function filterAuditLogs() {
         const matchesDate = !dateFilter || log.timestamp.includes(dateFilter);
 
 
-        
+
 
 
         return matchesAction && matchesUser && matchesDate;
@@ -5058,7 +5250,7 @@ function filterAuditLogs() {
     });
 
 
-    
+
 
 
     const tbody = document.getElementById('auditLogsList');
@@ -5067,7 +5259,7 @@ function filterAuditLogs() {
     if (!tbody) return;
 
 
-    
+
 
 
     if (filtered.length === 0) {
@@ -5082,7 +5274,7 @@ function filterAuditLogs() {
     }
 
 
-    
+
 
 
     tbody.innerHTML = filtered.map(log => `
@@ -5164,7 +5356,7 @@ function addAuditLog(action, description) {
     };
 
 
-    
+
 
 
     AppData.auditLogs.unshift(newLog);
@@ -5250,7 +5442,7 @@ function renderProfile() {
     };
 
 
-    
+
 
 
     const html = `
@@ -5274,13 +5466,13 @@ function renderProfile() {
                     <input type="file" id="profilePictureInput" accept="image/*" class="hidden" onchange="handleProfilePictureUpload(event)">
 
 
-                    ${currentUser.profilePicture ? 
+                    ${currentUser.profilePicture ?
 
 
-                        `<img id="profileImage" src="${currentUser.profilePicture}" alt="Profile" class="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover">` :
+            `<img id="profileImage" src="${currentUser.profilePicture}" alt="Profile" class="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover">` :
 
 
-                        `<div id="profileImage" class="w-32 h-32 rounded-full bg-white border-4 border-white shadow-lg flex items-center justify-center">
+            `<div id="profileImage" class="w-32 h-32 rounded-full bg-white border-4 border-white shadow-lg flex items-center justify-center">
 
 
                             <span class="text-red-600 text-4xl font-bold">${getInitials(currentUser.name)}</span>
@@ -5289,7 +5481,7 @@ function renderProfile() {
                         </div>`
 
 
-                    }
+        }
 
 
                     <button onclick="document.getElementById('profilePictureInput').click()" class="absolute bottom-0 right-0 bg-white text-red-600 rounded-full w-10 h-10 flex items-center justify-center hover:bg-gray-100 transform hover:scale-110 transition-all duration-200 shadow-lg">
@@ -5842,7 +6034,7 @@ function renderProfile() {
     `;
 
 
-    
+
 
 
     document.getElementById('content-area').innerHTML = html;
@@ -5865,7 +6057,7 @@ function handleProfilePictureUpload(event) {
     if (!file) return;
 
 
-    
+
 
 
     // Validate file type
@@ -5886,7 +6078,7 @@ function handleProfilePictureUpload(event) {
     }
 
 
-    
+
 
 
     // Validate file size (5MB max)
@@ -5904,7 +6096,7 @@ function handleProfilePictureUpload(event) {
     }
 
 
-    
+
 
 
     const fd = new FormData();
@@ -6197,7 +6389,7 @@ function updateNavbarProfilePicture(imageUrl) {
     }
 
 
-    
+
 
 
     // Update sidebar profile picture
@@ -6247,7 +6439,7 @@ function toggleEditMode() {
     isEditMode = !isEditMode;
 
 
-    
+
 
 
     const fields = ['editFullName', 'editUsername', 'editEmail', 'editPhone', 'editDepartment', 'editPosition'];
@@ -6256,7 +6448,7 @@ function toggleEditMode() {
     const saveBtn = document.getElementById('saveProfileBtn');
 
 
-    
+
 
 
     fields.forEach(fieldId => {
@@ -6292,7 +6484,7 @@ function toggleEditMode() {
     });
 
 
-    
+
 
 
     if (saveBtn) {
@@ -6563,7 +6755,7 @@ function openChangePasswordModal() {
     `;
 
 
-    
+
 
 
     document.body.appendChild(modal);
@@ -6606,7 +6798,7 @@ function changePassword() {
     const confirm = document.getElementById('confirmPassword').value;
 
 
-    
+
 
 
     if (!current || !newPass || !confirm) {
@@ -6621,7 +6813,7 @@ function changePassword() {
     }
 
 
-    
+
 
 
     if (newPass !== confirm) {
@@ -6636,7 +6828,7 @@ function changePassword() {
     }
 
 
-    
+
 
 
     if (newPass.length < 6) {
@@ -6651,7 +6843,7 @@ function changePassword() {
     }
 
 
-    
+
 
 
     const formData = new FormData();
@@ -6868,7 +7060,7 @@ function openTwoFactorModal() {
     `;
 
 
-    
+
 
 
     document.body.appendChild(modal);
@@ -7053,7 +7245,7 @@ function openLoginHistoryModal() {
     `;
 
 
-    
+
 
 
     document.body.appendChild(modal);
@@ -7183,7 +7375,7 @@ function openActivityReportModal() {
     `;
 
 
-    
+
 
 
     document.body.appendChild(modal);
@@ -7331,7 +7523,7 @@ function openSessionSettingsModal() {
     `;
 
 
-    
+
 
 
     document.body.appendChild(modal);
@@ -7525,7 +7717,7 @@ function openEditProfileModal() {
     `;
 
 
-    
+
 
 
     document.body.appendChild(modal);
@@ -7568,7 +7760,7 @@ function saveEditProfileModal() {
     AppData.currentUser.position = document.getElementById('modal-position').value;
 
 
-    
+
 
 
     closeEditProfileModal();
@@ -7603,7 +7795,7 @@ function handleDocumentUpload(event) {
     event.preventDefault();
 
 
-    
+
 
 
     const form = event.target;
@@ -7612,7 +7804,7 @@ function handleDocumentUpload(event) {
 
     const fileInput = document.getElementById('file-input');
 
-    
+
 
     if (!fileInput.files.length) {
 
@@ -7622,11 +7814,11 @@ function handleDocumentUpload(event) {
 
     }
 
-    
+
 
     formData.append('document_file', fileInput.files[0]);
 
-    
+
 
 
     // Validate
@@ -7644,7 +7836,7 @@ function handleDocumentUpload(event) {
     }
 
 
-    
+
 
 
     // Show loading
@@ -7658,37 +7850,37 @@ function handleDocumentUpload(event) {
         method: 'POST',
         body: formData
     })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            showNotification('Document uploaded successfully', 'success');
-            closeModal('upload-modal');
-            form.reset();
-            document.getElementById('file-name').textContent = '';
-            
-            // Refresh documents list
-            loadDocumentsFromApi().then(() => {
-                if (document.getElementById('documentsList')) {
-                    filterDocuments();
-                }
-            });
-            
-            // Add audit log
-            addAuditLog('upload', `Uploaded document ${formData.get('reference')}`);
-        } else {
-            showNotification(data.message || 'Upload failed', 'error');
-        }
-    })
-    .catch(err => {
-        console.error('Upload error:', err);
-        showNotification('Upload failed. Please try again.', 'error');
-    })
-    .finally(() => {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = originalText;
-    });
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Document uploaded successfully', 'success');
+                closeModal('upload-modal');
+                form.reset();
+                document.getElementById('file-name').textContent = '';
 
-    
+                // Refresh documents list
+                loadDocumentsFromApi().then(() => {
+                    if (document.getElementById('documentsList')) {
+                        filterDocuments();
+                    }
+                });
+
+                // Add audit log
+                addAuditLog('upload', `Uploaded document ${formData.get('reference')}`);
+            } else {
+                showNotification(data.message || 'Upload failed', 'error');
+            }
+        })
+        .catch(err => {
+            console.error('Upload error:', err);
+            showNotification('Upload failed. Please try again.', 'error');
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        });
+
+
 
 
     // Create new document
@@ -7721,13 +7913,13 @@ function handleDocumentUpload(event) {
     // };
 
 
-    
+
 
 
     // AppData.documents.unshift(newDoc);
 
 
-    
+
 
 
     // Close modal and reset form
@@ -7739,7 +7931,7 @@ function handleDocumentUpload(event) {
     // document.getElementById('uploadForm').reset();
 
 
-    
+
 
 
     // Show success notification
@@ -7748,7 +7940,7 @@ function handleDocumentUpload(event) {
     // showNotification('Document uploaded successfully', 'success');
 
 
-    
+
 
 
     // Add audit log
@@ -7757,7 +7949,7 @@ function handleDocumentUpload(event) {
     // addAuditLog('upload', `Uploaded document ${formData.reference}`);
 
 
-    
+
 
 
     // Refresh if on documents page
@@ -7781,7 +7973,7 @@ function handleDocumentUpload(event) {
 function handleFileSelect(event) {
     const file = event.target.files[0];
     const fileName = document.getElementById('file-name');
-    
+
     if (file) {
         fileName.textContent = `Selected: ${file.name} (${formatFileSize(file.size)})`;
     } else {
@@ -7808,7 +8000,7 @@ function setupDragAndDrop() {
     if (!dropzone) return;
 
 
-    
+
 
 
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -7820,7 +8012,7 @@ function setupDragAndDrop() {
     });
 
 
-    
+
 
 
     function preventDefaults(e) {
@@ -7835,7 +8027,7 @@ function setupDragAndDrop() {
     }
 
 
-    
+
 
 
     ['dragenter', 'dragover'].forEach(eventName => {
@@ -7853,7 +8045,7 @@ function setupDragAndDrop() {
     });
 
 
-    
+
 
 
     ['dragleave', 'drop'].forEach(eventName => {
@@ -7871,7 +8063,7 @@ function setupDragAndDrop() {
     });
 
 
-    
+
 
 
     dropzone.addEventListener('drop', (e) => {
@@ -8000,7 +8192,7 @@ function closeAppDialog() {
     appDialogState = null;
 }
 
-window.alert = function(message) {
+window.alert = function (message) {
     return openAppDialog({ title: 'Notice', message, type: 'info', confirmLabel: 'Okay', showCancel: false });
 };
 
@@ -8160,15 +8352,46 @@ function mapDbNotificationToUi(row) {
 
 
         time: formatNotifTime(row.created_at || '')
-
-
     };
-
-
 }
 
+function mapDbNotificationToUi(row) {
+    if (!row) return null;
+    const isRead = Number(row.is_read) === 1;
+    const type = String(row.type || 'info').toLowerCase();
+    const msg = String(row.message || '');
 
+    let title = 'System Notification';
+    let category = type;
+    let priority = (type === 'consultation' || type === 'feedback' || type === 'phms_integration' || type === 'ai_brief') ? 'high' : 'normal';
 
+    if (msg.includes('PHMS') || type === 'phms_integration') {
+        title = '🔗 PHMS Integration';
+        category = 'PHMS System';
+        priority = 'high';
+    } else if (msg.includes('AI') || type === 'ai_brief') {
+        title = '🤖 AI Committee Brief';
+        category = 'AI Engine';
+        priority = 'high';
+    } else if (type === 'feedback' || msg.includes('Feedback')) {
+        title = '📩 Citizen Feedback';
+        category = 'Public Portal';
+    } else if (type === 'consultation') {
+        title = '📋 Consultation Update';
+        category = 'Policy';
+    }
+
+    return {
+        id: Number(row.id || Date.now()),
+        title: title,
+        message: msg,
+        category: category,
+        priority: priority,
+        read: isRead,
+        time: row.created_at ? formatNotifTime(row.created_at) : 'Recently',
+        timestamp: row.created_at || new Date().toISOString()
+    };
+}
 
 async function loadNotifications() {
 
@@ -8327,88 +8550,46 @@ async function loadNotifications() {
 
 
         notifsList.innerHTML = sortedNotifs.length === 0 ?
+            '<div class="p-8 text-center text-gray-400 text-xs font-medium">No notifications yet</div>' :
+            sortedNotifs.map(notif => {
+                const title = escapeHtml(notif.title || 'Notification');
+                const message = escapeHtml(notif.message || '');
+                const time = escapeHtml(notif.time || 'Just updated');
+                const isRead = !!notif.read;
 
+                let iconInfo = { bg: 'bg-amber-50 border-amber-100', text: 'text-amber-600', icon: 'bi-calendar-check' };
+                const textLower = (title + ' ' + message + ' ' + (notif.category || '')).toLowerCase();
 
-            '<div class="p-4 text-center text-gray-500"><p>No notifications</p><p class="text-xs mt-1">You\'re all caught up!</p></div>' :
+                if (textLower.includes('orts') || textLower.includes('status') || textLower.includes('changed') || textLower.includes('ordinance')) {
+                    iconInfo = { bg: 'bg-blue-50 border-blue-100', text: 'text-blue-600', icon: 'bi-arrow-repeat' };
+                } else if (textLower.includes('lacs') || textLower.includes('hearing') || textLower.includes('approval') || textLower.includes('public hearing')) {
+                    iconInfo = { bg: 'bg-amber-50 border-amber-100', text: 'text-amber-600', icon: 'bi-calendar-check' };
+                } else if (textLower.includes('ai') || textLower.includes('brief') || textLower.includes('robot')) {
+                    iconInfo = { bg: 'bg-purple-50 border-purple-100', text: 'text-purple-600', icon: 'bi-robot' };
+                } else if (textLower.includes('feedback') || textLower.includes('phms') || textLower.includes('submission')) {
+                    iconInfo = { bg: 'bg-emerald-50 border-emerald-100', text: 'text-emerald-600', icon: 'bi-chat-left-text' };
+                }
 
-
-            sortedNotifs.map(notif => `
-
-
-            <div data-id="${notif.id}" class="p-3 border-b border-gray-100 transition hover:bg-gray-50 ${!notif.read ? 'bg-blue-50 border-l-3 border-l-blue-500' : 'bg-white'}" style="cursor: pointer;">
-
-
-                <div class="flex items-start gap-2">
-
-
-                    <div class="text-lg flex-shrink-0 mt-0.5" title="Priority: ${notif.priority}">
-
-
-                        ${priorityIcons[notif.priority] || '🔵'}
-
-
-                    </div>
-
-
-                    <div class="flex-1 min-w-0">
-
-
-                        <div class="flex items-start justify-between gap-2 mb-1">
-
-
-                            <h4 class="text-xs font-semibold text-gray-900 leading-tight">${escapeHtml(notif.title)}</h4>
-
-
-                            <span class="text-xs px-1.5 py-0.5 bg-gray-200 text-gray-700 rounded flex-shrink-0">${escapeHtml(notif.category || 'general')}</span>
-
-
+                return `
+                    <div data-id="${notif.id}" onclick="pfpMarkSingleNotifRead(${notif.id})" class="p-4 transition hover:bg-gray-50/80 flex items-start gap-3.5 relative cursor-pointer ${!isRead ? 'bg-white font-medium' : 'bg-gray-50/40 opacity-75'}">
+                        <div class="w-10 h-10 rounded-2xl ${iconInfo.bg} ${iconInfo.text} border flex items-center justify-center shrink-0 mt-0.5">
+                            <i class="bi ${iconInfo.icon} text-base"></i>
                         </div>
-
-
-                        <p class="text-xs text-gray-600 line-clamp-1 mb-1">${escapeHtml(notif.message)}</p>
-
-
-                        <div class="flex items-center justify-between gap-2">
-
-
-                            <span class="text-xs text-gray-400">🕐 ${escapeHtml(notif.time)}</span>
-
-
+                        <div class="flex-1 min-w-0 pr-3">
+                            <div class="font-bold text-gray-900 text-xs leading-snug">${title}</div>
+                            <div class="text-xs text-gray-500 mt-0.5 leading-relaxed font-normal">${message}</div>
+                            <div class="text-[11px] text-gray-400 mt-1 font-medium">${time}</div>
                         </div>
-
-
+                        ${!isRead ? '<span class="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0 mt-1.5 ring-4 ring-red-50"></span>' : ''}
                     </div>
-
-
-                    <i class="bi bi-chevron-right text-gray-400 text-xs flex-shrink-0 mt-1" style="cursor: pointer;"></i>
-
-
-                </div>
-
-
-            </div>
-
-
-        `).join('');
-
-
-
+                `;
+            }).join('');
 
         notifsList.querySelectorAll('[data-id]').forEach(item => {
-
-
-            item.addEventListener('click', function() {
-
-
+            item.addEventListener('click', function () {
                 const id = parseInt(this.getAttribute('data-id'));
-
-
-                viewNotification(id);
-
-
+                if (id) pfpMarkSingleNotifRead(id);
             });
-
-
         });
 
 
@@ -8458,357 +8639,196 @@ function toggleNotifications() {
 
 
 
-function viewNotification(id) {
-
-
-    const notif = AppData.notifications.find(n => n.id === id);
-
-
-    if (!notif) {
-
-
-        console.error('Notification not found:', id);
-
-
-        return;
-
-
+function pfpMarkAllNotificationsRead() {
+    if (Array.isArray(AppData.notifications)) {
+        AppData.notifications.forEach(n => n.read = true);
     }
-
-
-
-
-    // Mark as read (best-effort)
-
-
-    toggleNotificationRead(id, 1).finally(() => {
-
-
-        openNotificationModal(id);
-
-
-    });
-
-
+    if (typeof markAllNotificationsRead === 'function') {
+        try { markAllNotificationsRead(); } catch (_) { }
+    }
+    const badge = document.getElementById('notif-badge') || document.getElementById('notification-badge');
+    if (badge) badge.classList.add('hidden');
+    if (typeof loadNotifications === 'function') {
+        try { loadNotifications(); } catch (_) { }
+    }
 }
 
+function pfpMarkSingleNotifRead(id) {
+    if (!id) return;
 
+    if (Array.isArray(AppData.notifications)) {
+        const notif = AppData.notifications.find(n => String(n.id) === String(id));
+        if (notif) notif.read = true;
+    }
 
+    const dropdown = document.getElementById('notifications-dropdown');
+    if (dropdown) dropdown.classList.add('hidden');
+
+    const badge = document.getElementById('notif-badge') || document.getElementById('notification-badge');
+    if (badge && Array.isArray(AppData.notifications)) {
+        const unreadCount = AppData.notifications.filter(n => !n.read).length;
+        if (unreadCount > 0) {
+            badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+
+    if (typeof toggleNotificationRead === 'function') {
+        try { toggleNotificationRead(id, 1); } catch (_) { }
+    }
+
+    if (typeof openNotificationModal === 'function') {
+        openNotificationModal(id);
+    }
+}
+
+window.pfpMarkAllNotificationsRead = pfpMarkAllNotificationsRead;
+window.pfpMarkSingleNotifRead = pfpMarkSingleNotifRead;
+
+function viewNotification(id) {
+    const notif = AppData.notifications ? AppData.notifications.find(n => String(n.id) === String(id)) : null;
+    if (!notif) {
+        console.error('Notification not found:', id);
+        return;
+    }
+    pfpMarkSingleNotifRead(id);
+}
 
 function openNotificationModal(id) {
-
-
-    const notif = AppData.notifications.find(n => n.id === id);
-
-
+    const notif = AppData.notifications ? AppData.notifications.find(n => String(n.id) === String(id)) : null;
     if (!notif) return;
 
-
-
-
     // Create modal container if not present
-
-
     let modal = document.getElementById('notif-detail-modal');
-
-
     if (!modal) {
-
-
         modal = document.createElement('div');
-
-
         modal.id = 'notif-detail-modal';
-
-
-        modal.className = 'fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden';
-
+        modal.className = 'fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center z-[99999] p-4 hidden transition-all duration-200';
 
         modal.innerHTML = `
-
-
-            <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 p-6 relative overflow-hidden">
-
-
-                <!-- Navigation Buttons -->
-
-                <button id="notif-detail-prev" class="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white bg-opacity-90 hover:bg-opacity-100 rounded-full p-2 shadow-md transition-all duration-200 z-10 opacity-0 pointer-events-none">
-
-                    <i class="bi bi-chevron-left text-gray-600"></i>
-
-                </button>
-
-                <button id="notif-detail-next" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white bg-opacity-90 hover:bg-opacity-100 rounded-full p-2 shadow-md transition-all duration-200 z-10 opacity-0 pointer-events-none">
-
-                    <i class="bi bi-chevron-right text-gray-600"></i>
-
-                </button>
-
-
-                <!-- Content Container -->
-
-                <div id="notif-content-container" class="transition-transform duration-300 ease-in-out">
-
-
-                    <div class="flex items-start justify-between mb-4">
-
-
-                        <div class="flex-1">
-
-
-                            <div class="flex items-center gap-3 mb-2">
-
-
-                                <h3 id="notif-detail-title" class="text-lg font-bold text-gray-800"></h3>
-
-
-                                <span id="notif-priority-badge" class="inline-block px-2 py-1 text-xs font-semibold rounded-full"></span>
-
-
-                            </div>
-
-
-                            <p id="notif-detail-time" class="text-xs text-gray-500"></p>
-
-
-                            <p id="notif-detail-category" class="text-xs text-gray-400 mt-1"></p>
-
-
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-150">
+                <!-- Header Banner with Dynamic Colors -->
+                <div id="notif-header-banner" class="bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white p-6 flex items-start justify-between">
+                    <div class="flex-1 pr-3">
+                        <div class="flex items-center gap-2 mb-2 flex-wrap">
+                            <span id="notif-priority-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/20 text-white border border-white/30"></span>
+                            <span id="notif-detail-category" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-black/30 text-white/90"></span>
                         </div>
-
-
-                        <button id="notif-detail-close" class="text-gray-500 hover:text-gray-800 text-2xl">✕</button>
-
-
+                        <h3 id="notif-detail-title" class="text-lg font-extrabold text-white leading-snug">Notification Title</h3>
+                        <p id="notif-detail-time" class="text-xs text-white/80 mt-1 font-medium flex items-center gap-1.5"></p>
                     </div>
-
-
-                    <div class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-
-
-                        <p id="notif-detail-message" class="text-gray-700 leading-relaxed"></p>
-
-
-                    </div>
-
-
-                    <div class="mt-6 flex justify-between items-center">
-
-
-                        <div class="text-sm text-gray-500">
-
-                            <span id="notif-counter"></span>
-
-                        </div>
-
-
-                        <div class="flex gap-3">
-
-
-                            <button id="notif-detail-action" class="btn-primary hidden"></button>
-
-
-                            <button id="notif-detail-open" class="btn-primary">Open Related Page</button>
-
-
-                            <button id="notif-detail-dismiss" class="btn-outline">Close</button>
-
-
-                        </div>
-
-
-                    </div>
-
-
+                    <button id="notif-detail-close" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white text-xl font-bold flex items-center justify-center transition leading-none">&times;</button>
                 </div>
 
+                <!-- Content Body Container -->
+                <div id="notif-content-container" class="p-6 space-y-5">
+                    <div class="p-4.5 bg-slate-50 rounded-2xl border border-slate-200/80 shadow-inner">
+                        <h4 class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5">
+                            <i class="bi bi-chat-left-text-fill text-red-600"></i> Notification Message
+                        </h4>
+                        <p id="notif-detail-message" class="text-xs text-slate-800 font-medium leading-relaxed select-text"></p>
+                    </div>
 
+                    <!-- Footer Bar with Integrated Navigation & Actions -->
+                    <div class="pt-3 flex items-center justify-between gap-3 border-t border-slate-100">
+                        <!-- Navigation Counter & Buttons -->
+                        <div class="flex items-center gap-1.5">
+                            <button id="notif-detail-prev" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold transition border border-slate-200 text-xs">
+                                <i class="bi bi-chevron-left"></i>
+                            </button>
+                            <span id="notif-counter" class="font-mono font-extrabold text-slate-700 text-xs px-2">1 / 1</span>
+                            <button id="notif-detail-next" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold transition border border-slate-200 text-xs">
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex items-center gap-2">
+                            <button id="notif-detail-action" class="hidden px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-sm"></button>
+                            <button id="notif-detail-open" class="px-4 py-2.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-1.5 hover:shadow-lg">
+                                <i class="bi bi-box-arrow-up-right"></i> Open Related Page
+                            </button>
+                            <button id="notif-detail-dismiss" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
-
-
         `;
-
 
         document.body.appendChild(modal);
 
-
-
-
         // Close handlers
-
-
         modal.querySelector('#notif-detail-close').addEventListener('click', () => closeNotificationModal());
-
-
         modal.querySelector('#notif-detail-dismiss').addEventListener('click', () => closeNotificationModal());
 
-
-
-
         // Navigation handlers
-
-
         modal.querySelector('#notif-detail-prev').addEventListener('click', () => navigateNotification(-1));
-
-
         modal.querySelector('#notif-detail-next').addEventListener('click', () => navigateNotification(1));
-
-
     }
 
-
-
-
-    // Priority badge colors
-
-
-    const priorityColors = {
-
-
-        critical: 'bg-red-100 text-red-800',
-
-
-        high: 'bg-orange-100 text-orange-800',
-
-
-        normal: 'bg-blue-100 text-blue-800',
-
-
-        low: 'bg-gray-100 text-gray-800'
-
-
-    };
-
-
-
+    // Dynamic Banner Header Colors based on priority/type
+    const banner = document.getElementById('notif-header-banner');
+    const priority = String(notif.priority || 'normal').toLowerCase();
+    if (banner) {
+        if (priority === 'critical' || priority === 'high') {
+            banner.className = 'bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white p-6 flex items-start justify-between';
+        } else if (notif.category === 'AI Engine' || notif.type === 'ai_brief') {
+            banner.className = 'bg-gradient-to-r from-purple-700 via-purple-800 to-slate-900 text-white p-6 flex items-start justify-between';
+        } else {
+            banner.className = 'bg-gradient-to-r from-slate-800 via-slate-900 to-blue-950 text-white p-6 flex items-start justify-between';
+        }
+    }
 
     // Fill content
-
-
     document.getElementById('notif-detail-title').textContent = notif.title;
-
-
-    document.getElementById('notif-detail-time').textContent = '📅 ' + notif.time;
-
-
-    document.getElementById('notif-detail-category').textContent = '📁 Category: ' + (notif.category || 'general').toUpperCase();
-
-
+    document.getElementById('notif-detail-time').innerHTML = '<i class="bi bi-clock-history"></i> ' + (notif.time || 'Recently');
+    document.getElementById('notif-detail-category').textContent = '📁 ' + (notif.category || 'general').toUpperCase();
     document.getElementById('notif-detail-message').textContent = notif.message;
 
-
-
-
     // Priority badge
-
-
     const badge = document.getElementById('notif-priority-badge');
-
-
-    badge.textContent = (notif.priority || 'normal').toUpperCase();
-
-
-    badge.className = 'inline-block px-2 py-1 text-xs font-semibold rounded-full ' + (priorityColors[notif.priority] || priorityColors.normal);
-
-
-
-
-    // Action button
-
-
-    const actionBtn = document.getElementById('notif-detail-action');
-
-
-    if (notif.action) {
-
-
-        actionBtn.textContent = notif.action;
-
-
-        actionBtn.classList.remove('hidden');
-
-
-        actionBtn.onclick = function() {
-
-
-            closeNotificationModal();
-
-
-            if (notif.category === 'documents') showSection('documents');
-
-
-            else if (notif.category === 'feedback') showSection('public-feedback-queue');
-
-
-            else if (notif.category === 'users') showSection('users');
-
-
-            else if (notif.category === 'system') showSection('audit');
-
-
-            else showSection('public-consultation');
-
-
-        };
-
-
-    } else {
-
-
-        actionBtn.classList.add('hidden');
-
-
+    if (badge) {
+        badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${priority === 'high' || priority === 'critical' ? 'bg-amber-400 animate-ping' : 'bg-blue-400'} inline-block mr-1"></span> ${priority.toUpperCase()} PRIORITY`;
+        badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-white/20 text-white border border-white/30';
     }
 
-
-
+    // Action button
+    const actionBtn = document.getElementById('notif-detail-action');
+    if (notif.action) {
+        actionBtn.textContent = notif.action;
+        actionBtn.classList.remove('hidden');
+        actionBtn.onclick = function () {
+            closeNotificationModal();
+            if (notif.category === 'documents') showSection('documents');
+            else if (notif.category === 'feedback') showSection('public-feedback-queue');
+            else if (notif.category === 'users') showSection('users');
+            else if (notif.category === 'system') showSection('audit');
+            else showSection('public-consultation');
+        };
+    } else {
+        actionBtn.classList.add('hidden');
+    }
 
     // Open action
-
-
     const openBtn = document.getElementById('notif-detail-open');
-
-
-    openBtn.onclick = function() {
-
-
+    openBtn.onclick = function () {
         closeNotificationModal();
-
-
         if (notif.type === 'document' || notif.type === 'approval') showSection('documents');
-
-
         else if (notif.type === 'user') showSection('users');
-
-
-        else if (notif.type === 'feedback') showSection('public-feedback-queue');
-
-
+        else if (notif.type === 'feedback' || notif.type === 'phms_integration') showSection('public-feedback-queue');
         else if (notif.type === 'alert' || notif.type === 'system') showSection('audit');
-
-
         else showSection('public-consultation');
-
-
     };
 
-
-
-
     // Update navigation state and counter
-
-
     updateNavigationState(id);
 
-
-
-
     // Show modal
-
-
     modal.classList.remove('hidden');
-
-
 }
 
 
@@ -9303,7 +9323,7 @@ function showNotification(message, type = 'info') {
     };
 
 
-    
+
 
 
     const icons = {
@@ -9324,7 +9344,7 @@ function showNotification(message, type = 'info') {
     };
 
 
-    
+
 
 
     const notif = document.createElement('div');
@@ -9345,13 +9365,13 @@ function showNotification(message, type = 'info') {
     `;
 
 
-    
+
 
 
     document.body.appendChild(notif);
 
 
-    
+
 
 
     setTimeout(() => {
@@ -10053,17 +10073,18 @@ async function renderPublicConsultation() {
     renderConsultationsGrid();
 
 
-    
 
 
-        // Render charts — must wait for DOM injection at line ~10045 to complete
+
+    // Render charts — must wait for DOM injection at line ~10045 to complete
     setTimeout(() => {
         const filtered = Array.isArray(AppData.consultations) ? AppData.consultations : [];
-        console.log('[renderPublicConsultation] setTimeout fired, rendering charts with', filtered.length, 'consultations');
+        console.log('[renderPublicConsultation] setTimeout fired, rendering charts & calendar with', filtered.length, 'consultations');
         renderPCStatusChart(filtered);
         renderPCFeedbackSentimentChart();
         refreshPCSurveySelector(filtered);
         renderPCSurveyAnswersChart(filtered);
+        renderPCDashboardCalendar();
     }, 300);
 
     // Refresh feedback and issue analytics using latest DB data
@@ -10074,10 +10095,12 @@ async function renderPublicConsultation() {
         ]).then(() => {
             renderPCFeedbackSentimentChart();
             renderPCSurveyAnswersChart(Array.isArray(AppData.consultations) ? AppData.consultations : []);
+            renderPCDashboardCalendar();
         }).catch((e) => {
             console.error(e);
             renderPCFeedbackSentimentChart();
             renderPCSurveyAnswersChart(Array.isArray(AppData.consultations) ? AppData.consultations : []);
+            renderPCDashboardCalendar();
         });
     } catch (e) {
         console.error(e);
@@ -10365,7 +10388,7 @@ function saveSettings() {
     const email = document.getElementById('setting-email')?.value || AppData.currentUser.email;
 
 
-    
+
 
 
     if (!name || !email) {
@@ -10414,49 +10437,49 @@ function saveSettings() {
     })
 
 
-    .then(response => response.json())
+        .then(response => response.json())
 
 
-    .then(data => {
+        .then(data => {
 
 
-        if (data.success) {
+            if (data.success) {
 
 
-            AppData.currentUser.name = name;
+                AppData.currentUser.name = name;
 
 
-            AppData.currentUser.email = email;
+                AppData.currentUser.email = email;
 
 
-            updateHeaderUserDisplays();
+                updateHeaderUserDisplays();
 
 
-            showNotification('Settings saved successfully', 'success');
+                showNotification('Settings saved successfully', 'success');
 
 
-        } else {
+            } else {
 
 
-            showNotification(data.message || 'Failed to save settings', 'error');
+                showNotification(data.message || 'Failed to save settings', 'error');
 
 
-        }
+            }
 
 
-    })
+        })
 
 
-    .catch(error => {
+        .catch(error => {
 
 
-        console.error('Error saving settings:', error);
+            console.error('Error saving settings:', error);
 
 
-        showNotification('Error saving settings', 'error');
+            showNotification('Error saving settings', 'error');
 
 
-    });
+        });
 
 
 }
@@ -10973,7 +10996,7 @@ function renderAnnouncements() {
     document.getElementById('content-area').innerHTML = html;
 
 
-    
+
 
 
     // Load user posts via AJAX
@@ -11203,7 +11226,7 @@ function renderConsultationsGrid() {
         const typeBg = srcType === 'user' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600';
 
 
-        const dateText = c.date ? new Date(c.date).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '';
+        const dateText = c.date ? new Date(c.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
         const desc = String(c.description || '').substring(0, 80);
 
@@ -11524,7 +11547,7 @@ function getFilteredPublicConsultations() {
     let filtered = [...AppData.consultations];
 
 
-    
+
 
 
     const searchTerm = document.getElementById('pc-search')?.value.toLowerCase() || '';
@@ -11550,7 +11573,7 @@ function getFilteredPublicConsultations() {
     }
 
 
-    
+
 
 
     if (statusFilter) {
@@ -11562,7 +11585,7 @@ function getFilteredPublicConsultations() {
     }
 
 
-    
+
 
 
     if (typeFilter) {
@@ -11582,7 +11605,7 @@ function getFilteredPublicConsultations() {
     filtered.sort((a, b) => {
 
 
-        switch(sortBy) {
+        switch (sortBy) {
 
 
             case 'date-asc':
@@ -11770,7 +11793,7 @@ function renderPCFeedbackSentimentChart() {
     }
 
     if (window.pcFeedbackSentimentChart) {
-        try { window.pcFeedbackSentimentChart.destroy(); } catch (e) {}
+        try { window.pcFeedbackSentimentChart.destroy(); } catch (e) { }
     }
 
     window.pcFeedbackSentimentChart = new Chart(ctx, {
@@ -11791,7 +11814,7 @@ function renderPCFeedbackSentimentChart() {
                 legend: { position: 'bottom' },
                 tooltip: {
                     callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                             const label = context.label || '';
                             const value = Number(context.parsed || 0);
                             const total = Array.isArray(context.dataset?.data)
@@ -11950,7 +11973,7 @@ function renderPCSurveyAnswersChart(consultations) {
     }
 
     if (window.pcSurveyAnswersChart) {
-        try { window.pcSurveyAnswersChart.destroy(); } catch (e) {}
+        try { window.pcSurveyAnswersChart.destroy(); } catch (e) { }
     }
 
     const hasData = totals.total > 0;
@@ -11977,7 +12000,7 @@ function renderPCSurveyAnswersChart(consultations) {
                 tooltip: {
                     enabled: hasData,
                     callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                             if (!hasData) return 'No responses recorded yet';
                             const label = context.label || '';
                             const value = Number(context.parsed || 0);
@@ -12012,6 +12035,132 @@ function togglePCIssueMappingPanel() {
         button.setAttribute('aria-expanded', issueNowVisible ? 'true' : 'false');
         button.setAttribute('aria-controls', issueNowVisible ? 'pc-feedback-sentiment-pane' : 'pc-issue-mapping-pane');
     });
+
+    if (issueNowVisible) {
+        renderPCIssueMappingThemes();
+    }
+}
+
+function renderPCIssueMappingThemes() {
+    const container = document.getElementById('pc-issue-theme-list');
+    if (!container) return;
+
+    const feedbackList = (window.AppData && Array.isArray(window.AppData.feedback)) ? window.AppData.feedback : [];
+    const consultations = (window.AppData && Array.isArray(window.AppData.consultations)) ? window.AppData.consultations : [];
+
+    // Group feedback by consultation or category
+    const themesMap = {};
+
+    consultations.forEach(c => {
+        const cat = c.category || 'General Policy';
+        if (!themesMap[cat]) {
+            themesMap[cat] = {
+                title: cat,
+                icon: getCategoryIcon(cat),
+                positive: 0,
+                neutral: 0,
+                negative: 0,
+                items: []
+            };
+        }
+    });
+
+    feedbackList.forEach(f => {
+        const cid = Number(f.consultationId || f.consultation_id || 0);
+        const matchedConsult = consultations.find(c => Number(c.id) === cid);
+        const cat = matchedConsult ? (matchedConsult.category || 'General Policy') : (f.category || 'General Policy');
+
+        if (!themesMap[cat]) {
+            themesMap[cat] = {
+                title: cat,
+                icon: getCategoryIcon(cat),
+                positive: 0,
+                neutral: 0,
+                negative: 0,
+                items: []
+            };
+        }
+
+        const sent = String(f.sentiment || 'neutral').toLowerCase();
+        if (sent.includes('pos')) themesMap[cat].positive++;
+        else if (sent.includes('neg')) themesMap[cat].negative++;
+        else themesMap[cat].neutral++;
+
+        themesMap[cat].items.push(f);
+    });
+
+    const themes = Object.values(themesMap);
+
+    if (themes.length === 0) {
+        container.innerHTML = `
+            <div class="p-6 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
+                <i class="bi bi-robot text-2xl text-purple-600 block mb-2"></i>
+                <p class="text-xs font-bold">No feedback themes logged yet.</p>
+                <p class="text-[11px] text-slate-400 mt-1">AI analysis will populate as citizens post feedback on active consultations.</p>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '<div class="space-y-3 max-h-[340px] overflow-y-auto pr-1">';
+    themes.forEach(t => {
+        const total = t.positive + t.neutral + t.negative;
+        const posPct = total > 0 ? Math.round((t.positive / total) * 100) : 50;
+        const neuPct = total > 0 ? Math.round((t.neutral / total) * 100) : 30;
+        const negPct = total > 0 ? Math.round((t.negative / total) * 100) : 20;
+
+        let sampleInsight = 'High engagement on policy provisions and community compliance.';
+        if (t.positive >= t.negative && t.positive > 0) {
+            sampleInsight = `AI Extract: ${posPct}% Positive sentiment. Strong citizen backing for LGU ordinance.`;
+        } else if (t.negative > t.positive) {
+            sampleInsight = `AI Extract: ${negPct}% Negative sentiment. Primary concerns regarding implementation timeline.`;
+        }
+
+        html += `
+            <div class="p-3 bg-slate-50 hover:bg-slate-100/80 rounded-xl border border-slate-200/90 transition-all shadow-2xs">
+                <div class="flex items-center justify-between gap-2 mb-1.5">
+                    <div class="flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-xs text-purple-700 font-bold shrink-0">
+                            <i class="bi ${t.icon}"></i>
+                        </span>
+                        <h5 class="text-xs font-black text-slate-900 truncate max-w-[180px]">${escapeHtml(t.title)}</h5>
+                    </div>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200 shrink-0">
+                        ${total} Feedback
+                    </span>
+                </div>
+
+                <!-- Sentiment Bar -->
+                <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden flex my-2">
+                    <div class="bg-emerald-500 h-full" style="width: ${posPct}%" title="Positive: ${posPct}%"></div>
+                    <div class="bg-amber-400 h-full" style="width: ${neuPct}%" title="Neutral: ${neuPct}%"></div>
+                    <div class="bg-rose-500 h-full" style="width: ${negPct}%" title="Negative: ${negPct}%"></div>
+                </div>
+
+                <div class="flex items-center justify-between text-[10px] text-slate-600 font-semibold mb-1">
+                    <span class="text-emerald-700 font-extrabold"><i class="bi bi-hand-thumbs-up-fill mr-0.5"></i> ${posPct}% Pos</span>
+                    <span class="text-amber-700 font-extrabold"><i class="bi bi-dash-circle-fill mr-0.5"></i> ${neuPct}% Neu</span>
+                    <span class="text-rose-700 font-extrabold"><i class="bi bi-hand-thumbs-down-fill mr-0.5"></i> ${negPct}% Neg</span>
+                </div>
+
+                <p class="text-[10px] text-purple-900 bg-purple-50/70 p-1.5 rounded-lg border border-purple-100 font-medium leading-tight">
+                    <i class="bi bi-stars text-amber-500 mr-1"></i>${escapeHtml(sampleInsight)}
+                </p>
+            </div>
+        `;
+    });
+    html += '</div>';
+
+    container.innerHTML = html;
+}
+
+function getCategoryIcon(cat) {
+    const c = String(cat || '').toLowerCase();
+    if (c.includes('health') || c.includes('sanitation')) return 'bi-heart-pulse-fill';
+    if (c.includes('traffic') || c.includes('transport') || c.includes('infrastructure')) return 'bi-truck-front-fill';
+    if (c.includes('utility') || c.includes('facility') || c.includes('flood')) return 'bi-water';
+    if (c.includes('rule') || c.includes('governance')) return 'bi-bank2';
+    return 'bi-chat-left-quote-fill';
 }
 function renderPCStatusChart(consultations) {
 
@@ -12124,7 +12273,7 @@ function renderPCStatusChart(consultations) {
     if (window.pcStatusChart) {
 
 
-        try { window.pcStatusChart.destroy(); } catch (e) {}
+        try { window.pcStatusChart.destroy(); } catch (e) { }
 
 
     }
@@ -12192,7 +12341,7 @@ function renderPCStatusChart(consultations) {
                     callbacks: {
 
 
-                        label: function(context) {
+                        label: function (context) {
 
 
                             const label = context.label || '';
@@ -12261,7 +12410,7 @@ function renderPCFeedbackChart() {
     if (window.pcFeedbackChart) {
 
 
-        try { window.pcFeedbackChart.destroy(); } catch(e) {}
+        try { window.pcFeedbackChart.destroy(); } catch (e) { }
 
 
     }
@@ -12343,7 +12492,7 @@ function renderConsultationManagement() {
     const contentArea = document.getElementById('content-area');
 
 
-    
+
 
 
 
@@ -12351,7 +12500,7 @@ function renderConsultationManagement() {
     const breadcrumbCurrent = document.querySelector('.breadcrumb-current');
 
 
-    
+
 
 
 
@@ -12645,6 +12794,13 @@ function renderConsultationManagement() {
                         <option value="solved">Solved</option>
                         <option value="needs-follow-up">Needs Follow-up</option>
                         <option value="escalated">Escalated</option>
+                    </select>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Assign Resource Person / Expert</label>
+                    <select id="outcome-assignee-dropdown" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+                        <option value="">-- Unassigned --</option>
                     </select>
                 </div>
                 
@@ -12956,13 +13112,13 @@ function updateConsultationTypeTabButtons() {
 
     const makeActive = (btn) => {
         if (!btn) return;
-        btn.classList.remove('border-gray-200','text-gray-600');
-        btn.classList.add('border-red-600','border-b-2','text-red-600');
+        btn.classList.remove('border-gray-200', 'text-gray-600');
+        btn.classList.add('border-red-600', 'border-b-2', 'text-red-600');
     };
     const makeInactive = (btn) => {
         if (!btn) return;
-        btn.classList.remove('border-red-600','border-b-2','text-red-600');
-        btn.classList.add('border-gray-200','text-gray-600');
+        btn.classList.remove('border-red-600', 'border-b-2', 'text-red-600');
+        btn.classList.add('border-gray-200', 'text-gray-600');
     };
 
     if (type === 'admin') {
@@ -13000,6 +13156,35 @@ function openOutcomeModal(consultationId, citizenName, userEmail) {
     document.getElementById('outcome-dropdown').value = '';
     document.getElementById('outcome-remarks').value = '';
     document.getElementById('outcome-email-body').value = '';
+
+    const assigneeSelect = document.getElementById('outcome-assignee-dropdown');
+    if (assigneeSelect) {
+        assigneeSelect.innerHTML = '<option value="">-- Loading Experts... --</option>';
+        fetch('API/resource_person_api.php?action=list_approved')
+            .then(r => r.json())
+            .then(res => {
+                let html = '<option value="">-- Unassigned --</option>';
+                const cons = (AppData.consultations || []).find(c => Number(c.id) === Number(consultationId));
+                const consCat = (cons && cons.category) ? cons.category.toLowerCase().trim() : '';
+
+                if (res.success && res.data && res.data.length > 0) {
+                    res.data.forEach(rp => {
+                        const expAreas = (rp.expertise_areas || '').toLowerCase();
+                        const isMatch = consCat && expAreas.includes(consCat);
+                        const matchTag = isMatch ? ' ⭐ (Expertise Match)' : '';
+                        html += `<option value="${rp.id}">${rp.fullname} (${rp.department || 'Expert'})${matchTag}</option>`;
+                    });
+                }
+                assigneeSelect.innerHTML = html;
+                if (cons && cons.assigned_to) {
+                    assigneeSelect.value = cons.assigned_to;
+                }
+            })
+            .catch(() => {
+                assigneeSelect.innerHTML = '<option value="">-- Unassigned --</option>';
+            });
+    }
+
     document.getElementById('outcome-modal').style.display = 'flex';
 }
 
@@ -13013,12 +13198,14 @@ function submitOutcome() {
     const remarks = document.getElementById('outcome-remarks').value;
     const userEmail = document.getElementById('outcome-user-email').textContent;
     const emailBody = document.getElementById('outcome-email-body').value;
-    
+    const assigneeSelect = document.getElementById('outcome-assignee-dropdown');
+    const assignedTo = assigneeSelect ? assigneeSelect.value : '';
+
     if (!outcome) {
         alert('Please select an outcome');
         return;
     }
-    
+
     const optionalRemarks = remarks.trim() || 'No additional remarks were provided.';
     const emailValue = (userEmail || '').trim();
 
@@ -13029,36 +13216,46 @@ function submitOutcome() {
     formData.append('remarks', optionalRemarks);
     formData.append('user_email', emailValue);
     formData.append('manual_email_body', emailBody.trim());
-    
+
     fetch('API/consultations_api.php', {
         method: 'POST',
         body: formData
     })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            const consultation = AppData.consultations.find(c => Number(c.id) === Number(consultationId));
-            const outcomeStatusMap = {
-                solved: 'completed',
-                'needs-follow-up': 'replied',
-                escalated: 'viewed'
-            };
-            const newStatus = String(data.status || outcomeStatusMap[outcome] || outcome).toLowerCase();
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                // Save assignment if selected
+                if (assignedTo !== undefined) {
+                    const assignData = new FormData();
+                    assignData.append('action', 'assign');
+                    assignData.append('consultation_id', consultationId);
+                    assignData.append('assigned_to', assignedTo);
+                    fetch('API/consultations_api.php', { method: 'POST', body: assignData });
+                }
 
-            if (consultation) {
-                consultation.status = newStatus;
+                const consultation = AppData.consultations.find(c => Number(c.id) === Number(consultationId));
+                const outcomeStatusMap = {
+                    solved: 'completed',
+                    'needs-follow-up': 'replied',
+                    escalated: 'viewed'
+                };
+                const newStatus = String(data.status || outcomeStatusMap[outcome] || outcome).toLowerCase();
+
+                if (consultation) {
+                    consultation.status = newStatus;
+                    consultation.assigned_to = assignedTo ? parseInt(assignedTo) : null;
+                }
+
+                updateConsultationStatsUI();
+                renderConsultationsTable();
+
+                alert('Outcome saved and consultation assignment updated.');
+                closeOutcomeModal();
+            } else {
+                alert('Error: ' + (data.error || 'Failed to save outcome'));
             }
-
-            updateConsultationStatsUI();
-            renderConsultationsTable();
-
-            alert('Outcome saved and consultation status updated.');
-            closeOutcomeModal();
-        } else {
-            alert('Error: ' + (data.error || 'Failed to save outcome'));
-        }
-    })
-    .catch(err => alert('Error: ' + err));
+        })
+        .catch(err => alert('Error: ' + err));
 }
 
 
@@ -13244,7 +13441,7 @@ async function loadConsultationsFromApi() {
             try {
 
 
-                        const dbgRes = await fetchWithTimeout('API/consultations_api.php?action=debug', { headers: { 'Accept': 'application/json' } }, 5000);
+                const dbgRes = await fetchWithTimeout('API/consultations_api.php?action=debug', { headers: { 'Accept': 'application/json' } }, 5000);
 
 
                 const dbg = await dbgRes.json();
@@ -13574,6 +13771,11 @@ function renderConsultationsTable() {
             }
             const consultationType = String(consultation.title || '-');
             const scheduledDateTime = consultation.date ? new Date(consultation.date).toLocaleString() : '-';
+
+            const approveBtn = (st === 'pending' || st === 'new' || !st || st === 'draft')
+                ? `<button onclick="openApproveCitizenSubmissionModal(${consultation.id})" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer" title="Approve & Launch Live Consultation on Public Portal"><i class="bi bi-check-circle-fill"></i> Approve & Publish</button>`
+                : `<span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-lg text-[11px] flex items-center gap-1"><i class="bi bi-globe"></i> Live Public</span>`;
+
             userRows.push(`
                 <tr class="border-b hover:bg-gray-50 transition">
                     <td class="px-6 py-4 font-semibold text-gray-900">${'CONSULT-' + String(consultation.id || '').padStart(6, '0')}</td>
@@ -13583,11 +13785,11 @@ function renderConsultationsTable() {
                     <td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColor}">${st ? (st.charAt(0).toUpperCase() + st.slice(1)) : 'Pending'}</span></td>
                     <td class="px-6 py-4 text-center"><span class="inline-flex items-center gap-1 text-gray-600"><i class="bi bi-file-text"></i>${consultation.documentsAttached || 0}</span></td>
                     <td class="px-6 py-4 text-center">
-                        <div class="flex gap-2 justify-center">
-                            <button onclick="viewConsultationDetails(${consultation.id})" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs font-semibold transition border border-red-200" title="View Details">
+                        <div class="flex gap-2 justify-center items-center">
+                            <button onclick="viewConsultationDetails(${consultation.id})" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-semibold transition border border-blue-200 cursor-pointer" title="View Details">
                                 <i class="bi bi-eye font-bold"></i> View
                             </button>
-                            ${editButton}
+                            ${approveBtn}
                         </div>
                     </td>
                 </tr>
@@ -13635,7 +13837,7 @@ function getFilteredConsultations() {
     let filtered = [...AppData.consultations];
 
 
-    
+
 
 
     const searchTerm = document.getElementById('consultation-search')?.value.toLowerCase() || '';
@@ -13658,7 +13860,7 @@ function getFilteredConsultations() {
     }
 
 
-    
+
 
 
     if (statusFilter) {
@@ -13750,10 +13952,10 @@ function openCreateConsultationModal(createMode) {
     const today = new Date().toISOString().split('T')[0];
     const startDateInput = document.getElementById('consultation-start-date');
     const endDateInput = document.getElementById('consultation-end-date');
-    
+
     startDateInput.value = today;
     startDateInput.min = today; // Prevent selecting past dates
-    
+
     endDateInput.value = '';
     endDateInput.min = today; // Prevent selecting past dates
 
@@ -13761,7 +13963,7 @@ function openCreateConsultationModal(createMode) {
     const categorySelect = document.getElementById('consultation-category');
 
     if (titleInput && categorySelect) {
-        titleInput.oninput = function() {
+        titleInput.oninput = function () {
             const currentCategory = categorySelect.value;
             const suggestedCategory = guessConsultationCategoryFromTitle(this.value);
 
@@ -13771,20 +13973,20 @@ function openCreateConsultationModal(createMode) {
             }
         };
 
-        categorySelect.onchange = function() {
+        categorySelect.onchange = function () {
             delete categorySelect.dataset.autoSelected;
         };
     }
 
     // Add event listeners for date validation
-    startDateInput.addEventListener('change', function() {
+    startDateInput.addEventListener('change', function () {
         endDateInput.min = this.value; // End date must be after start date
         if (endDateInput.value && endDateInput.value < this.value) {
             endDateInput.value = this.value; // Set end date to start date if it's before
         }
     });
 
-    endDateInput.addEventListener('change', function() {
+    endDateInput.addEventListener('change', function () {
         if (this.value && this.value < startDateInput.value) {
             this.value = startDateInput.value; // Prevent end date being before start date
         }
@@ -13857,7 +14059,7 @@ function refreshConsultationModeConfigVisibility() {
 
 
 
-window.onConsultationBarangayChange = function() {
+window.onConsultationBarangayChange = function () {
     const bSelect = document.getElementById('consultation-barangay');
     const dSelect = document.getElementById('consultation-district');
     if (!bSelect || !dSelect) return;
@@ -13877,7 +14079,7 @@ window.onConsultationBarangayChange = function() {
     }
 };
 
-window.onConsultationDistrictChange = function() {
+window.onConsultationDistrictChange = function () {
     const bSelect = document.getElementById('consultation-barangay');
     const dSelect = document.getElementById('consultation-district');
     if (!bSelect || !dSelect) return;
@@ -13932,23 +14134,23 @@ function editConsultation(id) {
 
     const startDateInput = document.getElementById('consultation-start-date');
     const endDateInput = document.getElementById('consultation-end-date');
-    
+
     startDateInput.value = consultation.start_date || consultation.date || '';
     endDateInput.value = consultation.end_date || '';
-    
+
     // Apply date validation for editing
     const today = new Date().toISOString().split('T')[0];
     startDateInput.min = today; // Prevent selecting past dates for new selection
-    
+
     // Add event listeners for date validation
-    startDateInput.addEventListener('change', function() {
+    startDateInput.addEventListener('change', function () {
         endDateInput.min = this.value; // End date must be after start date
         if (endDateInput.value && endDateInput.value < this.value) {
             endDateInput.value = this.value; // Set end date to start date if it's before
         }
     });
 
-    endDateInput.addEventListener('change', function() {
+    endDateInput.addEventListener('change', function () {
         if (this.value && this.value < startDateInput.value) {
             this.value = startDateInput.value; // Prevent end date being before start date
         }
@@ -14130,7 +14332,7 @@ function previewConsultationImage(input) {
 
         var reader = new FileReader();
 
-        reader.onload = function(e) {
+        reader.onload = function (e) {
 
             if (preview) {
 
@@ -14172,7 +14374,7 @@ function viewConsultationDetails(id) {
 
     const relatedFeedback = AppData.feedback.filter(f => Number(f.consultationId || f.consultation_id) === Number(id));
 
-    const feedbackHTML = relatedFeedback.length > 0 
+    const feedbackHTML = relatedFeedback.length > 0
         ? relatedFeedback.map(f => `
             <div class="bg-gray-50/80 p-4 rounded-xl border border-gray-200 hover:border-red-200 transition">
                 <div class="flex items-center justify-between mb-1.5">
@@ -14191,8 +14393,8 @@ function viewConsultationDetails(id) {
            </div>`;
 
     const st = String(consultation.status || '').toLowerCase();
-    const statusBadgeClass = st === 'active' 
-        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+    const statusBadgeClass = st === 'active'
+        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
         : (st === 'draft' || st === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-gray-100 text-gray-700 border-gray-200');
     const statusLabel = st ? (st.charAt(0).toUpperCase() + st.slice(1)) : 'Pending';
 
@@ -14207,7 +14409,7 @@ function viewConsultationDetails(id) {
     const ageMs = createdDate ? (Date.now() - createdDate.getTime()) : null;
     const pastWindow = ageMs ? (ageMs > editWindowDays * 24 * 60 * 60 * 1000) : false;
     const canEdit = !isUserSubmission && !currentUserIsSuperAdmin() && !isConsultationClosed(consultation) && !pastWindow;
-    
+
     const aiRoutingNote = String(consultation.remarks || '').trim();
     const aiRoutingHtml = aiRoutingNote ? `
         <div class="bg-indigo-50/80 border border-indigo-200/80 rounded-xl p-4 shadow-xs">
@@ -14414,7 +14616,7 @@ function closeDetailsModal() {
     document.getElementById('consultation-details-modal').classList.add('hidden');
 }
 
-window.triggerSystemIntegration = async function(consultationId, targetSystem) {
+window.triggerSystemIntegration = async function (consultationId, targetSystem) {
     const btnPhs = document.getElementById(`sync-phs-btn-${consultationId}`);
     const btnLrs = document.getElementById(`sync-lrs-btn-${consultationId}`);
     const activeBtn = targetSystem === 'PHS' ? btnPhs : btnLrs;
@@ -14464,7 +14666,7 @@ function renderFeedbackCollection() {
     const contentArea = document.getElementById('content-area');
 
 
-    
+
 
 
 
@@ -14472,7 +14674,7 @@ function renderFeedbackCollection() {
     const breadcrumbCurrent = document.querySelector('.breadcrumb-current');
 
 
-    
+
 
 
 
@@ -14863,13 +15065,13 @@ async function loadFeedbackFromApi() {
     try {
 
 
-const res = await fetchWithTimeout('API/feedback_api.php?action=list&limit=200&offset=0', {
+        const res = await fetchWithTimeout('API/feedback_api.php?action=list&limit=200&offset=0', {
 
 
-        headers: { 'Accept': 'application/json' }
+            headers: { 'Accept': 'application/json' }
 
 
-    }, 5000);
+        }, 5000);
 
 
 
@@ -14965,7 +15167,7 @@ const res = await fetchWithTimeout('API/feedback_api.php?action=list&limit=200&o
             try {
 
 
-                        const dbgRes = await fetchWithTimeout('API/feedback_api.php?action=debug', { headers: { 'Accept': 'application/json' } }, 5000);
+                const dbgRes = await fetchWithTimeout('API/feedback_api.php?action=debug', { headers: { 'Accept': 'application/json' } }, 5000);
 
 
                 const dbg = await dbgRes.json();
@@ -15636,7 +15838,7 @@ function getFilteredFeedback() {
     let filtered = [...AppData.feedback];
 
 
-    
+
 
 
     const searchTerm = document.getElementById('feedback-search')?.value.toLowerCase() || '';
@@ -15653,10 +15855,10 @@ function getFilteredFeedback() {
     if (searchTerm) {
 
 
-        filtered = filtered.filter(f => 
+        filtered = filtered.filter(f =>
 
 
-            f.author.toLowerCase().includes(searchTerm) || 
+            f.author.toLowerCase().includes(searchTerm) ||
 
 
             f.message.toLowerCase().includes(searchTerm)
@@ -15668,7 +15870,7 @@ function getFilteredFeedback() {
     }
 
 
-    
+
 
 
     if (consultationFilter) {
@@ -15688,7 +15890,7 @@ function getFilteredFeedback() {
     filtered.sort((a, b) => {
 
 
-        switch(sortBy) {
+        switch (sortBy) {
 
 
             case 'date-asc':
@@ -15835,19 +16037,19 @@ async function analyzeSingleFeedback(id, showInModal = false) {
 
         // Read-only mode: analysis results are not persisted.
 
-// Update modal result area with rich analysis
+        // Update modal result area with rich analysis
 
         if (resultEl) {
 
             const badgeClass = result.sentiment === 'positive' ? 'bg-green-100 text-green-800' :
 
-                              result.sentiment === 'negative' ? 'bg-red-100 text-red-800' :
+                result.sentiment === 'negative' ? 'bg-red-100 text-red-800' :
 
-                              'bg-gray-100 text-gray-700';
+                    'bg-gray-100 text-gray-700';
 
             const icon = result.sentiment === 'positive' ? 'bi-emoji-smile' :
 
-                        result.sentiment === 'negative' ? 'bi-emoji-frown' : 'bi-emoji-neutral';
+                result.sentiment === 'negative' ? 'bi-emoji-frown' : 'bi-emoji-neutral';
 
             const urgencyColors = { critical: 'bg-red-600 text-white', high: 'bg-orange-500 text-white', medium: 'bg-yellow-400 text-yellow-900', low: 'bg-gray-200 text-gray-600' };
 
@@ -15864,9 +16066,9 @@ async function analyzeSingleFeedback(id, showInModal = false) {
 
                         const kwClass = k.score > 0 ? 'bg-green-50 text-green-700 border-green-200' :
 
-                                       k.score < 0 ? 'bg-red-50 text-red-700 border-red-200' :
+                            k.score < 0 ? 'bg-red-50 text-red-700 border-red-200' :
 
-                                       'bg-gray-50 text-gray-600 border-gray-200';
+                                'bg-gray-50 text-gray-600 border-gray-200';
 
                         return `<span class="text-xs px-2 py-0.5 rounded border ${kwClass}">${escapeHtml(k.word)} (${k.score > 0 ? '+' : ''}${k.score})</span>`;
 
@@ -16121,7 +16323,7 @@ async function runBatchSentimentAnalysis() {
             }
         }
 
-// Refresh table
+        // Refresh table
 
 
         renderFeedbackTable();
@@ -16334,7 +16536,7 @@ function saveFeedback() {
         AppData.feedback.push(newFeedback);
 
 
-        
+
 
 
         // Update consultation feedback count
@@ -16352,7 +16554,7 @@ function saveFeedback() {
         }
 
 
-        
+
 
 
         showNotification('Feedback added successfully', 'success');
@@ -16512,7 +16714,7 @@ function pfpRenderStats() {
     const closedCount = AppData.feedback.filter(f => String(f.status || '').toLowerCase() === 'closed').length;
     const forwardedCount = AppData.feedback.filter(f => String(f.status || '').toLowerCase() === 'forwarded' || !!f.committee_assigned).length;
     const anonymousCount = AppData.feedback.filter(f => !String(f.authorEmail || f.guest_email || '').trim()).length;
-    
+
     const surveyCount = AppData.feedback.filter(f => String(f.submission_type || f.type || '').toLowerCase() === 'survey').length;
     const proposalCount = AppData.feedback.filter(f => String(f.submission_type || f.type || '').toLowerCase() === 'proposal').length;
 
@@ -16636,7 +16838,7 @@ function pfpRenderTable() {
         const ratingHtml = pfpRatingStars(f.rating);
         const sentimentHtml = pfpSentimentBadge(f.sentiment_tag || f.sentiment);
         const typeBadge = pfpSubmissionTypeBadge(f.submission_type || f.type);
-        const committeeTag = f.committee_assigned 
+        const committeeTag = f.committee_assigned
             ? `<div class="mt-1"><span class="inline-block px-1.5 py-0.5 text-[10px] font-semibold bg-purple-50 text-purple-800 rounded border border-purple-200"><i class="bi bi-diagram-3 mr-0.5"></i>${escapeHtml(f.committee_assigned)}</span></div>`
             : '';
 
@@ -16734,7 +16936,7 @@ function openFeedbackResponseModal(id) {
         if (typeof f.topic_tags === 'string') topics = JSON.parse(f.topic_tags);
         else if (Array.isArray(f.topic_tags)) topics = f.topic_tags;
         else if (Array.isArray(f.topics)) topics = f.topics;
-    } catch (_) {}
+    } catch (_) { }
 
     if (topics.length) {
         topicsHtml = topics.map(t => `<span class="inline-block px-2 py-0.5 text-xs bg-blue-50 text-blue-700 rounded border border-blue-200 mr-1 mb-1">${escapeHtml(t)}</span>`).join('');
@@ -17158,23 +17360,23 @@ async function renderPublicFeedbackPortal() {
                 <input id="pfq-to-date" type="hidden">
             </div>
 
-            <!-- Interactive Queue System Tab Bar -->
+            <!-- Interactive Queue System Tab Bar (Clean 3-Tab Layout) -->
             <div class="border-b border-gray-200 bg-white rounded-t-xl px-4 pt-3 flex flex-wrap items-center justify-between gap-4 shadow-sm">
                 <div class="flex items-center gap-2 overflow-x-auto">
-                    <button id="pfq-tab-pcms" onclick="switchPublicFeedbackTab('pcms')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-red-600 text-red-600 flex items-center gap-2 transition focus:outline-none">
-                        <i class="bi bi-chat-left-text-fill"></i>
-                        <span>PCMS Portal Feedback Queue</span>
-                        <span id="pfq-tab-pcms-badge" class="px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-[10px] font-extrabold">0</span>
+                    <button id="pfq-tab-survey" onclick="switchPublicFeedbackTab('survey')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-purple-600 text-purple-600 flex items-center gap-2 transition focus:outline-none cursor-pointer">
+                        <i class="bi bi-square-poll-fill text-purple-600"></i>
+                        <span>Community Survey Polls</span>
+                        <span id="pfq-tab-survey-badge" class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-extrabold">0</span>
                     </button>
-                    <button id="pfq-tab-phms" onclick="switchPublicFeedbackTab('phms')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none">
-                        <i class="bi bi-building-gear"></i>
-                        <span>PHMS System Feedback</span>
+                    <button id="pfq-tab-consult" onclick="switchPublicFeedbackTab('consult')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none cursor-pointer">
+                        <i class="bi bi-chat-left-quote-fill"></i>
+                        <span>Consultation Feedback Summary</span>
+                        <span id="pfq-tab-consult-badge" class="px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-[10px] font-extrabold">0</span>
+                    </button>
+                    <button id="pfq-tab-phms" onclick="switchPublicFeedbackTab('phms')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none cursor-pointer">
+                        <i class="bi bi-building-gear text-blue-600"></i>
+                        <span>PHMS Feedback</span>
                         <span id="pfq-tab-phms-badge" class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-extrabold">0</span>
-                    </button>
-                    <button id="pfq-tab-reports" onclick="switchPublicFeedbackTab('reports')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none">
-                        <i class="bi bi-robot text-purple-600"></i>
-                        <span>AI Committee Reports & Briefs</span>
-                        <span id="pfq-tab-reports-badge" class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-extrabold">0</span>
                     </button>
                 </div>
                 <div class="text-xs text-gray-400 font-medium hidden sm:flex items-center gap-1.5 py-2">
@@ -17183,114 +17385,105 @@ async function renderPublicFeedbackPortal() {
                 </div>
             </div>
 
-            <!-- TAB 1: PCMS Portal Feedback Queue Container -->
-            <div id="pfq-pcms-container" class="space-y-4">
-                <!-- Clean Single-Row Filter Bar -->
-                <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-3">
-                    <div class="flex flex-wrap items-center gap-3">
-                        <!-- Search Input -->
+            <!-- TAB 1: Community Survey Polls Container (Active by default) -->
+            <div id="pfq-survey-container" class="space-y-4">
+                <div class="bg-white rounded-xl border border-purple-200 p-4 shadow-sm space-y-3 bg-purple-50/20">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
                         <div class="flex-1 min-w-[240px]">
                             <div class="relative">
                                 <i class="bi bi-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
-                                <input id="pfq-search" type="text" placeholder="Search by citizen name, reference #, or feedback message..." class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-red-500 focus:border-red-500" oninput="pfpRenderTable()">
+                                <input id="pfq-survey-search" type="text" placeholder="Search survey topic, question, or date..." class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 focus:border-purple-500" oninput="pfpRenderSurveyPollsTable()">
                             </div>
                         </div>
 
-                        <!-- Consultation Policy Dropdown -->
-                        <select id="pfq-consultation" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white max-w-[220px]" onchange="pfpRenderTable()">
-                            <option value="">All Consultation Policies</option>
-                        </select>
-
-                        <!-- Submission Type Dropdown -->
-                        <select id="pfq-type" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderTable()">
-                            <option value="">All Submission Types</option>
-                            <option value="survey">Surveys Only</option>
-                            <option value="proposal">Proposals Only</option>
-                            <option value="comment">Comments Only</option>
-                        </select>
-
-                        <!-- Queue Status Dropdown -->
-                        <select id="pfq-status" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderTable()">
-                            <option value="">All Statuses</option>
-                            <option value="pending">Pending</option>
-                            <option value="reviewed">Reviewed</option>
-                            <option value="responded">Responded</option>
-                            <option value="forwarded">Forwarded</option>
+                        <select id="pfq-survey-status" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderSurveyPollsTable()">
+                            <option value="">All Poll Statuses</option>
+                            <option value="active">Active</option>
+                            <option value="completed">Completed</option>
                             <option value="closed">Closed</option>
                         </select>
-
-                        <!-- Committee Dropdown -->
-                        <select id="pfq-committee" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderTable()">
-                            <option value="">All LGU Committees</option>
-                            <option value="Urban Planning">Urban Planning</option>
-                            <option value="Environmental">Environment</option>
-                            <option value="Health">Health</option>
-                            <option value="Finance">Finance</option>
-                            <option value="Rules">Rules & Governance</option>
-                        </select>
-
-                        <button onclick="pfpResetFilters()" class="px-3 py-2 text-xs font-semibold text-gray-500 hover:text-gray-800">
-                            Reset Filters
-                        </button>
-                    </div>
-
-                    <!-- Sub-bar: Archive Mode & Bulk Actions -->
-                    <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100 text-xs">
-                        <div class="flex items-center gap-3">
-                            <div class="flex items-center gap-2">
-                                <span class="text-gray-500 font-semibold">Queue View:</span>
-                                <select id="pfq-archive-mode" class="px-2.5 py-1 border border-purple-200 bg-purple-50 text-purple-900 font-bold rounded-md text-xs" onchange="pfpRenderTable()">
-                                    <option value="active">Active Submissions Queue</option>
-                                    <option value="archived">Archived Searchable Vault</option>
-                                </select>
-                            </div>
-                            <span class="text-gray-300">|</span>
-                            <div class="flex items-center gap-1">
-                                <span class="text-gray-500 font-medium">Barangay:</span>
-                                <input id="pfq-barangay" type="text" placeholder="e.g. Poblacion" class="px-2.5 py-1 border border-gray-300 rounded-md text-xs w-32" oninput="pfpRenderTable()">
-                            </div>
-                        </div>
-
-                        <div class="flex items-center gap-2">
-                            <select id="pfq-bulk-status" class="px-2.5 py-1 border border-gray-300 rounded-md text-xs">
-                                <option value="">Bulk status action...</option>
-                                <option value="reviewed">Mark as Reviewed</option>
-                                <option value="responded">Mark as Responded</option>
-                                <option value="closed">Close & Archive</option>
-                            </select>
-                            <button onclick="pfpApplyBulkStatus()" class="px-3 py-1 bg-gray-800 text-white font-semibold rounded-md text-xs hover:bg-gray-900 transition">
-                                Apply
-                            </button>
-                            <button onclick="pfpTriggerAiCommitteeCompile()" class="px-3 py-1 bg-gradient-to-r from-red-700 to-red-900 text-white font-extrabold rounded-md text-xs hover:from-red-800 hover:to-black transition shadow flex items-center gap-1">
-                                <i class="bi bi-robot"></i> Compile AI Committee Brief
-                            </button>
-                            <span id="pfq-items-count" class="text-gray-500 font-bold ml-2">0 item(s)</span>
-                        </div>
                     </div>
                 </div>
 
-                <!-- Queue Submissions Table -->
                 <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-sm">
                     <table class="w-full text-xs text-left">
-                        <thead class="bg-gray-50 border-b border-gray-200 uppercase tracking-wider text-[11px] font-bold text-gray-700">
+                        <thead class="bg-slate-50 border-b border-gray-200 uppercase tracking-wider text-[11px] font-bold text-gray-700">
                             <tr>
-                                <th class="px-3.5 py-3"><input id="pfq-check-all" type="checkbox" onchange="pfpToggleSelectAll()" class="rounded border-gray-300"></th>
-                                <th class="px-3.5 py-3 font-bold text-gray-900">Ref #</th>
-                                <th class="px-3.5 py-3 font-bold text-gray-900">Citizen</th>
-                                <th class="px-3.5 py-3 font-bold text-gray-900">Submission Type</th>
-                                <th class="px-3.5 py-3 font-bold text-gray-900">Consultation Policy / Committee</th>
-                                <th class="px-3.5 py-3 font-bold text-gray-900">Priority & Sentiment</th>
-                                <th class="px-3.5 py-3 font-bold text-gray-900">Status</th>
-                                <th class="px-3.5 py-3 font-bold text-gray-900">Submitted Date</th>
-                                <th class="px-3.5 py-3 font-bold text-gray-900">Aging</th>
-                                <th class="px-3.5 py-3 font-bold text-gray-900 text-center">Actions</th>
+                                <th class="px-4 py-3 text-gray-900">SURVEY / POLL TOPIC</th>
+                                <th class="px-4 py-3 text-gray-900">DATE</th>
+                                <th class="px-4 py-3 text-gray-900 text-center">TOTAL VOTES</th>
+                                <th class="px-4 py-3 text-gray-900 text-center">PUBLIC STANCE & POLL BREAKDOWN</th>
+                                <th class="px-4 py-3 text-gray-900 text-center">STATUS</th>
+                                <th class="px-4 py-3 text-gray-900 text-center">ACTIONS</th>
                             </tr>
                         </thead>
-                        <tbody id="pfq-table-body"></tbody>
+                        <tbody id="pfq-survey-table-body">
+                            <tr>
+                                <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                                    <i class="bi bi-arrow-repeat animate-spin text-xl mb-1 block"></i> Loading Community Survey Polls...
+                                </td>
+                            </tr>
+                        </tbody>
                     </table>
                     <div class="px-4 py-3 border-t border-gray-100 text-xs text-gray-500 flex items-center justify-between">
-                        <span><strong>Active Barangays Participating:</strong> <span id="pfq-top-barangay">-</span></span>
-                        <span>Click <strong>"View / Forward"</strong> on any row to open the review drawer and take action.</span>
+                        <span><strong>PCMS Opinion Polls:</strong> Live Citizen Vote Tally & Percentage Breakdown</span>
+                        <span>Click <strong>"View Poll Breakdown"</strong> to inspect vote statistics.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: Consultation Feedback Summary Container -->
+            <div id="pfq-consult-container" class="space-y-4 hidden">
+                <div class="bg-white rounded-xl border border-blue-200 p-4 shadow-sm space-y-3 bg-blue-50/20">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex-1 min-w-[240px]">
+                            <div class="relative">
+                                <i class="bi bi-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+                                <input id="pfq-consult-search" type="text" placeholder="Search consultation title, date, or ID..." class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500" oninput="pfpRenderConsultationFeedbackTable()">
+                            </div>
+                        </div>
+
+                        <select id="pfq-consultation" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white max-w-[240px]">
+                            <option value="">Select Consultation Policy...</option>
+                        </select>
+
+                        <select id="pfq-consult-status" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderConsultationFeedbackTable()">
+                            <option value="">All Consultation Statuses</option>
+                            <option value="active">Active</option>
+                            <option value="completed">Completed</option>
+                            <option value="closed">Closed</option>
+                        </select>
+
+                        <button onclick="pfpTriggerAiCommitteeCompile()" class="px-3.5 py-2 bg-gradient-to-r from-red-700 to-red-900 text-white font-extrabold rounded-lg text-xs hover:from-red-800 hover:to-black transition shadow flex items-center gap-1.5 cursor-pointer">
+                            <i class="bi bi-robot"></i> Compile AI Committee Brief
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-sm">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-slate-50 border-b border-gray-200 uppercase tracking-wider text-[11px] font-bold text-gray-700">
+                            <tr>
+                                <th class="px-4 py-3 text-gray-900">CONSULTATION</th>
+                                <th class="px-4 py-3 text-gray-900">DATE</th>
+                                <th class="px-4 py-3 text-gray-900 text-center">FEEDBACK</th>
+                                <th class="px-4 py-3 text-gray-900 text-center">AVG. RATING</th>
+                                <th class="px-4 py-3 text-gray-900 text-center">PUBLISHED</th>
+                                <th class="px-4 py-3 text-gray-900 text-center">PENDING</th>
+                                <th class="px-4 py-3 text-gray-900 text-center">ACTIONS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pfq-consultation-table-body">
+                            <tr>
+                                <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                                    <i class="bi bi-arrow-repeat animate-spin text-xl mb-1 block"></i> Loading Consultation Feedback...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="px-4 py-3 border-t border-gray-100 text-xs text-gray-500 flex items-center justify-between">
+                        <span><strong>PCMS Integration:</strong> Real-Time Live Sync enabled with Consultation Management System</span>
+                        <span>Click <strong>"View Feedback"</strong> to inspect individual citizen responses.</span>
                     </div>
                 </div>
             </div>
@@ -17302,22 +17495,17 @@ async function renderPublicFeedbackPortal() {
                         <div class="flex-1 min-w-[240px]">
                             <div class="relative">
                                 <i class="bi bi-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
-                                <input id="pfq-phms-search" type="text" placeholder="Search PHMS registrant name, email, or external reference..." class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500" oninput="pfpRenderPhmsTable()">
+                                <input id="pfq-phms-search" type="text" placeholder="Search PHMS hearing title, date, or ID..." class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500" oninput="pfpRenderPhmsTable()">
                             </div>
                         </div>
 
-                        <!-- PHMS Consultation / Hearing Dropdown -->
-                        <select id="pfq-phms-consultation" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white max-w-[220px]" onchange="pfpRenderPhmsTable()">
-                            <option value="">All PHMS Hearings / Policies</option>
-                        </select>
                         <select id="pfq-phms-status" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderPhmsTable()">
-                            <option value="">All PHMS Statuses</option>
-                            <option value="queued">Queued</option>
-                            <option value="reviewed">Reviewed</option>
-                            <option value="processed">Processed</option>
-                            <option value="closed">Closed</option>
+                            <option value="">All Hearing Statuses</option>
+                            <option value="completed">Completed</option>
+                            <option value="active">Active</option>
+                            <option value="open">Open</option>
                         </select>
-                        <button onclick="loadPhmsFeedbackFromApi(true)" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition shadow flex items-center gap-1.5">
+                        <button id="pfq-phms-sync-btn" onclick="pfpTriggerRealtimePhmsSync()" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition shadow flex items-center gap-1.5 cursor-pointer">
                             <i class="bi bi-arrow-repeat"></i> Sync PHMS Data
                         </button>
                     </div>
@@ -17325,101 +17513,38 @@ async function renderPublicFeedbackPortal() {
 
                 <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-sm">
                     <table class="w-full text-xs text-left">
-                        <thead class="bg-slate-50 border-b border-gray-200 uppercase tracking-wider text-[11px] font-extrabold text-gray-600">
+                        <thead class="bg-slate-50 border-b border-gray-200 uppercase tracking-wider text-[11px] font-bold text-gray-700">
                             <tr>
                                 <th class="px-4 py-3 text-gray-900">HEARING</th>
                                 <th class="px-4 py-3 text-gray-900">DATE</th>
                                 <th class="px-4 py-3 text-gray-900 text-center">FEEDBACK</th>
                                 <th class="px-4 py-3 text-gray-900 text-center">AVG. RATING</th>
-                                <th class="px-4 py-3 text-gray-900">AI SUMMARY</th>
+                                <th class="px-4 py-3 text-gray-900 text-center">PUBLISHED</th>
+                                <th class="px-4 py-3 text-gray-900 text-center">PENDING</th>
                                 <th class="px-4 py-3 text-gray-900 text-center">ACTIONS</th>
                             </tr>
                         </thead>
                         <tbody id="pfq-phms-table-body">
                             <tr>
-                                <td colspan="6" class="px-4 py-8 text-center text-gray-500">
-                                    <i class="bi bi-arrow-repeat animate-spin text-xl mb-1 block"></i> Loading PHMS AI Feedback Summaries...
+                                <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                                    <i class="bi bi-arrow-repeat animate-spin text-xl mb-1 block"></i> Loading PHMS Citizen Hearing Feedback...
                                 </td>
                             </tr>
                         </tbody>
                     </table>
                     <div class="px-4 py-3 border-t border-gray-100 text-xs text-gray-500 flex items-center justify-between">
-                        <span><strong>PHMS AI Intelligence:</strong> Synchronized with PHMS Public Hearing Management System</span>
-                        <span>Click <strong>"View"</strong> to inspect AI summary analysis & citizen feedback responses.</span>
+                        <span><strong>PHMS Integration:</strong> Real-Time Live Sync enabled with PHMS Public Hearing Management System</span>
+                        <span>Click <strong>"View Feedback"</strong> to inspect individual citizen responses.</span>
                     </div>
                 </div>
             </div>
-
-            <!-- TAB 3: AI Committee Reports & Briefs Section -->
-            <div id="pfq-reports-container" class="space-y-4 hidden">
-                <div class="bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 text-white p-5 rounded-xl shadow-md flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                        <h2 class="text-base font-bold flex items-center gap-2">
-                            <i class="bi bi-robot text-purple-400 text-lg"></i> AI Committee Synthesis Reports & Transmittal Vault
-                        </h2>
-                        <p class="text-purple-200 text-xs mt-0.5">
-                            Consolidated resolution briefs synthesized from closed public consultations for formal transmittal to LGU committees.
-                        </p>
-                    </div>
-                    <button onclick="pfpRenderReportsVaultTable()" class="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-lg border border-white/20 transition flex items-center gap-1.5">
-                        <i class="bi bi-arrow-repeat"></i> Refresh Reports Vault
-                    </button>
-                </div>
-
-                <div class="bg-white rounded-xl border border-purple-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3 bg-purple-50/20">
-                    <div class="flex-1 min-w-[240px]">
-                        <div class="relative">
-                            <i class="bi bi-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
-                            <input id="pfq-reports-search" type="text" placeholder="Search report title, consultation #, or committee..." class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 focus:border-purple-500" oninput="pfpRenderReportsVaultTable()">
-                        </div>
-                    </div>
-                    <select id="pfq-reports-filter-committee" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderReportsVaultTable()">
-                        <option value="">All LGU Committees</option>
-                        <option value="Environment">Environment Committee</option>
-                        <option value="Health">Health Committee</option>
-                        <option value="Urban Planning">Urban Planning Committee</option>
-                        <option value="Finance">Finance Committee</option>
-                        <option value="Rules">Rules & Governance Committee</option>
-                    </select>
-                    <select id="pfq-reports-filter-status" class="px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white" onchange="pfpRenderReportsVaultTable()">
-                        <option value="">All Report Statuses</option>
-                        <option value="closed">Closed Consultations (Ready / Transmitted)</option>
-                        <option value="active">Active Consultations (Pending Closure)</option>
-                    </select>
-                </div>
-
-                <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-sm">
-                    <table class="w-full text-xs text-left">
-                        <thead class="bg-purple-50/70 border-b border-purple-200 uppercase tracking-wider text-[11px] font-bold text-gray-700">
-                            <tr>
-                                <th class="px-3.5 py-3 font-bold text-gray-900">Consultation ID & Title</th>
-                                <th class="px-3.5 py-3 font-bold text-gray-900">Target LGU Committee</th>
-                                <th class="px-3.5 py-3 font-bold text-gray-900">Feedback Volume</th>
-                                <th class="px-3.5 py-3 font-bold text-gray-900">Public Sentiment</th>
-                                <th class="px-3.5 py-3 font-bold text-gray-900">Consultation Status</th>
-                                <th class="px-3.5 py-3 font-bold text-gray-900">AI Report Transmittal</th>
-                                <th class="px-3.5 py-3 font-bold text-gray-900 text-center">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="pfq-reports-table-body">
-                            <tr>
-                                <td colspan="7" class="px-4 py-8 text-center text-gray-500">
-                                    <i class="bi bi-arrow-repeat animate-spin text-xl mb-1 block"></i> Loading Committee Reports Vault...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <div class="px-4 py-3 border-t border-gray-100 text-xs text-gray-500 flex items-center justify-between">
-                        <span><strong>AI Synthesis Engine:</strong> Consolidated Problems, Solutions, and Conclusion Documents</span>
-                        <span>Click <strong>"View AI Document"</strong> to open, export, or pass report to committee.</span>
-                    </div>
-                </div>
             </div>
         </div>
     `;
 
     pfpPopulateConsultationDropdowns();
     pfpRenderStats();
+    pfpRenderConsultationFeedbackTable();
     pfpRenderTable();
     loadPhmsFeedbackFromApi();
 
@@ -17428,44 +17553,561 @@ async function renderPublicFeedbackPortal() {
     }
 }
 
-window.__current_pfq_tab__ = 'pcms';
+window.__current_pfq_tab__ = 'consult';
+window._phms_realtime_timer = null;
+
 if (!AppData.phmsFeedback) {
     AppData.phmsFeedback = [];
+}
+
+async function pfpTriggerRealtimePhmsSync() {
+    const btn = document.getElementById('pfq-phms-sync-btn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin"></i> Syncing...';
+    }
+
+    await loadPhmsFeedbackFromApi(true);
+
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sync PHMS Data';
+    }
 }
 
 function switchPublicFeedbackTab(tabName) {
     window.__current_pfq_tab__ = tabName;
 
-    const pcmsBtn = document.getElementById('pfq-tab-pcms');
+    const consultBtn = document.getElementById('pfq-tab-consult');
+    const surveyBtn = document.getElementById('pfq-tab-survey');
     const phmsBtn = document.getElementById('pfq-tab-phms');
-    const reportsBtn = document.getElementById('pfq-tab-reports');
-    const pcmsContainer = document.getElementById('pfq-pcms-container');
+
+    const consultContainer = document.getElementById('pfq-consult-container');
+    const surveyContainer = document.getElementById('pfq-survey-container');
     const phmsContainer = document.getElementById('pfq-phms-container');
-    const reportsContainer = document.getElementById('pfq-reports-container');
 
-    // Reset button states
-    if (pcmsBtn) pcmsBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none';
-    if (phmsBtn) phmsBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none';
-    if (reportsBtn) reportsBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none';
+    if (window._phms_realtime_timer) {
+        clearInterval(window._phms_realtime_timer);
+        window._phms_realtime_timer = null;
+    }
 
-    if (pcmsContainer) pcmsContainer.classList.add('hidden');
+    const inactiveClass = 'px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none cursor-pointer';
+
+    if (consultBtn) consultBtn.className = inactiveClass;
+    if (surveyBtn) surveyBtn.className = inactiveClass;
+    if (phmsBtn) phmsBtn.className = inactiveClass;
+
+    if (consultContainer) consultContainer.classList.add('hidden');
+    if (surveyContainer) surveyContainer.classList.add('hidden');
     if (phmsContainer) phmsContainer.classList.add('hidden');
-    if (reportsContainer) reportsContainer.classList.add('hidden');
 
-    if (tabName === 'reports') {
-        if (reportsBtn) reportsBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-purple-600 text-purple-600 flex items-center gap-2 transition focus:outline-none';
-        if (reportsContainer) reportsContainer.classList.remove('hidden');
-        pfpRenderReportsVaultTable();
-    } else if (tabName === 'phms') {
-        if (phmsBtn) phmsBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-blue-600 text-blue-600 flex items-center gap-2 transition focus:outline-none';
+    if (tabName === 'phms') {
+        if (phmsBtn) phmsBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-blue-600 text-blue-600 flex items-center gap-2 transition focus:outline-none cursor-pointer';
         if (phmsContainer) phmsContainer.classList.remove('hidden');
-        pfpRenderPhmsTable();
+        loadPhmsFeedbackFromApi(false);
+
+        window._phms_realtime_timer = setInterval(() => {
+            if (window.__current_pfq_tab__ === 'phms') {
+                loadPhmsFeedbackFromApi(false);
+            }
+        }, 15000);
+    } else if (tabName === 'survey') {
+        if (surveyBtn) surveyBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-purple-600 text-purple-600 flex items-center gap-2 transition focus:outline-none cursor-pointer';
+        if (surveyContainer) surveyContainer.classList.remove('hidden');
+        pfpRenderSurveyPollsTable();
     } else {
-        if (pcmsBtn) pcmsBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-red-600 text-red-600 flex items-center gap-2 transition focus:outline-none';
-        if (pcmsContainer) pcmsContainer.classList.remove('hidden');
-        pfpRenderTable();
+        if (consultBtn) consultBtn.className = 'px-4 py-2.5 text-xs font-bold border-b-2 border-red-600 text-red-600 flex items-center gap-2 transition focus:outline-none cursor-pointer';
+        if (consultContainer) consultContainer.classList.remove('hidden');
+        pfpRenderConsultationFeedbackTable();
     }
 }
+
+function pfpRenderSurveyPollsTable() {
+    const tbody = document.getElementById('pfq-survey-table-body');
+    if (!tbody) return;
+
+    const q = String(document.getElementById('pfq-survey-search')?.value || '').toLowerCase().trim();
+    const statusFilter = String(document.getElementById('pfq-survey-status')?.value || '').toLowerCase().trim();
+
+    let consultations = Array.isArray(AppData.consultations)
+        ? AppData.consultations.filter(c => (String(c.status || '').toLowerCase() === 'active' || String(c.status || '').toLowerCase() === 'open' || (c.type !== 'user' && String(c.type || '').toLowerCase() !== 'user')) && (String(c.response_mode || '').toLowerCase() === 'survey' || c.is_survey === 1 || c.is_survey === true))
+        : [];
+
+    if (q) {
+        consultations = consultations.filter(c => {
+            const title = String(c.title || '').toLowerCase();
+            const qText = String(c.survey_question || '').toLowerCase();
+            const dateStr = String(c.start_date || c.created_at || '').toLowerCase();
+            const cid = String(c.id || '').toLowerCase();
+            return title.includes(q) || qText.includes(q) || dateStr.includes(q) || cid.includes(q);
+        });
+    }
+
+    if (statusFilter) {
+        consultations = consultations.filter(c => String(c.status || '').toLowerCase() === statusFilter);
+    }
+
+    const badgeEl = document.getElementById('pfq-tab-survey-badge');
+    if (badgeEl) {
+        badgeEl.textContent = String(consultations.length);
+    }
+
+    if (consultations.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="px-6 py-10 text-center text-gray-500">
+                    <i class="bi bi-inbox text-2xl block mb-2 text-gray-400"></i>
+                    No community survey polls found matching your search.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = consultations.map(c => {
+        const cid = Number(c.id);
+        const title = escapeHtml(c.title || 'Survey Poll');
+        const question = escapeHtml(c.survey_question || 'Do you support this proposed initiative?');
+        const status = String(c.status || 'active').toLowerCase();
+
+        let dateStr = 'Jul 27, 2026';
+        if (c.created_at || c.start_date || c.upload_date) {
+            try {
+                const d = new Date(c.created_at || c.start_date || c.upload_date);
+                dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            } catch (e) { }
+        }
+
+        const fbs = (AppData.feedback || []).filter(f => Number(f.consultationId || f.consultation_id) === cid);
+        const optA = escapeHtml(c.survey_option_a || 'Agree');
+        const optB = escapeHtml(c.survey_option_b || 'Disagree');
+
+        let agreeCount = 0;
+        let disagreeCount = 0;
+        fbs.forEach(f => {
+            const msg = String(f.message || f.testimony || f.statement || '').trim().toLowerCase();
+            const isExplicitVote = (msg === 'agree' || msg === 'disagree' || msg === optA.toLowerCase() || msg === optB.toLowerCase());
+            if (!isExplicitVote) return;
+
+            const isDis = msg === 'disagree' || msg === optB.toLowerCase();
+            const isAgr = msg === 'agree' || msg === optA.toLowerCase();
+
+            if (isDis) disagreeCount++;
+            else if (isAgr) agreeCount++;
+        });
+
+        const totalVotes = agreeCount + disagreeCount;
+        const agreePct = totalVotes > 0 ? Math.round((agreeCount / totalVotes) * 100) : 0;
+        const disagreePct = totalVotes > 0 ? 100 - agreePct : 0;
+
+        let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-white uppercase tracking-wider">CLOSED</span>';
+        if (status === 'active' || status === 'open') {
+            statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase tracking-wider">ACTIVE</span>';
+        }
+
+        return `
+            <tr class="border-b border-gray-100 hover:bg-purple-50/50 transition cursor-pointer select-none">
+                <td class="px-4 py-3.5">
+                    <div class="font-bold text-gray-900 text-xs leading-snug">${title}</div>
+                    <div class="text-[11px] text-gray-500 font-medium mt-0.5"><i class="bi bi-question-circle mr-1 text-purple-600"></i>${question}</div>
+                </td>
+                <td class="px-4 py-3.5 font-medium text-gray-600 text-xs">${dateStr}</td>
+                <td class="px-4 py-3.5 text-center font-extrabold text-slate-800 text-xs">
+                    <span class="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-purple-100 text-purple-900 font-bold text-xs">
+                        ${totalVotes} Vote(s)
+                    </span>
+                </td>
+                <td class="px-4 py-3.5">
+                    <div class="space-y-1 max-w-xs mx-auto">
+                        <div class="flex justify-between text-[10px] font-extrabold">
+                            <span class="text-emerald-700">${optA}: ${agreeCount} (${agreePct}%)</span>
+                            <span class="text-rose-700">${optB}: ${disagreeCount} (${disagreePct}%)</span>
+                        </div>
+                        <div class="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden flex border border-slate-300/60 shadow-2xs">
+                            <div class="bg-emerald-500 h-full transition-all duration-500" style="width: ${agreePct}%"></div>
+                            <div class="bg-rose-500 h-full transition-all duration-500" style="width: ${disagreePct}%"></div>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-4 py-3.5 text-center">${statusBadge}</td>
+                <td class="px-4 py-3.5 text-center">
+                    <button type="button" onclick="pfpViewConsultationFeedback(${cid})" class="px-3.5 py-1.5 bg-purple-700 hover:bg-purple-800 text-white font-semibold rounded-lg text-xs transition shadow-sm flex items-center gap-1 mx-auto cursor-pointer">
+                        <i class="bi bi-bar-chart-fill"></i> View Poll Breakdown
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function pfpRenderConsultationFeedbackTable() {
+    const tbody = document.getElementById('pfq-consultation-table-body');
+    if (!tbody) return;
+
+    const q = String(document.getElementById('pfq-consult-search')?.value || '').toLowerCase().trim();
+    const statusFilter = String(document.getElementById('pfq-consult-status')?.value || '').toLowerCase().trim();
+
+    let consultations = Array.isArray(AppData.consultations)
+        ? AppData.consultations.filter(c => (String(c.status || '').toLowerCase() === 'active' || String(c.status || '').toLowerCase() === 'open' || (c.type !== 'user' && String(c.type || '').toLowerCase() !== 'user')) && String(c.response_mode || 'hybrid').toLowerCase() !== 'survey')
+        : [];
+
+    if (q) {
+        consultations = consultations.filter(c => {
+            const title = String(c.title || '').toLowerCase();
+            const dateStr = String(c.start_date || c.created_at || '').toLowerCase();
+            const cid = String(c.id || '').toLowerCase();
+            return title.includes(q) || dateStr.includes(q) || cid.includes(q);
+        });
+    }
+
+    if (statusFilter) {
+        consultations = consultations.filter(c => String(c.status || '').toLowerCase() === statusFilter);
+    }
+
+    const badgeEl = document.getElementById('pfq-tab-consult-badge');
+    if (badgeEl) {
+        badgeEl.textContent = String(consultations.length);
+    }
+
+    if (consultations.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="px-6 py-10 text-center text-gray-500">
+                    <i class="bi bi-inbox text-2xl block mb-2 text-gray-400"></i>
+                    No consultations found matching your search filters.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    const selectEl = document.getElementById('pfq-consultation');
+    if (selectEl) {
+        const curVal = selectEl.value;
+        selectEl.innerHTML = '<option value="">Select Consultation Policy...</option>' + consultations.map(c => `<option value="${c.id}">#${c.id} - ${escapeHtml(c.title || 'Consultation')}</option>`).join('');
+        if (curVal) selectEl.value = curVal;
+    }
+
+    tbody.innerHTML = consultations.map(c => {
+        const cid = Number(c.id);
+        const title = escapeHtml(c.title || 'Consultation Policy');
+        const status = String(c.status || 'active').toLowerCase();
+
+        let dateStr = 'Jul 27, 2026';
+        if (c.created_at || c.start_date || c.upload_date) {
+            try {
+                const d = new Date(c.created_at || c.start_date || c.upload_date);
+                dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            } catch (e) { }
+        }
+
+        const fbs = (AppData.feedback || []).filter(f => Number(f.consultationId || f.consultation_id) === cid);
+        const feedbackCount = fbs.length;
+
+        let sumRating = 0;
+        let countRating = 0;
+        let publishedCount = 0;
+        let pendingCount = 0;
+
+        fbs.forEach(f => {
+            const r = Number(f.rating || f.star_rating || 0);
+            if (r > 0) {
+                sumRating += r;
+                countRating++;
+            }
+            const st = String(f.status || f.queue_status || '').toLowerCase();
+            const msg = String(f.message || f.testimony || f.statement || '').trim().toLowerCase();
+            const isSurveyVote = msg === 'agree' || msg === 'disagree' || msg.length <= 15;
+
+            if (isSurveyVote) {
+                publishedCount++;
+            } else if (st === 'pending' || st === 'new') {
+                pendingCount++;
+            } else {
+                publishedCount++;
+            }
+        });
+
+        let avgRating = countRating > 0 ? (sumRating / countRating).toFixed(1) : (c.avg_rating ? Number(c.avg_rating).toFixed(1) : '5.0');
+        let ratingDisplay = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 font-semibold text-xs"><i class="bi bi-star-fill text-amber-500 text-[11px]"></i> ${avgRating} / 5.0</span>`;
+
+        if (feedbackCount === 0) {
+            publishedCount = 0;
+            pendingCount = 0;
+        } else if (publishedCount === 0 && pendingCount === 0) {
+            publishedCount = feedbackCount;
+        }
+
+        let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-white uppercase tracking-wider">COMPLETED</span>';
+        if (status === 'active' || status === 'open') {
+            statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase tracking-wider">ACTIVE</span>';
+        } else if (status === 'pending' || status === 'draft') {
+            statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 uppercase tracking-wider">PENDING</span>';
+        }
+
+        return `
+            <tr class="border-b border-gray-100 hover:bg-blue-50/60 transition cursor-pointer select-none">
+                <td class="px-4 py-3.5">
+                    <div class="font-bold text-gray-900 text-xs leading-snug">${title}</div>
+                    <div class="mt-1">${statusBadge}</div>
+                </td>
+                <td class="px-4 py-3.5 font-medium text-gray-600 text-xs">${dateStr}</td>
+                <td class="px-4 py-3.5 text-center">
+                    <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-800 font-bold text-xs">
+                        ${feedbackCount}
+                    </span>
+                </td>
+                <td class="px-4 py-3.5 text-center">
+                    ${ratingDisplay}
+                </td>
+                <td class="px-4 py-3.5 text-center font-semibold text-emerald-700 text-xs">${publishedCount}</td>
+                <td class="px-4 py-3.5 text-center font-semibold text-amber-700 text-xs">${pendingCount}</td>
+                <td class="px-4 py-3.5 text-center">
+                    <button type="button" onclick="pfpViewConsultationFeedback(${cid})" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs transition shadow-sm flex items-center gap-1 mx-auto cursor-pointer">
+                        <i class="bi bi-chat-left-text"></i> View Feedback
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+window.pfpShowConsultationFeedbackModal = function (consultationId) {
+    console.log('[PCMS Feedback Modal] Launching for consultationId:', consultationId);
+    const oldModal = document.getElementById('pcms-detail-modal');
+    if (oldModal) {
+        try { oldModal.remove(); } catch (_) { }
+    }
+
+    const escapeHtmlHelper = (str) => String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    const modal = document.createElement('div');
+    modal.id = 'pcms-detail-modal';
+    modal.style.cssText = 'position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: 100vw !important; height: 100vh !important; background-color: rgba(15, 23, 42, 0.88) !important; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex !important; align-items: center !important; justify-content: center !important; z-index: 9999999 !important; padding: 1rem !important; margin: 0 !important;';
+
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-150" style="position: relative; z-index: 10000000 !important;">
+            <!-- Modal Header -->
+            <div class="bg-slate-900 text-white p-6 flex items-start justify-between">
+                <div>
+                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-500/20 text-red-300 border border-red-400/30">
+                        <i class="bi bi-chat-left-text mr-1"></i> PCMS CITIZEN FEEDBACK
+                    </span>
+                    <h3 id="pcms-modal-title" class="text-lg font-extrabold text-white mt-1.5">Consultation Feedback</h3>
+                    <p id="pcms-modal-date" class="text-xs text-slate-300 mt-1">Loading citizen responses...</p>
+                </div>
+                <button type="button" onclick="const m=document.getElementById('pcms-detail-modal'); if(m)m.remove();" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white text-xl font-bold flex items-center justify-center transition leading-none cursor-pointer">&times;</button>
+            </div>
+
+            <!-- Modal Body -->
+            <div id="pcms-modal-body" class="p-6 max-h-[70vh] overflow-y-auto space-y-4">
+                <div class="p-8 text-center text-gray-500">
+                    <i class="bi bi-arrow-repeat animate-spin text-2xl mb-2 block text-red-600"></i> Loading citizen feedback responses...
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+                <span class="text-xs text-gray-500"><i class="bi bi-shield-check text-red-600 mr-1"></i> Verified Citizen Testimonial Ledger</span>
+                <button type="button" onclick="const m=document.getElementById('pcms-detail-modal'); if(m)m.remove();" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition cursor-pointer">
+                    Close
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const cid = Number(consultationId);
+    const consultation = (AppData.consultations || []).find(c => Number(c.id) === cid);
+    const title = escapeHtmlHelper(consultation ? consultation.title : `Consultation #${consultationId}`);
+    const dateStr = escapeHtmlHelper(consultation ? (consultation.start_date || consultation.created_at || 'Recently') : 'Recently');
+    const statusStr = escapeHtmlHelper(consultation ? (consultation.status || 'ACTIVE') : 'ACTIVE').toUpperCase();
+
+    let fbs = (AppData.feedback || []).filter(f => Number(f.consultationId || f.consultation_id) === cid);
+
+    const renderFeedbackResponses = (responsesList) => {
+        const titleEl = document.getElementById('pcms-modal-title');
+        const dateEl = document.getElementById('pcms-modal-date');
+        const bodyEl = document.getElementById('pcms-modal-body');
+
+        if (titleEl) titleEl.textContent = title;
+        if (dateEl) dateEl.textContent = `📅 Date: ${dateStr} | Status: ${statusStr} | Total Submissions: ${responsesList.length}`;
+
+        if (!responsesList.length) {
+            if (bodyEl) {
+                bodyEl.innerHTML = `
+                    <div class="p-8 text-center text-gray-500 bg-slate-50 rounded-xl border border-slate-200">
+                        <i class="bi bi-chat-left-text text-2xl block mb-2 text-gray-400"></i>
+                        No citizen feedback recorded for this consultation policy yet.
+                    </div>
+                `;
+            }
+            return;
+        }
+
+        if (!bodyEl) return;
+
+        const responsesHtml = responsesList.map((resp, idx) => {
+            const name = escapeHtmlHelper(resp.fullName || resp.name || resp.citizen_name || resp.citizen || 'Valenzuela Citizen');
+            const rating = resp.rating !== undefined && resp.rating !== null ? Number(resp.rating || resp.star_rating || 5.0).toFixed(1) : (resp.star_rating ? Number(resp.star_rating).toFixed(1) : '5.0');
+            const tone = escapeHtmlHelper(resp.sentiment || resp.tone || 'unanalyzed');
+            const testimony = escapeHtmlHelper(resp.message || resp.testimony || resp.statement || resp.proposal || 'No statement provided.');
+            const submittedAt = escapeHtmlHelper(resp.submitted_at || resp.date || resp.created_at || 'Recently');
+            const status = escapeHtmlHelper(resp.status || resp.publication_status || 'published').toLowerCase();
+
+            const isSurveyVote = testimony.toLowerCase() === 'agree' || testimony.toLowerCase() === 'disagree' || testimony.length <= 15;
+            const displayStatus = isSurveyVote ? 'VERIFIED VOTE' : status.toUpperCase();
+            const statusClass = (isSurveyVote || status === 'published' || status === 'reviewed' || status === 'closed')
+                ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                : 'bg-amber-100 text-amber-800 border-amber-200';
+
+            const voteBadge = isSurveyVote
+                ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase border bg-purple-100 text-purple-900 border-purple-200 flex items-center gap-1"><i class="bi bi-square-poll-fill text-purple-600"></i> Survey Vote</span>`
+                : '';
+
+            return `
+                <div class="p-4 bg-slate-50/80 rounded-xl border border-slate-200/80 shadow-sm space-y-2">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-gray-900 text-xs">${idx + 1}. ${name}</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${statusClass}">${displayStatus}</span>
+                            ${voteBadge}
+                            ${tone && !isSurveyVote ? `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">${tone}</span>` : ''}
+                        </div>
+                        <div class="flex items-center gap-2 text-xs">
+                            ${!isSurveyVote ? `<span class="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-semibold text-[11px]">⭐ ${rating}</span>` : ''}
+                            <span class="text-gray-400 font-normal">${submittedAt}</span>
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-700 leading-relaxed font-medium bg-white p-3 rounded-lg border border-slate-200/60 select-text flex items-center gap-2">
+                        ${isSurveyVote ? `<i class="bi bi-chat-square-quote text-purple-500 text-sm"></i> <strong class="text-purple-950 font-bold">${testimony}</strong>` : `"${testimony}"`}
+                    </p>
+                </div>
+            `;
+        }).join('');
+
+        let surveyBoxHtml = '';
+        let aiSurveyConclusionHtml = '';
+        if (consultation && String(consultation.response_mode || '').toLowerCase() === 'survey') {
+            const question = escapeHtmlHelper(consultation.survey_question || 'Do you support this proposed ordinance initiative?');
+            const optA = escapeHtmlHelper(consultation.survey_option_a || 'Agree');
+            const optB = escapeHtmlHelper(consultation.survey_option_b || 'Disagree');
+
+            let agreeCount = 0;
+            let disagreeCount = 0;
+            responsesList.forEach(r => {
+                const msg = String(r.message || r.testimony || r.statement || '').trim().toLowerCase();
+                const isDis = msg === 'disagree' || msg === optB.toLowerCase();
+                const isAgr = msg === 'agree' || msg === optA.toLowerCase();
+
+                if (isDis) {
+                    disagreeCount++;
+                } else if (isAgr) {
+                    agreeCount++;
+                }
+            });
+
+            const totalVotes = agreeCount + disagreeCount;
+            const agreePct = totalVotes > 0 ? Math.round((agreeCount / totalVotes) * 100) : 0;
+            const disagreePct = totalVotes > 0 ? 100 - agreePct : 0;
+
+            const isClosed = (consultation.status || '').toLowerCase() === 'closed' || (consultation.status || '').toLowerCase() === 'completed';
+
+            let mandateBadge = '🟢 CITIZEN SUPERMAJORITY SUPPORT';
+            let conclusionText = `PUBLIC MANDATE CONCLUSION: Citizen voting data demonstrates strong public approval (${agreePct}% ${optA} vs ${disagreePct}% ${optB}). Based on finalized public sentiment, the City Council is recommended to enact the proposed initiative into law.`;
+
+            if (totalVotes === 0) {
+                mandateBadge = '⚪ NO CITIZEN VOTES CAST';
+                conclusionText = 'PUBLIC MANDATE CONCLUSION: No citizen votes have been recorded for this opinion poll yet. Analysis will be updated live as public votes are submitted.';
+            } else if (disagreePct > 50) {
+                mandateBadge = '🔴 CITIZEN MAJORITY OPPOSITION';
+                conclusionText = `PUBLIC MANDATE CONCLUSION: Citizen voting data indicates majority public opposition (${disagreePct}% ${optB} vs ${agreePct}% ${optA}). Based on public sentiment, the committee is advised to review key policy provisions or hold further public consultation before proceeding.`;
+            } else if (agreePct === 50) {
+                mandateBadge = '🟡 EVENLY BALANCED SENTIMENT';
+                conclusionText = `PUBLIC MANDATE CONCLUSION: Public voting sentiment is evenly divided (${agreePct}% ${optA} vs ${disagreePct}% ${optB}). Additional public hearing sessions are recommended to resolve community concerns.`;
+            }
+
+            aiSurveyConclusionHtml = `
+                <div class="p-4 bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 text-white rounded-xl shadow-md border border-purple-700/60 space-y-2 mb-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+                            <i class="bi bi-robot text-purple-400 text-sm"></i> AI Poll Sentiment & Executive Conclusion
+                        </span>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${isClosed ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-slate-950'} shadow-2xs">
+                            ${isClosed ? 'FINAL MANDATE' : 'LIVE POLL ANALYSIS'}
+                        </span>
+                    </div>
+                    <div class="text-xs font-extrabold text-purple-200 tracking-wide">
+                        ${mandateBadge}
+                    </div>
+                    <p class="text-xs text-slate-200 leading-relaxed font-normal bg-slate-800/80 p-3 rounded-lg border border-purple-500/30 select-text">
+                        ${conclusionText}
+                    </p>
+                </div>
+            `;
+
+            surveyBoxHtml = `
+                <div class="p-4 bg-gradient-to-r from-purple-50 to-indigo-50/50 rounded-xl border border-purple-200/80 shadow-sm space-y-2 mb-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-extrabold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="bi bi-square-poll-horizontal-fill text-purple-600"></i> Citizen Survey & Opinion Poll Stance
+                        </span>
+                        <span class="text-[11px] font-bold text-slate-600 bg-white px-2.5 py-0.5 rounded-full border border-purple-200 shadow-2xs">${totalVotes} Poll Vote(s)</span>
+                    </div>
+                    <p class="text-xs font-bold text-slate-800">${question}</p>
+                    <div class="space-y-1 pt-1">
+                        <div class="flex justify-between text-[11px] font-bold">
+                            <span class="text-emerald-700"><i class="bi bi-hand-thumbs-up-fill mr-1"></i>${optA}: ${agreeCount} (${agreePct}%)</span>
+                            <span class="text-rose-700"><i class="bi bi-hand-thumbs-down-fill mr-1"></i>${optB}: ${disagreeCount} (${disagreePct}%)</span>
+                        </div>
+                        <div class="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden flex">
+                            <div class="bg-emerald-500 h-full transition-all duration-500" style="width: ${agreePct}%"></div>
+                            <div class="bg-rose-500 h-full transition-all duration-500" style="width: ${disagreePct}%"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        bodyEl.innerHTML = `
+            <div class="space-y-3">
+                ${aiSurveyConclusionHtml}
+                ${surveyBoxHtml}
+                <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                    Submitted Citizen Responses (${responsesList.length})
+                </div>
+                ${responsesHtml}
+            </div>
+        `;
+    };
+
+    if (fbs.length > 0) {
+        renderFeedbackResponses(fbs);
+    } else {
+        fetchWithTimeout(`API/feedback_api.php?action=list&consultation_id=${cid}`, {
+            headers: { 'Accept': 'application/json' }
+        }, 5000).then(res => res.json()).then(data => {
+            let fetchedList = [];
+            if (data && data.success && Array.isArray(data.data)) {
+                fetchedList = data.data;
+            } else if (data && data.success && Array.isArray(data.data?.items)) {
+                fetchedList = data.data.items;
+            }
+            renderFeedbackResponses(fetchedList);
+        }).catch(_ => {
+            renderFeedbackResponses([]);
+        });
+    }
+};
+
+function pfpViewConsultationFeedback(consultationId) {
+    pfpShowConsultationFeedbackModal(consultationId);
+}
+
+window.pfpRenderConsultationFeedbackTable = pfpRenderConsultationFeedbackTable;
+window.pfpViewConsultationFeedback = pfpViewConsultationFeedback;
+
 
 function pfpRenderReportsVaultTable() {
     const tbody = document.getElementById('pfq-reports-table-body');
@@ -17516,47 +18158,47 @@ function pfpRenderReportsVaultTable() {
         const cid = Number(c.id);
         const cStatus = String(c.status || 'active').toLowerCase();
         const isClosed = cStatus === 'closed' || cStatus === 'completed';
-        
+
         // Count feedback linked to this consultation
         const feedbackCount = AppData.feedback.filter(f => Number(f.consultationId || f.consultation_id) === cid).length;
-        
+
         const committee = c.committee_assigned || (c.category ? `${c.category} Committee` : 'Rules & Governance Committee');
 
-        let statusBadge = `<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold uppercase text-[10px]">Active</span>`;
+        let statusBadge = `<span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold uppercase text-[10px] tracking-wider">Active</span>`;
         if (isClosed) {
-            statusBadge = `<span class="px-2 py-0.5 rounded-full bg-slate-800 text-white font-extrabold uppercase text-[10px]">Closed</span>`;
+            statusBadge = `<span class="px-2 py-0.5 rounded-md bg-slate-800 text-white font-bold uppercase text-[10px] tracking-wider">Closed</span>`;
         }
 
-        let transmittalBadge = `<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-semibold text-[10px]">Pending Closure</span>`;
+        let transmittalBadge = `<span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-semibold text-[10px]">Pending Closure</span>`;
         if (c.committee_forwarded_at) {
             const dateStr = new Date(c.committee_forwarded_at).toLocaleDateString();
-            transmittalBadge = `<span class="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-900 font-extrabold text-[10px]"><i class="bi bi-check-all"></i> Transmitted (${dateStr})</span>`;
+            transmittalBadge = `<span class="px-2.5 py-0.5 rounded-md bg-purple-100 text-purple-900 font-bold text-[10px] tracking-wide"><i class="bi bi-check-all"></i> Transmitted (${dateStr})</span>`;
         } else if (isClosed) {
-            transmittalBadge = `<span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-extrabold text-[10px]"><i class="bi bi-robot"></i> AI Brief Ready</span>`;
+            transmittalBadge = `<span class="px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-900 font-bold text-[10px] tracking-wide"><i class="bi bi-robot"></i> AI Brief Ready</span>`;
         }
 
         return `
             <tr class="border-b border-gray-100 hover:bg-purple-50/40 transition">
                 <td class="px-3.5 py-3">
-                    <div class="font-extrabold text-gray-900">#${cid} - ${escapeHtml(c.title || 'Consultation')}</div>
+                    <div class="font-bold text-gray-900 text-xs leading-snug">#${cid} - ${escapeHtml(c.title || 'Consultation')}</div>
                     <div class="text-[11px] text-gray-500 font-medium">Category: ${escapeHtml(c.category || 'General Policy')}</div>
                 </td>
                 <td class="px-3.5 py-3">
-                    <span class="inline-block px-2 py-0.5 bg-purple-50 text-purple-900 font-bold rounded border border-purple-200 text-xs">
+                    <span class="inline-block px-2 py-0.5 bg-purple-50 text-purple-900 font-semibold rounded border border-purple-200 text-xs">
                         <i class="bi bi-diagram-3 mr-1"></i>${escapeHtml(committee)}
                     </span>
                 </td>
-                <td class="px-3.5 py-3 font-black text-gray-800 text-sm">
+                <td class="px-3.5 py-3 font-semibold text-gray-800 text-xs">
                     ${feedbackCount} submission(s)
                 </td>
                 <td class="px-3.5 py-3">
-                    <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-semibold text-xs capitalize">General Consensus</span>
+                    <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-medium text-xs capitalize">General Consensus</span>
                 </td>
                 <td class="px-3.5 py-3">${statusBadge}</td>
                 <td class="px-3.5 py-3">${transmittalBadge}</td>
                 <td class="px-3.5 py-3 text-center">
                     ${isClosed ? `
-                        <button onclick="pfpShowAiCommitteeBriefModal(${cid})" class="inline-flex items-center justify-center px-3 py-1 bg-purple-700 hover:bg-purple-800 text-white font-extrabold rounded-lg text-xs shadow-sm gap-1 transition" title="View AI Report Document">
+                        <button onclick="pfpShowAiCommitteeBriefModal(${cid})" class="inline-flex items-center justify-center px-3 py-1 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-lg text-xs shadow-sm gap-1 transition" title="View AI Report Document">
                             <i class="bi bi-file-earmark-text-fill"></i> View AI Report Document
                         </button>
                     ` : `
@@ -17570,49 +18212,88 @@ function pfpRenderReportsVaultTable() {
     }).join('');
 }
 
-async function loadPhmsFeedbackFromApi(isSync = false) {
+window._phms_last_fetch_error = null;
+window._phms_is_cached_data = false;
+
+async function loadPhmsFeedbackFromApi(isSync = false, limit = 50, offset = 0) {
+    window._phms_last_fetch_error = null;
+    window._phms_is_cached_data = false;
+
     try {
         const action = isSync ? 'phms_sync' : 'phms_list';
-        const res = await fetchWithTimeout(`API/feedback_api.php?action=${action}&limit=200&offset=0`, {
+        const res = await fetchWithTimeout(`API/feedback_api.php?action=${action}&limit=${limit}&offset=${offset}`, {
             headers: { 'Accept': 'application/json' }
         }, 5000);
 
         if (res.ok) {
             const data = await res.json();
-            if (data && data.success && Array.isArray(data.data)) {
-                AppData.phmsFeedback = data.data;
+            if (data && data.success && data.data) {
+                const hearingsList = Array.isArray(data.data.hearings) ? data.data.hearings : (Array.isArray(data.data) ? data.data : []);
+                AppData.phmsFeedback = hearingsList;
+                if (data.is_cached) {
+                    window._phms_is_cached_data = true;
+                }
 
-                // Push external system data receipt notification to in-app system notifications
-                if (data.data.length > 0) {
+                // Push external system receipt notification to top notification bar
+                if (hearingsList.length > 0) {
                     if (!Array.isArray(AppData.notifications)) AppData.notifications = [];
-                    const notifTitle = '🔗 External System Data Received (PHMS)';
-                    const exists = AppData.notifications.some(n => n.title === notifTitle);
-                    if (!exists) {
-                        AppData.notifications.unshift({
-                            id: Date.now(),
-                            title: notifTitle,
-                            message: `Successfully received ${data.data.length} PHMS AI Feedback Summaries & citizen responses from the PHMS Public Hearing System.`,
-                            category: 'External Integration',
-                            priority: 'high',
-                            read: false,
-                            time: 'Just now',
-                            timestamp: new Date().toISOString()
-                        });
+                    hearingsList.forEach(h => {
+                        const title = h.hearing_title || h.title || h.full_name || 'Public Hearing';
+                        const fbCount = h.feedback_count || 0;
+                        const notifTitle = `🔗 PHMS Feedback Received: ${title}`;
+                        const notifMsg = `Received ${fbCount} citizen hearing feedback response(s) from PHMS Public Hearing System for "${title}".`;
 
-                        // Update notification badge if function exists
-                        if (typeof updateNotificationBadge === 'function') {
-                            try { updateNotificationBadge(); } catch (_) {}
+                        const exists = AppData.notifications.some(n => n.title === notifTitle || (n.message && n.message.includes(title)));
+                        if (!exists) {
+                            AppData.notifications.unshift({
+                                id: Date.now() + Math.floor(Math.random() * 1000),
+                                title: notifTitle,
+                                message: notifMsg,
+                                category: 'External Integration',
+                                priority: 'high',
+                                read: false,
+                                time: 'Just now',
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    });
+
+                    // Trigger top navigation bar update
+                    if (typeof loadNotifications === 'function') {
+                        try { loadNotifications(); } catch (_) { }
+                    } else {
+                        const unreadCount = AppData.notifications.filter(n => !n.read).length;
+                        const badge = document.getElementById('notif-badge') || document.getElementById('notification-badge');
+                        if (badge) {
+                            if (unreadCount > 0) {
+                                badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+                                badge.classList.remove('hidden');
+                            }
                         }
                     }
                 }
 
                 if (isSync && typeof showNotification === 'function') {
-                    showNotification(`✅ PHMS Integration: ${data.data.length} hearing feedback items synchronized. System notification logged.`, 'success');
+                    showNotification(`✅ PHMS Integration: ${hearingsList.length} hearing feedback items synchronized.`, 'success');
                 }
+            } else if (data && !data.success) {
+                window._phms_last_fetch_error = data.message || 'Service unavailable';
+                if (isSync && typeof showNotification === 'function') {
+                    showNotification(`⚠️ PHMS Integration: ${data.message || 'Service unavailable'}`, 'warning');
+                }
+            }
+        } else if (res.status === 401) {
+            window._phms_last_fetch_error = 'PHMS Authentication Failed (401 Unauthorized): Invalid integration token.';
+            if (isSync && typeof showNotification === 'function') {
+                showNotification('❌ PHMS Integration Unauthorized (401): Integration token invalid.', 'error');
             }
         }
     } catch (e) {
+        window._phms_last_fetch_error = `PHMS Connection Failed: ${e.message}`;
         console.warn('PHMS feedback load failed:', e);
+        if (isSync && typeof showNotification === 'function') {
+            showNotification(`❌ PHMS Connection Failed: ${e.message}`, 'error');
+        }
     }
 
     const badgeEl = document.getElementById('pfq-tab-phms-badge');
@@ -17625,7 +18306,6 @@ async function loadPhmsFeedbackFromApi(isSync = false) {
 
 function pfpPopulateConsultationDropdowns() {
     const pcmsSelect = document.getElementById('pfq-consultation');
-    const phmsSelect = document.getElementById('pfq-phms-consultation');
     const consultations = Array.isArray(AppData.consultations) ? AppData.consultations : [];
 
     if (pcmsSelect) {
@@ -17637,21 +18317,10 @@ function pfpPopulateConsultationDropdowns() {
                 return `<option value="${c.id}" ${String(c.id) === curVal ? 'selected' : ''}>#${c.id} - ${truncated}</option>`;
             }).join('');
     }
-
-    if (phmsSelect) {
-        const curVal = phmsSelect.value || '';
-        phmsSelect.innerHTML = '<option value="">All PHMS Hearings / Policies</option>' +
-            consultations.map(c => {
-                const title = escapeHtml(c.title || `Consultation #${c.id}`);
-                const hearingTag = c.phms_hearing_id ? ` [Hearing #${c.phms_hearing_id}]` : '';
-                const truncated = title.length > 35 ? title.substring(0, 32) + '...' : title;
-                return `<option value="${c.id}" ${String(c.id) === curVal ? 'selected' : ''}>#${c.id}${hearingTag} - ${truncated}</option>`;
-            }).join('');
-    }
 }
 
 function pfpResetFilters() {
-    ['pfq-search', 'pfq-type', 'pfq-status', 'pfq-committee', 'pfq-consultation', 'pfq-barangay', 'pfq-phms-search', 'pfq-phms-status', 'pfq-phms-consultation'].forEach(id => {
+    ['pfq-search', 'pfq-type', 'pfq-status', 'pfq-committee', 'pfq-consultation', 'pfq-barangay', 'pfq-phms-search', 'pfq-phms-status'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
@@ -17665,210 +18334,129 @@ function pfpRenderPhmsTable() {
     const tbody = document.getElementById('pfq-phms-table-body');
     if (!tbody) return;
 
-    const q = String(document.getElementById('pfq-phms-search')?.value || '').toLowerCase().trim();
-    const statusFilter = String(document.getElementById('pfq-phms-status')?.value || '').toLowerCase().trim();
-    const phmsConsultationId = String(document.getElementById('pfq-phms-consultation')?.value || '').trim();
-
-    let rows = Array.isArray(AppData.phmsFeedback) ? [...AppData.phmsFeedback] : [];
-
-    if (q) {
-        rows = rows.filter(r => {
-            let payloadStr = '';
-            try { payloadStr = JSON.stringify(r.payload_json || ''); } catch(_) {}
-            return (
-                String(r.queue_id || '').toLowerCase().includes(q) ||
-                String(r.full_name || '').toLowerCase().includes(q) ||
-                String(r.external_ref || '').toLowerCase().includes(q) ||
-                payloadStr.toLowerCase().includes(q)
-            );
+    if (!tbody._phms_click_bound) {
+        tbody._phms_click_bound = true;
+        tbody.addEventListener('click', function (e) {
+            const btn = e.target.closest('.phms-view-btn') || e.target.closest('[data-hearing-id]');
+            if (btn) {
+                const hid = btn.getAttribute('data-hearing-id');
+                console.log('[PHMS Delegated Click] Table button clicked, hearingId:', hid);
+                if (hid) {
+                    pfpShowPhmsDetailModal(hid);
+                }
+            }
         });
     }
 
-    if (phmsConsultationId) {
-        rows = rows.filter(r => String(r.consultation_id || r.phms_hearing_id || '') === phmsConsultationId);
+    const q = String(document.getElementById('pfq-phms-search')?.value || '').toLowerCase().trim();
+    const statusFilter = String(document.getElementById('pfq-phms-status')?.value || '').toLowerCase().trim();
+
+    let hearings = Array.isArray(AppData.phmsFeedback) ? [...AppData.phmsFeedback] : [];
+
+    if (q) {
+        hearings = hearings.filter(h => {
+            const title = String(h.hearing_title || h.full_name || '').toLowerCase();
+            const dateStr = String(h.hearing_date || h.created_at || '').toLowerCase();
+            const hid = String(h.hearing_id || h.phms_hearing_id || h.queue_id || '').toLowerCase();
+            return title.includes(q) || dateStr.includes(q) || hid.includes(q);
+        });
     }
 
     if (statusFilter) {
-        rows = rows.filter(r => String(r.status || '').toLowerCase() === statusFilter);
+        hearings = hearings.filter(h => String(h.hearing_status || h.status || '').toLowerCase() === statusFilter);
     }
 
     const badgeEl = document.getElementById('pfq-tab-phms-badge');
     if (badgeEl) {
-        badgeEl.textContent = String(rows.length);
+        badgeEl.textContent = String(hearings.length);
     }
 
-    if (rows.length === 0) {
+    if (hearings.length === 0) {
+        const errDetail = window._phms_last_fetch_error ? escapeHtml(window._phms_last_fetch_error) : 'Please ensure the PHMS server is running or click "Sync PHMS Data" to refresh.';
         tbody.innerHTML = `
             <tr>
-                <td colspan="6" class="px-6 py-10 text-center text-gray-500">
-                    <i class="bi bi-inbox text-3xl text-gray-300 mb-2 block"></i>
-                    <p class="font-medium text-sm text-gray-600">No PHMS AI Feedback Summaries found.</p>
-                    <p class="text-xs text-gray-400 mt-1">Click "Sync PHMS Data" to pull latest citizen feedback from the PHMS Public Hearing System.</p>
+                <td colspan="7" class="px-6 py-10 text-center">
+                    <div class="max-w-md mx-auto p-5 bg-amber-50/90 rounded-2xl border border-amber-200 text-amber-900 shadow-sm space-y-2">
+                        <i class="bi bi-exclamation-triangle-fill text-2xl text-amber-600 block"></i>
+                        <h4 class="font-bold text-sm">No PHMS Citizen Hearing Feedback Available</h4>
+                        <p class="text-xs text-amber-800 leading-relaxed">${errDetail}</p>
+                        <div class="pt-2">
+                            <button type="button" onclick="loadPhmsFeedbackFromApi(true)" class="px-4 py-1.5 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-lg text-xs transition shadow-sm cursor-pointer">
+                                <i class="bi bi-arrow-repeat mr-1 pointer-events-none"></i> Retry PHMS Integration Sync
+                            </button>
+                        </div>
+                    </div>
                 </td>
             </tr>
         `;
         return;
     }
 
-    tbody.innerHTML = rows.map(r => {
-        const queueId = r.queue_id || 0;
-        let payload = {};
-        try {
-            payload = typeof r.payload_json === 'string' ? JSON.parse(r.payload_json) : (r.payload_json || {});
-        } catch (_) {}
+    tbody.innerHTML = hearings.map(h => {
+        const hearingId = String(h.hearing_id || h.phms_hearing_id || h.queue_id || 0);
+        const title = escapeHtml(h.hearing_title || h.full_name || 'Public Hearing');
+        const status = escapeHtml(h.hearing_status || h.status || 'completed').toLowerCase();
+        const dateStr = escapeHtml(h.hearing_date || h.created_at || 'N/A');
+        const feedbackCount = h.feedback_count ?? 0;
+        const avgRating = h.average_rating ? Number(h.average_rating).toFixed(1) : (h.avg_rating ? Number(h.avg_rating).toFixed(1) : '0.0');
+        const publishedCount = h.published_count ?? (h.published_responses ?? feedbackCount);
+        const pendingCount = h.pending_count ?? 0;
 
-        const hearingTitle = escapeHtml(payload.hearing_title || r.full_name || 'Public Hearing');
-        const hearingDate = escapeHtml(payload.hearing_date || r.created_at || 'Jul 27, 2026');
-        const hearingStatus = escapeHtml(payload.hearing_status || r.status || 'COMPLETED').toUpperCase();
-        const feedbackCount = payload.feedback_count || (payload.citizen_feedback ? payload.citizen_feedback.length : 3);
-        const avgRating = payload.avg_rating || 3.3;
-        const summaryDate = escapeHtml(payload.ai_summary_date || 'Jul 27, 2026');
-
-        let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-800 text-white uppercase">COMPLETED</span>';
-        if (hearingStatus === 'ACTIVE' || hearingStatus === 'OPEN') {
-            statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 uppercase">ACTIVE</span>';
+        let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-white uppercase tracking-wider">COMPLETED</span>';
+        if (status === 'active' || status === 'open') {
+            statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase tracking-wider">ACTIVE</span>';
         }
 
         return `
-            <tr class="border-b border-gray-100 hover:bg-slate-50 transition">
+            <tr class="border-b border-gray-100 hover:bg-blue-50/60 transition cursor-pointer select-none" style="cursor: pointer !important; pointer-events: auto !important;">
                 <td class="px-4 py-3.5">
-                    <div class="font-extrabold text-gray-900 text-xs">${hearingTitle}</div>
+                    <div class="font-bold text-gray-900 text-xs leading-snug">${title}</div>
                     <div class="mt-1">${statusBadge}</div>
                 </td>
-                <td class="px-4 py-3.5 font-medium text-gray-600 text-xs">${hearingDate}</td>
+                <td class="px-4 py-3.5 font-medium text-gray-600 text-xs">${dateStr}</td>
                 <td class="px-4 py-3.5 text-center">
-                    <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-900 font-black text-xs">
+                    <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-800 font-bold text-xs">
                         ${feedbackCount}
                     </span>
                 </td>
                 <td class="px-4 py-3.5 text-center">
-                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 font-extrabold text-xs">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 font-semibold text-xs">
                         <i class="bi bi-star-fill text-amber-500 text-[11px]"></i> ${avgRating}
                     </span>
                 </td>
-                <td class="px-4 py-3.5">
-                    <span class="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
-                        Generated <span class="text-gray-500 font-normal">(${summaryDate})</span>
-                    </span>
-                </td>
+                <td class="px-4 py-3.5 text-center font-semibold text-emerald-700 text-xs">${publishedCount}</td>
+                <td class="px-4 py-3.5 text-center font-semibold text-amber-700 text-xs">${pendingCount}</td>
                 <td class="px-4 py-3.5 text-center">
-                    <div class="flex items-center justify-center gap-1.5">
-                        <button onclick="pfpShowPhmsDetailModal(${queueId})" class="px-3 py-1 bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold rounded-lg text-xs transition shadow-sm flex items-center gap-1">
-                            <i class="bi bi-eye-fill"></i> View
-                        </button>
-                        <button onclick="loadPhmsFeedbackFromApi(true)" class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs transition flex items-center gap-1">
-                            <i class="bi bi-arrow-repeat"></i> Refresh
-                        </button>
-                    </div>
+                    <button type="button" data-hearing-id="${hearingId}" onclick="pfpShowPhmsDetailModal('${hearingId}')" class="phms-view-btn px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs transition shadow-sm flex items-center gap-1 mx-auto cursor-pointer" style="cursor:pointer !important; pointer-events: auto !important; position: relative; z-index: 5;">
+                        <i class="bi bi-chat-left-text pointer-events-none"></i> View Feedback
+                    </button>
                 </td>
             </tr>
         `;
     }).join('');
 }
 
-function pfpShowPhmsDetailModal(queueId) {
-    const item = Array.isArray(AppData.phmsFeedback) ? AppData.phmsFeedback.find(r => Number(r.queue_id) === Number(queueId)) : null;
-    if (!item) return;
-
-    let modal = document.getElementById('phms-detail-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'phms-detail-modal';
-        modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4';
-        document.body.appendChild(modal);
+function pfpShowPhmsDetailModal(hearingId) {
+    console.log('[PHMS Modal Delegation L17775] Delegating to top-level modal renderer for hearingId:', hearingId);
+    if (typeof window.pfpShowPhmsDetailModal === 'function') {
+        window.pfpShowPhmsDetailModal(hearingId);
     }
+}
 
-    let payload = {};
-    try {
-        payload = typeof item.payload_json === 'string' ? JSON.parse(item.payload_json) : (item.payload_json || {});
-    } catch (_) {}
+window.pfpShowPhmsDetailModal = pfpShowPhmsDetailModal;
 
-    const hearingTitle = escapeHtml(payload.hearing_title || item.full_name || 'Public Hearing');
-    const hearingDate = escapeHtml(payload.hearing_date || 'Jul 27, 2026');
-    const hearingStatus = escapeHtml(payload.hearing_status || 'COMPLETED');
-    const aiSummaryText = escapeHtml(payload.ai_summary_text || 'No AI summary statement available.');
-    const citizenFeedback = Array.isArray(payload.citizen_feedback) ? payload.citizen_feedback : [];
-
-    const feedbackHtml = citizenFeedback.map((fb, idx) => `
-        <tr class="border-b border-gray-100">
-            <td class="px-3 py-2.5 font-bold text-gray-900">${idx + 1}. ${escapeHtml(fb.name || 'Anonymous Citizen')}</td>
-            <td class="px-3 py-2.5 text-center">
-                <span class="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-extrabold text-[11px]">
-                    ⭐ ${fb.rating || '3.5'}
-                </span>
-            </td>
-            <td class="px-3 py-2.5 text-center">
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${fb.sentiment === 'Positive' ? 'bg-emerald-100 text-emerald-800' : (fb.sentiment === 'Negative' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700')}">
-                    ${escapeHtml(fb.sentiment || 'Neutral')}
-                </span>
-            </td>
-            <td class="px-3 py-2.5 text-gray-700">${escapeHtml(fb.statement || '-')}</td>
-            <td class="px-3 py-2.5 text-gray-400 text-[11px]">${escapeHtml(fb.date || hearingDate)}</td>
-        </tr>
-    `).join('');
-
-    modal.innerHTML = `
-        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in duration-150 border border-gray-200">
-            <!-- Modal Header -->
-            <div class="bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white p-6 flex items-center justify-between">
-                <div>
-                    <span class="px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-extrabold uppercase tracking-wider">
-                        <i class="bi bi-robot"></i> PHMS AI Feedback Summary
-                    </span>
-                    <h2 class="text-base font-extrabold mt-1 text-white">
-                        ${hearingTitle}
-                    </h2>
-                    <p class="text-xs text-red-100 mt-0.5">Hearing Date: <strong>${hearingDate}</strong> | Status: <strong>${hearingStatus}</strong></p>
-                </div>
-                <button onclick="document.getElementById('phms-detail-modal').remove()" class="text-white hover:text-red-200 text-2xl font-bold">&times;</button>
-            </div>
-
-            <!-- Modal Body -->
-            <div class="p-6 space-y-5 text-xs max-h-[75vh] overflow-y-auto">
-                <!-- AI Summary Statement Box -->
-                <div class="p-4 bg-purple-50/70 rounded-xl border border-purple-200">
-                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-purple-900 flex items-center gap-1.5 mb-1.5">
-                        <i class="bi bi-robot text-purple-700"></i> PHMS AI Synthesized Feedback Summary
-                    </h3>
-                    <p class="text-xs text-purple-950 font-medium leading-relaxed">${aiSummaryText}</p>
-                </div>
-
-                <!-- Citizen Feedback Responses Table -->
-                <div>
-                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-gray-700 flex items-center gap-1.5 mb-2">
-                        <i class="bi bi-chat-left-text-fill text-blue-600"></i> Individual Citizen Hearing Responses (${citizenFeedback.length})
-                    </h3>
-                    <div class="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                        <table class="w-full text-left text-xs">
-                            <thead class="bg-gray-50 border-b border-gray-200 text-[11px] uppercase font-bold text-gray-600">
-                                <tr>
-                                    <th class="px-3 py-2">Citizen</th>
-                                    <th class="px-3 py-2 text-center">Rating</th>
-                                    <th class="px-3 py-2 text-center">Tone</th>
-                                    <th class="px-3 py-2">Testimony / Statement</th>
-                                    <th class="px-3 py-2">Date</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${feedbackHtml || '<tr><td colspan="5" class="p-4 text-center text-gray-400">No individual responses recorded.</td></tr>'}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Modal Footer -->
-            <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex items-center justify-between">
-                <button onclick="window.print()" class="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-bold rounded-lg text-xs transition flex items-center gap-1.5">
-                    <i class="bi bi-printer"></i> Print Summary
-                </button>
-                <button onclick="document.getElementById('phms-detail-modal').remove()" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs transition">
-                    Close
-                </button>
-            </div>
-        </div>
-    `;
+if (!window._phms_global_click_listener) {
+    window._phms_global_click_listener = true;
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('.phms-view-btn') || e.target.closest('[data-hearing-id]');
+        if (btn) {
+            const hid = btn.getAttribute('data-hearing-id');
+            console.log('[PHMS Global Document Listener Capture] View Feedback clicked, hearingId:', hid);
+            if (hid) {
+                pfpShowPhmsDetailModal(hid);
+            }
+        }
+    }, true);
 }
 
 async function pfpUpdatePhmsStatus(queueId, newStatus) {
@@ -17893,7 +18481,7 @@ async function pfpUpdatePhmsStatus(queueId, newStatus) {
     }
 }
 
-function pfpShowPhmsDetailModal(queueId) {
+function pfpShowPhmsRawQueueModal(queueId) {
     const item = Array.isArray(AppData.phmsFeedback) ? AppData.phmsFeedback.find(r => Number(r.queue_id) === Number(queueId)) : null;
     if (!item) return;
 
@@ -17972,7 +18560,7 @@ async function renderPCDocuments() {
     const contentArea = document.getElementById('content-area');
 
 
-    
+
 
 
 
@@ -17980,7 +18568,7 @@ async function renderPCDocuments() {
     const breadcrumbCurrent = document.querySelector('.breadcrumb-current');
 
 
-    
+
 
 
 
@@ -18016,8 +18604,8 @@ async function renderPCDocuments() {
                         <p class="text-red-100">Manage all consultation documents, track uploads, and monitor approval status</p>
                     </div>
                     ${canManageDocuments ? `<div class="flex gap-2">
-                        <button onclick="openAddDocumentModal()" class="btn-primary flex items-center gap-2 bg-white text-red-600 hover:bg-red-50">
-                            <i class="bi bi-file-earmark-plus"></i> Upload Document
+                        <button onclick="openAddDocumentModal()" class="px-5 py-2.5 bg-white hover:bg-red-50 text-red-700 font-extrabold rounded-xl shadow-md transition-all flex items-center gap-2 text-xs border border-white/60 hover:shadow-lg hover:-translate-y-0.5">
+                            <i class="bi bi-file-earmark-plus-fill text-red-600 text-sm"></i> Upload Document
                         </button>
                     </div>` : `<span class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/20 text-red-100 text-sm">Read-only access</span>`}
                 </div>
@@ -18353,7 +18941,7 @@ async function renderPCDocuments() {
 window.renderPCDocuments = renderPCDocuments;
 window.renderDocuments = renderPCDocuments;
 
-// Filter documents by group (Consultation, Feedback, Survey, Reports)
+// Filter documents by group (Consultation, Feedback, Survey, Reports, Versions)
 function filterDocumentsByGroup(group) {
     // Update active tab styling
     document.querySelectorAll('.doc-group-tab').forEach(tab => {
@@ -18366,6 +18954,11 @@ function filterDocumentsByGroup(group) {
         }
     });
 
+    if (group === 'versions') {
+        loadDocumentVersions();
+        return;
+    }
+
     // Filter documents by group
     let groupDocuments = [];
     if (AppData && AppData.documents) {
@@ -18373,7 +18966,7 @@ function filterDocumentsByGroup(group) {
             // Determine which group a document belongs to
             const docType = String(doc.type || '').toLowerCase();
             const docGroup = String(doc.group || '').toLowerCase();
-            
+
             if (group === 'consultation') {
                 return docType.includes('consultation') || docGroup.includes('consultation') || docType === 'ordinance' || docType === 'resolution' || docType === 'final_document' || docType === 'consultation_form' || docType === 'attachment';
             } else if (group === 'feedback') {
@@ -18392,11 +18985,15 @@ function filterDocumentsByGroup(group) {
     if (!tbody) return;
 
     if (groupDocuments.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-gray-400 p-6">No documents in this group</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-gray-400 p-6">No documents in this group</td></tr>`;
         return;
     }
 
     tbody.innerHTML = groupDocuments.map(doc => {
+        const docRef = String(doc.reference || doc.id || '').replace(/'/g, "\\'");
+        const docTitle = String(doc.title || doc.reference || 'Consultation Summary').replace(/'/g, "\\'");
+        const docSource = String(doc.source || 'consultation').replace(/'/g, "\\'");
+
         return `
             <tr class="border-b border-gray-100 hover:bg-gray-50 transition">
                 <td class="px-6 py-4">
@@ -18411,19 +19008,151 @@ function filterDocumentsByGroup(group) {
                     </span>
                 </td>
                 <td class="px-6 py-4 text-center">
-                    <div class="flex gap-2 justify-center">
+                    <div class="flex gap-2 justify-center items-center flex-wrap">
                         <button onclick="downloadDocument('${String(doc.uid || doc.id).replace(/'/g, "\\'")}')" class="text-blue-600 hover:text-blue-800" title="Download">
-                            <i class="bi bi-download"></i>
+                            <i class="bi bi-download"></i> Download
                         </button>
                         ${doc.downloadUrl && doc.downloadUrl !== '#' ? `<button onclick="viewDocument('${String(doc.uid || doc.id).replace(/'/g, "\\'")}')" class="text-gray-600 hover:text-gray-800" title="View">
                             View
                         </button>` : ''}
+                        <button onclick="openForwardLRSModal('${doc.id}', '${docSource}', '${docRef}', '${docTitle}')" class="px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded border border-red-200 text-xs font-semibold flex items-center gap-1" title="Forward to LRS">
+                            <i class="bi bi-send-fill text-red-600"></i> Forward to LRS
+                        </button>
                     </div>
                 </td>
             </tr>
         `;
     }).join('');
 }
+
+// Forward to LRS Modal & Versioning Handlers
+function openForwardLRSModal(docId, source, reference, title) {
+    const modal = document.getElementById('forward-lrs-modal');
+    if (!modal) return;
+
+    document.getElementById('lrs-doc-id').value = docId || '';
+    document.getElementById('lrs-doc-source').value = source || 'consultation';
+    document.getElementById('lrs-doc-ref').value = reference || ('CONSULT-' + docId);
+    document.getElementById('lrs-doc-title').value = title || 'Consultation Summary Document';
+    document.getElementById('lrs-doc-desc').value = 'Sample consultation summary forwarded from PCMS';
+
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+}
+
+function closeForwardLRSModal() {
+    const modal = document.getElementById('forward-lrs-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+}
+
+async function submitForwardToLRS(event) {
+    if (event) event.preventDefault();
+    const submitBtn = document.getElementById('lrs-submit-btn');
+    const docId = document.getElementById('lrs-doc-id').value;
+    const source = document.getElementById('lrs-doc-source').value;
+    const description = document.getElementById('lrs-doc-desc').value;
+
+    if (!docId) {
+        showNotification('Invalid document selected', 'error');
+        return;
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> Forwarding...';
+    }
+
+    try {
+        const response = await fetch('API/documents_api.php?action=forward_lrs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: docId, source: source, description: description })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            showNotification(result.message || 'Document successfully forwarded to LRS!', 'success');
+            closeForwardLRSModal();
+            refreshDocumentsModule(true);
+        } else {
+            showNotification(result.message || 'Failed to forward document to LRS', 'error');
+        }
+    } catch (err) {
+        console.error('Error forwarding document to LRS:', err);
+        showNotification('Network error while forwarding document to LRS', 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-send-fill"></i> Forward to LRS';
+        }
+    }
+}
+
+async function loadDocumentVersions() {
+    const tbody = document.getElementById('group-documents-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-gray-500 p-6"><i class="bi bi-arrow-repeat spin mr-2"></i> Loading document versions...</td></tr>`;
+
+    try {
+        const response = await fetch('API/documents_api.php?action=list_versions');
+        const result = await response.json();
+
+        if (!result.success || !Array.isArray(result.data) || result.data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-gray-400 p-6">No version history found. Forward a document to LRS or receive returned documents to see history here.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = result.data.map(ver => {
+            const isLrs = ver.source_system === 'lrs';
+            const badgeColor = isLrs ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800';
+            const statusBadge = ver.status === 'forwarded_to_lrs'
+                ? '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">Forwarded to LRS</span>'
+                : (ver.status === 'returned_from_lrs'
+                    ? '<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Returned from LRS</span>'
+                    : `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">${ver.status}</span>`);
+
+            return `
+                <tr class="border-b border-gray-100 hover:bg-gray-50 transition">
+                    <td class="px-6 py-4">
+                        <div class="font-semibold text-gray-900 flex items-center gap-2">
+                            ${ver.title || 'Untitled'}
+                            <span class="px-2 py-0.5 text-xs font-bold rounded ${badgeColor}">v${ver.version_number || '1.0'}</span>
+                        </div>
+                        <div class="text-gray-500 text-xs mt-1 font-mono">Ref: ${ver.reference_number || '-'}</div>
+                        ${ver.notes ? `<div class="text-gray-600 text-xs mt-1 italic">"${ver.notes}"</div>` : ''}
+                    </td>
+                    <td class="px-6 py-4 text-xs font-medium text-gray-700">
+                        <span class="uppercase tracking-wider px-2 py-0.5 rounded text-xs ${isLrs ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-700'}">
+                            ${ver.source_system ? ver.source_system.toUpperCase() : 'PCMS'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-center">${statusBadge}</td>
+                    <td class="px-6 py-4 text-center text-xs text-gray-600">${formatFileSize(ver.file_size || 0)}</td>
+                    <td class="px-6 py-4 text-center text-xs text-gray-500">${ver.created_at ? ver.created_at : '-'}</td>
+                    <td class="px-6 py-4 text-center">
+                        <div class="flex gap-2 justify-center">
+                            <a href="${ver.download_url}" target="_blank" class="text-blue-600 hover:text-blue-800 text-xs font-semibold flex items-center gap-1" title="Download Version">
+                                <i class="bi bi-download"></i> Download
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error('Error fetching document versions:', err);
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-red-500 p-6">Error loading version history.</td></tr>`;
+    }
+}
+window.openForwardLRSModal = openForwardLRSModal;
+window.closeForwardLRSModal = closeForwardLRSModal;
+window.submitForwardToLRS = submitForwardToLRS;
+window.loadDocumentVersions = loadDocumentVersions;
+
 
 // Documents module: tabbed view (Consultations, Surveys, Feedback, Reports)
 function renderDocumentsModule() {
@@ -18453,10 +19182,10 @@ function renderDocumentsModule() {
     };
 
     function showTab(name) {
-        tabs.forEach(b => b.classList.remove('bg-red-600','text-white'));
-        tabs.forEach(b => b.classList.add('bg-gray-100','text-gray-700'));
+        tabs.forEach(b => b.classList.remove('bg-red-600', 'text-white'));
+        tabs.forEach(b => b.classList.add('bg-gray-100', 'text-gray-700'));
         const btn = tabs.find(b => b.dataset.tab === name);
-        if (btn) { btn.classList.remove('bg-gray-100','text-gray-700'); btn.classList.add('bg-red-600','text-white'); }
+        if (btn) { btn.classList.remove('bg-gray-100', 'text-gray-700'); btn.classList.add('bg-red-600', 'text-white'); }
         Object.keys(panes).forEach(k => { if (panes[k]) panes[k].style.display = (k === name) ? 'block' : 'none'; });
     }
 
@@ -18465,12 +19194,12 @@ function renderDocumentsModule() {
     });
 
     // Populate tables from AppData.documents
-    function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]); }
+    function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
 
-    const consultations = AppData.documents.filter(d => (d.source||'').toLowerCase() === 'consultation' || (d.type||'').toLowerCase() === 'consultation');
-    const surveys = AppData.documents.filter(d => (d.type||'').toLowerCase() === 'survey');
-    const feedbackDocs = AppData.documents.filter(d => (d.type||'').toLowerCase() === 'feedback');
-    const reports = AppData.documents.filter(d => ['report','reporting','admin'].includes((d.type||'').toLowerCase()) || ((d.source||'').toLowerCase() === 'admin' && !['consultation','survey','feedback'].includes((d.type||'').toLowerCase())));
+    const consultations = AppData.documents.filter(d => (d.source || '').toLowerCase() === 'consultation' || (d.type || '').toLowerCase() === 'consultation');
+    const surveys = AppData.documents.filter(d => (d.type || '').toLowerCase() === 'survey');
+    const feedbackDocs = AppData.documents.filter(d => (d.type || '').toLowerCase() === 'feedback');
+    const reports = AppData.documents.filter(d => ['report', 'reporting', 'admin'].includes((d.type || '').toLowerCase()) || ((d.source || '').toLowerCase() === 'admin' && !['consultation', 'survey', 'feedback'].includes((d.type || '').toLowerCase())));
 
     const renderRows = (list) => list.map(d => `
         <tr>
@@ -18560,7 +19289,7 @@ function getFilteredDocuments() {
     let filtered = [...AppData.documents];
 
 
-    
+
 
 
     const searchTerm = document.getElementById('doc-search')?.value.toLowerCase() || '';
@@ -18578,10 +19307,10 @@ function getFilteredDocuments() {
     if (searchTerm) {
 
 
-        filtered = filtered.filter(d => 
+        filtered = filtered.filter(d =>
 
 
-            d.title.toLowerCase().includes(searchTerm) || 
+            d.title.toLowerCase().includes(searchTerm) ||
 
 
             d.reference.toLowerCase().includes(searchTerm)
@@ -18593,7 +19322,7 @@ function getFilteredDocuments() {
     }
 
 
-    
+
 
 
     if (statusFilter) {
@@ -18605,7 +19334,7 @@ function getFilteredDocuments() {
     }
 
 
-    
+
 
 
     if (typeFilter) {
@@ -18624,7 +19353,7 @@ function getFilteredDocuments() {
     filtered.sort((a, b) => {
 
 
-        switch(sortBy) {
+        switch (sortBy) {
 
 
             case 'date-asc':
@@ -18838,7 +19567,7 @@ async function downloadDocument(uid) {
             headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: Number(doc.id), source: doc.source || 'admin' })
         });
-    } catch (_) {}
+    } catch (_) { }
 
     doc.downloads = Number(doc.downloads || 0) + 1;
     renderDocumentsTable();
@@ -18925,7 +19654,7 @@ async function applyBulkDocumentStatus() {
             });
             const data = await res.json().catch(() => null);
             if (res.ok && data && data.success) ok += 1;
-        } catch (_) {}
+        } catch (_) { }
     }
 
     await refreshDocumentsModule(true);
@@ -19053,7 +19782,7 @@ async function loadIssuesFromApi() {
         headers: { 'Accept': 'application/json' }
     }, 5000);
     let data = null;
-    try { data = await res.json(); } catch (_) {}
+    try { data = await res.json(); } catch (_) { }
     if (!res.ok || !data || !data.success || !Array.isArray(data.data)) {
         throw new Error((data && data.message) ? data.message : `HTTP ${res.status}`);
     }
@@ -20307,49 +21036,103 @@ function renderPCDashboardCalendar() {
     const grid = document.getElementById('pc-dashboard-calendar-grid');
     if (!label || !grid) return;
 
-    const month = pcDashboardCalMonth + 1;
-    fetch(`API/consultation_availability_api.php?action=list_month&year=${pcDashboardCalYear}&month=${month}`)
-        .then(r => r.json())
-        .then(data => {
-            let calendarAvailability = {};
-            if (data && data.availability) data.availability.forEach(row => calendarAvailability[row.date] = row);
-            const holidays = new Set(data && data.holidays ? data.holidays : []);
+    const first = new Date(pcDashboardCalYear, pcDashboardCalMonth, 1);
+    const last = new Date(pcDashboardCalYear, pcDashboardCalMonth + 1, 0);
+    label.textContent = first.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-            const first = new Date(pcDashboardCalYear, pcDashboardCalMonth, 1);
-            const last = new Date(pcDashboardCalYear, pcDashboardCalMonth + 1, 0);
-            label.textContent = first.toLocaleString('default', { month: 'long', year: 'numeric' });
+    const startDay = (first.getDay() + 6) % 7;
+    const totalDays = last.getDate();
+    const cells = Math.ceil((startDay + totalDays) / 7) * 7;
 
-            const startDay = (first.getDay() + 6) % 7;
-            const totalDays = last.getDate();
-            const cells = Math.ceil((startDay + totalDays) / 7) * 7;
+    let consultations = (window.AppData && Array.isArray(window.AppData.consultations)) ? window.AppData.consultations : [];
 
-            let html = '';
-            for (let i = 0; i < cells; i++) {
-                const dayNum = i - startDay + 1;
-                const isCurrent = dayNum >= 1 && dayNum <= totalDays;
-                const dateStr = isCurrent ? `${pcDashboardCalYear}-${String(pcDashboardCalMonth + 1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}` : '';
-                const avail = dateStr ? calendarAvailability[dateStr] : null;
-                const isHoliday = dateStr && holidays.has(dateStr);
-                const isAvailable = avail ? Number(avail.is_available) === 1 && Number(avail.current_consultations) < Number(avail.max_consultations) : true;
-                const isWeekend = dateStr ? (() => {
-                    const d = new Date(dateStr + 'T00:00:00');
-                    const wd = d.getDay();
-                    return wd === 0 || wd === 6;
-                })() : false;
+    if (consultations.length === 0 && !window._pcCalendarFetching) {
+        window._pcCalendarFetching = true;
+        fetch('API/consultations_api.php?action=list')
+            .then(r => r.json())
+            .then(d => {
+                window._pcCalendarFetching = false;
+                if (d && d.success && Array.isArray(d.data)) {
+                    if (!window.AppData) window.AppData = {};
+                    window.AppData.consultations = d.data;
+                    renderPCDashboardCalendar();
+                }
+            })
+            .catch(() => { window._pcCalendarFetching = false; });
+    }
+    const todayStr = new Date().toISOString().substring(0, 10);
 
-                let cls = 'p-6 text-xl rounded text-center border border-gray-200 ';
-                if (!isCurrent) cls += 'text-gray-300';
-                else if (isHoliday) cls += 'text-yellow-600';
-                else if (isWeekend) cls += 'text-red-600';
-                else cls += 'text-gray-700';
-                html += `<div class="${cls}">${isCurrent ? dayNum : ''}</div>`;
-            }
-            grid.innerHTML = html;
-        })
-        .catch(() => {
-            label.textContent = '';
-            grid.innerHTML = '';
+    let html = '';
+    for (let i = 0; i < cells; i++) {
+        const dayNum = i - startDay + 1;
+        const isCurrent = dayNum >= 1 && dayNum <= totalDays;
+        const dateStr = isCurrent ? `${pcDashboardCalYear}-${String(pcDashboardCalMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}` : '';
+
+        if (!isCurrent) {
+            html += `<div class="min-h-[85px] p-2 bg-slate-50/50 rounded-xl border border-slate-100/60"></div>`;
+            continue;
+        }
+
+        // Find consultations active or starting/ending on dateStr
+        const dayEvents = consultations.filter(c => {
+            if (!c.start_date && !c.end_date && !c.created_at) return false;
+            const start = (c.start_date || c.created_at || '').substring(0, 10);
+            const end = (c.end_date || '').substring(0, 10);
+            if (start && end) return dateStr >= start && dateStr <= end;
+            if (start) return dateStr === start;
+            if (end) return dateStr === end;
+            return false;
         });
+
+        const isToday = (todayStr === dateStr);
+
+        let cellCls = 'min-h-[90px] p-2 rounded-xl border transition-all duration-200 flex flex-col justify-between ';
+        if (isToday) {
+            cellCls += 'bg-red-50/80 border-red-300 ring-2 ring-red-500/20 ';
+        } else if (dayEvents.length > 0) {
+            cellCls += 'bg-white border-blue-200/90 shadow-2xs hover:shadow-md ';
+        } else {
+            cellCls += 'bg-white border-slate-200/70 hover:bg-slate-50/80 ';
+        }
+
+        let eventsHtml = '';
+        if (dayEvents.length > 0) {
+            eventsHtml = '<div class="space-y-1 mt-1 overflow-hidden max-h-[55px]">';
+            dayEvents.slice(0, 2).forEach(ev => {
+                const start = (ev.start_date || ev.created_at || '').substring(0, 10);
+                const end = (ev.end_date || '').substring(0, 10);
+                const isStart = start === dateStr;
+                const isEnd = end === dateStr;
+                
+                let badgeClass = 'bg-blue-50 text-blue-800 border-blue-200';
+                let icon = 'bi-chat-quote-fill';
+                if (isStart) { badgeClass = 'bg-emerald-50 text-emerald-800 border-emerald-200'; icon = 'bi-play-circle-fill'; }
+                if (isEnd) { badgeClass = 'bg-amber-50 text-amber-900 border-amber-200'; icon = 'bi-flag-fill'; }
+                
+                eventsHtml += `
+                    <div onclick="if(typeof pfpViewConsultationModal==='function') pfpViewConsultationModal(${ev.id})" class="px-1.5 py-0.5 rounded text-[10px] font-extrabold border ${badgeClass} truncate cursor-pointer hover:scale-102 transition-transform flex items-center gap-1" title="${escapeHtml(ev.title || '')}">
+                        <i class="bi ${icon} text-[9px] shrink-0"></i>
+                        <span class="truncate">${escapeHtml(ev.title || 'Topic')}</span>
+                    </div>
+                `;
+            });
+            if (dayEvents.length > 2) {
+                eventsHtml += `<div class="text-[9px] font-extrabold text-blue-600 pl-1">+${dayEvents.length - 2} more</div>`;
+            }
+            eventsHtml += '</div>';
+        }
+
+        html += `
+            <div class="${cellCls}">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-extrabold ${isToday ? 'w-5 h-5 rounded-full bg-red-700 text-white flex items-center justify-center' : 'text-slate-800'}">${dayNum}</span>
+                    ${dayEvents.length > 0 ? `<span class="w-2 h-2 rounded-full bg-blue-600 shrink-0" title="${dayEvents.length} active consultation(s)"></span>` : ''}
+                </div>
+                ${eventsHtml}
+            </div>
+        `;
+    }
+    grid.innerHTML = html;
 }
 
 // Report Generation Functions
@@ -20424,88 +21207,88 @@ function generateReport() {
         method: 'POST',
         body: formData
     })
-    .then(res => {
-        console.log('Response status:', res.status);
-        console.log('Response headers:', res.headers);
-        return res.text();
-    })
-    .then(text => {
-        console.log('Raw response text:', text);
-        console.log('Response length:', text.length);
-        // Try to extract JSON from response (in case there's extra content)
-        let jsonText = text;
-        const jsonStart = text.indexOf('{');
-        const jsonEnd = text.lastIndexOf('}');
-        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-            jsonText = text.substring(jsonStart, jsonEnd + 1);
-            console.log('Extracted JSON:', jsonText);
-        }
-        try {
-            const data = JSON.parse(jsonText);
-            console.log('Parsed data:', data);
-            if (data && data.success) {
-            const typeLabel = type.options[type.selectedIndex].text;
-            const reportTitle = `${typeLabel} (${formatDate(startDateValue)} - ${formatDate(endDateValue)})`;
-
-            const report = {
-                id: Date.now(),
-                uid: String(Date.now()),
-                title: reportTitle,
-                type: 'report',
-                group: 'reports',
-                status: 'approved',
-                size: 0,
-                downloads: 0,
-                views: 0,
-                uploadedBy: (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : ((typeof AppData !== 'undefined' && AppData.currentUser && AppData.currentUser.name) ? AppData.currentUser.name : 'System'),
-                uploadedAt: new Date().toISOString(),
-                date: new Date().toISOString().split('T')[0],
-                description: `Generated report: ${typeLabel} for ${category.value === 'all' ? 'all categories' : category.value} with status ${status.value === 'all' ? 'all statuses' : status.value}`,
-                tags: [type.value, category.value, exportFormat.value],
-                downloadUrl: data.download_url,
-                filePath: data.filename,
-                reportType: type.value,
-                reportStartDate: startDateValue,
-                reportEndDate: endDateValue,
-                reportCategory: category.value,
-                reportStatus: status.value,
-                reportFormat: exportFormat.value
-            };
-
-            AppData.documents.unshift(report);
-            renderDocumentsTable();
-            closeGenerateReportModal();
-            if (data.download_url) {
-                const downloadLink = document.createElement('a');
-                downloadLink.href = data.download_url;
-                downloadLink.setAttribute('download', data.filename || '');
-                document.body.appendChild(downloadLink);
-                downloadLink.click();
-                document.body.removeChild(downloadLink);
+        .then(res => {
+            console.log('Response status:', res.status);
+            console.log('Response headers:', res.headers);
+            return res.text();
+        })
+        .then(text => {
+            console.log('Raw response text:', text);
+            console.log('Response length:', text.length);
+            // Try to extract JSON from response (in case there's extra content)
+            let jsonText = text;
+            const jsonStart = text.indexOf('{');
+            const jsonEnd = text.lastIndexOf('}');
+            if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+                jsonText = text.substring(jsonStart, jsonEnd + 1);
+                console.log('Extracted JSON:', jsonText);
             }
-            showNotification('Report generated successfully', 'success');
-        } else {
-            const err = (data && data.message) ? data.message : 'Report generation failed.';
-            console.error('Report generation failed:', err);
-            showNotification(err, 'error');
-        }
-        } catch (parseError) {
-            console.error('JSON parse error:', parseError);
-            console.error('Response was:', text);
-            showNotification('Invalid response from server', 'error');
-        }
-    })
-    .catch(err => {
-        console.error('Report generation error:', err);
-        showNotification('Report generation failed. Please try again.', 'error');
-    })
-    .finally(() => {
-        // Reset button state
-        if (generateBtn) {
-            generateBtn.disabled = false;
-            generateBtn.textContent = 'Generate Report';
-        }
-    });
+            try {
+                const data = JSON.parse(jsonText);
+                console.log('Parsed data:', data);
+                if (data && data.success) {
+                    const typeLabel = type.options[type.selectedIndex].text;
+                    const reportTitle = `${typeLabel} (${formatDate(startDateValue)} - ${formatDate(endDateValue)})`;
+
+                    const report = {
+                        id: Date.now(),
+                        uid: String(Date.now()),
+                        title: reportTitle,
+                        type: 'report',
+                        group: 'reports',
+                        status: 'approved',
+                        size: 0,
+                        downloads: 0,
+                        views: 0,
+                        uploadedBy: (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : ((typeof AppData !== 'undefined' && AppData.currentUser && AppData.currentUser.name) ? AppData.currentUser.name : 'System'),
+                        uploadedAt: new Date().toISOString(),
+                        date: new Date().toISOString().split('T')[0],
+                        description: `Generated report: ${typeLabel} for ${category.value === 'all' ? 'all categories' : category.value} with status ${status.value === 'all' ? 'all statuses' : status.value}`,
+                        tags: [type.value, category.value, exportFormat.value],
+                        downloadUrl: data.download_url,
+                        filePath: data.filename,
+                        reportType: type.value,
+                        reportStartDate: startDateValue,
+                        reportEndDate: endDateValue,
+                        reportCategory: category.value,
+                        reportStatus: status.value,
+                        reportFormat: exportFormat.value
+                    };
+
+                    AppData.documents.unshift(report);
+                    renderDocumentsTable();
+                    closeGenerateReportModal();
+                    if (data.download_url) {
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = data.download_url;
+                        downloadLink.setAttribute('download', data.filename || '');
+                        document.body.appendChild(downloadLink);
+                        downloadLink.click();
+                        document.body.removeChild(downloadLink);
+                    }
+                    showNotification('Report generated successfully', 'success');
+                } else {
+                    const err = (data && data.message) ? data.message : 'Report generation failed.';
+                    console.error('Report generation failed:', err);
+                    showNotification(err, 'error');
+                }
+            } catch (parseError) {
+                console.error('JSON parse error:', parseError);
+                console.error('Response was:', text);
+                showNotification('Invalid response from server', 'error');
+            }
+        })
+        .catch(err => {
+            console.error('Report generation error:', err);
+            showNotification('Report generation failed. Please try again.', 'error');
+        })
+        .finally(() => {
+            // Reset button state
+            if (generateBtn) {
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generate Report';
+            }
+        });
 }
 
 function pfpTriggerAiCommitteeCompile() {
@@ -20688,6 +21471,21 @@ function renderAiCommitteeBriefModalHtml(brief) {
                         <span class="text-gray-400 font-semibold uppercase text-[10px] block">Transmittal Target</span>
                         <span class="text-xs font-bold text-purple-800 block truncate" title="${escapeHtml(brief.committee_assigned)}">${escapeHtml(brief.committee_assigned)}</span>
                     </div>
+                <!-- Integrated Multi-System Source Merging Box -->
+                <div class="bg-gradient-to-r from-blue-50 via-purple-50 to-indigo-50 p-4 rounded-xl border border-blue-200/80 shadow-sm space-y-2">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <span class="text-xs font-extrabold text-blue-950 uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="bi bi-diagram-3-fill text-blue-600"></i> Integrated Multi-System Source Merging
+                        </span>
+                        <span class="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-900 font-bold text-[10px] border border-blue-200">PCMS ↔ PHMS Synchronized</span>
+                    </div>
+                    <p class="text-xs text-slate-800 leading-relaxed font-semibold">
+                        ${escapeHtml(brief.merged_sources?.summary_text || `Unified AI Analysis merged all online PCMS citizen feedback and cross-referenced PHMS Live Public Hearing records.`)}
+                    </p>
+                    <div class="flex items-center gap-3 pt-1 text-[11px] font-bold">
+                        <span class="px-2.5 py-1 bg-white text-slate-800 rounded-lg border border-slate-200 shadow-2xs flex items-center gap-1.5"><i class="bi bi-globe text-blue-600"></i> PCMS Online Submissions: <strong class="text-blue-950">${brief.merged_sources?.pcms_portal_count || 0}</strong></span>
+                        <span class="px-2.5 py-1 bg-white text-slate-800 rounded-lg border border-slate-200 shadow-2xs flex items-center gap-1.5"><i class="bi bi-building-gear text-purple-600"></i> PHMS Live Hearing Testimonies: <strong class="text-purple-950">${brief.merged_sources?.phms_hearing_count || 0}</strong></span>
+                    </div>
                 </div>
 
                 <!-- Section 1: Identified Problems -->
@@ -20769,24 +21567,44 @@ async function pfpForwardBriefToCommittee(consultationId, committeeName) {
 }
 
 async function renderReportsSection() {
-    return await renderSystemReportsSection();
+    if (typeof showSection === 'function') {
+        showSection('reports');
+    } else {
+        await renderSystemReportsSection();
+    }
 }
 
 async function renderSystemReportsSection() {
+    window._currentActiveSection = 'reports';
+    if (typeof hideManagedTemplateSections === 'function') {
+        hideManagedTemplateSections();
+    }
+
     const contentArea = document.getElementById('content-area');
     const pageTitle = document.getElementById('page-title');
     const breadcrumbCurrent = document.getElementById('breadcrumb-current') || document.querySelector('.breadcrumb-current');
-    if (pageTitle) pageTitle.textContent = 'System Reports & Analytics';
+    if (pageTitle) pageTitle.textContent = 'System Reports';
     if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'Reports';
+
+    // Highlight sidebar nav item for reports
+    document.querySelectorAll('.nav-item, [data-section]').forEach(item => {
+        item.classList.remove('active');
+        const sec = item.dataset.section || '';
+        const onclickStr = item.getAttribute('onclick') || '';
+        if (sec === 'reports' || onclickStr.includes('reports') || onclickStr.includes('Reports')) {
+            item.classList.add('active');
+        }
+    });
+
     if (!contentArea) return;
 
     contentArea.innerHTML = '<div class="p-8 text-center text-gray-500"><i class="bi bi-arrow-repeat animate-spin text-2xl mb-2 block"></i>Loading system reports...</div>';
 
     try {
         await Promise.all([
-            loadFeedbackFromApi().catch(() => {}),
-            loadConsultationsFromApi().catch(() => {}),
-            loadDocumentsFromApi().catch(() => {})
+            loadFeedbackFromApi().catch(() => { }),
+            loadConsultationsFromApi().catch(() => { }),
+            loadDocumentsFromApi().catch(() => { })
         ]);
     } catch (e) {
         console.warn('System reports data load warning:', e);
@@ -20800,23 +21618,23 @@ async function renderSystemReportsSection() {
     contentArea.innerHTML = `
         <div class="space-y-6">
             <!-- Header Banner -->
-            <div class="bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white p-7 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-4">
+            <div class="bg-gradient-to-r from-red-900 via-red-950 to-slate-900 text-white p-7 rounded-2xl shadow-xl border border-red-950/40 flex flex-wrap items-center justify-between gap-4">
                 <div>
-                    <span class="px-3 py-1 rounded-full bg-white/20 text-white text-[11px] font-extrabold uppercase tracking-wider">
-                        <i class="bi bi-bar-chart-line-fill mr-1"></i> System Governance & Intelligence Hub
+                    <span class="px-3 py-1 rounded-full bg-white/15 text-red-100 text-[11px] font-extrabold uppercase tracking-wider backdrop-blur-xs border border-white/10">
+                        <i class="bi bi-bar-chart-line-fill mr-1"></i> System Governance Hub
                     </span>
-                    <h1 class="text-2xl font-black text-white mt-1.5 flex items-center gap-2">
-                        System Reports & Intelligence Center
+                    <h1 class="text-2xl font-black text-white mt-2 flex items-center gap-2">
+                        System Reports
                     </h1>
-                    <p class="text-xs text-red-100 mt-1 max-w-2xl">
+                    <p class="text-xs text-red-100/90 mt-1 max-w-2xl font-medium leading-relaxed">
                         Centralized administrative analytics & official reports across all modules including AI policy briefs, public consultations, citizen sentiment, document governance, and security audit trails.
                     </p>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button onclick="window.print()" class="px-4 py-2.5 bg-white text-gray-900 hover:bg-gray-100 text-xs font-bold rounded-xl transition shadow flex items-center gap-1.5">
+                    <button onclick="window.print()" class="px-4 py-2.5 bg-white text-red-950 hover:bg-red-50 text-xs font-bold rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer">
                         <i class="bi bi-printer"></i> Print Executive Summary
                     </button>
-                    <button onclick="renderSystemReportsSection()" class="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl transition border border-white/20 flex items-center gap-1.5">
+                    <button onclick="renderSystemReportsSection()" class="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl transition border border-white/20 flex items-center gap-1.5 cursor-pointer">
                         <i class="bi bi-arrow-repeat"></i> Refresh Data
                     </button>
                 </div>
@@ -20872,9 +21690,6 @@ async function renderSystemReportsSection() {
                 <button id="sys-report-tab-documents" onclick="switchSystemReportTab('documents')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none sys-report-tab">
                     <i class="bi bi-folder2"></i> Document Governance Reports
                 </button>
-                <button id="sys-report-tab-audit" onclick="switchSystemReportTab('audit')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none sys-report-tab">
-                    <i class="bi bi-shield-check"></i> System Audit & Activity Log
-                </button>
             </div>
 
             <!-- Active Report View Container -->
@@ -20904,60 +21719,60 @@ function switchSystemReportTab(tabName) {
     if (tabName === 'ai') {
         container.innerHTML = `
             <div class="space-y-4">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h3 class="text-base font-bold text-gray-900 flex items-center gap-2">
-                            <i class="bi bi-robot text-purple-600"></i> AI Committee Synthesis Briefs Vault
+                            <i class="bi bi-robot text-purple-600"></i> AI Committee Synthesis & Resolution Briefs Vault
                         </h3>
-                        <p class="text-xs text-gray-500">Official 3-part synthesis reports (Problems, Solutions, Conclusion) ready for committee transmittal.</p>
+                        <p class="text-xs text-gray-500">Consolidated resolution briefs synthesized from closed public consultations for formal transmittal to LGU committees.</p>
                     </div>
                 </div>
 
-                <div class="border border-gray-200 rounded-xl overflow-hidden">
+                <div class="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                     <table class="w-full text-left text-xs">
-                        <thead class="bg-gray-50 border-b border-gray-200 font-bold uppercase text-gray-600 text-[11px]">
+                        <thead class="bg-purple-50/70 border-b border-purple-200 uppercase tracking-wider text-[11px] font-bold text-gray-700">
                             <tr>
-                                <th class="px-4 py-3">Consultation Policy</th>
-                                <th class="px-4 py-3">Assigned Committee</th>
-                                <th class="px-4 py-3 text-center">Submissions</th>
-                                <th class="px-4 py-3">Status</th>
-                                <th class="px-4 py-3 text-center">Actions</th>
+                                <th class="px-4 py-3 text-gray-900">Consultation Policy</th>
+                                <th class="px-4 py-3 text-gray-900">Assigned Committee</th>
+                                <th class="px-4 py-3 text-center text-gray-900">Submissions</th>
+                                <th class="px-4 py-3 text-gray-900">Status</th>
+                                <th class="px-4 py-3 text-center text-gray-900">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${AppData.consultations.map(c => {
-                                const cid = Number(c.id);
-                                const isClosed = ['closed', 'completed'].includes(String(c.status || '').toLowerCase());
-                                const feedbackCount = AppData.feedback.filter(f => Number(f.consultationId || f.consultation_id) === cid).length;
-                                return `
-                                    <tr class="border-b border-gray-100 hover:bg-slate-50">
-                                        <td class="px-4 py-3">
-                                            <div class="font-extrabold text-gray-900">#${cid} - ${escapeHtml(c.title || 'Consultation')}</div>
-                                            <div class="text-[11px] text-gray-500">${escapeHtml(c.category || 'General Policy')}</div>
+            const cid = Number(c.id);
+            const isClosed = ['closed', 'completed'].includes(String(c.status || '').toLowerCase());
+            const feedbackCount = AppData.feedback.filter(f => Number(f.consultationId || f.consultation_id) === cid).length;
+            return `
+                                    <tr class="border-b border-gray-100 hover:bg-slate-50 transition">
+                                        <td class="px-4 py-3.5">
+                                            <div class="font-bold text-gray-900 text-xs leading-snug">#${cid} - ${escapeHtml(c.title || 'Consultation')}</div>
+                                            <div class="text-[11px] text-gray-500 font-medium">Category: ${escapeHtml(c.category || 'General Policy')}</div>
                                         </td>
-                                        <td class="px-4 py-3 font-semibold text-purple-900">
-                                            <span class="px-2 py-0.5 bg-purple-50 rounded border border-purple-200 text-xs">
-                                                ${escapeHtml(c.committee_assigned || 'Rules & Governance Committee')}
+                                        <td class="px-4 py-3.5 font-semibold text-purple-900">
+                                            <span class="inline-block px-2 py-0.5 bg-purple-50 rounded border border-purple-200 text-xs">
+                                                <i class="bi bi-diagram-3 mr-1"></i>${escapeHtml(c.committee_assigned || 'Rules & Governance Committee')}
                                             </span>
                                         </td>
-                                        <td class="px-4 py-3 text-center font-bold text-gray-800">${feedbackCount}</td>
-                                        <td class="px-4 py-3">
-                                            ${isClosed ? '<span class="px-2 py-0.5 rounded-full bg-slate-800 text-white font-extrabold text-[10px]">CLOSED</span>' : '<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">ACTIVE</span>'}
+                                        <td class="px-4 py-3.5 text-center font-semibold text-gray-800 text-xs">${feedbackCount} submission(s)</td>
+                                        <td class="px-4 py-3.5">
+                                            ${isClosed ? '<span class="px-2 py-0.5 rounded-md bg-slate-800 text-white font-bold text-[10px] uppercase tracking-wider">CLOSED</span>' : '<span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px] uppercase tracking-wider">ACTIVE</span>'}
                                         </td>
-                                        <td class="px-4 py-3 text-center">
+                                        <td class="px-4 py-3.5 text-center">
                                             ${isClosed ? `
-                                                <button onclick="pfpShowAiCommitteeBriefModal(${cid})" class="px-3 py-1 bg-purple-700 hover:bg-purple-800 text-white font-extrabold rounded-lg text-xs transition">
-                                                    <i class="bi bi-file-earmark-text"></i> View AI Brief
+                                                <button onclick="pfpShowAiCommitteeBriefModal(${cid})" class="px-3.5 py-1.5 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-lg text-xs transition shadow-sm flex items-center gap-1 mx-auto">
+                                                    <i class="bi bi-file-earmark-text-fill"></i> View AI Brief
                                                 </button>
                                             ` : `
-                                                <button onclick="pfpShowAiCommitteeBriefModal(${cid})" class="px-3 py-1 bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-lg text-xs">
+                                                <button onclick="pfpShowAiCommitteeBriefModal(${cid})" class="px-3 py-1.5 bg-amber-100 text-amber-900 border border-amber-300 font-semibold rounded-lg text-xs flex items-center gap-1 mx-auto">
                                                     <i class="bi bi-lock-fill"></i> Pending (Active)
                                                 </button>
                                             `}
                                         </td>
                                     </tr>
                                 `;
-                            }).join('') || '<tr><td colspan="5" class="p-6 text-center text-gray-500">No consultation records found.</td></tr>'}
+        }).join('') || '<tr><td colspan="5" class="p-6 text-center text-gray-500">No consultation records found.</td></tr>'}
                         </tbody>
                     </table>
                 </div>
@@ -20988,14 +21803,14 @@ function switchSystemReportTab(tabName) {
                     <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
                         <div class="text-xs font-bold text-gray-600 uppercase mb-2">Policy Category Representation</div>
                         ${Array.from(new Set(AppData.consultations.map(c => c.category || 'General'))).map(cat => {
-                            const count = AppData.consultations.filter(c => (c.category || 'General') === cat).length;
-                            return `
+            const count = AppData.consultations.filter(c => (c.category || 'General') === cat).length;
+            return `
                                 <div class="flex items-center justify-between py-1.5 border-b border-gray-200/60 text-xs">
                                     <span class="text-gray-700">${escapeHtml(cat)}</span>
                                     <span class="font-bold text-red-700">${count} policy(s)</span>
                                 </div>
                             `;
-                        }).join('')}
+        }).join('')}
                     </div>
                 </div>
             </div>
@@ -21051,37 +21866,269 @@ function switchSystemReportTab(tabName) {
                 </div>
             </div>
         `;
-    } else if (tabName === 'audit') {
-        container.innerHTML = `
-            <div class="space-y-4">
-                <h3 class="text-base font-bold text-gray-900"><i class="bi bi-shield-check text-orange-600"></i> Administrative Audit Log & Activity Trail</h3>
-                <p class="text-xs text-gray-500">Detailed security log of administrative operations across public consultation and feedback management.</p>
-                <div class="border border-gray-200 rounded-xl overflow-hidden max-h-[400px] overflow-y-auto">
-                    <table class="w-full text-left text-xs">
-                        <thead class="bg-gray-50 border-b border-gray-200 font-bold uppercase text-gray-600 text-[11px] sticky top-0">
-                            <tr>
-                                <th class="px-4 py-2.5">Timestamp</th>
-                                <th class="px-4 py-2.5">User</th>
-                                <th class="px-4 py-2.5">Action</th>
-                                <th class="px-4 py-2.5">Details</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${(AppData.auditLogs || []).map(log => `
-                                <tr class="border-b border-gray-100 hover:bg-gray-50">
-                                    <td class="px-4 py-2 font-mono text-gray-500 text-[11px]">${escapeHtml(log.timestamp || log.created_at || 'Recently')}</td>
-                                    <td class="px-4 py-2 font-bold text-gray-800">${escapeHtml(log.userName || log.user || 'Admin')}</td>
-                                    <td class="px-4 py-2 uppercase font-extrabold text-[10px] text-red-700">${escapeHtml(log.action || 'UPDATE')}</td>
-                                    <td class="px-4 py-2 text-gray-700">${escapeHtml(log.details || log.description || '-')}</td>
-                                </tr>
-                            `).join('') || '<tr><td colspan="4" class="p-6 text-center text-gray-500">No recent audit activity logged.</td></tr>'}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
     }
 }
+
+window.openApproveCitizenSubmissionModal = function (consultationId) {
+    const cid = Number(consultationId);
+    const consultation = (AppData.consultations || []).find(c => Number(c.id) === cid);
+    if (!consultation) {
+        if (typeof alertToast === 'function') alertToast('Submission not found.', 'error');
+        else alert('Submission not found.');
+        return;
+    }
+
+    const old = document.getElementById('approve-submission-modal');
+    if (old) old.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'approve-submission-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; background-color: rgba(15, 23, 42, 0.85); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 999999; padding: 1rem;';
+
+    const title = escapeHtml(consultation.title || 'Citizen Submission');
+    const desc = escapeHtml(consultation.description || 'No description provided.');
+    const citizen = escapeHtml(consultation.userName || consultation.user_name || 'Citizen');
+
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl max-w-xl w-full shadow-2xl overflow-hidden border border-slate-200 animate-fadeIn">
+            <div class="bg-gradient-to-r from-emerald-800 to-teal-900 text-white p-5 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="bi bi-check-circle-fill text-emerald-300 text-xl"></i>
+                    <div>
+                        <h3 class="font-extrabold text-sm uppercase tracking-wider">Approve & Launch Public Consultation</h3>
+                        <p class="text-[11px] text-emerald-100">Convert citizen proposal into a live consultation on the Portal</p>
+                    </div>
+                </div>
+                <button onclick="document.getElementById('approve-submission-modal').remove()" class="text-white/80 hover:text-white text-xl font-bold transition focus:outline-none">&times;</button>
+            </div>
+            
+            <div class="p-6 space-y-4 text-xs">
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                    <span class="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Submitted Proposal</span>
+                    <h4 class="font-extrabold text-slate-900 text-sm">${title}</h4>
+                    <p class="text-slate-600 font-medium">${desc}</p>
+                    <span class="text-[11px] text-slate-400 font-medium block pt-1">Submitted by: <strong>${citizen}</strong></span>
+                </div>
+
+                <div class="space-y-3 pt-1">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Assigned LGU Committee <span class="text-red-500">*</span></label>
+                        <select id="approve-committee-select" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500">
+                            <option value="Rules & Governance Committee">Rules & Governance Committee</option>
+                            <option value="Committee on Infrastructure & Public Works">Committee on Infrastructure & Public Works</option>
+                            <option value="Committee on Health & Sanitation">Committee on Health & Sanitation</option>
+                            <option value="Committee on Environmental Protection">Committee on Environmental Protection</option>
+                            <option value="Committee on Public Utilities">Committee on Public Utilities</option>
+                            <option value="Committee on Youth & Sports Development">Committee on Youth & Sports Development</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Citizen Feedback Response Mode <span class="text-red-500">*</span></label>
+                        <select id="approve-response-mode" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500">
+                            <option value="feedback">Written Feedback & Comments (Star Rating)</option>
+                            <option value="survey">1-Click Opinion Poll (Agree vs Disagree)</option>
+                            <option value="hybrid">Hybrid (Written Feedback + Opinion Poll)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Public Consultation Expiry / Close Date</label>
+                        <input id="approve-expiry-date" type="date" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500" value="${new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}">
+                    </div>
+                </div>
+
+                <div class="p-3 bg-amber-50 rounded-lg border border-amber-200 text-amber-900 text-[11px] flex items-center gap-2 font-medium">
+                    <i class="bi bi-info-circle-fill text-amber-600 text-sm shrink-0"></i>
+                    <span>Once approved, this policy will be published live on the Citizen Consultation Portal for public community voting & feedback.</span>
+                </div>
+            </div>
+
+            <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+                <button onclick="document.getElementById('approve-submission-modal').remove()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition">
+                    Cancel
+                </button>
+                <button onclick="confirmApproveCitizenSubmission(${cid})" class="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-extrabold text-xs rounded-xl transition shadow flex items-center gap-1.5 cursor-pointer">
+                    <i class="bi bi-rocket-takeoff-fill"></i> Launch Public Consultation
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+};
+
+window.confirmApproveCitizenSubmission = function (consultationId) {
+    const cid = Number(consultationId);
+    const consultation = (AppData.consultations || []).find(c => Number(c.id) === cid);
+    if (!consultation) return;
+
+    const committee = document.getElementById('approve-committee-select')?.value || 'Rules & Governance Committee';
+    const responseMode = document.getElementById('approve-response-mode')?.value || 'feedback';
+    const expiryDate = document.getElementById('approve-expiry-date')?.value || '';
+
+    // Update in-memory AppData
+    consultation.status = 'active';
+    consultation.type = 'official';
+    consultation.committee = committee;
+    consultation.response_mode = responseMode;
+    if (expiryDate) consultation.end_date = expiryDate;
+
+    // Send API update request
+    fetchWithTimeout('API/consultations_api.php?action=approve_publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            id: cid,
+            status: 'active',
+            type: 'official',
+            committee: committee,
+            response_mode: responseMode,
+            end_date: expiryDate
+        })
+    }, 5000).then(res => res.json()).then(res => {
+        if (typeof loadConsultationsFromApi === 'function') {
+            loadConsultationsFromApi().then(() => {
+                if (typeof pfpRenderConsultationFeedbackTable === 'function') pfpRenderConsultationFeedbackTable();
+                if (typeof pfpRenderSurveyPollsTable === 'function') pfpRenderSurveyPollsTable();
+            });
+        }
+    }).catch(() => { });
+
+    const modal = document.getElementById('approve-submission-modal');
+    if (modal) modal.remove();
+
+    if (typeof alertToast === 'function') {
+        alertToast('Citizen Submission approved! It is now live on the Public Portal.', 'success');
+    }
+    renderConsultationManagementSection();
+};
+
+window.loadPendingUserApplications = async function() {
+    const container = document.getElementById('pending-user-applications-list');
+    if (!container) return;
+    try {
+        const res = await fetch('API/resource_person_api.php?action=list_pending');
+        const data = await res.json();
+        const badge = document.getElementById('user-mgmt-pending-badge');
+        if (data.success && data.data) {
+            if (badge) badge.textContent = data.data.length;
+            if (data.data.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white p-12 rounded-2xl shadow-sm border border-gray-200 text-center col-span-full">
+                        <i class="bi bi-check-circle-fill text-4xl text-emerald-500 mb-3 inline-block"></i>
+                        <h4 class="text-base font-bold text-gray-800">No Pending Applications</h4>
+                        <p class="text-xs text-gray-500 mt-1">All Resource Person applications have been reviewed.</p>
+                    </div>
+                `;
+                return;
+            }
+            container.innerHTML = data.data.map(app => `
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 flex flex-col justify-between hover:shadow-md transition space-y-4">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 flex items-center gap-1">
+                                <i class="bi bi-clock"></i> Pending Review
+                            </span>
+                            <span class="text-xs text-gray-400">${new Date(app.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <h3 class="text-base font-bold text-gray-900">${app.fullname}</h3>
+                        <p class="text-xs text-gray-500 mb-3">${app.email} ${app.phone ? '• ' + app.phone : ''}</p>
+                        
+                        <div class="space-y-2 text-xs">
+                            <div class="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                                <span class="font-bold text-gray-700 block mb-0.5">Department / Office:</span>
+                                <span class="text-gray-600">${app.department || 'Not specified'}</span>
+                            </div>
+                            <div class="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                                <span class="font-bold text-gray-700 block mb-0.5">Areas of Expertise:</span>
+                                <span class="text-gray-600">${app.expertise_areas || 'Not specified'}</span>
+                            </div>
+                            <div class="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                                <span class="font-bold text-gray-700 block mb-0.5">Qualifications:</span>
+                                <span class="text-gray-600">${app.qualifications || 'Not specified'}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex gap-2 pt-2 border-t border-gray-100">
+                        <button onclick="approveResourcePersonApp(${app.id})" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-sm">
+                            <i class="bi bi-check-lg text-sm"></i> Approve
+                        </button>
+                        <button onclick="rejectResourcePersonApp(${app.id})" class="flex-1 bg-red-50 hover:bg-red-100 text-red-600 font-semibold py-2.5 px-4 rounded-xl text-xs transition border border-red-200 flex items-center justify-center gap-1.5">
+                            <i class="bi bi-x-lg text-sm"></i> Reject
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+    } catch(e) {
+        container.innerHTML = `<div class="p-6 text-red-600 text-xs text-center col-span-full">Failed to load pending applications.</div>`;
+    }
+};
+
+window.loadApprovedUserExperts = async function() {
+    const container = document.getElementById('approved-user-experts-list');
+    if (!container) return;
+    try {
+        const res = await fetch('API/resource_person_api.php?action=list_approved');
+        const data = await res.json();
+        const badge = document.getElementById('approved-experts-badge');
+        if (data.success && data.data) {
+            if (badge) badge.textContent = data.data.length;
+            if (data.data.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white p-12 rounded-2xl shadow-sm border border-gray-200 text-center col-span-full">
+                        <i class="bi bi-award text-4xl text-gray-300 mb-3 inline-block"></i>
+                        <h4 class="text-base font-bold text-gray-800">No Verified Resource Persons</h4>
+                        <p class="text-xs text-gray-500 mt-1">No Resource Persons have been verified yet.</p>
+                    </div>
+                `;
+                return;
+            }
+            container.innerHTML = data.data.map(exp => `
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 flex flex-col justify-between space-y-4">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                                <i class="bi bi-patch-check-fill text-emerald-600"></i> Verified Expert
+                            </span>
+                            <span class="text-xs text-gray-400">Approved ${new Date(exp.approved_at).toLocaleDateString()}</span>
+                        </div>
+                        <h3 class="text-base font-bold text-gray-900">${exp.fullname}</h3>
+                        <p class="text-xs text-gray-500 mb-3">${exp.email} ${exp.phone ? '• ' + exp.phone : ''}</p>
+                        
+                        <div class="space-y-2 text-xs">
+                            <div class="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                                <span class="font-bold text-gray-700 block mb-0.5">Department / Office:</span>
+                                <span class="text-gray-600">${exp.department || 'Not specified'}</span>
+                            </div>
+                            <div class="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                                <span class="font-bold text-gray-700 block mb-0.5">Areas of Expertise:</span>
+                                <span class="text-gray-600">${exp.expertise_areas || 'Not specified'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+    } catch(e) {
+        container.innerHTML = `<div class="p-6 text-red-600 text-xs text-center col-span-full">Failed to load verified experts.</div>`;
+    }
+};
+
+window.approveResourcePersonApp = function(id, fullname) {
+    if (typeof approveResourcePerson === 'function') {
+        approveResourcePerson(id, fullname);
+    }
+};
+
+window.rejectResourcePersonApp = function(id, fullname) {
+    if (typeof rejectResourcePerson === 'function') {
+        rejectResourcePerson(id, fullname);
+    }
+};
+
 
 
 

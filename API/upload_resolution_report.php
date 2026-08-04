@@ -35,12 +35,11 @@ if ($consultation_id === 0) {
     exit;
 }
 
-if (!isset($_FILES['resolution_file']) || $_FILES['resolution_file']['error'] !== UPLOAD_ERR_OK) {
+$file = $_FILES['resolution_file'] ?? ($_FILES['report_file'] ?? null);
+if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
     echo json_encode(['success' => false, 'message' => 'No file uploaded or upload error']);
     exit;
 }
-
-$file = $_FILES['resolution_file'];
 $allowed_types = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
 $finfo = finfo_open(FILEINFO_MIME_TYPE);
 $mime_type = finfo_file($finfo, $file['tmp_name']);
@@ -85,4 +84,7 @@ if (!$stmt->execute()) {
 
 $stmt->close();
 
-echo json_encode(['success' => true, 'message' => 'Resolution report uploaded successfully']);
+// Mark consultation status as endorsed by technical expert
+@$conn->query("UPDATE consultations SET status = 'endorsed' WHERE id = $consultation_id");
+
+echo json_encode(['success' => true, 'message' => 'Resolution report uploaded and consultation endorsed successfully']);

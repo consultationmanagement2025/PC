@@ -107,7 +107,8 @@ function initializeConsultationsTable() {
         'remarks' => "LONGTEXT DEFAULT NULL",
         'ai_committee_brief' => "LONGTEXT DEFAULT NULL",
         'committee_forwarded_at' => "DATETIME DEFAULT NULL",
-        'committee_assigned' => "VARCHAR(150) DEFAULT NULL"
+        'committee_assigned' => "VARCHAR(150) DEFAULT NULL",
+        'assigned_to' => "INT(11) DEFAULT NULL"
     ];
     
     $result = $conn->query("SHOW COLUMNS FROM consultations");

@@ -17,7 +17,61 @@ function initializeNotificationsTable() {
         error_log('Failed to create notifications table: ' . $conn->error);
         return false;
     }
+    seedNotificationsIfEmpty();
     return true;
+}
+
+function seedNotificationsIfEmpty($forceReSeed = false) {
+    global $conn;
+    $res = $conn->query("SELECT COUNT(*) AS cnt FROM notifications");
+    $row = $res ? $res->fetch_assoc() : null;
+    $cnt = isset($row['cnt']) ? (int)$row['cnt'] : 0;
+
+    if ($cnt > 0 && !$forceReSeed) {
+        return false;
+    }
+
+    if ($forceReSeed) {
+        $conn->query("TRUNCATE TABLE notifications");
+    }
+
+    $sampleNotifs = [
+        [
+            'user_id' => 0,
+            'message' => '🔗 External System Data Received (PHMS): Ingested 3 PHMS AI Feedback Summaries & citizen responses for "Consultation on Drainage Upgrades for Flood Control".',
+            'type' => 'phms_integration',
+            'is_read' => 0
+        ],
+        [
+            'user_id' => 0,
+            'message' => '🤖 AI Committee Synthesis Ready: Executive Brief generated for Consultation #1 ("Proposed Waste Segregation Enforcement Program").',
+            'type' => 'ai_brief',
+            'is_read' => 0
+        ],
+        [
+            'user_id' => 0,
+            'message' => '📩 New Citizen Policy Submission: Received public proposal #48 for Barangay Health Unit Modernization.',
+            'type' => 'feedback',
+            'is_read' => 0
+        ],
+        [
+            'user_id' => 0,
+            'message' => '📊 System Integration Status: All local databases and cross-system webhooks are operational.',
+            'type' => 'info',
+            'is_read' => 0
+        ]
+    ];
+
+    $stmt = $conn->prepare("INSERT INTO notifications (user_id, message, type, is_read, created_at) VALUES (?, ?, ?, ?, NOW())");
+    if ($stmt) {
+        foreach ($sampleNotifs as $n) {
+            $stmt->bind_param('issi', $n['user_id'], $n['message'], $n['type'], $n['is_read']);
+            $stmt->execute();
+        }
+        $stmt->close();
+        return true;
+    }
+    return false;
 }
 
 function createNotification($user_id, $message, $type = 'info') {

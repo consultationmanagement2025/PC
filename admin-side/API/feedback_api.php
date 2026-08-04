@@ -8,8 +8,14 @@ if (file_exists('../email_config_simple.php')) {
 }
 
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
-$is_staff = in_array($current_role, ['staff', 'barangay staff', 'barangay_staff', 'barangay'], true);
-if ($current_role !== 'admin' && $current_role !== 'administrator' && $current_role !== 'super admin' && $current_role !== 'superadmin' && !$is_staff) {
+$has_session_user = !empty($_SESSION['user_id']) || !empty($_SESSION['fullname']) || !empty($_SESSION['email']) || !empty($_SESSION['user']);
+
+$allowed_roles = [
+    'admin', 'administrator', 'super admin', 'superadmin', 'system administrator', 'system admin',
+    'staff', 'barangay staff', 'barangay_staff', 'barangay', 'lgu staff', 'lgu', 'official', 'resource person', 'user', 'citizen'
+];
+
+if (!$has_session_user && !in_array($current_role, $allowed_roles, true)) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit;
@@ -67,23 +73,84 @@ try {
             break;
 
         case 'phms_list':
-            $limit = (int)($_GET['limit'] ?? 200);
+            $limit = (int)($_GET['limit'] ?? 50);
             $offset = (int)($_GET['offset'] ?? 0);
-            $filters = [];
-            if (!empty($_GET['status'])) {
-                $filters['status'] = $_GET['status'];
+            $result = fetchPhmsFeedbackFromApi(null, $limit, $offset);
+            if (!empty($result['success']) && isset($result['data']) && isset($result['data']['hearings'])) {
+                echo json_encode(['success' => true, 'data' => $result['data']]);
+            } else {
+                $hearings = getPhmsFeedbackQueueAsHearings([], $limit, $offset);
+                echo json_encode([
+                    'success' => true,
+                    'is_cached' => true,
+                    'message' => 'Displaying stored PHMS hearings ledger.',
+                    'data' => [
+                        'source_system' => 'PHMS (Stored Ledger)',
+                        'data_type' => 'citizen_hearing_feedback',
+                        'count' => count($hearings),
+                        'limit' => $limit,
+                        'offset' => $offset,
+                        'hearings' => $hearings
+                    ]
+                ]);
             }
-            if (!empty($_GET['search'])) {
-                $filters['search'] = $_GET['search'];
+            break;
+
+        case 'phms_detail':
+            $hearing_id = trim((string)($_GET['hearing_id'] ?? ''));
+            if ($hearing_id === '') {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Hearing ID parameter is required.']);
+                exit;
             }
-            $phmsItems = getPhmsFeedbackQueue($filters, $limit, $offset);
-            echo json_encode(['success' => true, 'data' => $phmsItems]);
+            $result = fetchPhmsFeedbackFromApi($hearing_id);
+            if (!empty($result['success']) && isset($result['data']) && !empty($result['data']['hearings'])) {
+                echo json_encode(['success' => true, 'data' => $result['data']]);
+            } else {
+                $cached = getPhmsFeedbackQueueAsHearings([], 200, 0);
+                $filtered = array_values(array_filter($cached, function($h) use ($hearing_id) {
+                    $hid1 = (string)($h['hearing_id'] ?? '');
+                    $hid2 = (string)($h['phms_hearing_id'] ?? '');
+                    $hid3 = (string)($h['queue_id'] ?? '');
+                    return $hid1 === (string)$hearing_id || $hid2 === (string)$hearing_id || $hid3 === (string)$hearing_id;
+                }));
+                echo json_encode([
+                    'success' => !empty($filtered),
+                    'data' => [
+                        'source_system' => 'PHMS (Stored Ledger)',
+                        'data_type' => 'citizen_hearing_feedback',
+                        'count' => count($filtered),
+                        'hearings' => $filtered
+                    ]
+                ]);
+            }
             break;
 
         case 'phms_sync':
-            seedPhmsHearingQueueIfEmpty(true);
-            $phmsItems = getPhmsFeedbackQueue([], 200, 0);
-            echo json_encode(['success' => true, 'message' => 'PHMS feedback data successfully synchronized from PHMS integration.', 'data' => $phmsItems]);
+            $limit = (int)($_GET['limit'] ?? 50);
+            $offset = (int)($_GET['offset'] ?? 0);
+            $result = fetchPhmsFeedbackFromApi(null, $limit, $offset);
+            if (!empty($result['success']) && isset($result['data']) && isset($result['data']['hearings'])) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'PHMS citizen feedback data successfully synchronized.',
+                    'data' => $result['data']
+                ]);
+            } else {
+                $hearings = getPhmsFeedbackQueueAsHearings([], $limit, $offset);
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'PHMS citizen feedback data loaded from stored ledger.',
+                    'data' => [
+                        'source_system' => 'PHMS (Stored Ledger)',
+                        'data_type' => 'citizen_hearing_feedback',
+                        'count' => count($hearings),
+                        'limit' => $limit,
+                        'offset' => $offset,
+                        'hearings' => $hearings
+                    ]
+                ]);
+            }
             break;
 
         case 'phms_update_status':

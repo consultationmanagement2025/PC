@@ -16,21 +16,39 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-// Get document ID and source
+// Get version ID, document ID, and source
+$version_id = isset($_GET['version_id']) ? (int)$_GET['version_id'] : 0;
 $document_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $source = strtolower(trim((string)($_GET['source'] ?? 'admin')));
 
-if ($document_id <= 0) {
+if ($version_id > 0) {
+    initializeDocumentVersionsTable();
+    $stmt = $conn->prepare("SELECT * FROM document_versions WHERE id = ? LIMIT 1");
+    $stmt->bind_param('i', $version_id);
+    $stmt->execute();
+    $ver = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if ($ver) {
+        $download_name = !empty($ver['original_filename']) ? $ver['original_filename'] : 'version_' . $ver['version_number'] . '.pdf';
+        $relPath = $ver['file_path'];
+        $candidate = __DIR__ . '/' . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relPath);
+        if (is_file($candidate)) {
+            $file_path = $candidate;
+            $doc = $ver;
+        }
+    }
+} else if ($document_id <= 0) {
     http_response_code(400);
     echo 'Invalid document ID';
     exit;
 }
 
-$doc = null;
-$file_path = null;
-$download_name = 'document';
+$doc = $doc ?? null;
+$file_path = $file_path ?? null;
+$download_name = $download_name ?? 'document';
 
-if ($source === 'consultation') {
+if (!$file_path && $source === 'consultation') {
+
     $doc = getDocumentById($document_id);
     if ($doc) {
         $stored_name = trim((string)($doc['stored_filename'] ?? ''));

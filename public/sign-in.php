@@ -173,9 +173,12 @@ if (isset($_GET['signup']) && $_GET['signup'] === 'success') {
     <main class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div class="flex items-center justify-center min-h-[calc(100vh-120px)]">
             <div class="w-full max-w-md">
-                <div class="bg-white rounded-2xl p-8 shadow-lg border border-gray-100">
+                <div class="bg-white rounded-2xl p-8 shadow-lg border border-gray-100 text-center">
+                    <h2 class="text-xl font-extrabold text-slate-900 mb-1">Citizen Portal Access</h2>
+                    <p class="text-xs text-slate-500 mb-6">Sign in with your Google account to participate in public consultations and submit policy feedback.</p>
+
                     <!-- Prominent 1-Click Google Sign-In -->
-                    <div class="mb-6">
+                    <div>
                         <a href="google-auth.php" class="w-full bg-white hover:bg-slate-50 text-slate-700 font-bold py-3.5 px-4 rounded-xl border border-slate-300 shadow-sm transition-all flex justify-center items-center gap-3 hover:shadow-md hover:border-slate-400 group">
                             <svg class="w-5 h-5 transition-transform group-hover:scale-110" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
@@ -185,46 +188,6 @@ if (isset($_GET['signup']) && $_GET['signup'] === 'success') {
                             </svg>
                             <span class="text-sm">Continue with Google</span>
                         </a>
-
-                        <div class="relative flex py-4 items-center">
-                            <div class="flex-grow border-t border-slate-200"></div>
-                            <span class="flex-shrink mx-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">or sign in with email</span>
-                            <div class="flex-grow border-t border-slate-200"></div>
-                        </div>
-                    </div>
-
-                    <form method="POST" class="space-y-5" id="signin-form" novalidate>
-                        <div>
-                            <label for="email" class="block text-sm font-semibold text-slate-700 mb-1">Email Address</label>
-                            <input type="email" id="email" name="email" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-valenzuela-blue focus:border-valenzuela-blue outline-none transition-all" placeholder="name@example.com">
-                            <div id="email-error" class="text-red-500 text-xs font-semibold mt-1 hidden flex items-center gap-1">
-                                <i class="fa-solid fa-exclamation-circle"></i> <span id="email-error-text">Please enter a valid email address</span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="password" class="block text-sm font-semibold text-slate-700 mb-1">Password</label>
-                            <input type="password" id="password" name="password" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-valenzuela-blue focus:border-valenzuela-blue outline-none transition-all" placeholder="Enter your password">
-                            <div id="password-error" class="text-red-500 text-xs font-semibold mt-1 hidden flex items-center gap-1">
-                                <i class="fa-solid fa-exclamation-circle"></i> <span id="password-error-text">Please enter your password</span>
-                            </div>
-                        </div>
-
-                        <div class="flex items-center justify-between text-sm">
-                            <label class="inline-flex items-center gap-2 text-slate-600">
-                                <input type="checkbox" class="rounded border-gray-300 text-valenzuela-blue focus:ring-valenzuela-blue">
-                                Remember me
-                            </label>
-                            <a href="#" class="text-valenzuela-blue font-semibold hover:underline">Forgot password?</a>
-                        </div>
-
-                        <button type="submit" class="w-full bg-valenzuela-red hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-all flex justify-center items-center gap-2 hover:-translate-y-0.5">
-                            <i class="fa-solid fa-right-to-bracket"></i> Sign In
-                        </button>
-                    </form>
-
-                    <div class="mt-6 text-sm text-center text-slate-500">
-                        Don't have an account? <a href="sign-up.php" class="text-valenzuela-blue font-semibold hover:underline">Sign Up</a>
                     </div>
                 </div>
             </div>

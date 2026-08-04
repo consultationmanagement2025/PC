@@ -19,30 +19,31 @@ function initializeAnnouncementsTable() {
         visibility VARCHAR(50) DEFAULT 'public',
         status VARCHAR(50) DEFAULT 'published',
         allow_comments BOOLEAN DEFAULT TRUE,
-        liked_by LONGTEXT DEFAULT '[]',
-        saved_by LONGTEXT DEFAULT '[]',
+        liked_by LONGTEXT NULL,
+        saved_by LONGTEXT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_created_at (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     if (!$conn->query($sql)) {
         error_log('Failed to create announcements table: ' . $conn->error);
-        return false;
     }
     
     // Add columns if they don't exist
     $checkCols = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'announcements' AND COLUMN_NAME IN ('liked_by', 'saved_by', 'image_path', 'allow_comments')";
     $result = $conn->query($checkCols);
     $existingCols = [];
-    while ($row = $result->fetch_assoc()) {
-        $existingCols[] = $row['COLUMN_NAME'];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $existingCols[] = $row['COLUMN_NAME'];
+        }
     }
     
     if (!in_array('liked_by', $existingCols)) {
-        $conn->query("ALTER TABLE announcements ADD COLUMN liked_by LONGTEXT DEFAULT '[]'");
+        @$conn->query("ALTER TABLE announcements ADD COLUMN liked_by LONGTEXT NULL");
     }
     if (!in_array('saved_by', $existingCols)) {
-        $conn->query("ALTER TABLE announcements ADD COLUMN saved_by LONGTEXT DEFAULT '[]'");
+        @$conn->query("ALTER TABLE announcements ADD COLUMN saved_by LONGTEXT NULL");
     }
     if (!in_array('image_path', $existingCols)) {
         $conn->query("ALTER TABLE announcements ADD COLUMN image_path VARCHAR(255)");

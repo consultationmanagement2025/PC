@@ -180,7 +180,7 @@
 
             min-width: 0;
 
-            flex: 1;
+            flex: 0 0 auto;
 
         }
 
@@ -700,7 +700,9 @@
 
         .hero a {
 
-            display: inline-block;
+            display: inline-flex;
+
+            align-items: center;
 
         }
 
@@ -815,85 +817,160 @@
 
 
 <!-- HEADER -->
-
-<header>
-
-    <div class="logo-section">
-
-        <img src="images/logo.webp" alt="Logo">
-
-        <div>
-
-            <h1 class="text-lg font-bold text-red-900 leading-tight">Public Consultation</h1>
-
-            <p class="text-xs text-gray-600">Valenzuela City Government</p>
-
+<header class="glass sticky top-0 z-50 px-6 py-4 border-b border-gray-200/80 shadow-xs flex items-center justify-between gap-4">
+    <div class="logo-section flex items-center gap-3">
+        <div class="w-11 h-11 rounded-full border-2 border-red-100 shadow-xs flex items-center justify-center overflow-hidden bg-white shrink-0">
+            <img src="images/logo.webp" alt="Valenzuela Logo" class="w-full h-full object-cover">
         </div>
-
+        <div>
+            <h1 class="text-base font-black text-red-950 leading-snug flex items-center gap-1.5">
+                <span>VALENZUELA</span> <span class="text-red-600">PCMS</span>
+            </h1>
+            <p class="text-[11px] text-slate-500 font-medium">City Legislative Public Consultations</p>
+        </div>
     </div>
 
-
-
-    <nav>
-
-        <a href="#" class="active">HOME</a>
-
-        <a href="#about">ABOUT</a> <!-- smooth scroll -->
-
+    <nav class="hidden md:flex flex-1 justify-center items-center gap-8 text-xs font-extrabold text-slate-700 uppercase tracking-wider">
+        <a href="#" class="active text-red-700 border-b-2 border-red-700 pb-1">HOME</a>
+        <a href="#offerings" class="hover:text-red-700 transition-colors pb-1">WHAT WE OFFER</a>
+        <a href="#about" class="hover:text-red-700 transition-colors pb-1">ABOUT</a>
     </nav>
 
-
-
-    <div class="header-buttons">
-
-        <a href="public/index.php"><button class="signup-btn">PARTICIPATE</button></a>
-
+    <div class="header-buttons flex items-center gap-2">
+        <a href="public/google-auth.php" class="inline-flex flex-row items-center gap-2.5 bg-gradient-to-r from-red-700 to-red-900 hover:from-red-800 hover:to-black text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-md transition-all hover:scale-105 whitespace-nowrap">
+            <div class="w-4 h-4 rounded-full bg-white p-0.5 flex items-center justify-center shrink-0">
+                <svg class="w-full h-full" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.3 7.31 24 12 24z"/>
+                    <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.17 0 9.99 0 12s.46 3.83 1.26 5.42l4.02-3.15z"/>
+                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                </svg>
+            </div>
+            <span>PARTICIPATE NOW</span>
+        </a>
     </div>
-
 </header>
 
-
-
 <!-- HERO SECTION -->
+<section class="hero full-screen relative overflow-hidden">
+    <div class="hero-content fade-in backdrop-blur-md bg-slate-950/75 p-8 sm:p-12 rounded-3xl border border-white/20 shadow-2xl max-w-2xl">
+        <span class="px-3.5 py-1 rounded-full bg-red-600/30 text-red-200 text-xs font-extrabold uppercase tracking-wider border border-red-500/40 inline-block mb-3">
+            <i class="bi bi-bank2 mr-1"></i> Valenzuela City Legislative Office
+        </span>
 
-<section class="hero full-screen">
+        <h2 class="text-4xl sm:text-5xl font-black text-white leading-tight mb-3">
+            Tayo na, Valenzuela!
+        </h2>
 
-    <div class="hero-content fade-in">
-
-        <h2 style="font-size: clamp(1.5rem, 8vw, 3rem); margin-bottom: 1rem;">Tayo na, Valenzuela!</h2>
-
-        <p style="font-size: clamp(0.95rem, 2.5vw, 1rem); margin-bottom: 1rem;">Shape the Future of Legislation Through Public Participation</p>
-
-
-
-        <p class="opacity-90 leading-relaxed">
-
-            Digital na Konsultasyon tungo sa Mas Bukas na Pamamahala, kung saan ang Boses ng Valenzuelano ang Gabay ng Pamahalaan.
-
+        <p class="text-lg sm:text-xl font-bold text-red-200 mb-3">
+            Shape the Future of Legislation Through Public Participation
         </p>
 
+        <p class="text-xs sm:text-sm text-slate-200 leading-relaxed opacity-95 mb-6">
+            Digital na Konsultasyon tungo sa Mas Bukas na Pamamahala, kung saan ang Boses ng Valenzuelano ang Gabay ng Pamahalaan.
+        </p>
 
-
-        <div class="hero-button-wrap">
-
-            <a href="public/index.php" class="hero-button">
-
-                PARTICIPATE NOW
-
+        <div class="flex items-center">
+            <a href="public/google-auth.php" class="inline-flex flex-row items-center gap-3 bg-gradient-to-r from-red-600 to-red-800 hover:from-red-700 hover:to-red-950 text-white font-extrabold text-xs sm:text-sm px-6 py-3.5 rounded-2xl shadow-xl transition-all hover:scale-105 border border-red-500/30 whitespace-nowrap">
+                <div class="w-6 h-6 rounded-full bg-white p-1 flex items-center justify-center shrink-0">
+                    <svg class="w-full h-full" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.3 7.31 24 12 24z"/>
+                        <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.17 0 9.99 0 12s.46 3.83 1.26 5.42l4.02-3.15z"/>
+                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                    </svg>
+                </div>
+                <span>PARTICIPATE NOW</span>
             </a>
+        </div>
+    </div>
+</section>
 
+<!-- WHAT PCMS OFFERS SECTION -->
+<section id="offerings" class="py-16 px-4 md:px-8 bg-slate-900 text-white relative overflow-hidden">
+    <div class="max-w-6xl mx-auto">
+        <div class="text-center max-w-3xl mx-auto mb-12">
+            <span class="text-xs font-extrabold text-red-400 uppercase tracking-widest bg-red-950/60 border border-red-800/60 px-3.5 py-1.5 rounded-full inline-block mb-3">
+                <i class="bi bi-stars text-amber-400 mr-1.5"></i> Platform Capabilities
+            </span>
+            <h3 class="text-2xl sm:text-4xl font-black text-white tracking-tight">
+                What the PCMS Portal Offers to Citizens
+            </h3>
+            <p class="text-slate-300 text-xs sm:text-sm mt-2 leading-relaxed">
+                Empowering Valenzuela residents with direct legislative access, real-time tracking, and open municipal consultations.
+            </p>
         </div>
 
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Offering 1: Active Consultations -->
+            <div class="bg-slate-800/80 rounded-2xl p-6 border border-slate-700 shadow-lg hover:border-red-500/50 transition-all duration-300 flex flex-col justify-between group">
+                <div>
+                    <div class="w-12 h-12 rounded-xl bg-red-600 text-white flex items-center justify-center text-xl shadow-md mb-4 group-hover:scale-110 transition-transform">
+                        <i class="bi bi-chat-left-text-fill"></i>
+                    </div>
+                    <h4 class="text-base font-bold text-white mb-2">Ordinance Consultations</h4>
+                    <p class="text-slate-300 text-xs leading-relaxed">
+                        Review draft city ordinances, submit written testimonies, rate policy impact with 5-star feedback, and review official committee responses.
+                    </p>
+                </div>
+                <div class="pt-4 mt-4 border-t border-slate-700/80 flex items-center justify-between text-[11px] font-bold text-red-400">
+                    <span>Direct Feedback</span>
+                    <i class="bi bi-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                </div>
+            </div>
+
+            <!-- Offering 2: 1-Click Community Surveys -->
+            <div class="bg-slate-800/80 rounded-2xl p-6 border border-slate-700 shadow-lg hover:border-purple-500/50 transition-all duration-300 flex flex-col justify-between group">
+                <div>
+                    <div class="w-12 h-12 rounded-xl bg-purple-600 text-white flex items-center justify-center text-xl shadow-md mb-4 group-hover:scale-110 transition-transform">
+                        <i class="bi bi-square-poll-fill"></i>
+                    </div>
+                    <h4 class="text-base font-bold text-white mb-2">1-Click Opinion Polls</h4>
+                    <p class="text-slate-300 text-xs leading-relaxed">
+                        Cast your vote instantly on community survey initiatives (*Agree vs. Disagree*) and inspect live public sentiment and vote tallies across Valenzuela.
+                    </p>
+                </div>
+                <div class="pt-4 mt-4 border-t border-slate-700/80 flex items-center justify-between text-[11px] font-bold text-purple-400">
+                    <span>Live Poll Tally</span>
+                    <i class="bi bi-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                </div>
+            </div>
+
+            <!-- Offering 3: Submit Citizen Proposals -->
+            <div class="bg-slate-800/80 rounded-2xl p-6 border border-slate-700 shadow-lg hover:border-emerald-500/50 transition-all duration-300 flex flex-col justify-between group">
+                <div>
+                    <div class="w-12 h-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-xl shadow-md mb-4 group-hover:scale-110 transition-transform">
+                        <i class="bi bi-send-fill"></i>
+                    </div>
+                    <h4 class="text-base font-bold text-white mb-2">Citizen Proposals</h4>
+                    <p class="text-slate-300 text-xs leading-relaxed">
+                        Have a policy idea for your barangay or district? Submit your proposal directly to the City Council for official moderation and public launching.
+                    </p>
+                </div>
+                <div class="pt-4 mt-4 border-t border-slate-700/80 flex items-center justify-between text-[11px] font-bold text-emerald-400">
+                    <span>Submit Policy Idea</span>
+                    <i class="bi bi-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                </div>
+            </div>
+
+            <!-- Offering 4: Track Status & History -->
+            <div class="bg-slate-800/80 rounded-2xl p-6 border border-slate-700 shadow-lg hover:border-amber-500/50 transition-all duration-300 flex flex-col justify-between group">
+                <div>
+                    <div class="w-12 h-12 rounded-xl bg-amber-600 text-white flex items-center justify-center text-xl shadow-md mb-4 group-hover:scale-110 transition-transform">
+                        <i class="bi bi-qr-code-scan"></i>
+                    </div>
+                    <h4 class="text-base font-bold text-white mb-2">Transparent Tracking</h4>
+                    <p class="text-slate-300 text-xs leading-relaxed">
+                        Track the status of your submitted concerns in real-time with unique tracking tokens and review your full participation history.
+                    </p>
+                </div>
+                <div class="pt-4 mt-4 border-t border-slate-700/80 flex items-center justify-between text-[11px] font-bold text-amber-400">
+                    <span>Real-Time Updates</span>
+                    <i class="bi bi-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                </div>
+            </div>
+        </div>
     </div>
-
-
-
-    <div class="hero-illustration fade-in-delay">
-
-        <img src="images/val.jpg" class="illustration-img" alt="Valenzuela">
-
-    </div>
-
 </section>
 
 
@@ -904,406 +981,124 @@
 
     <div class="max-w-6xl mx-auto">
 
-        <!-- Header -->
-
-        <div class="text-center mb-8 md:mb-16">
-
-            <div style="display: inline-block; background: #fee2e2; padding: 0.5rem 1rem; border-radius: 6px; margin-bottom: 1rem;">
-
-                <p style="color: #991b1b; font-weight: 700; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px; margin: 0;">About Our Platform</p>
-
+        <!-- Section Header -->
+        <div class="text-center max-w-2xl mx-auto mb-10">
+            <span class="text-xs font-extrabold text-red-600 uppercase tracking-widest bg-red-50 border border-red-200 px-3.5 py-1.5 rounded-full inline-block mb-3">
+                <i class="bi bi-info-circle-fill text-red-600 mr-1"></i> About Our Platform
+            </span>
+            <h2 class="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">About the Public Consultation Portal</h2>
+            <p class="text-slate-500 text-xs sm:text-sm mt-2">Empowering Valenzuelanos to shape the future of local ordinances through transparent digital participation.</p>
+        </div>
+        <!-- Main Description Card -->
+        <div class="bg-gradient-to-r from-red-950 via-slate-900 to-blue-950 p-8 sm:p-10 rounded-3xl text-white shadow-2xl border border-white/10 relative overflow-hidden mb-12 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div class="z-10 max-w-2xl">
+                <span class="px-3 py-1 rounded-full bg-red-600/30 text-red-200 text-xs font-extrabold uppercase tracking-wider border border-red-500/40 inline-block mb-3">
+                    <i class="bi bi-bank2 mr-1"></i> Civic Governance Mission
+                </span>
+                <h3 class="text-2xl sm:text-3xl font-black text-white mb-2">Empowering Every Valenzuelano</h3>
+                <p class="text-slate-300 text-xs sm:text-sm leading-relaxed">
+                    The Public Consultation Portal is the official digital platform of the Valenzuela City Government. It promotes transparency, inclusion, and data-driven governance by allowing every resident to participate in shaping local legislation anytime, anywhere.
+                </p>
             </div>
-
-            <h2 style="font-size: clamp(1.5rem, 6vw, 2.5rem); font-weight: 800; color: #1f2937; margin-bottom: 1rem; line-height: 1.2;">About the Public Consultation Portal</h2>
-
-            <div style="height: 4px; width: 60px; background: linear-gradient(90deg, #991b1b, #7f1d1d); margin: 1.5rem auto; border-radius: 2px;"></div>
-
-            <p style="font-size: clamp(0.95rem, 2vw, 1.1rem); color: #4b5563; max-width: 48rem; margin-left: auto; margin-right: auto; padding: 0 0.5rem; line-height: 1.7;">
-
-                Empowering Valenzuelanos to shape the future through meaningful participation in governance
-
-            </p>
-
+            <div class="z-10 shrink-0 grid grid-cols-2 gap-3 text-xs font-bold text-slate-200">
+                <div class="p-3 bg-white/10 rounded-xl backdrop-blur-xs flex items-center gap-2 border border-white/15">
+                    <i class="bi bi-check-circle-fill text-emerald-400"></i> Transparent Governance
+                </div>
+                <div class="p-3 bg-white/10 rounded-xl backdrop-blur-xs flex items-center gap-2 border border-white/15">
+                    <i class="bi bi-check-circle-fill text-emerald-400"></i> Inclusive Participation
+                </div>
+                <div class="p-3 bg-white/10 rounded-xl backdrop-blur-xs flex items-center gap-2 border border-white/15">
+                    <i class="bi bi-check-circle-fill text-emerald-400"></i> Data-Driven Decisions
+                </div>
+                <div class="p-3 bg-white/10 rounded-xl backdrop-blur-xs flex items-center gap-2 border border-white/15">
+                    <i class="bi bi-check-circle-fill text-emerald-400"></i> Real-Time Engagement
+                </div>
+            </div>
         </div>
 
-
-
-        <!-- Main Description Grid -->
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 3rem; align-items: center;">
-
-            <div>
-
-                <h3 style="font-size: clamp(1.1rem, 3vw, 1.3rem); font-weight: 800; color: #1f2937; margin-bottom: 1.5rem;">What We Do</h3>
-
-                <p style="color: #374151; line-height: 1.8; margin-bottom: 1.5rem; font-size: clamp(0.9rem, 2vw, 1rem);">
-
-                    The Public Consultation Portal is the official digital platform of the Valenzuela City Government designed to gather citizen insights, preferences, and concerns on proposed ordinances, programs, and local policies.
-
-                </p>
-
-                <ul style="color: #374151; line-height: 1.8; font-size: clamp(0.85rem, 2vw, 0.95rem); margin: 0; padding: 0; list-style: none;">
-
-                    <li style="padding: 0.5rem 0;"><i class="bi bi-check-circle-fill" style="color: #991b1b; margin-right: 0.75rem;"></i>Transparent governance</li>
-
-                    <li style="padding: 0.5rem 0;"><i class="bi bi-check-circle-fill" style="color: #991b1b; margin-right: 0.75rem;"></i>Inclusive participation</li>
-
-                    <li style="padding: 0.5rem 0;"><i class="bi bi-check-circle-fill" style="color: #991b1b; margin-right: 0.75rem;"></i>Data-driven decision making</li>
-
-                    <li style="padding: 0.5rem 0;"><i class="bi bi-check-circle-fill" style="color: #991b1b; margin-right: 0.75rem;"></i>Real-time engagement</li>
-
-                </ul>
-
+        <!-- Redesigned Privacy & Security Section -->
+        <div id="security-privacy" class="pt-6 border-t border-slate-200">
+            <div class="text-center max-w-2xl mx-auto mb-10">
+                <span class="text-xs font-extrabold text-emerald-700 uppercase tracking-widest bg-emerald-50 border border-emerald-200 px-3.5 py-1.5 rounded-full inline-block mb-3">
+                    <i class="bi bi-shield-check text-emerald-600 mr-1"></i> Data Privacy Act Compliant
+                </span>
+                <h3 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Your Privacy & Data Security</h3>
+                <p class="text-slate-500 text-xs sm:text-sm mt-1">We protect your citizen data with enterprise encryption standards and strict compliance with Republic Act 10173.</p>
             </div>
 
-            <div style="background: linear-gradient(135deg, rgba(153, 27, 27, 0.08), rgba(127, 29, 29, 0.08)); padding: 2.5rem; border-radius: 12px; border-left: 5px solid #991b1b;">
-
-                <p style="color: #374151; line-height: 1.8; margin-bottom: 1rem; font-size: clamp(0.9rem, 2vw, 1rem);">
-
-                    It promotes transparency, inclusion, and data-driven governance by allowing every Valenzuelano to participate in shaping legislation anytime, anywhere.
-
-                </p>
-
-                <p style="color: #374151; line-height: 1.8; font-size: clamp(0.9rem, 2vw, 1rem); margin: 0;">
-
-                    Our platform strengthens collaboration between the government and its people through secure and modern digital participation.
-
-                </p>
-
-            </div>
-
-        </div>
-
-
-
-        <!-- Features Grid -->
-
-        <div class="mb-8 md:mb-16">
-
-            <h3 style="font-size: clamp(1.25rem, 5vw, 1.5rem); font-weight: 800; color: #1f2937; margin-bottom: 2rem; text-align: center;">Key Features</h3>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-
-                <div class="feature-card" style="background: linear-gradient(135deg, #fef2f2, #fee2e2); border: 1px solid #fecaca; border-left: 4px solid #dc2626;">
-
-                    <div class="feature-icon" style="background: #dc2626;">
-
-                        <i class="bi bi-megaphone-fill"></i>
-
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Security Card 1 -->
+                <div class="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 card-hover flex flex-col justify-between group">
+                    <div>
+                        <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 border border-blue-200 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
+                            <i class="bi bi-shield-lock-fill"></i>
+                        </div>
+                        <h4 class="text-base font-extrabold text-slate-900 mb-1.5">Secure Encrypted Connection</h4>
+                        <p class="text-slate-600 text-xs leading-relaxed">All citizen interactions are transmitted using end-to-end HTTPS / TLS 1.3 256-bit SSL encryption.</p>
                     </div>
-
-                    <h4>Public Consultations</h4>
-
-                    <p>Browse and participate in active government consultations on policies and programs</p>
-
+                    <span class="text-[10px] font-bold text-blue-700 uppercase tracking-wider mt-4 block">TLS 1.3 Encrypted</span>
                 </div>
 
-
-
-                <div class="feature-card" style="background: linear-gradient(135deg, #ecfdf5, #d1fae5); border: 1px solid #bbf7d0; border-left: 4px solid #059669;">
-
-                    <div class="feature-icon" style="background: #059669;">
-
-                        <i class="bi bi-chat-dots-fill"></i>
-
+                <!-- Security Card 2 -->
+                <div class="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 card-hover flex flex-col justify-between group">
+                    <div>
+                        <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
+                            <i class="bi bi-shield-check"></i>
+                        </div>
+                        <h4 class="text-base font-extrabold text-slate-900 mb-1.5">RA 10173 Data Privacy</h4>
+                        <p class="text-slate-600 text-xs leading-relaxed">Fully compliant with the Data Privacy Act of 2012, protecting citizen rights and personal identifiers.</p>
                     </div>
-
-                    <h4>Submit Feedback</h4>
-
-                    <p>Share your thoughts, suggestions, and concerns directly with city officials</p>
-
+                    <span class="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mt-4 block">RA 10173 Compliant</span>
                 </div>
 
-
-
-                <div class="feature-card" style="background: linear-gradient(135deg, #eff6ff, #dbeafe); border: 1px solid #bfdbfe; border-left: 4px solid #2563eb;">
-
-                    <div class="feature-icon" style="background: #2563eb;">
-
-                        <i class="bi bi-robot"></i>
-
+                <!-- Security Card 3 -->
+                <div class="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 card-hover flex flex-col justify-between group">
+                    <div>
+                        <div class="w-12 h-12 rounded-2xl bg-purple-50 text-purple-700 border border-purple-200 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
+                            <i class="bi bi-lock-fill"></i>
+                        </div>
+                        <h4 class="text-base font-extrabold text-slate-900 mb-1.5">Protected Information</h4>
+                        <p class="text-slate-600 text-xs leading-relaxed">Personal records and email addresses are securely isolated from public view and third-party trackers.</p>
                     </div>
-
-                    <h4>AI Assistant</h4>
-
-                    <p>Need help? Click the chat icon to ask our AI assistant anything</p>
-
+                    <span class="text-[10px] font-bold text-purple-700 uppercase tracking-wider mt-4 block">Isolated Storage</span>
                 </div>
 
-
-
-                <div class="feature-card" style="background: linear-gradient(135deg, #f5f3ff, #ede9fe); border: 1px solid #ddd6fe; border-left: 4px solid #7c3aed;">
-
-                    <div class="feature-icon" style="background: #7c3aed;">
-
-                        <i class="bi bi-shield-lock-fill"></i>
-
+                <!-- Security Card 4 -->
+                <div class="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 card-hover flex flex-col justify-between group">
+                    <div>
+                        <div class="w-12 h-12 rounded-2xl bg-red-50 text-red-700 border border-red-200 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
+                            <i class="bi bi-google"></i>
+                        </div>
+                        <h4 class="text-base font-extrabold text-slate-900 mb-1.5">Google OAuth SSO</h4>
+                        <p class="text-slate-600 text-xs leading-relaxed">1-click authentication powered by Google OAuth 2.0 without storing raw passwords in system databases.</p>
                     </div>
-
-                    <h4>Secure & Private</h4>
-
-                    <p>Your data is protected under Data Privacy Act with encryption</p>
-
+                    <span class="text-[10px] font-bold text-red-700 uppercase tracking-wider mt-4 block">OAuth 2.0 Verified</span>
                 </div>
 
+                <!-- Security Card 5 -->
+                <div class="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 card-hover flex flex-col justify-between group">
+                    <div>
+                        <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
+                            <i class="bi bi-eye-slash-fill"></i>
+                        </div>
+                        <h4 class="text-base font-extrabold text-slate-900 mb-1.5">Privacy Options</h4>
+                        <p class="text-slate-600 text-xs leading-relaxed">Flexible privacy options allowing feedback participation with full control over public identity disclosures.</p>
+                    </div>
+                    <span class="text-[10px] font-bold text-amber-700 uppercase tracking-wider mt-4 block">Citizen Control</span>
+                </div>
+
+                <!-- Security Card 6 -->
+                <div class="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 card-hover flex flex-col justify-between group">
+                    <div>
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
+                            <i class="bi bi-bank"></i>
+                        </div>
+                        <h4 class="text-base font-extrabold text-slate-900 mb-1.5">Open Governance</h4>
+                        <p class="text-slate-600 text-xs leading-relaxed">All verified policy feedback is directly integrated into City Council committee reports and public records.</p>
+                    </div>
+                    <span class="text-[10px] font-bold text-indigo-700 uppercase tracking-wider mt-4 block">Council Verified</span>
+                </div>
             </div>
-
-        </div>
-
-
-
-        <!-- Feature Card Styles -->
-
-        <style>
-
-            .feature-card {
-
-                padding: 2rem;
-
-                border-radius: 16px;
-
-                text-align: center;
-
-                transition: all 0.3s ease;
-
-                box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-
-                position: relative;
-
-                overflow: hidden;
-
-            }
-
-            .feature-card:hover {
-
-                transform: translateY(-4px);
-
-                box-shadow: 0 12px 24px rgba(0,0,0,0.12);
-
-            }
-
-            .feature-card::before {
-
-                content: '';
-
-                position: absolute;
-
-                top: 0;
-
-                left: 0;
-
-                right: 0;
-
-                height: 3px;
-
-                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-
-                animation: shimmer 2s infinite;
-
-            }
-
-            @keyframes shimmer {
-
-                0% { transform: translateX(-100%); }
-
-                100% { transform: translateX(100%); }
-
-            }
-
-            .feature-icon {
-
-                width: 64px;
-
-                height: 64px;
-
-                border-radius: 50%;
-
-                display: flex;
-
-                align-items: center;
-
-                justify-content: center;
-
-                margin: 0 auto 1.5rem;
-
-                color: white;
-
-                font-size: 1.5rem;
-
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-
-                transition: all 0.3s ease;
-
-            }
-
-            .feature-card:hover .feature-icon {
-
-                transform: scale(1.1) rotate(5deg);
-
-            }
-
-            .feature-card h4 {
-
-                font-size: 1.25rem;
-
-                font-weight: 800;
-
-                color: #1f2937;
-
-                margin-bottom: 0.75rem;
-
-                line-height: 1.2;
-
-            }
-
-            .feature-card p {
-
-                color: #4b5563;
-
-                font-size: 0.95rem;
-
-                line-height: 1.6;
-
-                margin: 0;
-
-            }
-
-            @media (max-width: 1024px) {
-
-                .feature-card { padding: 1.5rem; }
-
-                .feature-icon { 
-
-                    width: 56px; 
-
-                    height: 56px; 
-
-                    font-size: 1.25rem; 
-
-                    margin: 0 auto 1rem; 
-
-                }
-
-                .feature-card h4 { font-size: 1.1rem; }
-
-                .feature-card p { font-size: 0.9rem; }
-
-            }
-
-            @media (max-width: 768px) {
-
-                .feature-card { padding: 1.25rem; }
-
-                .feature-icon { 
-
-                    width: 48px; 
-
-                    height: 48px; 
-
-                    font-size: 1.1rem; 
-
-                    margin: 0 auto 0.75rem; 
-
-                }
-
-                .feature-card h4 { font-size: 1rem; }
-
-                .feature-card p { font-size: 0.85rem; }
-
-            }
-
-        </style>
-
-
-
-        
-
-        <!-- Security Features Section - User focused only -->
-
-        <div>
-
-            <div style="text-align: center; margin-bottom: 2rem;">
-
-                <h3 style="font-size: clamp(1.25rem, 5vw, 1.5rem); font-weight: 800; color: #1f2937; margin-bottom: 0.5rem;">Your Privacy & Security</h3>
-
-                <p style="color: #4b5563; font-size: clamp(0.9rem, 2vw, 1rem);">We protect your data with industry standards and comply with data protection laws</p>
-
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-
-                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-
-                    <i class="bi bi-shield-lock text-2xl md:text-3xl text-red-900 mb-3"></i>
-
-                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Secure Connection</h4>
-
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">All data transmitted using encrypted HTTPS/TLS connection</p>
-
-                </div>
-
-
-
-                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-
-                    <i class="bi bi-file-earmark-shield text-2xl md:text-3xl text-red-900 mb-3"></i>
-
-                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Data Privacy</h4>
-
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Compliance with Republic Act 10173 (Data Privacy Act of 2012)</p>
-
-                </div>
-
-
-
-                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-
-                    <i class="bi bi-lock text-2xl md:text-3xl text-red-900 mb-3"></i>
-
-                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Protected Information</h4>
-
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Your personal data is securely stored and protected from unauthorized access</p>
-
-                </div>
-
-
-
-                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-
-                    <i class="bi bi-envelope-check text-2xl md:text-3xl text-red-900 mb-3"></i>
-
-                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Verified Submissions</h4>
-
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Email verification ensures authentic and legitimate public participation</p>
-
-                </div>
-
-
-
-                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-
-                    <i class="bi bi-eye-slash text-2xl md:text-3xl text-red-900 mb-3"></i>
-
-                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Anonymous Options</h4>
-
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">Your feedback is valued regardless of optional personal details</p>
-
-                </div>
-
-
-
-                <div class="bg-white p-5 md:p-6 rounded-lg hover:shadow-lg transition duration-300 border-l-4 border-red-900" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-
-                    <i class="bi bi-info-circle text-2xl md:text-3xl text-red-900 mb-3"></i>
-
-                    <h4 style="font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; font-size: clamp(0.95rem, 2vw, 1rem);">Transparency</h4>
-
-                    <p style="color: #4b5563; font-size: clamp(0.85rem, 1.8vw, 0.875rem); margin: 0; line-height: 1.6;">We're committed to open and honest government engagement</p>
-
-                </div>
-
-            </div>
-
         </div>
 
 <div id="privacyModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

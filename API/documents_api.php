@@ -305,6 +305,44 @@ try {
             echo json_encode(['success' => (bool)$ok]);
             break;
 
+        case 'forward_lrs':
+            $data = jsonInput();
+            if (empty($data)) {
+                $data = $_POST;
+            }
+            $id = (int)($data['id'] ?? $data['document_id'] ?? 0);
+            $source = normalizeSource($data['source'] ?? 'consultation');
+            $description = trim((string)($data['description'] ?? ''));
+
+            if ($id <= 0) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Invalid document ID']);
+                exit;
+            }
+
+            if (function_exists('forwardDocumentToLRS')) {
+                $res = forwardDocumentToLRS($id, $source, $description);
+                echo json_encode($res);
+            } else {
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'LRS forward helper not loaded']);
+            }
+            break;
+
+        case 'list_versions':
+            initializeDocumentVersionsTable();
+            $ref = $_GET['reference'] ?? null;
+            $limit = (int)($_GET['limit'] ?? 200);
+            $offset = (int)($_GET['offset'] ?? 0);
+            $versions = getDocumentVersions($ref, $limit, $offset);
+            $versions = array_map(function($v) {
+                $v['download_url'] = 'download-document.php?version_id=' . (int)$v['id'];
+                return $v;
+            }, $versions);
+            echo json_encode(['success' => true, 'data' => $versions]);
+            break;
+
+
         default:
             http_response_code(400);
             echo json_encode(['success' => false, 'message' => 'Invalid action']);

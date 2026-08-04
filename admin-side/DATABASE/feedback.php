@@ -503,166 +503,186 @@ function getPhmsFeedbackQueue($filters = [], $limit = 50, $offset = 0) {
     return $items;
 }
 
-// Seed sample/live PHMS AI Feedback Summaries if empty
-function seedPhmsHearingQueueIfEmpty($forceReSeed = false) {
+/**
+/**
+ * Convert local hearing_queue table items into standard PHMS hearing response structure.
+ * Preserves last usable cached data when live PHMS service is unreachable.
+ */
+function getPhmsFeedbackQueueAsHearings($filters = [], $limit = 50, $offset = 0) {
+    global $conn;
+    initializeHearingQueueTable();
+    $items = getPhmsFeedbackQueue($filters, $limit, $offset);
+    $hearings = [];
+    foreach ($items as $row) {
+        $payload = [];
+        if (!empty($row['payload_json'])) {
+            $payload = is_string($row['payload_json']) ? json_decode($row['payload_json'], true) : $row['payload_json'];
+        }
+        if (!empty($payload['citizen_responses']) && is_array($payload['citizen_responses'])) {
+            $citizenResponses = $payload['citizen_responses'];
+        } else {
+            $citizenFeedback = isset($payload['citizen_feedback']) && is_array($payload['citizen_feedback']) ? $payload['citizen_feedback'] : [];
+            $citizenResponses = array_map(function($fb, $idx) {
+                return [
+                    'feedback_id' => $idx + 1,
+                    'citizen_name' => $fb['citizen_name'] ?? $fb['name'] ?? 'Anonymous Citizen',
+                    'rating' => (float)($fb['rating'] ?? 3.5),
+                    'tone' => $fb['tone'] ?? $fb['sentiment'] ?? 'Neutral',
+                    'testimony' => $fb['testimony'] ?? $fb['statement'] ?? '',
+                    'submitted_at' => $fb['submitted_at'] ?? $fb['date'] ?? date('Y-m-d'),
+                    'publication_status' => 'published'
+                ];
+            }, $citizenFeedback, array_keys($citizenFeedback));
+        }
+
+        $hearings[] = [
+            'hearing_id' => (int)($row['phms_hearing_id'] ?: $row['queue_id']),
+            'hearing_title' => $payload['hearing_title'] ?? $row['full_name'] ?? 'Public Hearing',
+            'hearing_status' => strtolower($payload['hearing_status'] ?? $row['status'] ?? 'completed'),
+            'hearing_date' => $payload['hearing_date'] ?? date('Y-m-d H:i:s', strtotime($row['created_at'] ?? 'now')),
+            'feedback_count' => (int)($payload['feedback_count'] ?? count($citizenResponses)),
+            'average_rating' => (float)($payload['avg_rating'] ?? $payload['average_rating'] ?? 3.5),
+            'published_count' => (int)($payload['published_count'] ?? count($citizenResponses)),
+            'pending_count' => (int)($payload['pending_count'] ?? 0),
+            'latest_feedback_at' => $payload['latest_feedback_at'] ?? $row['updated_at'] ?? date('Y-m-d H:i:s'),
+            'citizen_responses' => $citizenResponses
+        ];
+    }
+    return $hearings;
+}
+
+/**
+ * Synchronizes local hearing_queue table with the returned PHMS hearings collection snapshot.
+ * Replaces stale PCMS PHMS records using a database transaction.
+ */
+function syncPhmsCollectionToDatabase(array $hearings) {
     global $conn;
     initializeHearingQueueTable();
 
-    $cntRes = $conn->query("SELECT COUNT(*) AS cnt FROM hearing_queue");
-    $cntRow = $cntRes ? $cntRes->fetch_assoc() : null;
-    $cnt = isset($cntRow['cnt']) ? (int)$cntRow['cnt'] : 0;
+    $returnedHearingIds = [];
 
-    if ($cnt > 0 && !$forceReSeed) {
-        return false;
-    }
+    $conn->begin_transaction();
+    try {
+        $stmt = $conn->prepare("INSERT INTO hearing_queue 
+            (phms_hearing_id, phms_registration_id, full_name, email, status, external_ref, source_system, consultation_id, payload_json) 
+            VALUES (?, ?, ?, ?, ?, ?, 'PHMS', ?, ?) 
+            ON DUPLICATE KEY UPDATE 
+                full_name = VALUES(full_name), 
+                email = VALUES(email), 
+                status = VALUES(status), 
+                external_ref = VALUES(external_ref), 
+                payload_json = VALUES(payload_json), 
+                created_at = CURRENT_TIMESTAMP");
 
-    if ($forceReSeed) {
-        $conn->query("TRUNCATE TABLE hearing_queue");
-    }
+        foreach ($hearings as $h) {
+            $hearingId = (int)($h['hearing_id'] ?? $h['id'] ?? 0);
+            if ($hearingId <= 0) continue;
 
-    $consultationId = 1;
-    $cRes = $conn->query("SELECT id FROM consultations ORDER BY id ASC LIMIT 1");
-    if ($cRes && $cRow = $cRes->fetch_assoc()) {
-        $consultationId = (int)$cRow['id'];
-    }
+            $returnedHearingIds[] = $hearingId;
 
-    $phmsRecords = [
-        [
-            'phms_hearing_id' => 201,
-            'phms_registration_id' => 5001,
-            'full_name' => 'Consultation on Drainage Upgrades for Flood Control',
-            'email' => 'phms-summary@valenzuela.gov.ph',
-            'status' => 'completed',
-            'external_ref' => 'PHMS-AI-SUMMARY-201',
-            'source_system' => 'PHMS AI Feedback Summary',
-            'consultation_id' => $consultationId,
-            'payload_json' => json_encode([
-                'hearing_title' => 'Consultation on Drainage Upgrades for Flood Control',
-                'hearing_date' => 'Jul 27, 2026',
-                'hearing_status' => 'COMPLETED',
-                'feedback_count' => 3,
-                'avg_rating' => 3.3,
-                'ai_summary_status' => 'Generated',
-                'ai_summary_date' => 'Jul 27, 2026',
-                'ai_summary_text' => 'Citizen feedback highlights urgent concerns regarding drainage desilting prior to the monsoon season in Lowland Barangays (Poblacion & Polo). 66% of respondents support immediate canal widening, while 34% request alternative traffic rerouting plans during construction.',
-                'citizen_feedback' => [
-                    [
-                        'name' => 'Engr. Marcus Villar',
-                        'rating' => 4.0,
-                        'sentiment' => 'Positive',
-                        'date' => 'Jul 27, 2026',
-                        'statement' => 'The proposed culvert expansion along MacArthur Highway will significantly reduce gutter-deep flooding during heavy rainfall.'
-                    ],
-                    [
-                        'name' => 'Teresa Gonzaga',
-                        'rating' => 3.0,
-                        'sentiment' => 'Neutral',
-                        'date' => 'Jul 27, 2026',
-                        'statement' => 'Please ensure weekend construction schedules so local jeepney routes in Polo are not blocked during morning rush hours.'
-                    ],
-                    [
-                        'name' => 'Danilo Reyes',
-                        'rating' => 3.0,
-                        'sentiment' => 'Negative',
-                        'date' => 'Jul 27, 2026',
-                        'statement' => 'Canal dredging in Barangay Arkong Bato has been delayed twice. We need clear timelines for completion.'
-                    ]
-                ]
-            ])
-        ],
-        [
-            'phms_hearing_id' => 202,
-            'phms_registration_id' => 5002,
-            'full_name' => 'Public Hearing on Barangay Health Center Modernization & 24/7 Response',
-            'email' => 'phms-summary@valenzuela.gov.ph',
-            'status' => 'completed',
-            'external_ref' => 'PHMS-AI-SUMMARY-202',
-            'source_system' => 'PHMS AI Feedback Summary',
-            'consultation_id' => $consultationId,
-            'payload_json' => json_encode([
-                'hearing_title' => 'Public Hearing on Barangay Health Center Modernization & 24/7 Response',
-                'hearing_date' => 'Jul 29, 2026',
-                'hearing_status' => 'COMPLETED',
-                'feedback_count' => 5,
-                'avg_rating' => 4.5,
-                'ai_summary_status' => 'Generated',
-                'ai_summary_date' => 'Jul 29, 2026',
-                'ai_summary_text' => 'Strong public consensus (90%) in favor of 24/7 emergency response staffing at Barangay health units. Citizens emphasize restocking essential maintenance medicines for senior citizens.',
-                'citizen_feedback' => [
-                    [
-                        'name' => 'Elena Ramos',
-                        'rating' => 5.0,
-                        'sentiment' => 'Positive',
-                        'date' => 'Jul 29, 2026',
-                        'statement' => 'Submitting petition for 24/7 emergency response medical staff at Gen T. de Leon health unit.'
-                    ],
-                    [
-                        'name' => 'Dr. Aris Thorne',
-                        'rating' => 4.0,
-                        'sentiment' => 'Positive',
-                        'date' => 'Jul 29, 2026',
-                        'statement' => 'Health unit upgrades will shorten patient triage waiting times significantly.'
-                    ]
-                ]
-            ])
-        ],
-        [
-            'phms_hearing_id' => 203,
-            'phms_registration_id' => 5003,
-            'full_name' => 'Public Hearing on Environmental Waste Segregation Enforcement Ordinance',
-            'email' => 'phms-summary@valenzuela.gov.ph',
-            'status' => 'active',
-            'external_ref' => 'PHMS-AI-SUMMARY-203',
-            'source_system' => 'PHMS AI Feedback Summary',
-            'consultation_id' => $consultationId,
-            'payload_json' => json_encode([
-                'hearing_title' => 'Public Hearing on Environmental Waste Segregation Enforcement Ordinance',
-                'hearing_date' => 'Jul 30, 2026',
-                'hearing_status' => 'ACTIVE',
-                'feedback_count' => 4,
-                'avg_rating' => 4.1,
-                'ai_summary_status' => 'Generated',
-                'ai_summary_date' => 'Jul 30, 2026',
-                'ai_summary_text' => 'Commercial stall owners in public markets support color-coded waste bin enforcement. Requests submitted for Barangay-level Material Recovery Facilities (MRF).',
-                'citizen_feedback' => [
-                    [
-                        'name' => 'Juan Carlos Dela Cruz',
-                        'rating' => 4.0,
-                        'sentiment' => 'Positive',
-                        'date' => 'Jul 30, 2026',
-                        'statement' => 'Strongly support waste segregation rule for commercial vendors in Malinta market, provided color-coded bins are supplied.'
-                    ]
-                ]
-            ])
-        ]
-    ];
+            $regId = (int)($h['phms_registration_id'] ?? $h['registration_id'] ?? 5000 + $hearingId);
+            $fullName = $h['hearing_title'] ?? $h['title'] ?? $h['full_name'] ?? ('Public Hearing #' . $hearingId);
+            $email = $h['email'] ?? 'phms-integration@valenzuela.gov.ph';
+            $status = strtolower($h['hearing_status'] ?? $h['status'] ?? 'completed');
+            $extRef = $h['external_ref'] ?? ('PHMS-HEARING-' . $hearingId);
+            $consultationId = (int)($h['consultation_id'] ?? 1);
+            $payloadJson = json_encode($h);
 
-    $stmt = $conn->prepare("INSERT INTO hearing_queue (phms_hearing_id, phms_registration_id, full_name, email, status, external_ref, source_system, consultation_id, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    if ($stmt) {
-        foreach ($phmsRecords as $rec) {
-            $stmt->bind_param(
-                "iisssssis",
-                $rec['phms_hearing_id'],
-                $rec['phms_registration_id'],
-                $rec['full_name'],
-                $rec['email'],
-                $rec['status'],
-                $rec['external_ref'],
-                $rec['source_system'],
-                $rec['consultation_id'],
-                $rec['payload_json']
-            );
-            $stmt->execute();
-        if (file_exists(__DIR__ . '/notifications.php')) {
-            require_once __DIR__ . '/notifications.php';
-            foreach ($phmsRecords as $rec) {
-                createNotification(0, "🔗 External System Data Received (PHMS): New AI Feedback Summary & citizen responses ingested for \"{$rec['full_name']}\".", "phms_integration");
+            if ($stmt) {
+                $stmt->bind_param("iissssis", $hearingId, $regId, $fullName, $email, $status, $extRef, $consultationId, $payloadJson);
+                $stmt->execute();
             }
         }
-        $stmt->close();
+        // Add system notification for received PHMS hearing feedback records
+        require_once __DIR__ . '/notifications.php';
+        foreach ($hearings as $h) {
+            $hearingId = (int)($h['hearing_id'] ?? $h['id'] ?? 0);
+            if ($hearingId <= 0) continue;
+            $title = $conn->real_escape_string($h['hearing_title'] ?? $h['title'] ?? $h['full_name'] ?? ('Public Hearing #' . $hearingId));
+            $fbCount = (int)($h['feedback_count'] ?? 0);
+            $msg = "🔗 PHMS Feedback Received: Ingested {$fbCount} citizen hearing feedback response(s) for \"{$title}\".";
+            
+            $chkRes = $conn->query("SELECT id FROM notifications WHERE message LIKE '%" . substr($title, 0, 30) . "%' AND created_at >= CURDATE() LIMIT 1");
+            if (!$chkRes || $chkRes->num_rows === 0) {
+                createNotification(0, $msg, 'phms_integration');
+            }
+        }
+
+        $conn->commit();
         return true;
+    } catch (Throwable $e) {
+        $conn->rollback();
+        error_log("Failed to sync PHMS hearings transaction: " . $e->getMessage());
+        return false;
     }
-    return false;
+}
+
+/**
+ * Server-side cURL helper to fetch Citizen Feedback from PHMS API integration.
+ * Reads PHMS_BASE_URL and PCMS_INTEGRATION_TOKEN from config/environment.
+ * Token is NEVER exposed to browser JS or client-side code.
+ */
+function fetchPhmsFeedbackFromApi($hearingId = null, $limit = 50, $offset = 0) {
+    if (!defined('PHMS_BASE_URL')) {
+        $baseUrl = function_exists('app_env') ? app_env('PHMS_BASE_URL', app_env('PHMS_URL', 'https://phms.spvalenzuela.com')) : (getenv('PHMS_BASE_URL') ?: 'https://phms.spvalenzuela.com');
+    } else {
+        $baseUrl = PHMS_BASE_URL;
+    }
+
+    if (!defined('PCMS_INTEGRATION_TOKEN')) {
+        $token = function_exists('app_env') 
+            ? app_env('PCMS_INTEGRATION_TOKEN', app_env('LGU2_PHMS_TOKEN', 'phms_live_2d6f8a4c1e9057b3a9c5e7f2b4d80156')) 
+            : (getenv('PCMS_INTEGRATION_TOKEN') ?: (getenv('LGU2_PHMS_TOKEN') ?: 'phms_live_2d6f8a4c1e9057b3a9c5e7f2b4d80156'));
+    } else {
+        $token = PCMS_INTEGRATION_TOKEN;
+    }
+
+    $baseUrl = rtrim($baseUrl, '/');
+    if ($hearingId !== null && $hearingId !== '') {
+        $url = $baseUrl . '/api/v1/feedback.php?hearing_id=' . urlencode($hearingId);
+    } else {
+        $limit = max(1, (int)$limit);
+        $offset = max(0, (int)$offset);
+        $url = $baseUrl . '/api/v1/feedback.php?limit=' . $limit . '&offset=' . $offset;
+    }
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . $token,
+        'Accept: application/json'
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    // If live API succeeds (HTTP 200 and valid JSON)
+    if ($response !== false && empty($curlErr) && $httpCode === 200) {
+        $decoded = json_decode($response, true);
+        if (is_array($decoded) && !empty($decoded['success']) && isset($decoded['data'])) {
+            // When fetching full collection (no hearingId specified), synchronize DB transaction snapshot
+            if ($hearingId === null || $hearingId === '') {
+                $hearings = $decoded['data']['hearings'] ?? [];
+                syncPhmsCollectionToDatabase($hearings);
+            }
+            return $decoded;
+        }
+    }
+
+    // Return explicit failure if PHMS is unreachable or returns error
+    return [
+        'success' => false,
+        'message' => 'Unable to load PHMS feedback.',
+        'http_code' => $httpCode ?: 503,
+        'data' => null
+    ];
 }
 
 // Update status of a PHMS queue item

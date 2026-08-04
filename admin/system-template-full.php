@@ -1803,13 +1803,22 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
+    <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
     <script src="https://cdn.tailwindcss.com"></script>
 
-
+    <style>
+        body, button, input, select, textarea, table, th, td {
+            font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+    </style>
 
     <link rel="stylesheet" href="ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css">
-
-
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -2568,7 +2577,7 @@ $totalPages = ceil($totalLogs / $pageSize);
             </a>
             <?php endif; ?>
 
-            <a href="#" onclick="renderReportsSection()" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
+            <a href="#" onclick="showSection('reports')" class="nav-item flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1" data-section="reports">
                 <i class="bi bi-file-earmark-bar-graph mr-3 text-lg"></i>
                 <span>Reports</span>
             </a>
@@ -2891,7 +2900,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                     </a>
                     <?php endif; ?>
 
-                    <a href="#" onclick="renderReportsSection()" class="nav-item" data-section="reports">
+                    <a href="#" onclick="showSection('reports')" class="nav-item" data-section="reports">
                         <i class="bi bi-file-earmark-bar-graph"></i>
                         <span class="sidebar-text">Reports</span>
                     </a>
@@ -3268,34 +3277,14 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                                <div id="notifications-dropdown" class="hidden absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-80 flex flex-col" style="z-index: 9999 !important;">
-
-
-
-                                    <div class="p-3 border-b border-gray-200">
-
-
-
-                                        <h3 class="font-semibold text-gray-900 text-sm">Notifications</h3>
-
-
-
+                                <div id="notifications-dropdown" class="hidden absolute right-0 mt-2 w-80 md:w-[380px] bg-white rounded-2xl shadow-xl border border-gray-100 z-50 max-h-96 flex flex-col overflow-hidden transition-all duration-200" style="z-index: 9999 !important;">
+                                    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-white">
+                                        <h3 class="font-extrabold text-gray-900 text-sm md:text-base">Notifications</h3>
+                                        <button type="button" onclick="pfpMarkAllNotificationsRead()" class="text-xs font-bold text-red-600 hover:text-red-700 transition cursor-pointer">Mark all read</button>
                                     </div>
-
-
-
-                                    <div id="notifications-list" class="overflow-y-auto space-y-1 p-2" style="max-height: 240px;">
-
-
-
-                                        <div class="text-xs text-gray-500 text-center py-3">No notifications yet</div>
-
-
-
+                                    <div id="notifications-list" class="overflow-y-auto max-h-80 divide-y divide-gray-100">
+                                        <div class="p-6 text-center text-gray-400 text-xs font-medium">No notifications yet</div>
                                     </div>
-
-
-
                                 </div>
 
 
@@ -5029,7 +5018,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                            <!-- Four Section Tabs: Consultation, Feedback, Survey, Reports -->
+                            <!-- Five Section Tabs: Consultation, Feedback, Survey, Reports, Document Versions -->
                             <div class="flex flex-wrap gap-2 mt-6 border-b border-gray-200">
                                 <button onclick="filterDocumentsByGroup('consultation')" class="px-6 py-3 font-semibold text-sm border-b-2 border-red-600 text-red-600 hover:bg-red-50 doc-group-tab active" data-group="consultation">
                                     <i class="bi bi-chat-left-quote mr-2"></i>Consultation
@@ -5042,6 +5031,9 @@ $totalPages = ceil($totalLogs / $pageSize);
                                 </button>
                                 <button onclick="filterDocumentsByGroup('reports')" class="px-6 py-3 font-semibold text-sm border-b-2 border-gray-200 text-gray-600 hover:border-purple-600 hover:text-purple-600 transition doc-group-tab" data-group="reports">
                                     <i class="bi bi-file-earmark-text mr-2"></i>Reports
+                                </button>
+                                <button onclick="filterDocumentsByGroup('versions')" class="px-6 py-3 font-semibold text-sm border-b-2 border-gray-200 text-gray-600 hover:border-indigo-600 hover:text-indigo-600 transition doc-group-tab" data-group="versions">
+                                    <i class="bi bi-clock-history mr-2"></i>Document Versions
                                 </button>
                             </div>
 
@@ -6674,7 +6666,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-    <script src="app-features.js?v=<?php echo time(); ?>"></script>
+    <script src="app-features.js?v=<?php echo time(); ?>&nocache=<?php echo rand(1000, 9999); ?>"></script>
 
 
 
@@ -8857,6 +8849,52 @@ $totalPages = ceil($totalLogs / $pageSize);
     </script>
 
 
+
+<!-- Forward to LRS Modal -->
+<div id="forward-lrs-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden" style="display: none;">
+    <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 m-4 transform transition-all">
+        <div class="flex justify-between items-center pb-3 border-b border-gray-200">
+            <h3 class="text-lg font-bold text-red-800 flex items-center gap-2">
+                <i class="bi bi-send-fill text-red-600"></i> Forward Document to LRS
+            </h3>
+            <button onclick="closeForwardLRSModal()" class="text-gray-400 hover:text-gray-600 focus:outline-none">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="mt-4 space-y-4 text-sm">
+            <p class="text-gray-600">You are forwarding this official document to the <strong>Legislative Records System (LRS)</strong> via integration API.</p>
+            <form id="forward-lrs-form" onsubmit="submitForwardToLRS(event)">
+                <input type="hidden" id="lrs-doc-id" name="id">
+                <input type="hidden" id="lrs-doc-source" name="source">
+                
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Document Reference</label>
+                    <input type="text" id="lrs-doc-ref" readonly class="w-full px-3 py-2 border border-gray-300 rounded bg-gray-50 text-gray-700 font-mono text-xs">
+                </div>
+                <div class="mt-3">
+                    <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Document Title</label>
+                    <input type="text" id="lrs-doc-title" readonly class="w-full px-3 py-2 border border-gray-300 rounded bg-gray-50 text-gray-700 font-medium">
+                </div>
+                <div class="mt-3">
+                    <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Target Endpoint</label>
+                    <div class="text-xs bg-gray-100 text-gray-800 p-2 rounded border border-gray-200 font-mono break-all">
+                        POST https://llrm.spvalenzuela.com/modules/integration/api/receive_document.php
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Custom Notes / Description</label>
+                    <textarea id="lrs-doc-desc" name="description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-red-500 focus:border-red-500 text-sm" placeholder="Provide description or notes for LRS..."></textarea>
+                </div>
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" onclick="closeForwardLRSModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm hover:bg-gray-200">Cancel</button>
+                    <button type="submit" id="lrs-submit-btn" class="px-4 py-2 bg-red-700 text-white rounded-md text-sm font-semibold hover:bg-red-800 flex items-center gap-2">
+                        <i class="bi bi-send-fill"></i> Forward to LRS
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 </body>
 
