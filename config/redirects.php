@@ -11,8 +11,8 @@ define('PUBLIC_PORTAL', BASE_URL . '/public/index.php');
 define('LOGIN_PAGE', BASE_URL . '/login.php');
 define('PUBLIC_LOGIN', BASE_URL . '/public/sign-in.php');
 define('PUBLIC_SIGNUP', BASE_URL . '/public/sign-up.php');
-define('PENDING_APPROVAL', BASE_URL . '/scripts/pending_approval.php');
-define('RESOURCE_DASHBOARD', BASE_URL . '/scripts/resource_person_dashboard.php');
+define('PENDING_APPROVAL', BASE_URL . '/pending_approval.php');
+define('RESOURCE_DASHBOARD', BASE_URL . '/resource_person_dashboard.php');
 
 /**
  * Get redirect URL based on user role

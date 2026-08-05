@@ -123,6 +123,13 @@ define('DB_HOST', (string) app_env('DB_HOST', 'localhost'));
 define('DB_USER', (string) app_env('DB_USER', IS_LOCALHOST ? 'root' : 'cons_pc_db'));
 define('DB_PASS', (string) app_env('DB_PASS', IS_LOCALHOST ? '' : '%wE!*-vMg4GCbB#3'));
 define('DB_NAME', (string) app_env('DB_NAME', IS_LOCALHOST ? 'pc_db' : 'cons_pc_db'));
+// LRM / Document Tracking Integration Configuration
+define('LRM_BASE_URL', rtrim((string) app_env('LRM_BASE_URL', app_env('LRS_BASE_URL', 'https://llrm.spvalenzuela.com')), '/'));
+define('LRM_API_KEY', (string) app_env('LRM_API_KEY', app_env('LRS_API_KEY', 'pcm_f9e0185dca4546c83a1c5afa187ff10f')));
+define('LRM_INITIATE_URL', (string) app_env('LRM_INITIATE_URL', LRM_BASE_URL . '/modules/document-tracking/api/initiate.php'));
+define('LRM_RECEIVE_URL', (string) app_env('LRM_RECEIVE_URL', LRM_BASE_URL . '/modules/integration/api/receive_document.php'));
+define('LRM_EVENTS_URL', (string) app_env('LRM_EVENTS_URL', LRM_BASE_URL . '/modules/document-tracking/api/document-events.php'));
+
 // PHMS Integration Configuration
 define('PHMS_BASE_URL', rtrim((string) app_env('PHMS_BASE_URL', app_env('PHMS_URL', 'https://phms.spvalenzuela.com')), '/'));
 define('PCMS_INTEGRATION_TOKEN', (string) app_env('PCMS_INTEGRATION_TOKEN', app_env('LGU2_PHMS_TOKEN', 'phms_live_2d6f8a4c1e9057b3a9c5e7f2b4d80156')));

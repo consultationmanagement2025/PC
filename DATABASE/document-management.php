@@ -5,6 +5,9 @@
  */
 
 require_once __DIR__ . '/../db.php';
+if (file_exists(__DIR__ . '/documents.php')) {
+    require_once __DIR__ . '/documents.php';
+}
 
 /**
  * Create documents table if it doesn't exist
@@ -322,7 +325,7 @@ function handleDocumentDownload($document_id) {
 }
 
 /**
- * Create document_versions table if it doesn't exist
+ * Create document_versions table if it doesn't exist and ensure tracking_id column exists
  */
 function initializeDocumentVersionsTable() {
     global $conn;
@@ -332,6 +335,7 @@ function initializeDocumentVersionsTable() {
         document_id INT DEFAULT NULL,
         consultation_id INT DEFAULT NULL,
         reference_number VARCHAR(100) NOT NULL,
+        tracking_id VARCHAR(100) DEFAULT NULL,
         title VARCHAR(255) NOT NULL,
         version_number VARCHAR(50) DEFAULT '1.0',
         document_type VARCHAR(100) DEFAULT 'consultation_summary',
@@ -347,6 +351,7 @@ function initializeDocumentVersionsTable() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_reference (reference_number),
+        INDEX idx_tracking_id (tracking_id),
         INDEX idx_document_id (document_id),
         INDEX idx_consultation_id (consultation_id),
         INDEX idx_status (status)
@@ -355,6 +360,11 @@ function initializeDocumentVersionsTable() {
     if (!$conn->query($sql)) {
         error_log("Error creating document_versions table: " . $conn->error);
         return false;
+    }
+
+    $colCheck = $conn->query("SHOW COLUMNS FROM document_versions LIKE 'tracking_id'");
+    if ($colCheck && $colCheck->num_rows === 0) {
+        @$conn->query("ALTER TABLE document_versions ADD COLUMN tracking_id VARCHAR(100) DEFAULT NULL AFTER reference_number");
     }
 
     return true;
@@ -368,8 +378,8 @@ function addDocumentVersion($data) {
     initializeDocumentVersionsTable();
 
     $stmt = $conn->prepare("INSERT INTO document_versions 
-        (document_id, consultation_id, reference_number, title, version_number, document_type, original_filename, stored_filename, file_path, file_size, file_type, source_system, status, lrs_response, notes) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        (document_id, consultation_id, reference_number, tracking_id, title, version_number, document_type, original_filename, stored_filename, file_path, file_size, file_type, source_system, status, lrs_response, notes) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     if (!$stmt) {
         error_log("Error preparing addDocumentVersion statement: " . $conn->error);
         return false;
@@ -378,6 +388,7 @@ function addDocumentVersion($data) {
     $doc_id = isset($data['document_id']) ? (int)$data['document_id'] : null;
     $consult_id = isset($data['consultation_id']) ? (int)$data['consultation_id'] : null;
     $ref_num = $data['reference_number'] ?? 'CONSULT-000000';
+    $tracking_id = $data['tracking_id'] ?? null;
     $title = $data['title'] ?? 'Untitled Document';
     $ver_num = $data['version_number'] ?? '1.0';
     $doc_type = $data['document_type'] ?? 'consultation_summary';
@@ -392,10 +403,11 @@ function addDocumentVersion($data) {
     $notes = $data['notes'] ?? null;
 
     $stmt->bind_param(
-        'iisssssssisssss',
+        'iisssssssissssss',
         $doc_id,
         $consult_id,
         $ref_num,
+        $tracking_id,
         $title,
         $ver_num,
         $doc_type,
@@ -445,9 +457,164 @@ function getDocumentVersions($reference_number = null, $limit = 200, $offset = 0
 }
 
 /**
- * Forward a document to LRS (Legislative Records System) for archiving
+ * Normalize document_type for LRM API (Must be one of: ordinance, resolution, session, agenda, committee, voting, hearing, archive, consultation, research)
  */
-function forwardDocumentToLRS($id, $source = 'consultation', $customDescription = '') {
+function normalizeLRMDocumentType($type) {
+    $allowed = ['ordinance', 'resolution', 'session', 'agenda', 'committee', 'voting', 'hearing', 'archive', 'consultation', 'research'];
+    $low = strtolower(trim((string)$type));
+    foreach ($allowed as $at) {
+        if (strpos($low, $at) !== false) {
+            return $at;
+        }
+    }
+    return 'consultation';
+}
+
+/**
+ * Step 1: Initiate LRM tracking to reserve a tracking ID
+ */
+function initiateLRMTracking($documentType = 'consultation', $sourceSystem = 'pcms') {
+    $url = defined('LRM_INITIATE_URL') ? LRM_INITIATE_URL : (function_exists('app_env') ? app_env('LRM_INITIATE_URL', 'https://llrm.spvalenzuela.com/modules/document-tracking/api/initiate.php') : 'https://llrm.spvalenzuela.com/modules/document-tracking/api/initiate.php');
+    $apiKey = defined('LRM_API_KEY') ? LRM_API_KEY : (function_exists('app_env') ? app_env('LRM_API_KEY', 'pcm_f9e0185dca4546c83a1c5afa187ff10f') : 'pcm_f9e0185dca4546c83a1c5afa187ff10f');
+
+    $lrmDocType = normalizeLRMDocumentType($documentType);
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            'X-API-Key: ' . $apiKey,
+            'Content-Type: application/json'
+        ],
+        CURLOPT_POSTFIELDS => json_encode([
+            'document_type' => $lrmDocType,
+            'source_system' => $sourceSystem
+        ]),
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_SSL_VERIFYPEER => false
+    ]);
+
+    $responseBody = curl_exec($ch);
+    $curlErr = curl_error($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $decoded = json_decode($responseBody, true);
+    $trackingId = null;
+    if (is_array($decoded)) {
+        $trackingId = $decoded['tracking_id'] ?? ($decoded['data']['tracking_id'] ?? ($decoded['tracking_number'] ?? null));
+    }
+
+    return [
+        'success' => ($httpCode >= 200 && $httpCode < 300 && !empty($trackingId)),
+        'http_code' => $httpCode,
+        'tracking_id' => $trackingId,
+        'raw_response' => $responseBody,
+        'decoded' => $decoded,
+        'curl_error' => $curlErr
+    ];
+}
+
+/**
+ * Step 2: Upload document file to LRM receive_document.php
+ */
+function uploadDocumentToLRM($postFields) {
+    $url = defined('LRM_RECEIVE_URL') ? LRM_RECEIVE_URL : (function_exists('app_env') ? app_env('LRM_RECEIVE_URL', 'https://llrm.spvalenzuela.com/modules/integration/api/receive_document.php') : 'https://llrm.spvalenzuela.com/modules/integration/api/receive_document.php');
+    $apiKey = defined('LRM_API_KEY') ? LRM_API_KEY : (function_exists('app_env') ? app_env('LRM_API_KEY', 'pcm_f9e0185dca4546c83a1c5afa187ff10f') : 'pcm_f9e0185dca4546c83a1c5afa187ff10f');
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $postFields,
+        CURLOPT_HTTPHEADER => [
+            'X-API-Key: ' . $apiKey
+        ],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_SSL_VERIFYPEER => false
+    ]);
+
+    $responseBody = curl_exec($ch);
+    $curlErr = curl_error($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $decoded = json_decode($responseBody, true);
+
+    return [
+        'success' => ($httpCode >= 200 && $httpCode < 300),
+        'http_code' => $httpCode,
+        'raw_response' => $responseBody,
+        'decoded' => $decoded,
+        'curl_error' => $curlErr
+    ];
+}
+
+/**
+ * Step 3: Send tracking event to LRM document-events.php
+ */
+function sendLRMTrackingEvent($trackingId, $localDocId, $activity = 'Transferred', $status = 'Transferred', $performedBy = null, $department = 'Consultation Office', $remarks = 'Transferred to ORTS', $metadata = null) {
+    $url = defined('LRM_EVENTS_URL') ? LRM_EVENTS_URL : (function_exists('app_env') ? app_env('LRM_EVENTS_URL', 'https://llrm.spvalenzuela.com/modules/document-tracking/api/document-events.php') : 'https://llrm.spvalenzuela.com/modules/document-tracking/api/document-events.php');
+    $apiKey = defined('LRM_API_KEY') ? LRM_API_KEY : (function_exists('app_env') ? app_env('LRM_API_KEY', 'pcm_f9e0185dca4546c83a1c5afa187ff10f') : 'pcm_f9e0185dca4546c83a1c5afa187ff10f');
+
+    if (empty($performedBy)) {
+        if (isset($_SESSION['full_name']) && !empty($_SESSION['full_name'])) {
+            $performedBy = $_SESSION['full_name'];
+        } elseif (isset($_SESSION['user_name']) && !empty($_SESSION['user_name'])) {
+            $performedBy = $_SESSION['user_name'];
+        } else {
+            $performedBy = 'Ana Reyes';
+        }
+    }
+
+    $payload = [
+        'tracking_id' => $trackingId,
+        'source_system' => 'pcms',
+        'local_document_id' => (string)$localDocId,
+        'activity' => $activity,
+        'status' => $status,
+        'performed_by' => $performedBy,
+        'department' => $department ?: 'Consultation Office',
+        'remarks' => $remarks ?: 'Transferred to ORTS',
+        'timestamp' => date('c'),
+        'metadata' => $metadata ?: ['destination' => 'orts']
+    ];
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            'X-API-Key: ' . $apiKey,
+            'Content-Type: application/json'
+        ],
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_SSL_VERIFYPEER => false
+    ]);
+
+    $responseBody = curl_exec($ch);
+    $curlErr = curl_error($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $decoded = json_decode($responseBody, true);
+
+    return [
+        'success' => ($httpCode >= 200 && $httpCode < 300),
+        'http_code' => $httpCode,
+        'payload' => $payload,
+        'raw_response' => $responseBody,
+        'decoded' => $decoded,
+        'curl_error' => $curlErr
+    ];
+}
+
+/**
+ * Forward a document to LRS (Legislative Records System / LRM) for archiving using full 3-step tracking workflow
+ */
+function forwardDocumentToLRS($id, $source = 'consultation', $customDescription = '', $performerName = null) {
     global $conn;
     $id = (int)$id;
     if ($id <= 0) return ['success' => false, 'message' => 'Invalid document ID'];
@@ -484,7 +651,7 @@ function forwardDocumentToLRS($id, $source = 'consultation', $customDescription 
     $storedFilename = '';
     $title = '';
     $reference = '';
-    $docType = 'consultation_summary';
+    $docType = 'consultation';
     $docDate = date('Y-m-d');
     $description = trim((string)$customDescription);
 
@@ -492,12 +659,12 @@ function forwardDocumentToLRS($id, $source = 'consultation', $customDescription 
         $consultation_id = (int)($doc['consultation_id'] ?? 0);
         $title = !empty($doc['original_filename']) ? str_replace(['.pdf', '.docx', '_'], ['', '', ' '], $doc['original_filename']) : ('Consultation Document ' . ($doc['reference_number'] ?? $id));
         $reference = !empty($doc['reference_number']) ? $doc['reference_number'] : generateDocumentReference($id);
-        $docType = !empty($doc['document_type']) ? $doc['document_type'] : 'consultation_summary';
+        $docType = !empty($doc['document_type']) ? $doc['document_type'] : 'consultation';
         $docDate = !empty($doc['upload_date']) ? date('Y-m-d', strtotime($doc['upload_date'])) : date('Y-m-d');
         $storedFilename = $doc['stored_filename'] ?? '';
         $origFilename = $doc['original_filename'] ?? $storedFilename ?: 'document.pdf';
         $filePath = 'uploads/documents/' . $storedFilename;
-        if (empty($description)) $description = $doc['description'] ?? 'Consultation summary document forwarded from PCMS';
+        if (empty($description)) $description = $doc['description'] ?? 'Sample consultation summary from PCMS';
 
         $absRoot = realpath(__DIR__ . '/../');
         $fullPath = $absRoot . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $filePath);
@@ -519,12 +686,12 @@ function forwardDocumentToLRS($id, $source = 'consultation', $customDescription 
     } else {
         $title = $doc['title'] ?? 'Document';
         $reference = !empty($doc['reference']) ? $doc['reference'] : 'DOC-' . sprintf('%06d', $id);
-        $docType = !empty($doc['type']) ? $doc['type'] : 'consultation_summary';
+        $docType = !empty($doc['type']) ? $doc['type'] : 'consultation';
         $docDate = !empty($doc['document_date']) ? date('Y-m-d', strtotime($doc['document_date'])) : date('Y-m-d');
         $filePath = $doc['file_path'] ?? '';
         $origFilename = pathinfo($filePath, PATHINFO_BASENAME) ?: 'document.pdf';
         $storedFilename = pathinfo($filePath, PATHINFO_BASENAME);
-        if (empty($description)) $description = $doc['description'] ?? 'Admin document forwarded to LRS';
+        if (empty($description)) $description = $doc['description'] ?? 'Sample consultation summary from PCMS';
 
         $absRoot = realpath(__DIR__ . '/../');
         $fullPath = $absRoot . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $filePath);
@@ -537,21 +704,14 @@ function forwardDocumentToLRS($id, $source = 'consultation', $customDescription 
     $finfo = new finfo(FILEINFO_MIME_TYPE);
     $mimeType = $finfo->file($fullPath) ?: 'application/pdf';
 
-    $lrsUrl = function_exists('app_env') ? app_env('LRS_RECEIVE_URL', 'https://llrm.spvalenzuela.com/modules/integration/api/receive_document.php') : 'https://llrm.spvalenzuela.com/modules/integration/api/receive_document.php';
-    $apiKey = function_exists('app_env') ? app_env('LRS_API_KEY', 'pcm_f9e0185dca4546c83a1c5afa187ff10f') : 'pcm_f9e0185dca4546c83a1c5afa187ff10f';
+    $lrsDocType = normalizeLRMDocumentType($docType);
 
-    $lrsDocType = !empty($docType) ? $docType : 'consultation_summary';
-    $lowType = strtolower(trim((string)$docType));
-    if (strpos($lowType, 'ordinance') !== false) {
-        $lrsDocType = 'Ordinance';
-    } elseif (strpos($lowType, 'resolution') !== false) {
-        $lrsDocType = 'Resolution';
-    } elseif (strpos($lowType, 'report') !== false) {
-        $lrsDocType = 'Committee Report';
-    }
+    // Step 1: Initiate tracking
+    $initRes = initiateLRMTracking($lrsDocType, 'pcms');
+    $trackingId = $initRes['tracking_id'] ?? null;
 
+    // Step 2: Upload document
     $cFile = new CURLFile($fullPath, $mimeType, $origFilename);
-
     $postFields = [
         'title' => $title,
         'document_type' => $lrsDocType,
@@ -562,34 +722,40 @@ function forwardDocumentToLRS($id, $source = 'consultation', $customDescription 
         'file' => $cFile
     ];
 
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL => $lrsUrl,
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $postFields,
-        CURLOPT_HTTPHEADER => [
-            'X-API-Key: ' . $apiKey
-        ],
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_SSL_VERIFYPEER => false
-    ]);
+    $uploadRes = uploadDocumentToLRM($postFields);
 
-    $responseBody = curl_exec($ch);
-    $curlErr = curl_error($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    $lrsResponseDecoded = null;
-    if ($responseBody) {
-        $lrsResponseDecoded = json_decode($responseBody, true);
+    if (!$trackingId && is_array($uploadRes['decoded'])) {
+        $trackingId = $uploadRes['decoded']['tracking_id'] ?? ($uploadRes['decoded']['reference_number'] ?? null);
     }
+
+    // Step 3: Send tracking event if tracking ID is available
+    $eventRes = null;
+    if (!empty($trackingId)) {
+        $eventRes = sendLRMTrackingEvent(
+            $trackingId,
+            $reference,
+            'Transferred',
+            'Transferred',
+            $performerName,
+            'Consultation Office',
+            'Transferred to ORTS',
+            ['destination' => 'orts']
+        );
+    }
+
+    $allSuccess = ($uploadRes['success'] && ($initRes['success'] || !empty($trackingId)));
+    $combinedResponses = [
+        'step1_initiate' => $initRes,
+        'step2_upload' => $uploadRes,
+        'step3_event' => $eventRes
+    ];
 
     initializeDocumentVersionsTable();
     $verId = addDocumentVersion([
         'document_id' => $isConsultation ? $id : null,
         'consultation_id' => $doc['consultation_id'] ?? null,
         'reference_number' => $reference,
+        'tracking_id' => $trackingId,
         'title' => $title,
         'version_number' => '1.0',
         'document_type' => $docType,
@@ -599,9 +765,9 @@ function forwardDocumentToLRS($id, $source = 'consultation', $customDescription 
         'file_size' => filesize($fullPath),
         'file_type' => $mimeType,
         'source_system' => 'pcms',
-        'status' => ($httpCode >= 200 && $httpCode < 300) ? 'forwarded_to_lrs' : 'forward_failed',
-        'lrs_response' => $responseBody ?: $curlErr,
-        'notes' => 'Forwarded to LRS via API (HTTP ' . $httpCode . ')'
+        'status' => $allSuccess ? 'forwarded_to_lrs' : 'forward_failed',
+        'lrs_response' => json_encode($combinedResponses),
+        'notes' => 'Forwarded to LRM with 3-step tracking workflow (Tracking ID: ' . ($trackingId ?: 'N/A') . ')'
     ]);
 
     if ($isConsultation) {
@@ -610,19 +776,22 @@ function forwardDocumentToLRS($id, $source = 'consultation', $customDescription 
         updateDocument($id, $reference, $title, $docType, 'forwarded_to_lrs', $docDate, $description, $doc['tags'] ?? '');
     }
 
-    if ($curlErr) {
+    if (!$uploadRes['success']) {
         return [
             'success' => false,
-            'message' => 'cURL Error sending document to LRS: ' . $curlErr,
+            'message' => 'Upload error sending document to LRM: ' . ($uploadRes['curl_error'] ?: 'HTTP ' . $uploadRes['http_code']),
+            'tracking_id' => $trackingId,
+            'responses' => $combinedResponses,
             'version_id' => $verId
         ];
     }
 
     return [
         'success' => true,
-        'message' => 'Document successfully forwarded to LRS',
-        'http_code' => $httpCode,
-        'lrs_response' => $lrsResponseDecoded ?: $responseBody,
+        'message' => 'Document successfully tracked and forwarded to LRM',
+        'tracking_id' => $trackingId,
+        'http_code' => $uploadRes['http_code'],
+        'responses' => $combinedResponses,
         'version_id' => $verId
     ];
 }

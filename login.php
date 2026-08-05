@@ -206,8 +206,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     if ($user = $result->fetch_assoc()) {
                         if (password_verify($password, $user['password'])) {
                             $normalized_db_role = normalizeUserRole($user['role'] ?? '');
-                            if (!in_array($normalized_db_role, ['admin', 'super admin'], true)) {
-                                $error = "This login is for Admin or Super Admin accounts only.";
+                            $roleNorm = strtolower(str_replace([' ', '_'], '', $normalized_db_role));
+                            $allowed_login_roles = ['admin', 'super admin', 'administrator', 'staff', 'resource person', 'resource_person', 'expert'];
+                            
+                            if (!in_array($normalized_db_role, $allowed_login_roles, true) && !in_array($user['role'] ?? '', $allowed_login_roles, true)) {
+                                $error = "Invalid role for portal access.";
                             } else {
                                 $user['role'] = $normalized_db_role;
 
@@ -225,8 +228,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                                 clearRateLimit($email);
                                 logAction($user['id'], $user['fullname'], "User Login", "user", $user['id'], null, null, 'success', "Password-only login from IP: " . ($_SERVER['REMOTE_ADDR'] ?? ''));
 
-                                if (in_array($normalized_db_role, ['admin', 'super admin', 'administrator', 'staff', 'barangay staff', 'barangay'], true)) {
+                                if (in_array($roleNorm, ['admin', 'administrator', 'superadmin', 'staff', 'barangaystaff', 'barangay'], true)) {
                                     header("Location: system-template-full.php");
+                                } elseif (in_array($roleNorm, ['resourceperson', 'expert', 'speaker'], true)) {
+                                    header("Location: resource_person_dashboard.php");
                                 } else {
                                     header("Location: index.php");
                                 }

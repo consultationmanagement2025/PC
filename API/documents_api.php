@@ -306,13 +306,15 @@ try {
             break;
 
         case 'forward_lrs':
-            $data = jsonInput();
+        case 'forward_to_lrs':
+        case 'forward_to_lrm':
             if (empty($data)) {
                 $data = $_POST;
             }
             $id = (int)($data['id'] ?? $data['document_id'] ?? 0);
             $source = normalizeSource($data['source'] ?? 'consultation');
             $description = trim((string)($data['description'] ?? ''));
+            $performer = trim((string)($data['performed_by'] ?? ''));
 
             if ($id <= 0) {
                 http_response_code(400);
@@ -321,11 +323,48 @@ try {
             }
 
             if (function_exists('forwardDocumentToLRS')) {
-                $res = forwardDocumentToLRS($id, $source, $description);
+                $res = forwardDocumentToLRS($id, $source, $description, $performer);
                 echo json_encode($res);
             } else {
                 http_response_code(500);
                 echo json_encode(['success' => false, 'message' => 'LRS forward helper not loaded']);
+            }
+            break;
+
+        case 'initiate_tracking':
+            $docType = $data['document_type'] ?? ($_POST['document_type'] ?? 'consultation');
+            $srcSys = $data['source_system'] ?? ($_POST['source_system'] ?? 'pcms');
+            if (function_exists('initiateLRMTracking')) {
+                $res = initiateLRMTracking($docType, $srcSys);
+                echo json_encode($res);
+            } else {
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'LRM initiate tracking function not found']);
+            }
+            break;
+
+        case 'send_event':
+            $trackingId = $data['tracking_id'] ?? ($_POST['tracking_id'] ?? '');
+            $localDocId = $data['local_document_id'] ?? ($_POST['local_document_id'] ?? 'PCM-EXAMPLE-001');
+            $activity = $data['activity'] ?? ($_POST['activity'] ?? 'Transferred');
+            $status = $data['status'] ?? ($_POST['status'] ?? 'Transferred');
+            $performedBy = $data['performed_by'] ?? ($_POST['performed_by'] ?? null);
+            $dept = $data['department'] ?? ($_POST['department'] ?? 'Consultation Office');
+            $remarks = $data['remarks'] ?? ($_POST['remarks'] ?? 'Transferred to ORTS');
+            $meta = $data['metadata'] ?? ($_POST['metadata'] ?? ['destination' => 'orts']);
+
+            if (empty($trackingId)) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'tracking_id parameter is required']);
+                exit;
+            }
+
+            if (function_exists('sendLRMTrackingEvent')) {
+                $res = sendLRMTrackingEvent($trackingId, $localDocId, $activity, $status, $performedBy, $dept, $remarks, $meta);
+                echo json_encode($res);
+            } else {
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'LRM send event function not found']);
             }
             break;
 

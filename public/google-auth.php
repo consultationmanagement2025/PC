@@ -105,10 +105,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user_id = 0;
         $user_name = '';
         $user_role = 'citizen';
+        $verification_status = 'approved';
 
         if (isset($conn) && $conn) {
             // Query database for existing user account
-            $stmt = $conn->prepare("SELECT id, fullname, email, role, status FROM users WHERE email = ? LIMIT 1");
+            $stmt = $conn->prepare("SELECT id, fullname, email, role, status, verification_status FROM users WHERE email = ? LIMIT 1");
             if ($stmt) {
                 $stmt->bind_param('s', $email);
                 $stmt->execute();
@@ -119,6 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $user_id = $user['id'];
                     $user_name = !empty($user['fullname']) ? $user['fullname'] : $fullname;
                     $user_role = !empty($user['role']) ? strtolower($user['role']) : 'citizen';
+                    $verification_status = strtolower(trim($user['verification_status'] ?? 'approved'));
                 }
                 $stmt->close();
             }
@@ -128,6 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $username = explode('@', $email)[0];
                 $hashed_password = password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT);
                 $user_role = 'citizen';
+                $verification_status = 'approved';
 
                 $insert_stmt = $conn->prepare("INSERT INTO users (fullname, username, email, password, role, status, created_at) VALUES (?, ?, ?, ?, ?, 'active', NOW())");
                 if ($insert_stmt) {
@@ -159,6 +162,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['full_name'] = $user_name;
             $_SESSION['email'] = $email;
             $_SESSION['role'] = $user_role;
+            $_SESSION['verification_status'] = $verification_status;
+            $_SESSION['login_time'] = time();
 
             // Audit log
             $audit_file = file_exists(__DIR__ . '/../DATABASE/audit-log.php') ? (__DIR__ . '/../DATABASE/audit-log.php') : (__DIR__ . '/DATABASE/audit-log.php');
@@ -174,12 +179,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         null,
                         json_encode(['email' => $email, 'provider' => 'google_oauth2']),
                         'success',
-                        "Citizen logged in via Google OAuth 2.0 / Verified Email ({$email})"
+                        "User logged in via Google OAuth 2.0 / Verified Email ({$email})"
                     );
                 }
             }
 
-            header('Location: index.php?login=google_success');
+            // Role-based smart redirection
+            $roleNorm = strtolower(str_replace([' ', '_'], '', $user_role));
+
+            if (in_array($roleNorm, ['admin', 'administrator', 'superadmin', 'staff', 'barangaystaff', 'barangay'], true)) {
+                header('Location: ../system-template-full.php');
+            } elseif (in_array($roleNorm, ['resourceperson', 'expert', 'speaker'], true)) {
+                if ($verification_status === 'pending') {
+                    header('Location: ../pending_approval.php');
+                } elseif ($verification_status === 'rejected') {
+                    header('Location: ../login.php?error=account_rejected');
+                } else {
+                    header('Location: ../resource_person_dashboard.php');
+                }
+            } else {
+                header('Location: index.php?login=google_success');
+            }
             exit;
         } else {
             header('Location: sign-in.php?error=' . urlencode('Failed to authenticate with Google.'));
