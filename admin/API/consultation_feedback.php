@@ -523,33 +523,127 @@ try {
             break;
 
         case 'get_all_vote_stats':
+            // 1. Fetch survey options metadata from consultations
+            $consultationMeta = [];
+            $cRes = $conn->query("SELECT id, title, response_mode, survey_question, survey_option_a, survey_option_b FROM consultations");
+            if ($cRes) {
+                while ($cRow = $cRes->fetch_assoc()) {
+                    $cid = (int)$cRow['id'];
+                    $consultationMeta[$cid] = [
+                        'title' => $cRow['title'] ?? '',
+                        'mode' => $cRow['response_mode'] ?? 'feedback',
+                        'question' => $cRow['survey_question'] ?? '',
+                        'option_a' => $cRow['survey_option_a'] ?? 'Agree',
+                        'option_b' => $cRow['survey_option_b'] ?? 'Disagree'
+                    ];
+                }
+            }
+
+            // 2. Fetch vote counts from consultation_votes and consultation_guest_votes
             $res = $conn->query("
                 SELECT consultation_id, vote_option, COUNT(*) as total
                 FROM (
-                    SELECT consultation_id, LOWER(vote_option) as vote_option FROM consultation_votes
+                    SELECT consultation_id, LOWER(TRIM(vote_option)) as vote_option FROM consultation_votes
                     UNION ALL
-                    SELECT consultation_id, LOWER(vote_option) as vote_option FROM consultation_guest_votes
+                    SELECT consultation_id, LOWER(TRIM(vote_option)) as vote_option FROM consultation_guest_votes
                 ) all_votes
                 GROUP BY consultation_id, vote_option
             ");
+            
             $byConsultation = [];
+            $overall = [
+                'total_respondents' => 0,
+                'agree_votes' => 0,
+                'disagree_votes' => 0,
+                'other_votes' => 0,
+                'survey_count' => 0
+            ];
+
             if ($res) {
                 while ($row = $res->fetch_assoc()) {
                     $cid = (int)$row['consultation_id'];
                     $opt = strtolower(trim($row['vote_option']));
                     $cnt = (int)$row['total'];
+
                     if (!isset($byConsultation[$cid])) {
-                        $byConsultation[$cid] = ['agree_votes' => 0, 'disagree_votes' => 0, 'total_votes' => 0];
+                        $meta = $consultationMeta[$cid] ?? [];
+                        $byConsultation[$cid] = [
+                            'consultation_id' => $cid,
+                            'agree_votes' => 0,
+                            'disagree_votes' => 0,
+                            'other_votes' => 0,
+                            'total_votes' => 0,
+                            'survey_responses' => 0,
+                            'option_a_label' => !empty($meta['option_a']) ? $meta['option_a'] : 'Agree',
+                            'option_b_label' => !empty($meta['option_b']) ? $meta['option_b'] : 'Disagree',
+                            'survey_question' => $meta['question'] ?? ''
+                        ];
                     }
-                    if ($opt === 'agree') {
+
+                    $optA = strtolower(trim($byConsultation[$cid]['option_a_label']));
+                    $optB = strtolower(trim($byConsultation[$cid]['option_b_label']));
+
+                    if ($opt === 'agree' || $opt === 'option_a' || $opt === 'a' || $opt === 'yes' || $opt === $optA) {
                         $byConsultation[$cid]['agree_votes'] += $cnt;
-                    } else if ($opt === 'disagree') {
+                        $overall['agree_votes'] += $cnt;
+                    } else if ($opt === 'disagree' || $opt === 'option_b' || $opt === 'b' || $opt === 'no' || $opt === $optB) {
                         $byConsultation[$cid]['disagree_votes'] += $cnt;
+                        $overall['disagree_votes'] += $cnt;
+                    } else {
+                        $byConsultation[$cid]['other_votes'] += $cnt;
+                        $overall['other_votes'] += $cnt;
                     }
                     $byConsultation[$cid]['total_votes'] += $cnt;
+                    $overall['total_respondents'] += $cnt;
                 }
             }
-            echo json_encode(['success' => true, 'data' => $byConsultation]);
+
+            // 3. Include survey_responses count if table exists
+            $surveyResponsesCheck = $conn->query("SHOW TABLES LIKE 'survey_responses'");
+            if ($surveyResponsesCheck && $surveyResponsesCheck->num_rows > 0) {
+                $srRes = $conn->query("
+                    SELECT st.consultation_id, COUNT(sr.id) as response_count
+                    FROM survey_responses sr
+                    JOIN survey_templates st ON st.id = sr.survey_id
+                    WHERE st.consultation_id IS NOT NULL
+                    GROUP BY st.consultation_id
+                ");
+                if ($srRes) {
+                    while ($srRow = $srRes->fetch_assoc()) {
+                        $cid = (int)$srRow['consultation_id'];
+                        $cnt = (int)$srRow['response_count'];
+                        if ($cnt > 0) {
+                            if (!isset($byConsultation[$cid])) {
+                                $meta = $consultationMeta[$cid] ?? [];
+                                $byConsultation[$cid] = [
+                                    'consultation_id' => $cid,
+                                    'agree_votes' => 0,
+                                    'disagree_votes' => 0,
+                                    'other_votes' => 0,
+                                    'total_votes' => 0,
+                                    'survey_responses' => 0,
+                                    'option_a_label' => !empty($meta['option_a']) ? $meta['option_a'] : 'Option A',
+                                    'option_b_label' => !empty($meta['option_b']) ? $meta['option_b'] : 'Option B',
+                                    'survey_question' => $meta['question'] ?? ''
+                                ];
+                            }
+                            $byConsultation[$cid]['survey_responses'] = $cnt;
+                            if ($byConsultation[$cid]['total_votes'] === 0) {
+                                $byConsultation[$cid]['total_votes'] = $cnt;
+                                $overall['total_respondents'] += $cnt;
+                            }
+                        }
+                    }
+                }
+            }
+
+            $overall['survey_count'] = count($byConsultation);
+
+            echo json_encode([
+                'success' => true,
+                'data' => $byConsultation,
+                'overall' => $overall
+            ]);
             break;
 
         // Get consultation survey vote stats

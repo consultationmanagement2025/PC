@@ -9651,8 +9651,12 @@ async function renderPublicConsultation() {
                     </div>
 
 
-                    ${isReadOnlySuperAdmin ? '' : `<div class="dashboard-header-actions flex flex-wrap items-center gap-2">
-                    </div>`}
+                    <div class="dashboard-header-actions flex flex-wrap items-center gap-2">
+                        <button onclick="openPCCalendarModal()" class="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-xl px-4 py-2.5 flex items-center gap-2 transition-all duration-200 shadow-sm hover:shadow-md border border-white/10" title="Open Consultation Calendar">
+                            <i class="bi bi-calendar3 text-lg"></i>
+                            <span class="text-sm font-semibold hidden sm:inline">Calendar</span>
+                        </button>
+                    </div>
 
 
                 </div>
@@ -9758,26 +9762,37 @@ async function renderPublicConsultation() {
 
             </div>
 
-            <!-- Calendar Display -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex items-center justify-between mb-4">
-                    <div class="text-gray-700 text-lg font-semibold">Consultation Calendar</div>
-                    <div class="flex gap-2">
-                        <button onclick="pcDashboardCalendarChangeMonth(-1)" class="p-2 hover:bg-gray-100 rounded text-gray-600"><i class="bi bi-chevron-left"></i></button>
-                        <button onclick="pcDashboardCalendarChangeMonth(1)" class="p-2 hover:bg-gray-100 rounded text-gray-600"><i class="bi bi-chevron-right"></i></button>
+            <!-- Calendar Modal (triggered by icon in red header) -->
+            <div id="pc-calendar-modal" class="modal" style="display: none; align-items: center; justify-content: center;">
+                <div class="modal-content p-6" style="max-width: 900px; width: 95%;">
+                    <div class="flex items-center justify-between mb-5">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-red-50 rounded-lg p-2.5"><i class="bi bi-calendar3 text-red-600 text-xl"></i></div>
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-900">Consultation Calendar</h3>
+                                <p class="text-xs text-gray-500">View scheduled consultations by date</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="pcDashboardCalendarChangeMonth(-1)" class="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition"><i class="bi bi-chevron-left"></i></button>
+                            <button onclick="pcDashboardCalendarChangeMonth(1)" class="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition"><i class="bi bi-chevron-right"></i></button>
+                            <button onclick="closePCCalendarModal()" class="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition ml-2">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
                     </div>
+                    <div id="pc-dashboard-calendar-label" class="text-center font-bold text-gray-900 text-lg mb-4"></div>
+                    <div class="grid grid-cols-7 gap-1 text-sm text-gray-600 mb-2">
+                        <div class="text-center font-medium">Mon</div>
+                        <div class="text-center font-medium">Tue</div>
+                        <div class="text-center font-medium">Wed</div>
+                        <div class="text-center font-medium">Thu</div>
+                        <div class="text-center font-medium">Fri</div>
+                        <div class="text-center font-medium">Sat</div>
+                        <div class="text-center font-medium">Sun</div>
+                    </div>
+                    <div id="pc-dashboard-calendar-grid" class="grid grid-cols-7 gap-1 text-base"></div>
                 </div>
-                <div id="pc-dashboard-calendar-label" class="text-center font-bold text-gray-900 text-lg mb-4"></div>
-                <div class="grid grid-cols-7 gap-1 text-sm text-gray-600 mb-2">
-                    <div class="text-center font-medium">Mon</div>
-                    <div class="text-center font-medium">Tue</div>
-                    <div class="text-center font-medium">Wed</div>
-                    <div class="text-center font-medium">Thu</div>
-                    <div class="text-center font-medium">Fri</div>
-                    <div class="text-center font-medium">Sat</div>
-                    <div class="text-center font-medium">Sun</div>
-                </div>
-                <div id="pc-dashboard-calendar-grid" class="grid grid-cols-7 gap-1 text-base"></div>
             </div>
 
 
@@ -11862,28 +11877,50 @@ function refreshPCSurveySelector(consultations) {
     const selectEl = document.getElementById('pc-survey-select');
     if (!selectEl) return;
 
-    const surveys = getSurveyConsultations(consultations);
     const prev = String(selectEl.value || 'all');
+    const apiData = window._pcLiveVoteStatsResponse?.data || {};
+    const source = Array.isArray(consultations) && consultations.length > 0 ? consultations : (Array.isArray(AppData.consultations) ? AppData.consultations : []);
 
-    if (!surveys.length) {
-        selectEl.innerHTML = '<option value="all">No surveys</option>';
+    const surveyMap = new Map();
+
+    // 1. Add consultations from AppData/source
+    for (const c of source) {
+        if (!c || !c.id) continue;
+        const cid = String(c.id);
+        const title = (c.title || c.survey_question || `Survey #${cid}`).trim();
+        const mode = String(c.response_mode || '').toLowerCase();
+        const hasVotes = apiData[cid] && (apiData[cid].total_votes > 0 || apiData[cid].agree_votes > 0 || apiData[cid].disagree_votes > 0);
+        if (mode === 'survey' || c.survey_question || hasVotes) {
+            surveyMap.set(cid, title);
+        }
+    }
+
+    // 2. Add consultations from API vote stats data if not already present
+    for (const cid in apiData) {
+        if (!surveyMap.has(cid)) {
+            const item = apiData[cid];
+            const title = (item.survey_question || `Survey #${cid}`).trim();
+            surveyMap.set(cid, title);
+        }
+    }
+
+    if (surveyMap.size === 0) {
+        selectEl.innerHTML = '<option value="all">All surveys</option>';
         selectEl.value = 'all';
-        selectEl.disabled = true;
+        selectEl.disabled = false;
         return;
     }
 
     const options = ['<option value="all">All surveys</option>'];
-    for (const s of surveys) {
-        const id = Number(s && s.id ? s.id : 0);
-        if (!id) continue;
-        const title = getSurveyDisplayTitle(s)
+    surveyMap.forEach((title, id) => {
+        const safeTitle = title
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
-        options.push(`<option value="${id}">${title}</option>`);
-    }
+        options.push(`<option value="${id}">${safeTitle}</option>`);
+    });
 
     selectEl.innerHTML = options.join('');
     selectEl.disabled = false;
@@ -11892,94 +11929,123 @@ function refreshPCSurveySelector(consultations) {
 }
 
 function handlePCSurveySelectionChange() {
-    renderPCSurveyAnswersChart(Array.isArray(AppData.consultations) ? AppData.consultations : []);
-}
-
-function getVoteTotalsFromConsultations(surveyList) {
-    let agree = 0, disagree = 0, total = 0;
-    console.log('[getVoteTotals] Processing', surveyList.length, 'surveys');
-    for (let i = 0; i < surveyList.length; i++) {
-        const c = surveyList[i];
-        const vs = c.vote_stats || c.voteStats || c.stats || null;
-        console.log('[getVoteTotals] Survey #' + i + ' id=' + c.id + ' vote_stats=', vs, 'type=' + typeof vs);
-        if (vs && typeof vs === 'object') {
-            const a = Number(vs.agree_votes) || Number(vs.agree) || 0;
-            const d = Number(vs.disagree_votes) || Number(vs.disagree) || 0;
-            const t = Number(vs.total_votes) || Number(vs.total) || 0;
-            console.log('[getVoteTotals]   parsed: agree=' + a + ' disagree=' + d + ' total=' + t);
-            agree += a;
-            disagree += d;
-            total += Math.max(t, a + d);
-        } else {
-            console.warn('[getVoteTotals]   vote_stats is null/empty for consultation id=' + c.id);
-        }
-    }
-    total = Math.max(total, agree + disagree);
-    console.log('[getVoteTotals] RESULT: agree=' + agree + ' disagree=' + disagree + ' total=' + total);
-    return { agree, disagree, total, surveyCount: surveyList.length };
+    doRenderPCSurveyAnswersChart();
 }
 
 function renderPCSurveyAnswersChart(consultations) {
     const ctx = document.getElementById('pcSurveyAnswersChart');
-    console.log('[renderPCSurveyChart] canvas found:', !!ctx);
+    if (!ctx) return;
+
+    fetch('API/consultation_feedback.php?action=get_all_vote_stats')
+        .then(r => r.json())
+        .then(d => {
+            if (d && d.success) {
+                window._pcLiveVoteStatsResponse = d;
+                refreshPCSurveySelector(consultations);
+                doRenderPCSurveyAnswersChart();
+            }
+        })
+        .catch(err => {
+            console.error('[SurveySummary] Error fetching vote stats:', err);
+            doRenderPCSurveyAnswersChart();
+        });
+}
+
+function doRenderPCSurveyAnswersChart() {
+    const ctx = document.getElementById('pcSurveyAnswersChart');
     if (!ctx) return;
 
     const respondentTotalEl = document.getElementById('pc-respondent-total');
     const surveyCountEl = document.getElementById('pc-survey-count-summary');
-    const respondentScopeEl = document.getElementById('pc-respondent-scope');
-    const totalEl = document.getElementById('pc-survey-total-count');
     const agreeEl = document.getElementById('pc-survey-agree-count');
     const disagreeEl = document.getElementById('pc-survey-disagree-count');
     const sourceEl = document.getElementById('pc-survey-source');
-
     const selectEl = document.getElementById('pc-survey-select');
+
     const selectedId = String(selectEl && selectEl.value ? selectEl.value : 'all');
-    const surveys = getSurveyConsultations(consultations);
-    console.log('[renderPCSurveyChart] surveys found:', surveys.length, 'selectedId:', selectedId);
+    const apiResponse = window._pcLiveVoteStatsResponse || { data: {}, overall: {} };
+    const voteData = apiResponse.data || {};
+    const overall = apiResponse.overall || {};
 
-    const selectedSurvey = selectedId === 'all'
-        ? null
-        : (surveys.find((s) => String(Number(s && s.id ? s.id : 0)) === selectedId) || (Array.isArray(consultations) ? consultations.find((s) => String(Number(s && s.id ? s.id : 0)) === selectedId) : null));
-    const scope = selectedSurvey ? [selectedSurvey] : surveys;
+    let agreeCount = 0;
+    let disagreeCount = 0;
+    let otherCount = 0;
+    let totalVotes = 0;
+    let activeForms = 0;
+    let labelA = 'Agree / Option A';
+    let labelB = 'Disagree / Option B';
+    let scopeText = '';
 
-    // Get vote totals SYNCHRONOUSLY from in-memory data — NO API calls
-    const totals = getVoteTotalsFromConsultations(scope);
-
-    console.log('[renderPCSurveyChart] totals:', JSON.stringify(totals));
-
-    if (totalEl) totalEl.textContent = String(totals.total);
-    if (agreeEl) agreeEl.textContent = 'Agree: ' + totals.agree;
-    if (disagreeEl) disagreeEl.textContent = 'Disagree: ' + totals.disagree;
-    if (respondentTotalEl) respondentTotalEl.textContent = String(totals.total);
-    if (surveyCountEl) surveyCountEl.textContent = String(totals.surveyCount || (selectedSurvey ? 1 : surveys.length) || 0);
-    if (respondentScopeEl) {
-        if (selectedSurvey) {
-            respondentScopeEl.textContent = 'Showing respondents for ' + getSurveyDisplayTitle(selectedSurvey);
-        } else if (surveys.length) {
-            respondentScopeEl.textContent = 'Across ' + surveys.length + ' active survey forms';
-        } else {
-            respondentScopeEl.textContent = 'No survey responses available yet.';
-        }
+    if (selectedId === 'all') {
+        agreeCount = Number(overall.agree_votes || 0);
+        disagreeCount = Number(overall.disagree_votes || 0);
+        otherCount = Number(overall.other_votes || 0);
+        totalVotes = Number(overall.total_respondents || (agreeCount + disagreeCount + otherCount));
+        activeForms = Number(overall.survey_count || Object.keys(voteData).length || 0);
+        labelA = 'Option A / Agree';
+        labelB = 'Option B / Disagree';
+        scopeText = activeForms > 0 ? `Across ${activeForms} active survey form${activeForms === 1 ? '' : 's'}` : 'No survey responses recorded yet';
+    } else if (voteData[selectedId]) {
+        const item = voteData[selectedId];
+        agreeCount = Number(item.agree_votes || 0);
+        disagreeCount = Number(item.disagree_votes || 0);
+        otherCount = Number(item.other_votes || 0);
+        totalVotes = Number(item.total_votes || (agreeCount + disagreeCount + otherCount));
+        activeForms = 1;
+        labelA = item.option_a_label || 'Option A';
+        labelB = item.option_b_label || 'Option B';
+        scopeText = item.survey_question ? `Q: "${item.survey_question}"` : `Showing Survey #${selectedId}`;
+    } else {
+        agreeCount = 0;
+        disagreeCount = 0;
+        otherCount = 0;
+        totalVotes = 0;
+        activeForms = 0;
+        labelA = 'Option A';
+        labelB = 'Option B';
+        scopeText = 'No votes recorded for this survey';
     }
-    if (sourceEl) {
-        const count = Number(totals.surveyCount || 0);
-        if (selectedSurvey) {
-            sourceEl.textContent = 'Showing: ' + getSurveyDisplayTitle(selectedSurvey);
-        } else {
-            sourceEl.textContent = count > 0
-                ? 'Across ' + count + ' survey consultation' + (count === 1 ? '' : 's')
-                : 'No survey consultations found';
-        }
-    }
+
+    if (respondentTotalEl) respondentTotalEl.textContent = String(totalVotes);
+    if (surveyCountEl) surveyCountEl.textContent = String(activeForms);
+    if (agreeEl) agreeEl.textContent = `${labelA}: ${agreeCount}`;
+    if (disagreeEl) disagreeEl.textContent = `${labelB}: ${disagreeCount}`;
+    if (sourceEl) sourceEl.textContent = scopeText;
 
     if (window.pcSurveyAnswersChart) {
         try { window.pcSurveyAnswersChart.destroy(); } catch (e) { }
     }
 
-    const hasData = totals.total > 0;
-    const chartData = hasData ? [totals.agree, totals.disagree] : [1];
-    const chartColors = hasData ? ['#22c55e', '#ef4444'] : ['#e2e8f0'];
-    const chartLabels = hasData ? ['Agree', 'Disagree'] : ['No responses recorded yet'];
+    const hasData = totalVotes > 0;
+    const chartLabels = [];
+    const chartData = [];
+    const chartColors = [];
+
+    if (hasData) {
+        if (agreeCount > 0 || disagreeCount > 0 || otherCount > 0) {
+            chartLabels.push(labelA);
+            chartData.push(agreeCount);
+            chartColors.push('#22c55e');
+
+            chartLabels.push(labelB);
+            chartData.push(disagreeCount);
+            chartColors.push('#ef4444');
+
+            if (otherCount > 0) {
+                chartLabels.push('Other Options');
+                chartData.push(otherCount);
+                chartColors.push('#f59e0b');
+            }
+        } else {
+            chartLabels.push('Responses');
+            chartData.push(totalVotes);
+            chartColors.push('#3b82f6');
+        }
+    } else {
+        chartLabels.push('No responses recorded yet');
+        chartData.push(1);
+        chartColors.push('#e2e8f0');
+    }
 
     window.pcSurveyAnswersChart = new Chart(ctx, {
         type: 'doughnut',
@@ -11988,7 +12054,7 @@ function renderPCSurveyAnswersChart(consultations) {
             datasets: [{
                 data: chartData,
                 backgroundColor: chartColors,
-                borderColor: '#fff',
+                borderColor: '#ffffff',
                 borderWidth: 2
             }]
         },
@@ -11996,7 +12062,14 @@ function renderPCSurveyAnswersChart(consultations) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'bottom' },
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 12,
+                        padding: 10,
+                        font: { size: 11 }
+                    }
+                },
                 tooltip: {
                     enabled: hasData,
                     callbacks: {
@@ -12008,7 +12081,7 @@ function renderPCSurveyAnswersChart(consultations) {
                                 ? context.dataset.data.reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0)
                                 : 0;
                             const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
-                            return label + ': ' + value + ' (' + percentage + '%)';
+                            return `${label}: ${value} vote${value === 1 ? '' : 's'} (${percentage}%)`;
                         }
                     }
                 }
@@ -13754,7 +13827,6 @@ function renderConsultationsTable() {
 
     for (const consultation of consultations) {
         const st = String(consultation.status || '').toLowerCase();
-        const statusColor = st === 'active' ? 'bg-green-100 text-green-800' : (st === 'closed' ? 'bg-gray-100 text-gray-800' : (st === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'));
         const srcType = isUserConsultation(consultation) ? 'user' : String(consultation.type || 'admin').toLowerCase();
         const dateText = consultation.date ? new Date(consultation.date).toLocaleDateString() : '-';
         const closed = isConsultationClosed(consultation);
@@ -13763,6 +13835,21 @@ function renderConsultationsTable() {
             : (closed
                 ? `<button class="text-gray-400 cursor-not-allowed" title="Closed consultations cannot be edited"><i class="bi bi-pencil"></i></button>`
                 : `<button onclick="editConsultation(${consultation.id})" class="text-yellow-600 hover:text-yellow-800" title="Edit"><i class="bi bi-pencil"></i></button>`);
+
+        let consultBadgeStyle = 'bg-amber-50 text-amber-800 border-amber-300';
+        if (st === 'active') {
+            consultBadgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300';
+        } else if (st === 'scheduled' || st === 'reviewed' || st === 'viewed') {
+            consultBadgeStyle = 'bg-blue-50 text-blue-800 border-blue-300';
+        } else if (st === 'completed') {
+            consultBadgeStyle = 'bg-purple-50 text-purple-800 border-purple-300';
+        } else if (st === 'closed' || st === 'archived') {
+            consultBadgeStyle = 'bg-gray-100 text-gray-800 border-gray-300';
+        } else if (st === 'draft') {
+            consultBadgeStyle = 'bg-slate-100 text-slate-700 border-slate-300';
+        }
+
+        const consultStatusTrackerHtml = renderConnectingDotsTracker(consultation.status, consultation.id, 'consultation');
 
         if (srcType === 'user') {
             let citizenName = String(consultation.userName || consultation.user_name || 'Citizen');
@@ -13782,7 +13869,7 @@ function renderConsultationsTable() {
                     <td class="px-6 py-4 text-gray-600">${citizenName}</td>
                     <td class="px-6 py-4 text-gray-600">${consultationType}</td>
                     <td class="px-6 py-4 text-gray-600">${scheduledDateTime}</td>
-                    <td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColor}">${st ? (st.charAt(0).toUpperCase() + st.slice(1)) : 'Pending'}</span></td>
+                    <td class="px-6 py-4 text-center">${consultStatusTrackerHtml}</td>
                     <td class="px-6 py-4 text-center"><span class="inline-flex items-center gap-1 text-gray-600"><i class="bi bi-file-text"></i>${consultation.documentsAttached || 0}</span></td>
                     <td class="px-6 py-4 text-center">
                         <div class="flex gap-2 justify-center items-center">
@@ -13803,7 +13890,7 @@ function renderConsultationsTable() {
                     <td class="px-6 py-4 font-semibold text-gray-900">${consultationId}</td>
                     <td class="px-6 py-4 font-semibold text-gray-900">${consultationTitle}</td>
                     <td class="px-6 py-4 text-gray-600">${dateText}</td>
-                    <td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColor}">${st ? (st.charAt(0).toUpperCase() + st.slice(1)) : 'Draft'}</span></td>
+                    <td class="px-6 py-4 text-center">${consultStatusTrackerHtml}</td>
                     <td class="px-6 py-4 text-center"><span class="inline-flex items-center justify-center w-8 h-8 bg-red-100 text-red-600 rounded-full font-semibold text-sm">${consultation.feedbackCount || 0}</span></td>
                     <td class="px-6 py-4 text-center"><span class="inline-flex items-center gap-1 text-gray-600"><i class="bi bi-file-text"></i>${consultation.documentsAttached || 0}</span></td>
                     <td class="px-6 py-4 text-center"><div class="flex gap-2 justify-center"> <button onclick="viewConsultationDetails(${consultation.id})" class="text-blue-600 hover:text-blue-800" title="View"><i class="bi bi-eye"></i></button>${editButton}</div></td>
@@ -13826,6 +13913,34 @@ function renderConsultationsTable() {
 
     if (adminTbody) adminTbody.innerHTML = adminRows.length ? adminRows.join('') : '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No admin-created consultations found</td></tr>';
     if (userTbody) userTbody.innerHTML = userRows.length ? userRows.join('') : '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No user submissions found</td></tr>';
+}
+
+async function updateConsultationStatusFromTracker(consultationId, newStatus) {
+    if (!consultationId || !newStatus) return;
+
+    try {
+        const response = await fetch('API/consultations_api.php?action=update_status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: consultationId, status: newStatus })
+        });
+        const result = await response.json();
+
+        if (result && result.success) {
+            const formattedName = newStatus.replace(/_/g, ' ').toUpperCase();
+            showNotification(`Consultation status updated to ${formattedName}!`, 'success');
+            if (Array.isArray(AppData.consultations)) {
+                const c = AppData.consultations.find(item => Number(item.id) === Number(consultationId));
+                if (c) c.status = newStatus;
+            }
+            renderConsultationsTable();
+        } else {
+            showNotification(result.message || 'Failed to update consultation status', 'error');
+        }
+    } catch (err) {
+        console.error('Error updating consultation status:', err);
+        showNotification('Network error updating consultation status', 'error');
+    }
 }
 
 
@@ -18650,13 +18765,14 @@ async function renderPCDocuments() {
                             <tr>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Document Title</th>
                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Type</th>
+                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Status Tracker</th>
                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Size</th>
                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Downloads</th>
                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="group-documents-table-body">
-                            <tr><td colspan="5" class="text-center text-gray-400 p-6">No documents in this group</td></tr>
+                            <tr><td colspan="6" class="text-center text-gray-400 p-6">No documents in this group</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -18993,6 +19109,36 @@ function filterDocumentsByGroup(group) {
         const docRef = String(doc.reference || doc.id || '').replace(/'/g, "\\'");
         const docTitle = String(doc.title || doc.reference || 'Consultation Summary').replace(/'/g, "\\'");
         const docSource = String(doc.source || 'consultation').replace(/'/g, "\\'");
+        const docIdClean = String(doc.id || doc.uid || '').replace(/'/g, "\\'");
+        const statusVal = String(doc.status || 'submitted').toLowerCase().trim();
+
+        let badgeStyle = 'bg-amber-50 text-amber-800 border-amber-300';
+        let statusLabel = '⏳ Pending Review';
+
+        if (statusVal === 'draft') {
+            badgeStyle = 'bg-slate-100 text-slate-700 border-slate-300';
+            statusLabel = '📝 Draft';
+        } else if (statusVal === 'reviewed' || statusVal === 'under_review') {
+            badgeStyle = 'bg-blue-50 text-blue-800 border-blue-300';
+            statusLabel = '🔍 Under Review';
+        } else if (statusVal === 'approved' || statusVal === 'active') {
+            badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300';
+            statusLabel = '✅ Approved & Active';
+        } else if (statusVal === 'archived' || statusVal === 'closed') {
+            badgeStyle = 'bg-purple-50 text-purple-800 border-purple-300';
+            statusLabel = '📦 Archived';
+        } else if (statusVal === 'rejected') {
+            badgeStyle = 'bg-rose-50 text-rose-800 border-rose-300';
+            statusLabel = '❌ Rejected';
+        } else if (statusVal === 'forwarded_to_lrs' || statusVal === 'forwarded') {
+            badgeStyle = 'bg-indigo-50 text-indigo-800 border-indigo-300';
+            statusLabel = '🚀 Forwarded to LRS Hub';
+        } else if (statusVal === 'published') {
+            badgeStyle = 'bg-teal-50 text-teal-800 border-teal-300';
+            statusLabel = '🌐 Live Published';
+        }
+
+        const docDotsTrackerHtml = renderConnectingDotsTracker(doc.status, docIdClean, 'document');
 
         return `
             <tr class="border-b border-gray-100 hover:bg-gray-50 transition">
@@ -19001,6 +19147,7 @@ function filterDocumentsByGroup(group) {
                     <div class="text-gray-600 text-xs mt-1">${doc.description || ''}</div>
                 </td>
                 <td class="px-6 py-4 text-gray-700">${doc.type || '-'}</td>
+                <td class="px-6 py-4 text-center">${docDotsTrackerHtml}</td>
                 <td class="px-6 py-4 text-center text-gray-600">${formatFileSize(doc.size || 0)}</td>
                 <td class="px-6 py-4 text-center">
                     <span class="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-full font-semibold text-sm">
@@ -19015,7 +19162,10 @@ function filterDocumentsByGroup(group) {
                         ${doc.downloadUrl && doc.downloadUrl !== '#' ? `<button onclick="viewDocument('${String(doc.uid || doc.id).replace(/'/g, "\\'")}')" class="text-gray-600 hover:text-gray-800" title="View">
                             View
                         </button>` : ''}
-                        <button onclick="openForwardLRSModal('${doc.id}', '${docSource}', '${docRef}', '${docTitle}')" class="px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded border border-red-200 text-xs font-semibold flex items-center gap-1" title="Forward to LRS">
+                        <button onclick="openLiveDocumentTrackerModal('${docIdClean}', '${docSource}', '${docRef}', '${docTitle}')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded border border-slate-300 text-xs font-bold flex items-center gap-1 cursor-pointer" title="View Detailed Audit Timeline">
+                            <i class="bi bi-clock-history text-amber-600"></i> Event Audit Log
+                        </button>
+                        <button onclick="openForwardLRSModal('${doc.id}', '${docSource}', '${docRef}', '${docTitle}')" class="px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded border border-red-200 text-xs font-semibold flex items-center gap-1 cursor-pointer" title="Forward to LRS">
                             <i class="bi bi-send-fill text-red-600"></i> Forward to LRS
                         </button>
                     </div>
@@ -19023,6 +19173,499 @@ function filterDocumentsByGroup(group) {
             </tr>
         `;
     }).join('');
+}
+
+/* ==========================================================
+   5 CONNECTING DOTS PROGRESS TRACKER HELPER
+   ========================================================== */
+function renderConnectingDotsTracker(currentStatus, docOrConsultId, type = 'consultation') {
+    const st = String(currentStatus || '').toLowerCase().trim();
+    let currentStep = 1;
+
+    let steps = [];
+    if (type === 'document') {
+        if (st === 'draft' || st === 'submitted' || st === 'pending' || !st) currentStep = 1;
+        else if (st === 'under_review' || st === 'reviewed') currentStep = 2;
+        else if (st === 'active' || st === 'public_review' || st === 'published_portal') currentStep = 3;
+        else if (st === 'forwarded_to_lrs' || st === 'forwarded' || st === 'committee') currentStep = 4;
+        else if (st === 'approved' || st === 'ordinance' || st === 'in_ordinance') currentStep = 5;
+        else if (st === 'published' || st === 'officialized' || st === 'archived' || st === 'closed' || st === 'rejected') currentStep = 6;
+
+        steps = [
+            { num: 1, name: 'Document Registration', desc: 'Original document file registered in PCMS repository', statusVal: 'submitted' },
+            { num: 2, name: 'Resource Person Review', desc: 'Evaluated & verified by assigned Resource Person / Secretariat', statusVal: 'under_review' },
+            { num: 3, name: 'Live Public Portal', desc: 'Published live on the Public Portal for citizen feedback & stakeholder review', statusVal: 'active' },
+            { num: 4, name: 'Committee System Dispatch', desc: 'Forwarded to Committee Management System for formal committee evaluation', statusVal: 'forwarded' },
+            { num: 5, name: 'Ordinance System Processing', desc: 'Transmitted to Ordinance System to draft & formalize into city law', statusVal: 'approved' },
+            { num: 6, name: 'Officialized & Archived', desc: 'Enacted as official city ordinance, published & archived in city repository', statusVal: 'published' }
+        ];
+    } else {
+        // Consultation
+        if (st === 'draft' || st === 'pending' || st === 'new' || st === 'submitted' || !st) currentStep = 1;
+        else if (st === 'under_review' || st === 'reviewed' || st === 'viewed' || st === 'replied') currentStep = 2;
+        else if (st === 'active' || st === 'published_portal' || st === 'voting') currentStep = 3;
+        else if (st === 'scheduled' || st === 'committee' || st === 'forwarded') currentStep = 4;
+        else if (st === 'approved' || st === 'ordinance' || st === 'in_ordinance') currentStep = 5;
+        else if (st === 'completed' || st === 'closed' || st === 'officialized' || st === 'archived') currentStep = 6;
+
+        steps = [
+            { num: 1, name: 'Intake & Submission', desc: 'Public consultation intake logged and registered into PCMS repository', statusVal: 'pending' },
+            { num: 2, name: 'Resource Person Vetting', desc: 'Reviewed, evaluated & synthesized by assigned Resource Person', statusVal: 'under_review' },
+            { num: 3, name: 'Live Public Portal', desc: 'Active on Public Portal collecting citizen votes, surveys, and public feedback', statusVal: 'active' },
+            { num: 4, name: 'Forward to Committee System', desc: 'Dispatched to Committee Management System for committee deliberations', statusVal: 'scheduled' },
+            { num: 5, name: 'Forward to Ordinance System', desc: 'Forwarded to Ordinance System to formalize findings into an ordinance draft', statusVal: 'approved' },
+            { num: 6, name: 'Officialized Ordinance', desc: 'Enacted into official city ordinance & stored in permanent city archive', statusVal: 'completed' }
+        ];
+    }
+
+    const linePercent = Math.min(100, Math.max(0, (currentStep - 1) * 20));
+
+    const dotsHtml = steps.map(step => {
+        const isCompleted = step.num < currentStep;
+        const isCurrent = step.num === currentStep;
+
+        let dotBg = 'bg-slate-300 border-slate-400 hover:bg-slate-400';
+        let innerContent = '';
+
+        if (isCurrent) {
+            dotBg = 'bg-amber-500 border-amber-600 ring-4 ring-amber-300/70 scale-115 shadow-sm';
+            innerContent = '<span class="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>';
+        } else if (isCompleted) {
+            dotBg = 'bg-emerald-500 border-emerald-600 ring-1 ring-emerald-200';
+            innerContent = '<i class="bi bi-check text-[10px] text-white font-black leading-none"></i>';
+        }
+
+        const safeName = step.name.replace(/'/g, "\\'");
+        const safeDesc = step.desc.replace(/'/g, "\\'");
+
+        const clickHandler = `openTrackerStageDetailModal('${type}', '${docOrConsultId}', ${step.num}, 6, '${safeName}', '${safeDesc}', '${step.statusVal}', ${isCurrent}, ${isCompleted})`;
+
+        return `
+            <div class="relative cursor-pointer hover:scale-125 transition transform" onclick="${clickHandler}" title="Click to view Stage ${step.num}: ${safeName}">
+                <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${dotBg}">
+                    ${innerContent}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    const currentStageInfo = steps[currentStep - 1];
+
+    return `
+        <div class="flex flex-col items-center gap-1 my-1">
+            <div class="relative flex items-center justify-between w-44 px-2 py-1.5">
+                <!-- Connecting Line Background -->
+                <div class="absolute top-1/2 left-4 right-4 h-1 bg-slate-200 -translate-y-1/2 rounded-full z-0"></div>
+                <!-- Active Progress Line -->
+                <div class="absolute top-1/2 left-4 h-1 bg-gradient-to-r from-emerald-500 to-amber-500 -translate-y-1/2 rounded-full z-0 transition-all duration-500" style="width: ${linePercent}%;"></div>
+                
+                <!-- 5 Connecting Dots -->
+                <div class="relative z-10 flex items-center justify-between w-full">
+                    ${dotsHtml}
+                </div>
+            </div>
+            <span class="text-[10px] font-black text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md uppercase tracking-wider shadow-2xs">${currentStep}/5 - ${currentStageInfo.name}</span>
+        </div>
+    `;
+}
+
+/* TOP RIGHT CORNER STAGE DETAIL MODAL (READ-ONLY REAL-TIME TRACKER) */
+function openTrackerStageDetailModal(type, itemId, stepNum, totalSteps, stepName, stepDesc, statusVal, isCurrent, isCompleted) {
+    let modalEl = document.getElementById('tracker-stage-detail-modal');
+    if (!modalEl) {
+        modalEl = document.createElement('div');
+        modalEl.id = 'tracker-stage-detail-modal';
+        document.body.appendChild(modalEl);
+    }
+
+    const typeTitle = type === 'document' ? 'Document Real-Time Tracker' : 'Consultation Real-Time Tracker';
+    const statusBadgeHtml = isCurrent 
+        ? `<span class="px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-bold inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> ⚡ Current Active Stage</span>`
+        : (isCompleted 
+            ? `<span class="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold inline-flex items-center gap-1.5"><i class="bi bi-check-circle-fill"></i> ✓ Stage Completed</span>`
+            : `<span class="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-bold inline-flex items-center gap-1.5"><i class="bi bi-clock"></i> ○ Upcoming Stage</span>`);
+
+    modalEl.className = 'fixed top-5 right-5 z-[9999] w-80 sm:w-96 bg-slate-900/95 backdrop-blur-md text-white rounded-2xl shadow-2xl border border-slate-700/80 p-5 transition-all duration-300 transform scale-100';
+    modalEl.innerHTML = `
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 font-black text-xs flex items-center justify-center shadow-xs">
+                    ${stepNum}/${totalSteps}
+                </div>
+                <div>
+                    <div class="text-[10px] font-bold uppercase tracking-wider text-amber-400">${typeTitle}</div>
+                    <div class="font-black text-sm text-white leading-tight">${stepName}</div>
+                </div>
+            </div>
+            <button onclick="closeTrackerStageDetailModal()" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-bold transition flex items-center justify-center cursor-pointer">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+
+        <div class="space-y-3">
+            <div class="flex items-center justify-between text-xs">
+                <span class="font-medium text-slate-400">Stage Status:</span>
+                ${statusBadgeHtml}
+            </div>
+
+            <div class="bg-slate-800/90 rounded-xl p-3.5 border border-slate-700/60 text-xs text-slate-300 leading-relaxed font-medium">
+                <div class="text-[11px] font-bold text-amber-300 mb-1 flex items-center gap-1">
+                    <i class="bi bi-info-circle-fill"></i> Stage Details:
+                </div>
+                ${stepDesc}
+            </div>
+
+            <div class="pt-2 text-[10px] text-slate-400 font-medium text-center border-t border-slate-800/80 flex items-center justify-center gap-1">
+                <i class="bi bi-shield-check text-emerald-400"></i> Automatically synchronized with real-time audit log
+            </div>
+        </div>
+    `;
+}
+
+function closeTrackerStageDetailModal() {
+    const modalEl = document.getElementById('tracker-stage-detail-modal');
+    if (modalEl) {
+        modalEl.remove();
+    }
+}
+
+async function updateDocumentStatusFromTracker(docId, source, newStatus) {
+    if (!docId || !newStatus) return;
+
+    try {
+        const response = await fetch('API/documents_api.php?action=update_status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: docId, source: source, status: newStatus })
+        });
+        const result = await response.json();
+
+        if (result && result.success) {
+            const formattedName = newStatus.replace(/_/g, ' ').toUpperCase();
+            showNotification(`Document status updated to ${formattedName}!`, 'success');
+            refreshDocumentsModule(true);
+        } else {
+            showNotification(result.message || 'Failed to update document status', 'error');
+        }
+    } catch (err) {
+        console.error('Error updating document status:', err);
+        showNotification('Network error updating document status', 'error');
+    }
+}
+
+/* ==========================================================
+   LIVE DOCUMENT HAPPENINGS & SYSTEM INTEGRATION TRACKER MODAL
+   ========================================================== */
+let currentTrackingDocId = null;
+let currentTrackingDocSource = 'consultation';
+let currentTrackingDocRef = '';
+let currentTrackingDocTitle = '';
+
+function getLiveDocumentTrackerModalHtml() {
+    return `
+    <div id="live-document-tracker-modal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+            <!-- Header -->
+            <div class="bg-slate-900 text-white p-6 flex justify-between items-center relative overflow-hidden">
+                <div class="absolute -right-10 -bottom-10 opacity-10 text-9xl text-white pointer-events-none">
+                    <i class="bi bi-activity"></i>
+                </div>
+                <div class="relative z-10 flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-red-600 flex items-center justify-center text-white shadow-md font-bold text-xl">
+                        <i class="bi bi-diagram-3-fill"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-black tracking-tight text-white flex items-center gap-2">
+                            Live Document Status Tracker
+                            <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> Live Integration Active
+                            </span>
+                        </h3>
+                        <p class="text-xs text-slate-300 mt-0.5" id="tracker-doc-subtitle">Tracking real-time document events, LRM system dispatches & status pipeline</p>
+                    </div>
+                </div>
+                <button onclick="closeLiveDocumentTrackerModal()" class="text-slate-400 hover:text-white text-2xl font-bold transition cursor-pointer relative z-10">&times;</button>
+            </div>
+
+            <!-- Scrollable Content -->
+            <div class="p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50/50">
+                <!-- Document Meta & Integration Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Document Reference</div>
+                        <div class="text-sm font-black text-slate-800 font-mono" id="tracker-ref-code">CONSULT-000000</div>
+                        <div class="text-xs text-slate-500 mt-1 truncate" id="tracker-doc-title">Document Title</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">LRM Tracking Reference</div>
+                        <div class="text-sm font-black text-indigo-600 font-mono flex items-center gap-1" id="tracker-lrm-id">
+                            <i class="bi bi-qr-code-scan"></i> <span id="tracker-lrm-id-text">TRK-2026-0000</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mt-1">External Records Hub Tracking ID</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">System Integration Target</div>
+                        <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5" id="tracker-integration-target">
+                            <i class="bi bi-hdd-network text-emerald-600"></i> LRM System Hub (llrm.spvalenzuela.com)
+                        </div>
+                        <div class="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
+                            <i class="bi bi-check-circle-fill"></i> HTTP 200 - API Key Authenticated
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pipeline Progress Stepper -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
+                    <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
+                        <i class="bi bi-signpost-split-fill text-amber-500"></i> Workflow Lifecycle Pipeline
+                    </h4>
+                    <div class="grid grid-cols-4 gap-2 text-center relative" id="tracker-pipeline-container">
+                        <!-- Dynamic stepper stages -->
+                    </div>
+                </div>
+
+                <!-- Live Happenings Audit Feed -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                        <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                            <i class="bi bi-clock-history text-red-600"></i> Live Happenings & Activity Audit Feed
+                        </h4>
+                        <span class="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full font-bold" id="tracker-event-count">0 Events Logged</span>
+                    </div>
+                    
+                    <div id="tracker-timeline-feed" class="space-y-4 relative pl-6 border-l-2 border-slate-200">
+                        <!-- Dynamic Timeline Events -->
+                    </div>
+                </div>
+
+                <!-- Log Event / Action Box -->
+                <div class="bg-slate-900 text-white p-5 rounded-2xl shadow-md space-y-4">
+                    <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                        <i class="bi bi-pencil-square text-amber-400"></i> Advance Status or Log Custom Activity Event
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">New Workflow Status</label>
+                            <select id="tracker-new-status" class="w-full px-3 py-2 bg-slate-800 text-white border border-slate-700 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-amber-500">
+                                <option value="under_review">🔍 Under Review</option>
+                                <option value="approved">✅ Approved</option>
+                                <option value="forwarded_to_lrs">🚀 Forwarded to LRS / LRM System</option>
+                                <option value="published">🌐 Published on Public Portal</option>
+                                <option value="archived">📦 Archived</option>
+                                <option value="rejected">❌ Rejected</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">Happenings Remarks / Action Notes</label>
+                            <input type="text" id="tracker-event-notes" placeholder="e.g., Reviewed by Secretariat, submitted for committee approval" class="w-full px-3 py-2 bg-slate-800 text-white border border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-amber-500">
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-3 pt-1">
+                        <button onclick="submitTrackerEventLog()" class="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black rounded-xl text-xs transition shadow-2xs cursor-pointer flex items-center gap-1.5">
+                            <i class="bi bi-plus-circle-fill"></i> Log Activity Event
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="bg-slate-100 p-4 border-t border-slate-200 flex justify-between items-center">
+                <button onclick="dispatchLiveLRMIntegrationFromModal()" id="btn-modal-lrm-dispatch" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition flex items-center gap-2 shadow-2xs cursor-pointer">
+                    <i class="bi bi-send-fill text-amber-300"></i> Dispatch to External LRM System
+                </button>
+                <button onclick="closeLiveDocumentTrackerModal()" class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer">
+                    Close Tracker
+                </button>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+async function openLiveDocumentTrackerModal(docId, source, refNumber, title) {
+    currentTrackingDocId = docId;
+    currentTrackingDocSource = source || 'consultation';
+    currentTrackingDocRef = refNumber || '';
+    currentTrackingDocTitle = title || '';
+
+    let modal = document.getElementById('live-document-tracker-modal');
+    if (!modal) {
+        const div = document.createElement('div');
+        div.innerHTML = getLiveDocumentTrackerModalHtml();
+        document.body.appendChild(div.firstElementChild);
+        modal = document.getElementById('live-document-tracker-modal');
+    }
+
+    if (!modal) return;
+    modal.classList.remove('hidden');
+
+    const subtitle = document.getElementById('tracker-doc-subtitle');
+    const refCode = document.getElementById('tracker-ref-code');
+    const docTitleEl = document.getElementById('tracker-doc-title');
+
+    if (subtitle) subtitle.innerText = `Document: ${title || 'Consultation Summary'} | Ref: ${refNumber || docId}`;
+    if (refCode) refCode.innerText = refNumber || ('CONSULT-' + String(docId).padStart(6, '0'));
+    if (docTitleEl) docTitleEl.innerText = title || 'Document';
+
+    await loadLiveTrackingTimeline(docId, source, refNumber);
+}
+
+function closeLiveDocumentTrackerModal() {
+    const modal = document.getElementById('live-document-tracker-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function loadLiveTrackingTimeline(docId, source, refNumber) {
+    const timelineFeed = document.getElementById('tracker-timeline-feed');
+    const pipelineContainer = document.getElementById('tracker-pipeline-container');
+    const eventCount = document.getElementById('tracker-event-count');
+    const trackerLrmText = document.getElementById('tracker-lrm-id-text');
+
+    if (timelineFeed) {
+        timelineFeed.innerHTML = `<div class="text-center py-6 text-slate-400 font-semibold flex items-center justify-center gap-2"><i class="bi bi-arrow-repeat animate-spin text-lg text-amber-500"></i> Loading live document happenings timeline...</div>`;
+    }
+
+    try {
+        const res = await fetch(`API/documents_api.php?action=get_tracking_timeline&id=${docId}&source=${source}&reference=${encodeURIComponent(refNumber || '')}`);
+        const data = await res.json();
+
+        if (data && data.success) {
+            if (trackerLrmText) trackerLrmText.innerText = data.latest_tracking_id || 'TRK-PENDING';
+            if (eventCount) eventCount.innerText = `${(data.timeline || []).length} Happenings Logged`;
+
+            // Pipeline Stepper (4 Stages)
+            const stage = data.pipeline_stage || 1;
+            const stages = [
+                { title: '1. Uploaded', desc: 'Registered in PCMS' },
+                { title: '2. Under Review', desc: 'Secretariat Evaluation' },
+                { title: '3. Dispatched (LRM)', desc: 'Sent to Records System' },
+                { title: '4. Approved & Live', desc: 'Published Record' }
+            ];
+
+            if (pipelineContainer) {
+                pipelineContainer.innerHTML = stages.map((s, idx) => {
+                    const stepNum = idx + 1;
+                    const isDone = stepNum <= stage;
+                    const isCurrent = stepNum === stage;
+                    const bgClass = isDone ? (isCurrent ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 ring-2 ring-amber-400/50' : 'bg-emerald-600 text-white font-bold') : 'bg-slate-100 text-slate-400 border-slate-200';
+                    const icon = isDone ? (isCurrent ? 'bi-hourglass-split' : 'bi-check-circle-fill') : 'bi-circle';
+                    return `
+                        <div class="flex flex-col items-center">
+                            <div class="w-9 h-9 rounded-full ${bgClass} flex items-center justify-center text-sm shadow-2xs transition-all mb-1">
+                                <i class="bi ${icon}"></i>
+                            </div>
+                            <span class="text-[11px] font-bold ${isDone ? 'text-slate-800' : 'text-slate-400'}">${s.title}</span>
+                            <span class="text-[9px] text-slate-400">${s.desc}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Timeline Feed
+            if (timelineFeed) {
+                if (!data.timeline || data.timeline.length === 0) {
+                    timelineFeed.innerHTML = `<div class="text-center py-6 text-slate-400">No activity events logged yet</div>`;
+                } else {
+                    timelineFeed.innerHTML = data.timeline.map((ev) => {
+                        return `
+                            <div class="relative pl-6 pb-2">
+                                <div class="absolute -left-[25px] top-0 w-4 h-4 rounded-full bg-slate-900 border-2 border-white ring-2 ring-amber-400 flex items-center justify-center">
+                                    <div class="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
+                                </div>
+                                <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+                                    <div class="flex justify-between items-start mb-1 flex-wrap gap-2">
+                                        <span class="font-bold text-xs text-slate-900 flex items-center gap-1.5">
+                                            ${ev.title}
+                                            <span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${ev.badge || 'bg-slate-100 text-slate-700'}">${ev.activity || 'Event'}</span>
+                                        </span>
+                                        <span class="text-[11px] font-semibold text-slate-400 font-mono">${ev.timestamp}</span>
+                                    </div>
+                                    <p class="text-xs text-slate-600 font-medium mt-1">${ev.notes || ''}</p>
+                                    <div class="flex items-center gap-4 text-[10px] text-slate-400 mt-2 font-semibold pt-2 border-t border-slate-200/60">
+                                        <span><i class="bi bi-person-fill text-slate-500"></i> ${ev.performer || 'System'}</span>
+                                        <span><i class="bi bi-building text-slate-500"></i> ${ev.department || 'Office'}</span>
+                                        ${ev.tracking_id ? `<span class="font-mono text-indigo-600"><i class="bi bi-qr-code"></i> ID: ${ev.tracking_id}</span>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+        } else {
+            if (timelineFeed) timelineFeed.innerHTML = `<div class="p-4 bg-rose-50 text-rose-700 rounded-xl text-xs font-bold text-center">Failed to load tracking timeline</div>`;
+        }
+    } catch (err) {
+        console.error('Error loading live tracking timeline:', err);
+        if (timelineFeed) timelineFeed.innerHTML = `<div class="p-4 bg-rose-50 text-rose-700 rounded-xl text-xs font-bold text-center">Network error loading live happenings</div>`;
+    }
+}
+
+async function submitTrackerEventLog() {
+    if (!currentTrackingDocId) return;
+
+    const newStatus = document.getElementById('tracker-new-status').value;
+    const eventNotes = document.getElementById('tracker-event-notes').value.trim();
+
+    try {
+        const formData = new FormData();
+        formData.append('id', currentTrackingDocId);
+        formData.append('source', currentTrackingDocSource);
+        formData.append('status', newStatus);
+        formData.append('notes', eventNotes || `Workflow status updated to ${newStatus}`);
+        formData.append('activity', 'Status Progression');
+
+        const response = await fetch('API/documents_api.php?action=log_event', {
+            method: 'POST',
+            body: formData
+        });
+        const result = await response.json();
+
+        if (result && result.success) {
+            showNotification('Live event logged & status updated!', 'success');
+            document.getElementById('tracker-event-notes').value = '';
+            await loadLiveTrackingTimeline(currentTrackingDocId, currentTrackingDocSource, currentTrackingDocRef);
+            if (typeof refreshDocumentsModule === 'function') refreshDocumentsModule(true);
+        } else {
+            showNotification(result.message || 'Failed to log event', 'error');
+        }
+    } catch (err) {
+        console.error('Error logging event:', err);
+        showNotification('Network error logging tracking event', 'error');
+    }
+}
+
+async function dispatchLiveLRMIntegrationFromModal() {
+    if (!currentTrackingDocId) return;
+    const btn = document.getElementById('btn-modal-lrm-dispatch');
+    if (btn) btn.disabled = true;
+
+    try {
+        showNotification('Initiating 3-Step Live LRM System Integration Dispatch...', 'info');
+        const response = await fetch('API/documents_api.php?action=forward_to_lrs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: currentTrackingDocId,
+                source: currentTrackingDocSource,
+                description: 'Live dispatch from Document Tracker Happenings Feed'
+            })
+        });
+        const result = await response.json();
+
+        if (result && result.success) {
+            showNotification(`Successfully dispatched to LRM System! Tracking ID: ${result.tracking_id || 'Generated'}`, 'success');
+            await loadLiveTrackingTimeline(currentTrackingDocId, currentTrackingDocSource, currentTrackingDocRef);
+            if (typeof refreshDocumentsModule === 'function') refreshDocumentsModule(true);
+        } else {
+            showNotification(result.message || 'Failed to dispatch to LRM System', 'error');
+        }
+    } catch (err) {
+        console.error('Error dispatching LRM integration:', err);
+        showNotification('Network error dispatching LRM integration', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 }
 
 // Forward to LRS Modal & Versioning Handlers
@@ -21021,8 +21664,32 @@ async function renderIssueMapping() {
 }
 
 // PC Dashboard Calendar functions
+function openPCCalendarModal() {
+    const modal = document.getElementById('pc-calendar-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        renderPCDashboardCalendar();
+    }
+}
+
+function closePCCalendarModal() {
+    const modal = document.getElementById('pc-calendar-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Close modal on backdrop click
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('pc-calendar-modal');
+    if (modal && e.target === modal) {
+        closePCCalendarModal();
+    }
+});
+
 let pcDashboardCalYear = new Date().getFullYear();
 let pcDashboardCalMonth = new Date().getMonth();
+
 
 function pcDashboardCalendarChangeMonth(delta) {
     pcDashboardCalMonth += delta;

@@ -5,7 +5,9 @@
  */
 
 // Base URLs
-define('BASE_URL', '/CAP101/PC');
+// Auto-detect base URL for local vs live environment
+$isLive = (isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'localhost') === false && strpos($_SERVER['HTTP_HOST'], '127.0.0.1') === false);
+define('BASE_URL', $isLive ? '' : '/CAP101/PC');
 define('ADMIN_PANEL', BASE_URL . '/system-template-full.php');
 define('PUBLIC_PORTAL', BASE_URL . '/public/index.php');
 define('LOGIN_PAGE', BASE_URL . '/login.php');
@@ -63,6 +65,11 @@ function setStandardSession($user) {
     $_SESSION['verification_status'] = $user['verification_status'] ?? 'pending';
     $_SESSION['login_time'] = time();
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+
+    // Tag session with portal context to prevent session bleed between portals
+    $roleNorm = strtolower(str_replace([' ', '_'], '', $user['role'] ?? 'citizen'));
+    $citizen_roles = ['citizen', 'guest', 'public'];
+    $_SESSION['portal'] = in_array($roleNorm, $citizen_roles) ? 'citizen' : 'admin';
 }
 ?>
 

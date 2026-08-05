@@ -381,6 +381,144 @@ try {
             echo json_encode(['success' => true, 'data' => $versions]);
             break;
 
+        case 'get_tracking_timeline':
+            initializeDocumentVersionsTable();
+            $id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
+            $reference = trim((string)($_GET['reference'] ?? $_POST['reference'] ?? ''));
+            $source = normalizeSource($_GET['source'] ?? $_POST['source'] ?? 'consultation');
+
+            $doc = null;
+            if ($id > 0) {
+                if ($source === 'admin') {
+                    $doc = getAdminDocumentById($id) ?: getDocumentById($id);
+                } else {
+                    $doc = getDocumentById($id) ?: getAdminDocumentById($id);
+                }
+            } elseif (!empty($reference)) {
+                $doc = getDocumentByReference($reference);
+            }
+
+            $refNumber = $doc['reference_number'] ?? ($doc['reference'] ?? ($id > 0 ? ('CONSULT-' . sprintf('%06d', $id)) : ''));
+            $versions = !empty($refNumber) ? getDocumentVersions($refNumber) : [];
+
+            $events = [];
+
+            // Stage 1: Document Upload Event
+            if ($doc) {
+                $uploadDate = $doc['upload_date'] ?? ($doc['document_date'] ?? date('Y-m-d H:i:s'));
+                $events[] = [
+                    'timestamp' => date('M j, Y g:i A', strtotime($uploadDate)),
+                    'raw_date' => $uploadDate,
+                    'title' => 'Document Registered & Uploaded',
+                    'activity' => 'Upload',
+                    'status' => 'submitted',
+                    'performer' => $doc['uploaded_by_name'] ?? 'System User',
+                    'department' => 'Public Consultation Office',
+                    'notes' => 'Original document file registered into PCMS repository. Ref: ' . ($refNumber ?: 'N/A'),
+                    'badge' => 'bg-blue-100 text-blue-800 border-blue-200'
+                ];
+            }
+
+            // Version events & LRM dispatches
+            $latestTrackingId = null;
+            foreach ($versions as $v) {
+                if (!empty($v['tracking_id'])) {
+                    $latestTrackingId = $v['tracking_id'];
+                }
+                $vDate = $v['created_at'] ?? date('Y-m-d H:i:s');
+                $isForward = strpos(strtolower($v['status'] ?? ''), 'forward') !== false || !empty($v['tracking_id']);
+
+                $events[] = [
+                    'timestamp' => date('M j, Y g:i A', strtotime($vDate)),
+                    'raw_date' => $vDate,
+                    'title' => $isForward ? 'External System Integration Dispatch (LRM)' : ('Status Update: ' . ucfirst($v['status'] ?? 'Updated')),
+                    'activity' => $isForward ? 'LRM Dispatch' : 'Status Update',
+                    'status' => $v['status'] ?? 'updated',
+                    'performer' => 'Secretariat / Integration Engine',
+                    'department' => 'Legislative Records Management (LRM)',
+                    'tracking_id' => $v['tracking_id'] ?? null,
+                    'notes' => $v['notes'] ?? 'Document version updated or dispatched to external integration server.',
+                    'badge' => $isForward ? 'bg-indigo-100 text-indigo-800 border-indigo-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                ];
+            }
+
+            // Sort timeline by date descending
+            usort($events, function($a, $b) {
+                return strtotime($b['raw_date']) - strtotime($a['raw_date']);
+            });
+
+            // Calculate current pipeline stage (1 to 4)
+            $currStatus = strtolower($doc['status'] ?? 'submitted');
+            $stage = 1;
+            if (in_array($currStatus, ['reviewed', 'under_review'])) {
+                $stage = 2;
+            } elseif (in_array($currStatus, ['forwarded_to_lrs', 'forwarded', 'active'])) {
+                $stage = 3;
+            } elseif (in_array($currStatus, ['approved', 'published', 'archived'])) {
+                $stage = 4;
+            }
+
+            $lrmBaseUrl = defined('LRM_BASE_URL') ? LRM_BASE_URL : 'https://llrm.spvalenzuela.com';
+
+            echo json_encode([
+                'success' => true,
+                'document' => $doc,
+                'reference_number' => $refNumber,
+                'latest_tracking_id' => $latestTrackingId ?: ($refNumber ?: ('TRK-' . date('Ymd') . '-' . rand(1000, 9999))),
+                'pipeline_stage' => $stage,
+                'integration' => [
+                    'lrm_system' => 'LRM (Legislative Records Management)',
+                    'lrm_base_url' => $lrmBaseUrl,
+                    'lrm_events_endpoint' => defined('LRM_EVENTS_URL') ? LRM_EVENTS_URL : ($lrmBaseUrl . '/modules/document-tracking/api/document-events.php'),
+                    'status' => 'Connected & Active',
+                    'api_key' => defined('LRM_API_KEY') ? (substr(LRM_API_KEY, 0, 8) . '***') : 'Configured'
+                ],
+                'timeline' => $events
+            ]);
+            break;
+
+        case 'log_event':
+            initializeDocumentVersionsTable();
+            $id = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
+            $activity = trim((string)($_POST['activity'] ?? 'Status Update'));
+            $status = trim((string)($_POST['status'] ?? 'under_review'));
+            $notes = trim((string)($_POST['notes'] ?? 'Updated document tracking timeline'));
+            $performer = trim((string)($_POST['performed_by'] ?? $_SESSION['full_name'] ?? 'Secretariat'));
+
+            if ($id <= 0) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Invalid document ID']);
+                exit;
+            }
+
+            $doc = getDocumentById($id) ?: getAdminDocumentById($id);
+            if (!$doc) {
+                http_response_code(404);
+                echo json_encode(['success' => false, 'message' => 'Document not found']);
+                exit;
+            }
+
+            $refNumber = $doc['reference_number'] ?? ($doc['reference'] ?? ('CONSULT-' . sprintf('%06d', $id)));
+            addDocumentVersion([
+                'document_id' => $id,
+                'reference_number' => $refNumber,
+                'title' => $doc['original_filename'] ?? ($doc['title'] ?? 'Document'),
+                'version_number' => '1.0',
+                'document_type' => $doc['document_type'] ?? 'consultation',
+                'original_filename' => $doc['original_filename'] ?? 'document.pdf',
+                'stored_filename' => $doc['stored_filename'] ?? 'document.pdf',
+                'file_path' => 'uploads/documents/' . ($doc['stored_filename'] ?? ''),
+                'file_size' => $doc['file_size'] ?? 0,
+                'status' => $status,
+                'notes' => "[{$activity}] by {$performer}: {$notes}"
+            ]);
+
+            // Update doc status
+            updateDocumentStatus($id, $status);
+
+            echo json_encode(['success' => true, 'message' => 'Event logged successfully in live tracker timeline']);
+            break;
+
 
         default:
             http_response_code(400);

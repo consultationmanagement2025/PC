@@ -41,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['full_name'] = $user['fullname'] ?? 'Citizen';
                         $_SESSION['email'] = $user['email'];
                         $_SESSION['role'] = $role;
+                        $_SESSION['portal'] = 'citizen'; // Isolate from admin portal
 
                         // Redirect to public portal
                         header('Location: index.php?login=success&name=' . urlencode($user['fullname'] ?? 'Citizen'));

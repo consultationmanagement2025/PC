@@ -1,6 +1,7 @@
 <?php
 
-$configFile = dirname(__DIR__) . '/config.php';
+// Load config if available for fallback constants
+$configFile = __DIR__ . '/config.php';
 if (file_exists($configFile)) {
     require_once $configFile;
 }
@@ -24,7 +25,7 @@ if (!function_exists('dbConnect')) {
 
         $hosts = array_unique(array_filter([$primaryHost, 'localhost', '127.0.0.1']));
         $users = array_unique(array_filter([$primaryUser, 'cons_pc_db', 'consu2396_cons_pc_db', 'consu2396_pc_db', 'root']));
-        $passes = array_unique([$primaryPass, '%wE!*-vMg4GCbB#3', 'e3sEe1sf!g6+uoak', 'consultation2025', '']);
+        $passes = array_unique([$primaryPass, '%wE!*-vMg4GCbB#3', 'e3sEe1sf!g6+uoak', 'consultation2025', 'admin', '']);
         $names = array_unique(array_filter([$primaryName, 'cons_pc_db', 'consu2396_cons_pc_db', 'consu2396_pc_db', 'pc_db']));
 
         $lastErr = null;

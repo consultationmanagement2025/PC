@@ -22,18 +22,17 @@ require_once __DIR__ . '/../email_config.php';
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
 $is_authenticated = isset($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($_SESSION['role']);
 
-if (!$is_authenticated) {
+$action = $_POST['action'] ?? ($_GET['action'] ?? 'list');
+$read_actions = ['list', 'get', 'get_vote_stats', 'get_all_vote_stats', 'debug'];
+
+if (!in_array($action, $read_actions, true) && !$is_authenticated) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Unauthorized access. Please log in first.']);
     exit;
 }
 
-
-
 $is_super_admin = ($current_role === 'super admin' || $current_role === 'superadmin');
 $is_staff = in_array($current_role, ['staff', 'barangay staff', 'barangay_staff', 'barangay'], true);
-
-$action = $_POST['action'] ?? ($_GET['action'] ?? 'list');
 
 
 
@@ -556,6 +555,35 @@ try {
 
             echo json_encode(['success' => $success]);
 
+            break;
+
+        case 'update_status':
+            $data = json_decode(file_get_contents('php://input'), true);
+            if (empty($data)) {
+                $data = $_POST;
+            }
+            $id = (int)($data['id'] ?? ($_GET['id'] ?? 0));
+            $status = strtolower(trim((string)($data['status'] ?? '')));
+            if (!$id || !$status) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Consultation ID and status required']);
+                exit;
+            }
+
+            $allowedStatuses = ['draft', 'pending', 'scheduled', 'active', 'viewed', 'replied', 'completed', 'closed', 'archived'];
+            if (!in_array($status, $allowedStatuses, true)) {
+                $status = 'pending';
+            }
+
+            $stmt = $conn->prepare("UPDATE consultations SET status = ? WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param('si', $status, $id);
+                $ok = $stmt->execute();
+                $stmt->close();
+                echo json_encode(['success' => (bool)$ok, 'status' => $status]);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Failed to prepare database statement']);
+            }
             break;
 
             

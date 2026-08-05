@@ -4,6 +4,12 @@ require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../DATABASE/consultations.php';
 require_once __DIR__ . '/../DATABASE/feedback.php';
 require_once __DIR__ . '/../DATABASE/announcements.php';
+require_once __DIR__ . '/../config/google_oauth_config.php';
+
+// Generate direct Google OAuth URL for citizen portal (bypasses custom google-auth.php page)
+$_citizenOAuthState = bin2hex(random_bytes(16));
+$_SESSION['citizen_google_oauth_state'] = $_citizenOAuthState;
+$citizenGoogleOAuthUrl = getGoogleAuthUrl($_citizenOAuthState);
 
 // Ensure required tables exist
 initializeConsultationsTable();
@@ -467,7 +473,17 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
 $user_role = strtolower(trim($_SESSION['role'] ?? ''));
 $is_citizen_session = isset($_SESSION['user_id']) && ($user_role === 'citizen' || empty($user_role) || $user_role === 'user');
 $current_user_name = $_SESSION['fullname'] ?? $_SESSION['full_name'] ?? $_SESSION['username'] ?? ($_SESSION['email'] ?? null);
-$is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($current_user_name);
+
+// Portal isolation: only recognize sessions that belong to the citizen portal.
+// If an admin/resource person is logged in (portal='admin'), treat them as guest here.
+$_session_portal = $_SESSION['portal'] ?? null;
+$_is_admin_portal_session = ($_session_portal === 'admin');
+if ($_is_admin_portal_session) {
+    // Clear citizen-side state — do NOT destroy the session (that would log them out everywhere)
+    $current_user_name = null;
+    $is_citizen_session = false;
+}
+$is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($current_user_name));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -534,7 +550,7 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
             </p>
 
             <div class="space-y-3">
-                <a href="google-auth.php" class="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm border border-slate-300 px-5 py-3 rounded-xl transition-all shadow-sm hover:shadow">
+                <a href="<?php echo htmlspecialchars($citizenGoogleOAuthUrl); ?>" class="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm border border-slate-300 px-5 py-3 rounded-xl transition-all shadow-sm hover:shadow">
                     <svg class="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
                         <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.3 7.31 24 12 24z"/>
@@ -617,31 +633,26 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
                                     <p class="text-xs font-bold text-slate-800"><?php echo htmlspecialchars($current_user_name); ?></p>
                                     <p class="text-[11px] text-slate-500 truncate"><?php echo htmlspecialchars($_SESSION['email'] ?? ''); ?></p>
                                 </div>
-                                <button onclick="showMyActivityModal()" class="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                                <button onclick="showMyActivityModal()" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors">
                                     <i class="fa-solid fa-clock-history text-valenzuela-blue"></i> My Submissions & Votes
                                 </button>
-                                <button onclick="showTrackModal()" class="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2">
-                                    <i class="fa-solid fa-barcode text-valenzuela-red"></i> Track Submission
-                                </button>
                                 <div class="border-t border-gray-100 my-1"></div>
-                                <a href="sign-out.php" class="block w-full text-left px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 flex items-center gap-2">
+                                <a href="sign-out.php" class="block w-full text-left px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors">
                                     <i class="fa-solid fa-right-from-bracket"></i> Sign Out
                                 </a>
                             </div>
                         </div>
                     <?php else: ?>
-                        <a href="google-auth.php" class="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs border border-slate-300 hover:border-slate-400 px-4 py-2 rounded-full transition-all shadow-sm hover:shadow">
+                        <a href="<?php echo htmlspecialchars($citizenGoogleOAuthUrl); ?>" class="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs border border-slate-300 hover:border-slate-400 px-4 py-2 rounded-full transition-all shadow-sm hover:shadow">
                             <svg class="w-4 h-4" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
                                 <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.3 7.31 24 12 24z"/>
                                 <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.17 0 9.99 0 12s.46 3.83 1.26 5.42l4.02-3.15z"/>
                                 <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
                             </svg>
-                            <span class="font-bold">Sign In</span>
+                            <span>Sign in with Google</span>
                         </a>
-                        <a href="sign-up.php" class="bg-valenzuela-red hover:bg-red-700 text-white px-5 py-2 rounded-full font-bold text-xs transition-all shadow-[0_4px_14px_0_rgba(220,38,38,0.35)] hover:shadow-lg hover:-translate-y-0.5">
-                            Get Started
-                        </a>
+
                     <?php endif; ?>
                 </div>
 
@@ -655,7 +666,7 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
         </div>
 
         <!-- Mobile Menu Dropdown -->
-        <div id="mobile-menu" class="hidden md:hidden bg-white border-b border-gray-200 px-4 py-5 space-y-3 shadow-xl absolute w-full left-0 z-50">
+        <div id="mobile-menu" class="hidden md:hidden pb-4 space-y-2 border-t border-gray-100 mt-3 pt-3">
             <a href="#active-consultations" class="block font-medium text-slate-700 hover:text-valenzuela-blue py-1 flex items-center gap-2">
                 <i class="fa-solid fa-comments text-valenzuela-blue w-5"></i> Consultations
             </a>
@@ -670,7 +681,7 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
             </button>
             <?php if ($is_logged_in): ?>
                 <button onclick="showMyActivityModal()" class="w-full text-left font-medium text-slate-700 hover:text-valenzuela-blue py-1 flex items-center gap-2">
-                    <i class="fa-solid fa-clock-history text-amber-500 w-5"></i> My Submissions
+                    <i class="fa-solid fa-clock-history text-amber-500 w-5"></i> My Submissions & Votes
                 </button>
             <?php endif; ?>
 
@@ -681,7 +692,7 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
                         <a href="sign-out.php" class="text-xs font-bold text-red-600">Sign Out</a>
                     </div>
                 <?php else: ?>
-                    <a href="google-auth.php" class="flex items-center justify-center gap-2 font-bold text-slate-700 bg-white border border-gray-300 py-2.5 rounded-lg shadow-sm hover:bg-slate-50 transition-colors">
+                    <a href="<?php echo htmlspecialchars($citizenGoogleOAuthUrl); ?>" class="flex items-center justify-center gap-2 font-bold text-slate-700 bg-white border border-gray-300 py-2.5 rounded-lg shadow-sm hover:bg-slate-50 transition-colors">
                         <svg class="w-4 h-4" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
                             <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.3 7.31 24 12 24z"/>
@@ -690,7 +701,7 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
                         </svg>
                         <span>Sign In</span>
                     </a>
-                    <a href="sign-up.php" class="block text-center bg-valenzuela-red text-white py-2.5 rounded-lg font-bold">Get Started</a>
+
                 <?php endif; ?>
             </div>
         </div>
@@ -1479,7 +1490,7 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
 
         function castSurveyVote(surveyId, optionChosen, confirmChange = false) {
             if (!window.__IS_LOGGED_IN__) {
-                window.location.href = 'google-auth.php';
+                window.location.href = '<?php echo htmlspecialchars($citizenGoogleOAuthUrl); ?>';
                 return;
             }
 
@@ -1739,6 +1750,137 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
                 });
         }
 
+        /* ==========================================================
+           CITIZEN 6-STAGE REAL-TIME LEGISLATIVE TRACKER
+           ========================================================== */
+        function renderCitizenConnectingDotsTracker(status, itemId, trackingCode) {
+            const st = String(status || '').toLowerCase().trim();
+            let currentStep = 1;
+            if (st === 'draft' || st === 'pending' || st === 'new' || st === 'submitted' || !st) currentStep = 1;
+            else if (st === 'under_review' || st === 'reviewed' || st === 'viewed' || st === 'replied') currentStep = 2;
+            else if (st === 'active' || st === 'published_portal' || st === 'voting') currentStep = 3;
+            else if (st === 'scheduled' || st === 'committee' || st === 'forwarded') currentStep = 4;
+            else if (st === 'approved' || st === 'ordinance' || st === 'in_ordinance') currentStep = 5;
+            else if (st === 'completed' || st === 'closed' || st === 'officialized' || st === 'archived') currentStep = 6;
+
+            const steps = [
+                { num: 1, name: 'Received', desc: 'Public consultation intake logged and pending evaluation by Resource Person', statusVal: 'pending' },
+                { num: 2, name: 'Vetting', desc: 'Reviewed, evaluated & prepared for public consultation by assigned Resource Person', statusVal: 'under_review' },
+                { num: 3, name: 'Public Portal', desc: 'Published live on the Public Portal for citizen voting, surveys, and public feedback', statusVal: 'active' },
+                { num: 4, name: 'Committee', desc: 'Dispatched to Committee Management System with public feedback synthesis report', statusVal: 'scheduled' },
+                { num: 5, name: 'Ordinance', desc: 'Forwarded to Ordinance System to draft and formalize findings into a city ordinance bill', statusVal: 'approved' },
+                { num: 6, name: 'Officialized', desc: 'Enacted into official city ordinance & stored in permanent municipal archive', statusVal: 'completed' }
+            ];
+
+            const linePercent = Math.min(100, Math.max(0, (currentStep - 1) * 20));
+
+            const dotsHtml = steps.map(step => {
+                const isCompleted = step.num < currentStep;
+                const isCurrent = step.num === currentStep;
+
+                let dotBg = 'bg-slate-200 border-slate-300 hover:bg-slate-300';
+                let innerContent = '';
+
+                if (isCurrent) {
+                    dotBg = 'bg-amber-500 border-amber-600 ring-4 ring-amber-200 scale-110 shadow-sm';
+                    innerContent = '<span class="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>';
+                } else if (isCompleted) {
+                    dotBg = 'bg-emerald-500 border-emerald-600 ring-1 ring-emerald-200';
+                    innerContent = '<i class="fa-solid fa-check text-[9px] text-white font-bold"></i>';
+                }
+
+                const safeName = step.name.replace(/'/g, "\\'");
+                const safeDesc = step.desc.replace(/'/g, "\\'");
+
+                return `
+                    <div class="relative cursor-pointer group flex flex-col items-center" onclick="openCitizenStageDetailModal(${step.num}, 6, '${safeName}', '${safeDesc}', ${isCurrent}, ${isCompleted})" title="Click to view Stage ${step.num}: ${safeName}">
+                        <div class="w-6 h-6 rounded-full border-2 ${dotBg} flex items-center justify-center transition-all z-10">
+                            ${innerContent}
+                        </div>
+                        <span class="text-[8.5px] font-bold mt-1 text-center max-w-[55px] leading-tight ${isCurrent ? 'text-amber-700 font-extrabold' : (isCompleted ? 'text-emerald-700' : 'text-slate-400')}">
+                            ${step.name}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="mt-3 pt-3 border-t border-slate-200/80">
+                    <div class="flex items-center justify-between text-[11px] mb-2">
+                        <span class="font-bold text-slate-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-route text-amber-500"></i> Real-Time Legislative Progress:
+                        </span>
+                        <span class="font-mono text-[10px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-bold">
+                            Stage ${currentStep} of 6 (${steps[currentStep - 1].name})
+                        </span>
+                    </div>
+                    <div class="relative px-3 py-2 bg-white rounded-xl border border-slate-200/80 shadow-xs">
+                        <div class="absolute top-[20px] left-[28px] right-[28px] h-1 bg-slate-100 rounded-full z-0"></div>
+                        <div class="absolute top-[20px] left-[28px] h-1 bg-gradient-to-r from-emerald-500 via-amber-400 to-amber-500 rounded-full z-0 transition-all duration-500" style="width: calc((100% - 56px) * ${linePercent / 100});"></div>
+                        <div class="flex justify-between items-start relative z-10">
+                            ${dotsHtml}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function openCitizenStageDetailModal(stepNum, totalSteps, stepName, stepDesc, isCurrent, isCompleted) {
+            let modalEl = document.getElementById('citizen-stage-detail-modal');
+            if (!modalEl) {
+                modalEl = document.createElement('div');
+                modalEl.id = 'citizen-stage-detail-modal';
+                document.body.appendChild(modalEl);
+            }
+
+            const statusBadgeHtml = isCurrent 
+                ? `<span class="px-2.5 py-1 rounded-full bg-amber-50 border border-amber-300 text-amber-800 text-[11px] font-bold inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> ⚡ Current Active Stage</span>`
+                : (isCompleted 
+                    ? `<span class="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-[11px] font-bold inline-flex items-center gap-1.5"><i class="fa-solid fa-circle-check"></i> ✓ Stage Completed</span>`
+                    : `<span class="px-2.5 py-1 rounded-full bg-slate-100 border border-slate-300 text-slate-600 text-[11px] font-bold inline-flex items-center gap-1.5"><i class="fa-solid fa-clock"></i> ○ Upcoming Stage</span>`);
+
+            modalEl.className = 'fixed top-5 right-5 z-[9999] w-80 sm:w-96 bg-white text-slate-900 rounded-2xl shadow-2xl border border-slate-200 p-5 transition-all duration-300 transform scale-100';
+            modalEl.innerHTML = `
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 font-black text-xs flex items-center justify-center shadow-xs">
+                            ${stepNum}/${totalSteps}
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-bold uppercase tracking-wider text-amber-600">Legislative Progress Tracker</div>
+                            <div class="font-black text-sm text-slate-900 leading-tight">${stepName}</div>
+                        </div>
+                    </div>
+                    <button onclick="closeCitizenStageDetailModal()" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs font-bold transition flex items-center justify-center cursor-pointer">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="font-medium text-slate-500">Stage Status:</span>
+                        ${statusBadgeHtml}
+                    </div>
+
+                    <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-200 text-xs text-slate-700 leading-relaxed font-medium">
+                        <div class="text-[11px] font-bold text-amber-800 mb-1 flex items-center gap-1">
+                            <i class="fa-solid fa-circle-info"></i> Stage Details:
+                        </div>
+                        ${stepDesc}
+                    </div>
+
+                    <div class="pt-2 text-[10px] text-slate-500 font-medium text-center border-t border-slate-100 flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-shield-halved text-emerald-600"></i> Synchronized with real-time audit log
+                    </div>
+                </div>
+            `;
+        }
+
+        function closeCitizenStageDetailModal() {
+            const modalEl = document.getElementById('citizen-stage-detail-modal');
+            if (modalEl) modalEl.remove();
+        }
+
         // My Activity History Modal
         function showMyActivityModal() {
             const modal = document.getElementById('my-activity-modal');
@@ -1746,7 +1888,7 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
             if (modal) modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
             if (content) {
-                content.innerHTML = '<div class="text-center py-8 text-slate-400 flex items-center justify-center gap-2"><i class="fa-solid fa-spinner fa-spin text-valenzuela-blue text-lg"></i> <span>Loading your history...</span></div>';
+                content.innerHTML = '<div class="text-center py-8 text-slate-400 flex items-center justify-center gap-2"><i class="fa-solid fa-spinner fa-spin text-valenzuela-blue text-lg"></i> <span>Loading your history & tracking status...</span></div>';
             }
 
             fetch('index.php?api=get_my_activity')
@@ -1754,38 +1896,48 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
                 .then(res => {
                     if (!content) return;
                     if (res.success) {
-                        let html = '';
+                        let html = `
+                            <div class="mb-4">
+                                <input type="text" id="activity-search-input" onkeyup="filterActivityList()" placeholder="🔍 Filter submissions by title or tracking code (e.g. TRK-2026)..." class="w-full px-4 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-valenzuela-blue outline-none font-medium shadow-xs">
+                            </div>
+                        `;
                         if ((!res.proposals || res.proposals.length === 0) && (!res.feedback || res.feedback.length === 0)) {
-                            html = '<div class="p-6 text-center text-slate-400 bg-slate-50 rounded-2xl border border-slate-200"><i class="fa-solid fa-folder-open text-3xl text-slate-300 mb-2"></i><p class="text-xs italic">No proposal submissions or feedback recorded under your account yet.</p></div>';
+                            html += '<div class="p-6 text-center text-slate-400 bg-slate-50 rounded-2xl border border-slate-200"><i class="fa-solid fa-folder-open text-3xl text-slate-300 mb-2"></i><p class="text-xs italic">No proposal submissions or feedback recorded under your account yet.</p></div>';
                         } else {
                             if (res.proposals && res.proposals.length > 0) {
-                                html += '<h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">My Submitted Proposals (' + res.proposals.length + ')</h4>';
+                                html += '<h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center justify-between"><span>My Submitted Proposals (' + res.proposals.length + ')</span> <span class="text-[10px] text-amber-600 font-normal">Click dots for stage details</span></h4>';
+                                html += '<div id="proposals-list-container">';
                                 html += res.proposals.map(p => `
-                                    <div class="p-4 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200 text-xs space-y-2 mb-3 transition-colors">
+                                    <div class="activity-item-card p-4 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200 text-xs space-y-2 mb-4 transition-colors shadow-xs" data-search="${escapeHtml((p.title + ' ' + (p.tracking_number || '') + ' ' + (p.category || '')).toLowerCase())}">
                                         <div class="flex justify-between items-start font-bold text-slate-800">
-                                            <span class="text-sm text-slate-900">${escapeHtml(p.title)}</span>
-                                            <span class="font-mono bg-blue-50 text-valenzuela-blue px-2.5 py-1 rounded-lg border border-blue-200 text-[11px]">${escapeHtml(p.tracking_number || 'TRK-PENDING')}</span>
+                                            <span class="text-sm text-slate-900 font-black">${escapeHtml(p.title)}</span>
+                                            <span class="font-mono bg-blue-50 text-valenzuela-blue px-2.5 py-1 rounded-lg border border-blue-200 text-[11px] font-extrabold">${escapeHtml(p.tracking_number || 'TRK-PENDING')}</span>
                                         </div>
-                                        <p class="text-slate-600 line-clamp-2">${escapeHtml(p.description || '')}</p>
-                                        <div class="flex justify-between items-center pt-2 border-t border-slate-200 text-[11px] text-slate-400">
-                                            <span>Category: ${escapeHtml(p.category || 'General')}</span>
-                                            <span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold uppercase text-[10px]">${escapeHtml(p.status || 'pending')}</span>
+                                        <p class="text-slate-600 leading-relaxed">${escapeHtml(p.description || '')}</p>
+                                        <div class="flex justify-between items-center text-[11px] text-slate-500 pt-1">
+                                            <span>Category: <strong class="text-slate-700">${escapeHtml(p.category || 'General')}</strong></span>
+                                            <span class="text-[10px] text-slate-400">${escapeHtml(p.created_at || '')}</span>
                                         </div>
+                                        ${renderCitizenConnectingDotsTracker(p.status, p.id, p.tracking_number)}
                                     </div>
                                 `).join('');
+                                html += '</div>';
                             }
                             if (res.feedback && res.feedback.length > 0) {
-                                html += '<h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mt-5 mb-3">My Feedback & Comments (' + res.feedback.length + ')</h4>';
+                                html += '<h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mt-6 mb-3">My Feedback & Comments (' + res.feedback.length + ')</h4>';
+                                html += '<div id="feedback-list-container">';
                                 html += res.feedback.map(f => `
-                                    <div class="p-4 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200 text-xs space-y-2 mb-3 transition-colors">
+                                    <div class="activity-item-card p-4 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200 text-xs space-y-2 mb-4 transition-colors shadow-xs" data-search="${escapeHtml(((f.consultation_title || '') + ' ' + (f.tracking_token || '') + ' ' + (f.message || '')).toLowerCase())}">
                                         <div class="flex justify-between items-start">
-                                            <span class="font-bold text-slate-800">${escapeHtml(f.consultation_title || 'General Feedback')}</span>
-                                            <span class="font-mono bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px]">${escapeHtml(f.tracking_token || '')}</span>
+                                            <span class="font-bold text-slate-800 text-sm">${escapeHtml(f.consultation_title || 'General Feedback')}</span>
+                                            <span class="font-mono bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold">${escapeHtml(f.tracking_token || '')}</span>
                                         </div>
-                                        <p class="text-slate-700">${escapeHtml(f.message)}</p>
-                                        ${f.admin_response ? `<div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-xl text-valenzuela-blue font-medium"><strong>Response:</strong> ${escapeHtml(f.admin_response)}</div>` : ''}
+                                        <p class="text-slate-700 leading-relaxed">${escapeHtml(f.message)}</p>
+                                        ${f.admin_response ? `<div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-xl text-valenzuela-blue font-medium"><strong>Legislative Response:</strong> ${escapeHtml(f.admin_response)}</div>` : ''}
+                                        ${renderCitizenConnectingDotsTracker(f.status || 'pending', f.id, f.tracking_token)}
                                     </div>
                                 `).join('');
+                                html += '</div>';
                             }
                         }
                         content.innerHTML = html;
@@ -1799,6 +1951,20 @@ $is_logged_in = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !e
                     }
                 });
         }
+
+        function filterActivityList() {
+            const query = (document.getElementById('activity-search-input')?.value || '').toLowerCase().trim();
+            const cards = document.querySelectorAll('.activity-item-card');
+            cards.forEach(card => {
+                const searchData = card.getAttribute('data-search') || '';
+                if (!query || searchData.includes(query)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
         function closeMyActivityModal() {
             document.getElementById('my-activity-modal').classList.add('hidden');
             document.body.style.overflow = 'auto';

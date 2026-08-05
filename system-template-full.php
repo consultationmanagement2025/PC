@@ -5341,8 +5341,8 @@ $totalPages = ceil($totalLogs / $pageSize);
                                         <thead class="bg-gray-50 border-b border-gray-200">
                                             <tr>
                                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Document Title</th>
-                                                <th class="px-6 py-3 text-left font-semibold text-gray-700">User</th>
-                                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Status</th>
+                                                <th class="px-6 py-3 text-left font-semibold text-gray-700">User / Type</th>
+                                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Status Tracker</th>
                                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Size</th>
                                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Downloads</th>
                                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Actions</th>
@@ -5403,6 +5403,9 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
                                 <div class="flex items-center gap-2 flex-wrap">
+    <button type="button" onclick="openPCCalendarModal()" class="btn-outline px-4 py-2" title="Open Consultation Calendar">
+        <i class="bi bi-calendar3 mr-2"></i>Calendar
+    </button>
     <button type="button" onclick="openModuleReportModal('consultations')" class="btn-outline px-4 py-2">
         <i class="bi bi-file-earmark-bar-graph mr-2"></i>Generate Report
     </button>
@@ -5468,18 +5471,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
                             </div>
 
-                            <!-- Calendar Display -->
-                            <div class="bg-white rounded-lg shadow-sm p-4 border-l-4 border-purple-600 mt-6">
-                                <div class="flex items-center justify-between mb-2">
-                                    <div class="text-gray-600 text-sm font-medium">Consultation Calendar</div>
-                                    <div class="flex gap-1">
-                                        <button onclick="consultationCalendarChangeMonth(-1)" class="p-1 hover:bg-gray-100 rounded text-gray-600"><i class="bi bi-chevron-left"></i></button>
-                                        <button onclick="consultationCalendarChangeMonth(1)" class="p-1 hover:bg-gray-100 rounded text-gray-600"><i class="bi bi-chevron-right"></i></button>
-                                    </div>
-                                </div>
-                                <div id="consultation-calendar-label" class="text-center font-bold text-gray-900 text-sm mb-2"></div>
-                                <div id="consultation-calendar-grid" class="grid grid-cols-7 gap-1 text-xs"></div>
-                            </div>
+
 
 
 

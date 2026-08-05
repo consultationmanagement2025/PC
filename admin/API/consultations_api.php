@@ -22,18 +22,17 @@ require_once __DIR__ . '/../email_config.php';
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
 $is_authenticated = isset($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($_SESSION['role']);
 
-if (!$is_authenticated) {
+$action = $_POST['action'] ?? ($_GET['action'] ?? 'list');
+$read_actions = ['list', 'get', 'get_vote_stats', 'get_all_vote_stats', 'debug'];
+
+if (!in_array($action, $read_actions, true) && !$is_authenticated) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Unauthorized access. Please log in first.']);
     exit;
 }
 
-
-
 $is_super_admin = ($current_role === 'super admin' || $current_role === 'superadmin');
 $is_staff = in_array($current_role, ['staff', 'barangay staff', 'barangay_staff', 'barangay'], true);
-
-$action = $_POST['action'] ?? ($_GET['action'] ?? 'list');
 
 
 
@@ -394,7 +393,16 @@ try {
                                 $document_type, $document_description
                             );
                             $stmtDoc->execute();
+                            $createdDocId = $conn->insert_id;
                             $stmtDoc->close();
+
+                            if ($createdDocId > 0 && function_exists('forwardDocumentToLRS')) {
+                                try {
+                                    forwardDocumentToLRS($createdDocId, 'consultation', 'Auto-forwarded consultation summary on creation');
+                                } catch (Throwable $lrsEx) {
+                                    error_log('Auto LRS forward on creation failed: ' . $lrsEx->getMessage());
+                                }
+                            }
                         }
                     }
                 } catch (Throwable $e) {
@@ -412,6 +420,59 @@ try {
             break;
 
             
+
+        case 'approve_publish':
+            $data = json_decode(file_get_contents('php://input'), true);
+            if (empty($data)) {
+                $data = $_POST;
+            }
+            $id = (int)($data['id'] ?? ($_GET['id'] ?? 0));
+            if (!$id) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Consultation ID required']);
+                exit;
+            }
+
+            $committee = $data['committee'] ?? 'Rules & Governance Committee';
+            $response_mode = $data['response_mode'] ?? 'feedback';
+            $end_date = !empty($data['end_date']) ? $data['end_date'] : date('Y-m-d', strtotime('+14 days'));
+
+            $stmt = $conn->prepare("UPDATE consultations SET status = 'active', type = 'official', category = ?, response_mode = ?, end_date = ? WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param('sssi', $committee, $response_mode, $end_date, $id);
+                $ok = $stmt->execute();
+                $stmt->close();
+
+                // Auto generate document and forward to LRS on approval
+                if ($ok) {
+                    try {
+                        require_once __DIR__ . '/../UTILS/generate_consultation_documents.php';
+                        if (function_exists('generateConsultationDocuments')) {
+                            generateConsultationDocuments($id);
+                        }
+                        $dStmt = $conn->prepare("SELECT id FROM documents WHERE consultation_id = ? ORDER BY id DESC LIMIT 1");
+                        if ($dStmt) {
+                            $dStmt->bind_param('i', $id);
+                            $dStmt->execute();
+                            $dRes = $dStmt->get_result();
+                            if ($dRes && $dRow = $dRes->fetch_assoc()) {
+                                $approveDocId = (int)$dRow['id'];
+                                if ($approveDocId > 0 && function_exists('forwardDocumentToLRS')) {
+                                    forwardDocumentToLRS($approveDocId, 'consultation', 'Auto-forwarded approved citizen submission to LRS');
+                                }
+                            }
+                            $dStmt->close();
+                        }
+                    } catch (Throwable $exLrs) {
+                        error_log('LRS auto-forward on approve failed: ' . $exLrs->getMessage());
+                    }
+                }
+
+                echo json_encode(['success' => $ok]);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Database statement prepare failed']);
+            }
+            break;
 
         case 'update':
 
@@ -496,6 +557,35 @@ try {
 
             break;
 
+        case 'update_status':
+            $data = json_decode(file_get_contents('php://input'), true);
+            if (empty($data)) {
+                $data = $_POST;
+            }
+            $id = (int)($data['id'] ?? ($_GET['id'] ?? 0));
+            $status = strtolower(trim((string)($data['status'] ?? '')));
+            if (!$id || !$status) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Consultation ID and status required']);
+                exit;
+            }
+
+            $allowedStatuses = ['draft', 'pending', 'scheduled', 'active', 'viewed', 'replied', 'completed', 'closed', 'archived'];
+            if (!in_array($status, $allowedStatuses, true)) {
+                $status = 'pending';
+            }
+
+            $stmt = $conn->prepare("UPDATE consultations SET status = ? WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param('si', $status, $id);
+                $ok = $stmt->execute();
+                $stmt->close();
+                echo json_encode(['success' => (bool)$ok, 'status' => $status]);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Failed to prepare database statement']);
+            }
+            break;
+
             
 
         case 'delete':
@@ -545,6 +635,32 @@ try {
             break;
 
             
+
+        case 'assign':
+            $consultation_id = (int)($_POST['consultation_id'] ?? 0);
+            $assigned_to = isset($_POST['assigned_to']) && $_POST['assigned_to'] !== '' ? (int)$_POST['assigned_to'] : null;
+
+            if (!$consultation_id) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Missing consultation_id']);
+                exit;
+            }
+
+            if ($assigned_to === null) {
+                $stmt = $conn->prepare("UPDATE consultations SET assigned_to = NULL WHERE id = ?");
+                $stmt->bind_param('i', $consultation_id);
+            } else {
+                $stmt = $conn->prepare("UPDATE consultations SET assigned_to = ? WHERE id = ?");
+                $stmt->bind_param('ii', $assigned_to, $consultation_id);
+            }
+
+            if ($stmt->execute()) {
+                echo json_encode(['success' => true, 'message' => 'Consultation assignment updated successfully']);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Database error: ' . $stmt->error]);
+            }
+            $stmt->close();
+            break;
 
         case 'save_outcome':
 

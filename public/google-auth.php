@@ -164,6 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['role'] = $user_role;
             $_SESSION['verification_status'] = $verification_status;
             $_SESSION['login_time'] = time();
+            $_SESSION['portal'] = 'citizen'; // Isolate from admin portal
 
             // Audit log
             $audit_file = file_exists(__DIR__ . '/../DATABASE/audit-log.php') ? (__DIR__ . '/../DATABASE/audit-log.php') : (__DIR__ . '/DATABASE/audit-log.php');

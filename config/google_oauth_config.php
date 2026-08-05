@@ -14,7 +14,12 @@
 // Google OAuth Configuration
 define('GOOGLE_CLIENT_ID', '483330697347-snf4hu7n502f9ko2l20snan49j6c72ba.apps.googleusercontent.com');
 define('GOOGLE_CLIENT_SECRET', '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');
-define('GOOGLE_REDIRECT_URI', 'http://localhost/CAP101/PC/google_oauth_callback.php');
+// Auto-detect redirect URI for local vs live
+$_googleIsLive = (isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'localhost') === false && strpos($_SERVER['HTTP_HOST'], '127.0.0.1') === false);
+define('GOOGLE_REDIRECT_URI', $_googleIsLive
+    ? 'https://consultation.spvalenzuela.com/google_oauth_callback.php'
+    : 'http://localhost/CAP101/PC/google_oauth_callback.php'
+);
 
 // Google OAuth endpoints
 define('GOOGLE_AUTH_URL', 'https://accounts.google.com/o/oauth2/auth');

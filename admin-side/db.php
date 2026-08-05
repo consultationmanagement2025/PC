@@ -1,14 +1,22 @@
 <?php
 
+// Load config if available for fallback constants
+$configFile = __DIR__ . '/config.php';
+if (file_exists($configFile)) {
+    require_once $configFile;
+}
+
 if (!function_exists('dbConnect')) {
     function dbConnect() {
-        $primaryHost = getenv('DB_HOST') ?: 'localhost';
-        $primaryUser = getenv('DB_USER') ?: 'cons_pc_db';
-        $primaryPass = getenv('DB_PASS') !== false ? getenv('DB_PASS') : '%wE!*-vMg4GCbB#3';
-        $primaryName = getenv('DB_NAME') ?: 'cons_pc_db';
-        $db_port_raw = getenv('DB_PORT');
+        $isLocal = defined('IS_LOCALHOST') ? IS_LOCALHOST : true;
+        $primaryHost = function_exists('app_env') ? app_env('DB_HOST', defined('DB_HOST') ? DB_HOST : 'localhost') : (getenv('DB_HOST') ?: (defined('DB_HOST') ? DB_HOST : 'localhost'));
+        $primaryUser = function_exists('app_env') ? app_env('DB_USER', defined('DB_USER') ? DB_USER : ($isLocal ? 'root' : 'cons_pc_db')) : (getenv('DB_USER') ?: (defined('DB_USER') ? DB_USER : ($isLocal ? 'root' : 'cons_pc_db')));
+        $primaryPass = function_exists('app_env') ? app_env('DB_PASS', defined('DB_PASS') ? DB_PASS : ($isLocal ? '' : '%wE!*-vMg4GCbB#3')) : (getenv('DB_PASS') !== false ? getenv('DB_PASS') : (defined('DB_PASS') ? DB_PASS : ($isLocal ? '' : '%wE!*-vMg4GCbB#3')));
+        $primaryName = function_exists('app_env') ? app_env('DB_NAME', defined('DB_NAME') ? DB_NAME : ($isLocal ? 'pc_db' : 'cons_pc_db')) : (getenv('DB_NAME') ?: (defined('DB_NAME') ? DB_NAME : ($isLocal ? 'pc_db' : 'cons_pc_db')));
+        
+        $db_port_raw = function_exists('app_env') ? app_env('DB_PORT', getenv('DB_PORT')) : getenv('DB_PORT');
         $db_port = 3306;
-        if ($db_port_raw !== false && $db_port_raw !== '') {
+        if ($db_port_raw !== null && $db_port_raw !== false && $db_port_raw !== '') {
             $db_port = (int)$db_port_raw;
             if ($db_port <= 0) {
                 $db_port = 3306;
@@ -17,7 +25,7 @@ if (!function_exists('dbConnect')) {
 
         $hosts = array_unique(array_filter([$primaryHost, 'localhost', '127.0.0.1']));
         $users = array_unique(array_filter([$primaryUser, 'cons_pc_db', 'consu2396_cons_pc_db', 'consu2396_pc_db', 'root']));
-        $passes = array_unique([$primaryPass, '%wE!*-vMg4GCbB#3', 'e3sEe1sf!g6+uoak', 'consultation2025', '']);
+        $passes = array_unique([$primaryPass, '%wE!*-vMg4GCbB#3', 'e3sEe1sf!g6+uoak', 'consultation2025', 'admin', '']);
         $names = array_unique(array_filter([$primaryName, 'cons_pc_db', 'consu2396_cons_pc_db', 'consu2396_pc_db', 'pc_db']));
 
         $lastErr = null;

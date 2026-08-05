@@ -158,6 +158,7 @@ unset($c);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Resource Person Workspace - Valenzuela PCMS</title>
+    <link rel="icon" type="image/png" href="images/logo.webp">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -197,9 +198,6 @@ unset($c);
             <div>
                 <h1 class="text-lg font-bold leading-tight">PCMS</h1>
                 <p class="text-xs text-red-200 font-medium">City of Valenzuela</p>
-                <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-950 text-red-200 border border-red-700/60">
-                    Expert Portal
-                </span>
             </div>
         </div>
 
@@ -219,13 +217,7 @@ unset($c);
                             <span class="ml-auto px-2 py-0.5 rounded-full text-xs bg-white text-red-900 font-bold"><?php echo $total_assigned; ?></span>
                         <?php endif; ?>
                     </a>
-                    <a href="#expertise" onclick="filterTaskCategory('expertise')" class="flex items-center px-4 py-3 text-amber-200 hover:bg-red-700/60 hover:text-white rounded-xl text-sm transition gap-3">
-                        <i class="bi bi-award-fill text-lg text-amber-400"></i>
-                        <span>Expertise Matches</span>
-                        <?php if ($expertise_match_count > 0): ?>
-                            <span class="ml-auto px-2 py-0.5 rounded-full text-xs bg-amber-400 text-amber-950 font-bold"><?php echo $expertise_match_count; ?></span>
-                        <?php endif; ?>
-                    </a>
+
                     <a href="#reports" onclick="filterTaskCategory('all')" class="flex items-center px-4 py-3 text-red-100 hover:bg-red-700/60 hover:text-white rounded-xl text-sm transition gap-3">
                         <i class="bi bi-file-earmark-text text-lg"></i>
                         <span>Resolution Reports</span>
@@ -268,7 +260,7 @@ unset($c);
                     <div class="flex items-center gap-2 text-xs text-slate-500">
                         <a href="index.php" class="hover:text-red-600">Home</a>
                         <i class="bi bi-chevron-right text-[10px]"></i>
-                        <span class="text-slate-800 font-medium">Expert Portal</span>
+                        <span class="text-slate-800 font-medium">Resource Person Workspace</span>
                     </div>
                 </div>
             </div>
@@ -315,7 +307,7 @@ unset($c);
             </div>
 
             <!-- KPI Metric Summary Cards (Admin Matching Grid) -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                     <div>
                         <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Assigned to You</p>
@@ -327,16 +319,7 @@ unset($c);
                     </div>
                 </div>
 
-                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-                    <div>
-                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Expertise Matches</p>
-                        <p class="text-3xl font-bold text-amber-600 mt-1"><?php echo $expertise_match_count; ?></p>
-                        <p class="text-[11px] text-amber-600 font-medium mt-0.5">Matching your field</p>
-                    </div>
-                    <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-2xl">
-                        <i class="bi bi-award-fill"></i>
-                    </div>
-                </div>
+
 
                 <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                     <div>
@@ -379,7 +362,7 @@ unset($c);
                         <select id="filter-assignment" onchange="filterTasks()" class="px-3 py-2 text-xs border border-slate-300 rounded-xl outline-none bg-white font-medium">
                             <option value="all">All Consultations</option>
                             <option value="assigned">Assigned to Me (<?php echo $total_assigned; ?>)</option>
-                            <option value="expertise">Expertise Matches (<?php echo $expertise_match_count; ?>)</option>
+
                             <option value="general">General Consultations</option>
                         </select>
                     </div>
