@@ -11,7 +11,21 @@ header('Content-Type: application/json');
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
-    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    // Log User & Audit Activity
+if (file_exists(__DIR__ . '/../DATABASE/user-logs.php')) {
+    require_once __DIR__ . '/../DATABASE/user-logs.php';
+    if (function_exists('logUserAction')) {
+        logUserAction($user_id, $user_name, 'Annotated Master Document', 'expert_annotation', 'consultation', $consultation_id, "Expert $user_name appended inline recommendations ($new_version_label) to consultation #$consultation_id", 'success');
+    }
+}
+if (file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+    require_once __DIR__ . '/../DATABASE/audit-log.php';
+    if (function_exists('logAction')) {
+        logAction($user_id, $user_name, 'Annotated Master Document', 'consultation', $consultation_id, null, null, 'success', "Expert $user_name appended inline recommendations ($new_version_label)");
+    }
+}
+
+echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit;
 }
 
@@ -19,12 +33,40 @@ if (!isset($_SESSION['user_id'])) {
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
 $allowed_roles = ['resource person', 'resource_person', 'staff', 'admin', 'administrator', 'super admin', 'superadmin'];
 if (!in_array($current_role, $allowed_roles, true)) {
-    echo json_encode(['success' => false, 'message' => 'Unauthorized access role']);
+    // Log User & Audit Activity
+if (file_exists(__DIR__ . '/../DATABASE/user-logs.php')) {
+    require_once __DIR__ . '/../DATABASE/user-logs.php';
+    if (function_exists('logUserAction')) {
+        logUserAction($user_id, $user_name, 'Annotated Master Document', 'expert_annotation', 'consultation', $consultation_id, "Expert $user_name appended inline recommendations ($new_version_label) to consultation #$consultation_id", 'success');
+    }
+}
+if (file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+    require_once __DIR__ . '/../DATABASE/audit-log.php';
+    if (function_exists('logAction')) {
+        logAction($user_id, $user_name, 'Annotated Master Document', 'consultation', $consultation_id, null, null, 'success', "Expert $user_name appended inline recommendations ($new_version_label)");
+    }
+}
+
+echo json_encode(['success' => false, 'message' => 'Unauthorized access role']);
     exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+    // Log User & Audit Activity
+if (file_exists(__DIR__ . '/../DATABASE/user-logs.php')) {
+    require_once __DIR__ . '/../DATABASE/user-logs.php';
+    if (function_exists('logUserAction')) {
+        logUserAction($user_id, $user_name, 'Annotated Master Document', 'expert_annotation', 'consultation', $consultation_id, "Expert $user_name appended inline recommendations ($new_version_label) to consultation #$consultation_id", 'success');
+    }
+}
+if (file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+    require_once __DIR__ . '/../DATABASE/audit-log.php';
+    if (function_exists('logAction')) {
+        logAction($user_id, $user_name, 'Annotated Master Document', 'consultation', $consultation_id, null, null, 'success', "Expert $user_name appended inline recommendations ($new_version_label)");
+    }
+}
+
+echo json_encode(['success' => false, 'message' => 'Invalid request method']);
     exit;
 }
 
@@ -40,12 +82,40 @@ $proposed_revisions = isset($input['proposed_revisions']) ? trim($input['propose
 $signoff_status = isset($input['signoff_status']) ? trim($input['signoff_status']) : 'ready_for_committee';
 
 if ($consultation_id === 0) {
-    echo json_encode(['success' => false, 'message' => 'Invalid consultation ID']);
+    // Log User & Audit Activity
+if (file_exists(__DIR__ . '/../DATABASE/user-logs.php')) {
+    require_once __DIR__ . '/../DATABASE/user-logs.php';
+    if (function_exists('logUserAction')) {
+        logUserAction($user_id, $user_name, 'Annotated Master Document', 'expert_annotation', 'consultation', $consultation_id, "Expert $user_name appended inline recommendations ($new_version_label) to consultation #$consultation_id", 'success');
+    }
+}
+if (file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+    require_once __DIR__ . '/../DATABASE/audit-log.php';
+    if (function_exists('logAction')) {
+        logAction($user_id, $user_name, 'Annotated Master Document', 'consultation', $consultation_id, null, null, 'success', "Expert $user_name appended inline recommendations ($new_version_label)");
+    }
+}
+
+echo json_encode(['success' => false, 'message' => 'Invalid consultation ID']);
     exit;
 }
 
 if (empty($technical_rationale) && empty($executive_summary)) {
-    echo json_encode(['success' => false, 'message' => 'Please provide executive summary or technical rationale']);
+    // Log User & Audit Activity
+if (file_exists(__DIR__ . '/../DATABASE/user-logs.php')) {
+    require_once __DIR__ . '/../DATABASE/user-logs.php';
+    if (function_exists('logUserAction')) {
+        logUserAction($user_id, $user_name, 'Annotated Master Document', 'expert_annotation', 'consultation', $consultation_id, "Expert $user_name appended inline recommendations ($new_version_label) to consultation #$consultation_id", 'success');
+    }
+}
+if (file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+    require_once __DIR__ . '/../DATABASE/audit-log.php';
+    if (function_exists('logAction')) {
+        logAction($user_id, $user_name, 'Annotated Master Document', 'consultation', $consultation_id, null, null, 'success', "Expert $user_name appended inline recommendations ($new_version_label)");
+    }
+}
+
+echo json_encode(['success' => false, 'message' => 'Please provide executive summary or technical rationale']);
     exit;
 }
 
@@ -55,7 +125,21 @@ $user_name = $_SESSION['fullname'] ?? 'Resource Person';
 // Fetch current consultation details
 $stmt = $conn->prepare("SELECT id, title, document_version, expert_notes FROM consultations WHERE id = ?");
 if (!$stmt) {
-    echo json_encode(['success' => false, 'message' => 'Database query error: ' . $conn->error]);
+    // Log User & Audit Activity
+if (file_exists(__DIR__ . '/../DATABASE/user-logs.php')) {
+    require_once __DIR__ . '/../DATABASE/user-logs.php';
+    if (function_exists('logUserAction')) {
+        logUserAction($user_id, $user_name, 'Annotated Master Document', 'expert_annotation', 'consultation', $consultation_id, "Expert $user_name appended inline recommendations ($new_version_label) to consultation #$consultation_id", 'success');
+    }
+}
+if (file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+    require_once __DIR__ . '/../DATABASE/audit-log.php';
+    if (function_exists('logAction')) {
+        logAction($user_id, $user_name, 'Annotated Master Document', 'consultation', $consultation_id, null, null, 'success', "Expert $user_name appended inline recommendations ($new_version_label)");
+    }
+}
+
+echo json_encode(['success' => false, 'message' => 'Database query error: ' . $conn->error]);
     exit;
 }
 
@@ -66,7 +150,21 @@ $consultation = $cRes ? $cRes->fetch_assoc() : null;
 $stmt->close();
 
 if (!$consultation) {
-    echo json_encode(['success' => false, 'message' => 'Consultation not found']);
+    // Log User & Audit Activity
+if (file_exists(__DIR__ . '/../DATABASE/user-logs.php')) {
+    require_once __DIR__ . '/../DATABASE/user-logs.php';
+    if (function_exists('logUserAction')) {
+        logUserAction($user_id, $user_name, 'Annotated Master Document', 'expert_annotation', 'consultation', $consultation_id, "Expert $user_name appended inline recommendations ($new_version_label) to consultation #$consultation_id", 'success');
+    }
+}
+if (file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+    require_once __DIR__ . '/../DATABASE/audit-log.php';
+    if (function_exists('logAction')) {
+        logAction($user_id, $user_name, 'Annotated Master Document', 'consultation', $consultation_id, null, null, 'success', "Expert $user_name appended inline recommendations ($new_version_label)");
+    }
+}
+
+echo json_encode(['success' => false, 'message' => 'Consultation not found']);
     exit;
 }
 
@@ -93,13 +191,41 @@ $new_version_label = 'v1.' . $annotation_count;
 // Update Master Consultation Record
 $updStmt = $conn->prepare("UPDATE consultations SET expert_notes = ?, document_version = ?, document_status = 'expert_annotated', expert_last_updated_by = ?, expert_last_updated_at = NOW(), status = 'completed' WHERE id = ?");
 if (!$updStmt) {
-    echo json_encode(['success' => false, 'message' => 'Database update prepare error: ' . $conn->error]);
+    // Log User & Audit Activity
+if (file_exists(__DIR__ . '/../DATABASE/user-logs.php')) {
+    require_once __DIR__ . '/../DATABASE/user-logs.php';
+    if (function_exists('logUserAction')) {
+        logUserAction($user_id, $user_name, 'Annotated Master Document', 'expert_annotation', 'consultation', $consultation_id, "Expert $user_name appended inline recommendations ($new_version_label) to consultation #$consultation_id", 'success');
+    }
+}
+if (file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+    require_once __DIR__ . '/../DATABASE/audit-log.php';
+    if (function_exists('logAction')) {
+        logAction($user_id, $user_name, 'Annotated Master Document', 'consultation', $consultation_id, null, null, 'success', "Expert $user_name appended inline recommendations ($new_version_label)");
+    }
+}
+
+echo json_encode(['success' => false, 'message' => 'Database update prepare error: ' . $conn->error]);
     exit;
 }
 
 $updStmt->bind_param('ssii', $expert_notes_json, $new_version_label, $user_id, $consultation_id);
 if (!$updStmt->execute()) {
-    echo json_encode(['success' => false, 'message' => 'Failed to update consultation: ' . $updStmt->error]);
+    // Log User & Audit Activity
+if (file_exists(__DIR__ . '/../DATABASE/user-logs.php')) {
+    require_once __DIR__ . '/../DATABASE/user-logs.php';
+    if (function_exists('logUserAction')) {
+        logUserAction($user_id, $user_name, 'Annotated Master Document', 'expert_annotation', 'consultation', $consultation_id, "Expert $user_name appended inline recommendations ($new_version_label) to consultation #$consultation_id", 'success');
+    }
+}
+if (file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+    require_once __DIR__ . '/../DATABASE/audit-log.php';
+    if (function_exists('logAction')) {
+        logAction($user_id, $user_name, 'Annotated Master Document', 'consultation', $consultation_id, null, null, 'success', "Expert $user_name appended inline recommendations ($new_version_label)");
+    }
+}
+
+echo json_encode(['success' => false, 'message' => 'Failed to update consultation: ' . $updStmt->error]);
     exit;
 }
 $updStmt->close();
@@ -136,6 +262,20 @@ $notes_summary = "Master Document Updated ($new_version_label): " . mb_substr($t
 
 // Create Expert Notification for Secretariat
 @$conn->query("INSERT INTO expert_notifications (user_id, title, message, type, consultation_id, is_read, created_at) VALUES ($user_id, 'Master Document Updated ($new_version_label)', 'Your inline expert input was appended to Master Document #$consultation_id ($new_version_label).', 'inline_annotation', $consultation_id, 0, NOW())");
+
+// Log User & Audit Activity
+if (file_exists(__DIR__ . '/../DATABASE/user-logs.php')) {
+    require_once __DIR__ . '/../DATABASE/user-logs.php';
+    if (function_exists('logUserAction')) {
+        logUserAction($user_id, $user_name, 'Annotated Master Document', 'expert_annotation', 'consultation', $consultation_id, "Expert $user_name appended inline recommendations ($new_version_label) to consultation #$consultation_id", 'success');
+    }
+}
+if (file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+    require_once __DIR__ . '/../DATABASE/audit-log.php';
+    if (function_exists('logAction')) {
+        logAction($user_id, $user_name, 'Annotated Master Document', 'consultation', $consultation_id, null, null, 'success', "Expert $user_name appended inline recommendations ($new_version_label)");
+    }
+}
 
 echo json_encode([
     'success' => true,

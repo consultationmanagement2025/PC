@@ -55,25 +55,32 @@ function initializeFeedbackTable() {
     if ($conn->query($sql) === TRUE) {
         return true;
     } else {
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS submission_type ENUM('survey', 'proposal', 'comment') DEFAULT 'comment'");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS committee_assigned VARCHAR(150) DEFAULT NULL");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS barangay VARCHAR(150) DEFAULT NULL");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS sentiment_tag VARCHAR(20) DEFAULT NULL");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS sentiment_score DECIMAL(6,2) DEFAULT NULL");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS topic_tags JSON");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS analysis_summary LONGTEXT");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS allow_email_notifications TINYINT(1) DEFAULT 0");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS attachment_path VARCHAR(255) DEFAULT NULL");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS feedback_hash VARCHAR(64) UNIQUE");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS is_archived TINYINT(1) DEFAULT 0");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS archived_at DATETIME DEFAULT NULL");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS lifecycle_stage ENUM('received', 'analyzed', 'considered_in_policy', 'outcome_published') DEFAULT 'received'");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS themes JSON");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS issue_priority INT CHECK(issue_priority >= 1 AND issue_priority <= 5)");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS policy_link_id INT");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS policy_link_type VARCHAR(50)");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS impact_summary LONGTEXT");
-        $conn->query("ALTER TABLE feedback ADD COLUMN IF NOT EXISTS tracking_token VARCHAR(64) UNIQUE");
+        
+    $cols = [];
+    $res = $conn->query("SHOW COLUMNS FROM feedback");
+    if ($res) {
+        while ($r = $res->fetch_assoc()) { $cols[] = $r['Field']; }
+    }
+    if (!in_array('submission_type', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN submission_type ENUM('survey', 'proposal', 'comment') DEFAULT 'comment'");
+    if (!in_array('committee_assigned', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN committee_assigned VARCHAR(150) DEFAULT NULL");
+    if (!in_array('barangay', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN barangay VARCHAR(150) DEFAULT NULL");
+    if (!in_array('sentiment_tag', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN sentiment_tag VARCHAR(20) DEFAULT NULL");
+    if (!in_array('sentiment_score', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN sentiment_score DECIMAL(6,2) DEFAULT NULL");
+    if (!in_array('topic_tags', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN topic_tags JSON");
+    if (!in_array('analysis_summary', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN analysis_summary LONGTEXT");
+    if (!in_array('allow_email_notifications', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN allow_email_notifications TINYINT(1) DEFAULT 0");
+    if (!in_array('attachment_path', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN attachment_path VARCHAR(255) DEFAULT NULL");
+    if (!in_array('feedback_hash', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN feedback_hash VARCHAR(64) DEFAULT NULL");
+    if (!in_array('is_archived', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN is_archived TINYINT(1) DEFAULT 0");
+    if (!in_array('archived_at', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN archived_at DATETIME DEFAULT NULL");
+    if (!in_array('lifecycle_stage', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN lifecycle_stage ENUM('received', 'analyzed', 'considered_in_policy', 'outcome_published') DEFAULT 'received'");
+    if (!in_array('themes', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN themes JSON");
+    if (!in_array('issue_priority', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN issue_priority INT DEFAULT NULL");
+    if (!in_array('policy_link_id', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN policy_link_id INT DEFAULT NULL");
+    if (!in_array('policy_link_type', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN policy_link_type VARCHAR(50) DEFAULT NULL");
+    if (!in_array('impact_summary', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN impact_summary LONGTEXT");
+    if (!in_array('tracking_token', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN tracking_token VARCHAR(64) DEFAULT NULL");
+
         return true;
     }
 }
@@ -124,6 +131,20 @@ function submitFeedback($guest_name, $guest_email, $guest_phone, $consultation_i
     if ($stmt->execute()) {
         $id = $conn->insert_id;
         $stmt->close();
+        if (file_exists(__DIR__ . '/user-logs.php')) {
+            require_once __DIR__ . '/user-logs.php';
+            if (function_exists('logUserAction')) {
+                $uid = $_SESSION['user_id'] ?? null;
+                logUserAction($uid, $guest_name, 'Submitted Feedback', 'citizen_feedback', 'consultation', $consultation_id, "Submitted feedback on consultation #$consultation_id", 'success', $message);
+            }
+        }
+        if (file_exists(__DIR__ . '/audit-log.php')) {
+            require_once __DIR__ . '/audit-log.php';
+            if (function_exists('logAction')) {
+                $uid = $_SESSION['user_id'] ?? null;
+                logAction($uid, $guest_name, 'Submitted Feedback', 'feedback', $consultation_id, null, null, 'success', 'Submitted citizen feedback');
+            }
+        }
         return ['id' => $id, 'tracking_token' => $tracking_token, 'sentiment' => $sentiment_tag, 'topics' => $analysis['topics']];
     }
 

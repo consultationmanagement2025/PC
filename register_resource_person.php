@@ -139,6 +139,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($updateStmt->execute()) {
                     $_SESSION['temp_user_id'] = $userId;
                     unset($_SESSION['google_user']);
+                    
+                    // Create notification for Admin
+                    if (file_exists('DATABASE/notifications.php')) {
+                        require_once 'DATABASE/notifications.php';
+                        if (function_exists('createNotification')) {
+                            createNotification(0, "👤 New Resource Person Application: $fullname ($department) applied for expert role. Please review in User Management.", "user_registration");
+                        }
+                    } else {
+                        @$conn->query("INSERT INTO notifications (user_id, message, type, created_at) VALUES (0, '👤 New Resource Person Application: " . $conn->real_escape_string($fullname) . " (" . $conn->real_escape_string($department) . ") applied for expert role. Please review in User Management.', 'user_registration', NOW())");
+                    }
+
                     header('Location: pending_approval.php');
                     exit;
                 } else {
@@ -169,6 +180,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $userId = $conn->insert_id;
                         unset($_SESSION['google_user']);
                         $_SESSION['temp_user_id'] = $userId;
+
+                        // Create notification for Admin
+                        if (file_exists('DATABASE/notifications.php')) {
+                            require_once 'DATABASE/notifications.php';
+                            if (function_exists('createNotification')) {
+                                createNotification(0, "👤 New Resource Person Application: $fullname ($department) applied for expert role. Please review in User Management.", "user_registration");
+                            }
+                        } else {
+                            @$conn->query("INSERT INTO notifications (user_id, message, type, created_at) VALUES (0, '👤 New Resource Person Application: " . $conn->real_escape_string($fullname) . " (" . $conn->real_escape_string($department) . ") applied for expert role. Please review in User Management.', 'user_registration', NOW())");
+                        }
+
                         header('Location: pending_approval.php');
                         exit;
                     } else {

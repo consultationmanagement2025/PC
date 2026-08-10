@@ -96,7 +96,7 @@ function logUserAction($user_id, $username, $action, $action_type = null, $entit
         return false;
     }
     
-    $types = 'isssssssss';
+    $types = 'issssisssss';
     $bind_names = [$types];
     $bind_names[] = &$user_id;
     $bind_names[] = &$username;

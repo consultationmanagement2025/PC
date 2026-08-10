@@ -36,55 +36,55 @@ try {
 
         case 'approve':
             // Approve a resource person application
-            $user_id = (int)($_POST['user_id'] ?? 0);
+            $user_id = (int)($_POST['user_id'] ?? ($_GET['user_id'] ?? 0));
             $admin_id = $_SESSION['user_id'] ?? null;
-            $admin_name = $_SESSION['fullname'] ?? 'System';
+            $admin_name = $_SESSION['fullname'] ?? 'Admin';
 
             if (!$user_id) {
                 echo json_encode(['success' => false, 'message' => 'Invalid user ID']);
                 exit;
             }
 
-            $stmt = $conn->prepare("UPDATE users SET verification_status = 'verified', approved_by = ?, approved_at = NOW() WHERE id = ? AND role = 'resource person' AND verification_status = 'pending'");
+            $stmt = $conn->prepare("UPDATE users SET status = 'active', verification_status = 'verified', approved_by = ?, approved_at = NOW() WHERE id = ?");
             $stmt->bind_param('ii', $admin_id, $user_id);
 
             if ($stmt->execute()) {
-                if ($stmt->affected_rows > 0) {
-                    // Log the approval action
-                    logAction($admin_id, $admin_name, 'approved_resource_person', 'user', $user_id, null, null, 'success', 'Admin approved resource person application');
-                    echo json_encode(['success' => true, 'message' => 'Application approved successfully']);
-                } else {
-                    echo json_encode(['success' => false, 'message' => 'Application not found or already processed']);
-                }
+                // Notify applicant
+                @$conn->query("CREATE TABLE IF NOT EXISTS expert_notifications (
+                    id INT(11) NOT NULL AUTO_INCREMENT,
+                    user_id INT(11) NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    message TEXT NOT NULL,
+                    type VARCHAR(50) DEFAULT 'assignment',
+                    consultation_id INT(11) DEFAULT NULL,
+                    is_read TINYINT(1) DEFAULT 0,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+                @$conn->query("INSERT INTO expert_notifications (user_id, title, message, type, is_read, created_at) VALUES ($user_id, 'Application Approved!', 'Congratulations! Your Resource Person application has been approved by City Admin $admin_name. You can now access your Expert Workspace.', 'approval', 0, NOW())");
+
+                echo json_encode(['success' => true, 'message' => 'Resource Person application approved successfully! User is now verified and active.']);
             } else {
-                echo json_encode(['success' => false, 'message' => 'Failed to approve application']);
+                echo json_encode(['success' => false, 'message' => 'Failed to approve application: ' . $stmt->error]);
             }
             $stmt->close();
             break;
 
         case 'reject':
             // Reject a resource person application
-            $user_id = (int)($_POST['user_id'] ?? 0);
-            $rejection_reason = trim($_POST['reason'] ?? '');
+            $user_id = (int)($_POST['user_id'] ?? ($_GET['user_id'] ?? 0));
             $admin_id = $_SESSION['user_id'] ?? null;
-            $admin_name = $_SESSION['fullname'] ?? 'System';
 
             if (!$user_id) {
                 echo json_encode(['success' => false, 'message' => 'Invalid user ID']);
                 exit;
             }
 
-            $stmt = $conn->prepare("UPDATE users SET verification_status = 'rejected', approved_by = ?, approved_at = NOW() WHERE id = ? AND role = 'resource person' AND verification_status = 'pending'");
+            $stmt = $conn->prepare("UPDATE users SET status = 'rejected', verification_status = 'rejected', approved_by = ?, approved_at = NOW() WHERE id = ?");
             $stmt->bind_param('ii', $admin_id, $user_id);
             
             if ($stmt->execute()) {
-                if ($stmt->affected_rows > 0) {
-                    // Log the rejection action
-                    logAction($admin_id, $admin_name, 'rejected_resource_person', 'user', $user_id, null, null, 'success', 'Admin rejected resource person application: ' . $rejection_reason);
-                    echo json_encode(['success' => true, 'message' => 'Application rejected successfully']);
-                } else {
-                    echo json_encode(['success' => false, 'message' => 'Application not found or already processed']);
-                }
+                echo json_encode(['success' => true, 'message' => 'Application rejected successfully']);
             } else {
                 echo json_encode(['success' => false, 'message' => 'Failed to reject application']);
             }

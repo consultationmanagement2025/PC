@@ -308,13 +308,11 @@ try {
         case 'forward_lrs':
         case 'forward_to_lrs':
         case 'forward_to_lrm':
-            if (empty($data)) {
-                $data = $_POST;
-            }
-            $id = (int)($data['id'] ?? $data['document_id'] ?? 0);
-            $source = normalizeSource($data['source'] ?? 'consultation');
-            $description = trim((string)($data['description'] ?? ''));
-            $performer = trim((string)($data['performed_by'] ?? ''));
+            $inputData = array_merge($_GET, $_POST, jsonInput());
+            $id = (int)($inputData['id'] ?? $inputData['document_id'] ?? $inputData['consultation_id'] ?? 0);
+            $source = normalizeSource($inputData['source'] ?? 'consultation');
+            $description = trim((string)($inputData['description'] ?? ''));
+            $performer = trim((string)($inputData['performed_by'] ?? $_SESSION['fullname'] ?? 'Admin'));
 
             if ($id <= 0) {
                 http_response_code(400);

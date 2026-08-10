@@ -14496,7 +14496,7 @@ async function saveConsultation() {
         }
 
 
-        showNotification(id ? 'Consultation updated successfully' : 'Consultation created successfully! It will now appear in Active Consultations.', 'success');
+        showConsultationSuccessModal(!!id, title);
 
         closeConsultationModal();
 
@@ -23128,15 +23128,47 @@ window.loadApprovedUserExperts = async function() {
 };
 
 window.approveResourcePersonApp = function(id, fullname) {
-    if (typeof approveResourcePerson === 'function') {
-        approveResourcePerson(id, fullname);
-    }
+    if (!confirm('Are you sure you want to approve this Resource Person application?')) return;
+    const formData = new FormData();
+    formData.append('user_id', id);
+    formData.append('action', 'approve');
+
+    fetch('API/resource_person_api.php?action=approve', {
+        method: 'POST',
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ ' + data.message);
+            location.reload();
+        } else {
+            alert('⚠️ ' + (data.message || 'Approval failed'));
+        }
+    })
+    .catch(err => alert('❌ Error: ' + err.message));
 };
 
 window.rejectResourcePersonApp = function(id, fullname) {
-    if (typeof rejectResourcePerson === 'function') {
-        rejectResourcePerson(id, fullname);
-    }
+    if (!confirm('Are you sure you want to reject this Resource Person application?')) return;
+    const formData = new FormData();
+    formData.append('user_id', id);
+    formData.append('action', 'reject');
+
+    fetch('API/resource_person_api.php?action=reject', {
+        method: 'POST',
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ ' + data.message);
+            location.reload();
+        } else {
+            alert('⚠️ ' + (data.message || 'Rejection failed'));
+        }
+    })
+    .catch(err => alert('❌ Error: ' + err.message));
 };
 
 

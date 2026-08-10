@@ -41,9 +41,19 @@ function initializeDocumentsTable() {
 }
 
 /**
- * Generate reference number for document
+ * Generate reference number for document (uses the exact tracking number from the public feedback queue)
  */
 function generateDocumentReference($consultation_id) {
+    global $conn;
+    $consultation_id = (int)$consultation_id;
+    if ($conn) {
+        $res = $conn->query("SELECT tracking_number FROM consultations WHERE id = $consultation_id LIMIT 1");
+        if ($res && $row = $res->fetch_assoc()) {
+            if (!empty($row['tracking_number'])) {
+                return $row['tracking_number'];
+            }
+        }
+    }
     return sprintf("CONSULT-%06d", $consultation_id);
 }
 

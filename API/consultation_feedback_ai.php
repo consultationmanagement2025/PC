@@ -655,7 +655,7 @@ try {
 
             // Persist brief to consultations table
             $briefJson = json_encode($brief);
-            $uStmt = $conn->prepare("UPDATE consultations SET ai_committee_brief = ?, committee_assigned = ? WHERE id = ?");
+            $uStmt = $conn->prepare("UPDATE consultations SET ai_committee_brief = ?, committee_assigned = ?, ai_analyzed = 1 WHERE id = ?");
             if ($uStmt) {
                 $uStmt->bind_param('ssi', $briefJson, $assignedCommittee, $consultationId);
                 $uStmt->execute();

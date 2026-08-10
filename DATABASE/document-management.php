@@ -46,9 +46,19 @@ function initializeDocumentsTable() {
 }
 
 /**
- * Generate reference number for document
+ * Generate reference number for document (uses the exact tracking number from the public feedback queue)
  */
 function generateDocumentReference($consultation_id) {
+    global $conn;
+    $consultation_id = (int)$consultation_id;
+    if ($conn) {
+        $res = $conn->query("SELECT tracking_number FROM consultations WHERE id = $consultation_id LIMIT 1");
+        if ($res && $row = $res->fetch_assoc()) {
+            if (!empty($row['tracking_number'])) {
+                return $row['tracking_number'];
+            }
+        }
+    }
     return sprintf("CONSULT-%06d", $consultation_id);
 }
 
@@ -637,8 +647,47 @@ function forwardDocumentToLRS($id, $source = 'consultation', $customDescription 
         if ($doc) {
             $isConsultation = true;
         } else {
-            $doc = getAdminDocumentById($id);
-            if ($doc) $isConsultation = false;
+            // Check if document exists for consultation_id = $id
+            $chkByCId = $conn->prepare("SELECT * FROM documents WHERE consultation_id = ? ORDER BY id DESC LIMIT 1");
+            if ($chkByCId) {
+                $chkByCId->bind_param('i', $id);
+                $chkByCId->execute();
+                $cRes = $chkByCId->get_result();
+                $doc = $cRes ? $cRes->fetch_assoc() : null;
+                $chkByCId->close();
+            }
+            if ($doc) {
+                $isConsultation = true;
+            } else {
+                // Check if $id is a valid consultation ID
+                $cChk = $conn->prepare("SELECT id FROM consultations WHERE id = ? LIMIT 1");
+                if ($cChk) {
+                    $cChk->bind_param('i', $id);
+                    $cChk->execute();
+                    $cExists = $cChk->get_result()->fetch_assoc();
+                    $cChk->close();
+                    if ($cExists) {
+                        require_once __DIR__ . '/../UTILS/generate_consultation_documents.php';
+                        if (function_exists('generateConsultationDocuments')) {
+                            generateConsultationDocuments($id);
+                            $chkByCId = $conn->prepare("SELECT * FROM documents WHERE consultation_id = ? ORDER BY id DESC LIMIT 1");
+                            if ($chkByCId) {
+                                $chkByCId->bind_param('i', $id);
+                                $chkByCId->execute();
+                                $cRes = $chkByCId->get_result();
+                                $doc = $cRes ? $cRes->fetch_assoc() : null;
+                                $chkByCId->close();
+                            }
+                        }
+                    }
+                }
+                if ($doc) {
+                    $isConsultation = true;
+                } else {
+                    $doc = getAdminDocumentById($id);
+                    if ($doc) $isConsultation = false;
+                }
+            }
         }
     }
 

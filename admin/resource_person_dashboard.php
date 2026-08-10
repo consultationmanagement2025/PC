@@ -49,8 +49,8 @@ function ensureResourcePersonSchema($conn) {
     if (!in_array('document_status', $cCols)) @$conn->query("ALTER TABLE consultations ADD COLUMN document_status VARCHAR(50) DEFAULT 'draft'");
     if (!in_array('expert_last_updated_by', $cCols)) @$conn->query("ALTER TABLE consultations ADD COLUMN expert_last_updated_by INT(11) DEFAULT NULL");
     if (!in_array('expert_last_updated_at', $cCols)) @$conn->query("ALTER TABLE consultations ADD COLUMN expert_last_updated_at DATETIME DEFAULT NULL");
-    if (!in_array('ai_analyzed', $cCols)) @$conn->query("ALTER TABLE consultations ADD COLUMN ai_analyzed TINYINT(1) DEFAULT 1");
-    if (!in_array('forwarded_to_expert', $cCols)) @$conn->query("ALTER TABLE consultations ADD COLUMN forwarded_to_expert TINYINT(1) DEFAULT 1");
+    if (!in_array('ai_analyzed', $cCols)) @$conn->query("ALTER TABLE consultations ADD COLUMN ai_analyzed TINYINT(1) DEFAULT 0");
+    if (!in_array('forwarded_to_expert', $cCols)) @$conn->query("ALTER TABLE consultations ADD COLUMN forwarded_to_expert TINYINT(1) DEFAULT 0");
 
     // 3. Document Audit Trail Table
     @$conn->query("CREATE TABLE IF NOT EXISTS consultation_document_audit_trail (
@@ -147,17 +147,17 @@ function isConsultationVisibleToExpert($cRow, $user_id, $user_role, $expertise_a
         return false; // AI analysis or intake not complete
     }
 
-    $aiAnalyzed = isset($cRow['ai_analyzed']) ? (int)$cRow['ai_analyzed'] : 1;
+    $aiAnalyzed = isset($cRow['ai_analyzed']) ? (int)$cRow['ai_analyzed'] : 0;
     if ($aiAnalyzed === 0) {
         return false; // Waiting for AI analysis
     }
 
     $assignedTo = (int)($cRow['assigned_to'] ?? 0);
-    $forwarded = isset($cRow['forwarded_to_expert']) ? (int)$cRow['forwarded_to_expert'] : 1;
+    $forwarded = isset($cRow['forwarded_to_expert']) ? (int)$cRow['forwarded_to_expert'] : 0;
     $docStatus = strtolower(trim($cRow['document_status'] ?? ''));
 
     // Check if admin has explicitly assigned or forwarded it
-    $isForwardedByAdmin = ($assignedTo > 0 || $forwarded === 1 || in_array($docStatus, ['sent_to_expert', 'expert_annotated', 'admin_validated', 'forwarded_to_committee']));
+    $isForwardedByAdmin = ($assignedTo === $user_id || $forwarded === 1 || in_array($docStatus, ['sent_to_expert', 'expert_annotated', 'admin_validated', 'forwarded_to_committee']));
     if (!$isForwardedByAdmin) {
         return false; // Admin has not forwarded this consultation to experts yet
     }
@@ -267,9 +267,16 @@ unset($c);
     <link rel="icon" type="image/png" href="images/logo.webp">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="../ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Google Fonts: Plus Jakarta Sans & Inter (Admin Side Font Family) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Poppins', sans-serif; }
+        body, button, input, select, textarea, table, th, td {
+            font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
         .bg-valenzuela-red { background-color: #800000; }
         .text-valenzuela-red { color: #800000; }
     </style>
@@ -434,9 +441,6 @@ unset($c);
                     <p class="text-red-100 text-xs sm:text-sm max-w-3xl leading-relaxed">
                         Department: <strong class="text-white"><?php echo htmlspecialchars($department); ?></strong> &bull; 
                         Registered Expertise: <span class="text-amber-200 font-bold px-2 py-0.5 bg-black/30 rounded-lg"><?php echo htmlspecialchars($expertise_areas); ?></span>
-                    </p>
-                    <p class="text-[11px] text-red-200/90 pt-1">
-                        <i class="bi bi-check-circle-fill text-emerald-400 mr-1"></i> Showing only consultations matching your registered expertise (e.g. <strong><?php echo htmlspecialchars($expertise_areas); ?></strong>) after AI analysis is completed and forwarded by the Admin.
                     </p>
                 </div>
                 <div class="absolute -right-6 -bottom-10 opacity-15 text-9xl text-white pointer-events-none">
@@ -622,41 +626,95 @@ unset($c);
         </main>
     </div>
 
-    <!-- Notification Drawer -->
+        <!-- Admin-Style Notification Drawer -->
     <div id="notif-drawer" class="fixed inset-y-0 right-0 w-full sm:w-96 bg-white shadow-2xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-200">
-        <div class="bg-gradient-to-r from-red-800 to-red-900 text-white p-5 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <i class="bi bi-bell-fill text-amber-300"></i>
-                <h3 class="font-bold text-sm">Notifications & Alerts</h3>
+        <!-- Header Banner with Admin Gradient -->
+        <div class="bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white p-5 flex items-center justify-between shadow-md">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-white/10 text-amber-300 flex items-center justify-center text-lg shadow-inner border border-white/20">
+                    <i class="bi bi-bell-fill"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-sm tracking-wide">Notifications & Alerts</h3>
+                    <p class="text-[11px] text-white/70">Expert Advisory Updates</p>
+                </div>
             </div>
-            <button onclick="toggleNotificationDrawer()" class="text-white hover:text-red-200 text-xl leading-none">&times;</button>
+            <button onclick="toggleNotificationDrawer()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white text-base transition flex items-center justify-center">&times;</button>
         </div>
-        <div class="p-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs">
-            <span class="font-semibold text-slate-600"><?php echo $unread_notif_count; ?> unread alert(s)</span>
-            <button onclick="markAllNotificationsRead()" class="text-red-700 font-bold hover:underline">Mark all as read</button>
+
+        <!-- Action Bar -->
+        <div class="p-3.5 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                <i class="bi bi-bell text-amber-600"></i> <?php echo $unread_notif_count; ?> Unread Alert(s)
+            </span>
+            <button onclick="markAllNotificationsRead()" class="text-red-700 hover:text-red-900 font-extrabold text-[11px] flex items-center gap-1 hover:underline transition">
+                <i class="bi bi-check2-all"></i> Mark all read
+            </button>
         </div>
-        <div class="flex-1 overflow-y-auto divide-y divide-slate-100 p-2 space-y-1">
+
+        <!-- Notifications Body -->
+        <div class="flex-1 overflow-y-auto p-3 space-y-2.5">
             <?php if (empty($notifications_list)): ?>
-                <div class="p-8 text-center text-slate-400 space-y-2">
-                    <i class="bi bi-bell-slash text-3xl block"></i>
-                    <p class="text-xs font-semibold">No Notifications Yet</p>
+                <div class="p-10 text-center text-slate-400 space-y-3 my-auto">
+                    <div class="w-14 h-14 rounded-2xl bg-slate-100 text-slate-300 mx-auto flex items-center justify-center text-2xl border border-slate-200">
+                        <i class="bi bi-bell-slash"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-600">No Notifications Yet</p>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Dispatched consultations and admin updates will appear here.</p>
+                    </div>
                 </div>
             <?php else: ?>
                 <?php foreach ($notifications_list as $n): ?>
-                    <div class="p-3.5 rounded-xl hover:bg-slate-50 transition space-y-1 border border-transparent <?php echo !$n['is_read'] ? 'bg-amber-50/60 border-amber-200' : ''; ?>">
+                    <?php 
+                        $type = strtolower($n['type'] ?? 'info');
+                        $badgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
+                        if ($type === 'assignment') $badgeClass = 'bg-red-100 text-red-800 border-red-200';
+                        elseif ($type === 'approval') $badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                        elseif ($type === 'rejection') $badgeClass = 'bg-rose-100 text-rose-800 border-rose-200';
+                    ?>
+                    <div onclick="openNotificationDetailModal('<?php echo htmlspecialchars(addslashes($n['title'])); ?>', '<?php echo htmlspecialchars(addslashes($n['message'])); ?>', '<?php echo strtoupper($n['type']); ?>', '<?php echo date('M j, Y g:i A', strtotime($n['created_at'])); ?>')"
+                         class="p-4 rounded-2xl border transition-all duration-200 cursor-pointer space-y-2 shadow-2xs hover:shadow-md <?php echo !$n['is_read'] ? 'bg-amber-50/70 border-amber-300/80 hover:bg-amber-100/70' : 'bg-white border-slate-200/80 hover:bg-slate-50'; ?>">
                         <div class="flex items-center justify-between">
-                            <span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase <?php echo $n['type'] === 'assignment' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'; ?>">
+                            <span class="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border <?php echo $badgeClass; ?>">
                                 <?php echo htmlspecialchars($n['type']); ?>
                             </span>
-                            <span class="text-[10px] text-slate-400"><?php echo date('M j, g:i a', strtotime($n['created_at'])); ?></span>
+                            <span class="text-[10px] text-slate-400 font-medium"><i class="bi bi-clock mr-1"></i><?php echo date('M j, g:i a', strtotime($n['created_at'])); ?></span>
                         </div>
                         <h4 class="font-bold text-xs text-slate-900 leading-snug"><?php echo htmlspecialchars($n['title']); ?></h4>
-                        <p class="text-[11px] text-slate-600"><?php echo htmlspecialchars($n['message']); ?></p>
+                        <p class="text-[11px] text-slate-600 line-clamp-2 leading-relaxed"><?php echo htmlspecialchars($n['message']); ?></p>
                     </div>
                 <?php endforeach; ?>
             <?php endif; ?>
         </div>
     </div>
+
+    <!-- ADMIN-STYLE NOTIFICATION DETAIL MODAL -->
+    <div id="notif-detail-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 space-y-0 animate-in fade-in zoom-in duration-150">
+            <div class="bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white p-6 flex items-start justify-between">
+                <div class="space-y-1.5 pr-4">
+                    <span id="modal-notif-type" class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/20 text-white border border-white/30">NOTIFICATION</span>
+                    <h3 id="modal-notif-title" class="text-base font-extrabold leading-tight text-white">Title</h3>
+                    <p id="modal-notif-time" class="text-[11px] text-white/70 font-medium"><i class="bi bi-clock mr-1"></i>Date</p>
+                </div>
+                <button type="button" onclick="closeNotificationDetailModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white text-base transition flex items-center justify-center shrink-0">&times;</button>
+            </div>
+
+            <div class="p-6 space-y-4">
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/90 text-xs text-slate-700 leading-relaxed font-medium" id="modal-notif-message">
+                    Message content
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeNotificationDetailModal()" class="w-full bg-slate-900 hover:bg-black text-white font-bold py-3 px-5 rounded-2xl text-xs transition shadow-md flex items-center justify-center gap-1">
+                        <i class="bi bi-check-circle"></i> Close & Mark Read
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 
     <!-- WORKSTATION MODAL: ANNOTATE SINGLE MASTER CONSULTATION DOCUMENT -->
     <div id="inline-input-modal" class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
@@ -672,6 +730,31 @@ unset($c);
                     <p class="text-xs text-slate-300">Annotating master document directly. Contributions are logged into the audit trail.</p>
                 </div>
                 <button onclick="closeInlineInputModal()" class="text-white/80 hover:text-white text-2xl font-bold leading-none">&times;</button>
+            </div>
+
+            <!-- LRMS Master Document Archival Tracker Bar -->
+            <div class="bg-slate-900 text-white px-6 py-3 border-b border-red-800">
+                <div class="flex items-center justify-between text-[11px] font-bold max-w-3xl mx-auto">
+                    <div class="flex items-center gap-1.5 text-emerald-400">
+                        <span class="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center text-[10px]"><i class="bi bi-check-lg"></i></span>
+                        <span>1. Master Draft (v1.0)</span>
+                    </div>
+                    <div class="h-0.5 flex-1 bg-emerald-500 mx-2"></div>
+                    <div class="flex items-center gap-1.5 text-amber-300">
+                        <span class="w-5 h-5 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center text-[10px]"><i class="bi bi-pencil-fill"></i></span>
+                        <span>2. Expert Annotated (v1.1)</span>
+                    </div>
+                    <div class="h-0.5 flex-1 bg-slate-700 mx-2"></div>
+                    <div class="flex items-center gap-1.5 text-slate-400">
+                        <span class="w-5 h-5 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center text-[10px]">3</span>
+                        <span>3. Secretariat Validated (v2.0)</span>
+                    </div>
+                    <div class="h-0.5 flex-1 bg-slate-700 mx-2"></div>
+                    <div class="flex items-center gap-1.5 text-slate-400">
+                        <span class="w-5 h-5 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center text-[10px]"><i class="bi bi-archive"></i></span>
+                        <span>4. LRMS Transmitted & Archived</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Modal Content Body -->
@@ -983,17 +1066,16 @@ unset($c);
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-check-circle-fill"></i> Save & Append to Master Document';
             if (data.success) {
-                alert(data.message);
                 closeInlineInputModal();
-                location.reload();
+                showMasterDocSuccessModal(data.version, data.message);
             } else {
-                alert('⚠️ ' + (data.message || 'Failed to save inline input'));
+                showSystemErrorModal(data.message || 'Failed to save inline input');
             }
         })
         .catch(err => {
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-check-circle-fill"></i> Save & Append to Master Document';
-            alert('❌ Error: ' + err.message);
+            showSystemErrorModal('Error: ' + err.message);
         });
     }
 

@@ -605,8 +605,8 @@ function createConsultation($title, $description, $category, $start_date, $end_d
     $allow_guest_quick_vote = (int)$allow_guest_quick_vote ? 1 : 0;
     $allow_guest_verified_vote = (int)$allow_guest_verified_vote ? 1 : 0;
 
-    $stmt = $conn->prepare("INSERT INTO consultations (title, description, category, district, barangay, start_date, end_date, admin_id, expected_posts, status, type, image_path, user_name, user_email, allow_email_notifications, source_url, response_mode, survey_question, survey_option_a, survey_option_b, allow_guest_quick_vote, allow_guest_verified_vote)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO consultations (title, description, category, district, barangay, start_date, end_date, admin_id, expected_posts, status, type, image_path, user_name, user_email, allow_email_notifications, source_url, response_mode, survey_question, survey_option_a, survey_option_b, allow_guest_quick_vote, allow_guest_verified_vote, ai_analyzed, forwarded_to_expert, document_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'draft')");
 
     if (!$stmt) {
         $errorMsg = "Prepare failed: " . ($conn ? $conn->error : 'No DB connection');

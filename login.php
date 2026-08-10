@@ -118,7 +118,18 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 error_log("Session created successfully. User ID: " . $_SESSION['user_id'] . ", Role: " . $_SESSION['role']);
                 
                 // Log successful login
-                logAction($user['id'], $user['fullname'], "User Login", "user", $user['id'], null, null, 'success', "Email verified login from IP: " . $_SERVER['REMOTE_ADDR']);
+                $roleNormCheck = strtolower(str_replace([' ', '_'], '', ($user['role'] ?? '')));
+                if (in_array($roleNormCheck, ['admin', 'administrator', 'superadmin', 'staff', 'barangaystaff'], true)) {
+                    logAction($user['id'], $user['fullname'], "Admin Login", "user", $user['id'], null, null, 'success', "Admin login from IP: " . $_SERVER['REMOTE_ADDR']);
+                } else {
+                    if (file_exists(__DIR__ . '/DATABASE/user-logs.php')) {
+                        require_once __DIR__ . '/DATABASE/user-logs.php';
+                        if (function_exists('logUserAction')) {
+                            logUserAction($user['id'], $user['fullname'], "User Login", "auth", "user", $user['id'], "Citizen/Expert logged into system", 'success');
+                        }
+                    }
+                    logAction($user['id'], $user['fullname'], "User Login", "user", $user['id'], null, null, 'success', "User login from IP: " . $_SERVER['REMOTE_ADDR']);
+                }
                 
                 // Redirect based on role (normalize role names to catch variants like 'super admin' or 'barangay staff')
                 error_log("Redirecting user with role: " . ($user['role'] ?? 'unknown'));
