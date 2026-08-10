@@ -156,3 +156,54 @@ function pcms_integration_on_consultation_closed(array $consultation): void
         ]);
     }
 }
+
+/**
+ * Sends event payload to CMS (Committee Management System) Live Endpoint
+ */
+function pcms_send_cms_event(array $customPayload = []): array
+{
+    $cmsApiUrl = "https://cms.spvalenzuela.com/api/v1/events.php";
+
+    $defaultPayload = [
+        "source_system"   => "PCMS",
+        "event"           => "consultation_feedback",
+        "consultation_id" => 12,
+        "committee_id"    => 3,
+        "committee_name"  => "Committee on Finance",
+        "title"           => "Public Consultation on Ordinance No. 001",
+        "description"     => "Consultation feedback requiring committee review.",
+        "referral_date"   => date('Y-m-d'),
+        "notes"           => "Referred for committee hearing and action."
+    ];
+
+    $payload = array_merge($defaultPayload, array_filter($customPayload, function ($v) {
+        return $v !== null && $v !== '';
+    }));
+
+    $ch = curl_init($cmsApiUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'Authorization: Bearer cms_live_9c1e5a7b3f8042d6b8e2a4c7f1d90638'
+        ],
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_TIMEOUT => 15
+    ]);
+
+    $response = curl_exec($ch);
+    $error = curl_error($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    return [
+        'success' => ($error === '' && $httpCode >= 200 && $httpCode < 300),
+        'http_code' => $httpCode,
+        'response' => $response,
+        'error' => $error,
+        'payload' => $payload
+    ];
+}
+

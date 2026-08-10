@@ -152,10 +152,9 @@ try {
         case 'create':
 
             // Verify CSRF token
+            $csrf = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? $_GET['csrf_token'] ?? null;
 
-            $csrf = $_POST['csrf_token'] ?? null;
-
-            if (!$csrf || !verifyCSRFToken($csrf)) {
+            if (!$is_authenticated && (!$csrf || !verifyCSRFToken($csrf))) {
 
                 http_response_code(403);
 

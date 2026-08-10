@@ -105,11 +105,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user_id = 0;
         $user_name = '';
         $user_role = 'citizen';
-        $verification_status = 'approved';
+        $verification_status = 'verified';
 
         if (isset($conn) && $conn) {
             // Query database for existing user account
-            $stmt = $conn->prepare("SELECT id, fullname, email, role, status, verification_status FROM users WHERE email = ? LIMIT 1");
+            $stmt = $conn->prepare("SELECT id, fullname, name, email, role, status, verification_status FROM users WHERE email = ? LIMIT 1");
             if ($stmt) {
                 $stmt->bind_param('s', $email);
                 $stmt->execute();
@@ -118,23 +118,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($result && $result->num_rows > 0) {
                     $user = $result->fetch_assoc();
                     $user_id = $user['id'];
-                    $user_name = !empty($user['fullname']) ? $user['fullname'] : $fullname;
+                    $user_name = !empty($user['fullname']) ? $user['fullname'] : (!empty($user['name']) ? $user['name'] : $fullname);
                     $user_role = !empty($user['role']) ? strtolower($user['role']) : 'citizen';
-                    $verification_status = strtolower(trim($user['verification_status'] ?? 'approved'));
+                    $verification_status = strtolower(trim($user['verification_status'] ?? 'verified'));
                 }
                 $stmt->close();
             }
 
             // Provision user if not found
             if (!$user_id) {
-                $username = explode('@', $email)[0];
+                $username = strtolower(explode('@', $email)[0]);
                 $hashed_password = password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT);
                 $user_role = 'citizen';
-                $verification_status = 'approved';
+                $verification_status = 'verified';
 
-                $insert_stmt = $conn->prepare("INSERT INTO users (fullname, username, email, password, role, status, created_at) VALUES (?, ?, ?, ?, ?, 'active', NOW())");
+                $insert_stmt = $conn->prepare("INSERT INTO users (fullname, name, username, email, password, role, status, verification_status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'active', 'verified', NOW())");
                 if ($insert_stmt) {
-                    $insert_stmt->bind_param('sssss', $fullname, $username, $email, $hashed_password, $user_role);
+                    $insert_stmt->bind_param('ssssss', $fullname, $fullname, $username, $email, $hashed_password, $user_role);
                     if ($insert_stmt->execute()) {
                         $user_id = $insert_stmt->insert_id;
                         $user_name = $fullname;
@@ -143,9 +143,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if (!$user_id) {
-                    $insert_stmt2 = $conn->prepare("INSERT INTO users (fullname, email, password, role, status, created_at) VALUES (?, ?, ?, ?, 'active', NOW())");
+                    $insert_stmt2 = $conn->prepare("INSERT INTO users (fullname, name, email, password, role, status, verification_status, created_at) VALUES (?, ?, ?, ?, ?, 'active', 'verified', NOW())");
                     if ($insert_stmt2) {
-                        $insert_stmt2->bind_param('ssss', $fullname, $email, $hashed_password, $user_role);
+                        $insert_stmt2->bind_param('sssss', $fullname, $fullname, $email, $hashed_password, $user_role);
                         if ($insert_stmt2->execute()) {
                             $user_id = $insert_stmt2->insert_id;
                             $user_name = $fullname;

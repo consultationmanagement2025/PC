@@ -78,6 +78,8 @@ function initializeConsultationsTable() {
     $required_columns = [
         'admin_id' => "INT",
         'type' => "ENUM('admin','user') DEFAULT 'admin'",
+        'district' => "VARCHAR(50) DEFAULT NULL",
+        'barangay' => "VARCHAR(100) DEFAULT NULL",
         'user_name' => "VARCHAR(255)",
         'user_email' => "VARCHAR(255)",
         'allow_email_notifications' => "TINYINT(1) DEFAULT 1",
@@ -107,7 +109,8 @@ function initializeConsultationsTable() {
         'remarks' => "LONGTEXT DEFAULT NULL",
         'ai_committee_brief' => "LONGTEXT DEFAULT NULL",
         'committee_forwarded_at' => "DATETIME DEFAULT NULL",
-        'committee_assigned' => "VARCHAR(150) DEFAULT NULL"
+        'committee_assigned' => "VARCHAR(150) DEFAULT NULL",
+        'assigned_to' => "INT(11) DEFAULT NULL"
     ];
     
     $result = $conn->query("SHOW COLUMNS FROM consultations");
@@ -231,14 +234,15 @@ function initializeConsultationVotesTable() {
 
 
     if (!$conn->query($sql)) {
-
         error_log("Error creating consultation_votes table: " . $conn->error);
-
         return false;
-
     }
 
-
+    // Auto-migration for existing installs
+    $colReason = $conn->query("SHOW COLUMNS FROM consultation_votes LIKE 'reason_text'");
+    if ($colReason && $colReason->num_rows === 0) {
+        $conn->query("ALTER TABLE consultation_votes ADD COLUMN reason_text TEXT DEFAULT NULL AFTER vote_option");
+    }
 
     return true;
 
@@ -337,21 +341,24 @@ function getConsultationVoteStats($consultation_id) {
 
 
     $stmt = $conn->prepare("SELECT
-            (SELECT COUNT(*) FROM consultation_votes WHERE consultation_id = ? AND vote_option = 'agree')
-            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ? AND vote_option = 'agree') AS agree_votes,
+            (SELECT COUNT(*) FROM consultation_votes WHERE consultation_id = ? AND LOWER(vote_option) = 'agree')
+            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ? AND LOWER(vote_option) = 'agree')
+            + (SELECT COUNT(*) FROM feedback WHERE consultation_id = ? AND LOWER(category) = 'survey vote' AND (LOWER(message) LIKE '%agree%' OR LOWER(message) LIKE '%yes%' OR LOWER(message) LIKE '%support%')) AS agree_votes,
 
-            (SELECT COUNT(*) FROM consultation_votes WHERE consultation_id = ? AND vote_option = 'disagree')
-            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ? AND vote_option = 'disagree') AS disagree_votes,
+            (SELECT COUNT(*) FROM consultation_votes WHERE consultation_id = ? AND LOWER(vote_option) = 'disagree')
+            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ? AND LOWER(vote_option) = 'disagree')
+            + (SELECT COUNT(*) FROM feedback WHERE consultation_id = ? AND LOWER(category) = 'survey vote' AND (LOWER(message) LIKE '%disagree%' OR LOWER(message) LIKE '%no%' OR LOWER(message) LIKE '%oppose%')) AS disagree_votes,
 
             (SELECT COUNT(*) FROM consultation_votes WHERE consultation_id = ?)
-            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ?) AS total_votes");
+            + (SELECT COUNT(*) FROM consultation_guest_votes WHERE consultation_id = ?)
+            + (SELECT COUNT(*) FROM feedback WHERE consultation_id = ? AND LOWER(category) = 'survey vote') AS total_votes");
 
     if (!$stmt) {
         error_log("Error preparing getConsultationVoteStats: " . $conn->error);
         return ['agree_votes' => 0, 'disagree_votes' => 0, 'total_votes' => 0, 'agree_percent' => 0, 'disagree_percent' => 0];
     }
 
-    $stmt->bind_param('iiiiii', $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id);
+    $stmt->bind_param('iiiiiiiii', $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id, $consultation_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $row = $result ? $result->fetch_assoc() : null;
@@ -391,46 +398,48 @@ function getConsultationVoteStats($consultation_id) {
 
 
 
-function getUserConsultationVote($consultation_id, $user_id) {
-
+function getUserConsultationVote($consultation_id, $user_id = 0, $device_token = null, $guest_email = null) {
     global $conn;
 
-
-
     initializeConsultationVotesTable();
+    initializeConsultationGuestVotesTable();
 
     $consultation_id = (int)$consultation_id;
-
     $user_id = (int)$user_id;
+    $device_token = trim((string)$device_token);
+    $guest_email = strtolower(trim((string)$guest_email));
 
-
-
-    $stmt = $conn->prepare("SELECT vote_option FROM consultation_votes WHERE consultation_id = ? AND user_id = ? LIMIT 1");
-
-    if (!$stmt) {
-
-        error_log("Error preparing getUserConsultationVote: " . $conn->error);
-
-        return null;
-
+    // 1. First check consultation_votes if logged in user
+    if ($user_id > 0) {
+        $stmt = $conn->prepare("SELECT vote_option FROM consultation_votes WHERE consultation_id = ? AND user_id = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('ii', $consultation_id, $user_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $row = $result ? $result->fetch_assoc() : null;
+            $stmt->close();
+            if ($row && !empty($row['vote_option'])) {
+                return strtolower($row['vote_option']);
+            }
+        }
     }
 
+    // 2. Canonical IP+UA token fallback
+    $ipUaToken = 'DEV-' . md5(($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1') . ($_SERVER['HTTP_USER_AGENT'] ?? 'agent'));
 
+    $stmt = $conn->prepare("SELECT vote_option FROM consultation_guest_votes WHERE consultation_id = ? AND (device_token = ? OR device_token = ? OR (guest_email = ? AND ? <> '')) ORDER BY updated_at DESC LIMIT 1");
+    if ($stmt) {
+        $stmt->bind_param('issss', $consultation_id, $device_token, $ipUaToken, $guest_email, $guest_email);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+        if ($row && !empty($row['vote_option'])) {
+            return strtolower($row['vote_option']);
+        }
+    }
 
-    $stmt->bind_param('ii', $consultation_id, $user_id);
-
-    $stmt->execute();
-
-    $result = $stmt->get_result();
-
-    $row = $result ? $result->fetch_assoc() : null;
-
-    $stmt->close();
-
-
-
-    return $row['vote_option'] ?? null;
-
+    return null;
 }
 
 
@@ -843,7 +852,32 @@ function updateConsultation($id, $title, $description, $category, $status, $star
 
     global $conn;
 
+    initializeConsultationsTable();
+
     $id = (int)$id;
+    if ($id <= 0) return false;
+
+    if (empty($start_date) || empty($end_date)) {
+        $exStmt = $conn->prepare("SELECT start_date, end_date, created_at FROM consultations WHERE id = ? LIMIT 1");
+        if ($exStmt) {
+            $exStmt->bind_param('i', $id);
+            $exStmt->execute();
+            $exRow = $exStmt->get_result()->fetch_assoc();
+            $exStmt->close();
+            if ($exRow) {
+                if (empty($start_date)) {
+                    $start_date = !empty($exRow['start_date']) ? $exRow['start_date'] : $exRow['created_at'];
+                }
+                if (empty($end_date)) {
+                    $end_date = !empty($exRow['end_date']) ? $exRow['end_date'] : date('Y-m-d H:i:s', strtotime('+30 days'));
+                }
+            }
+        }
+    }
+
+    $start_date = normalizeDateForMysql($start_date, false);
+    $end_date = normalizeDateForMysql($end_date, true);
+
     $response_mode = in_array($response_mode, ['feedback', 'survey', 'hybrid'], true) ? $response_mode : 'hybrid';
     $survey_question = $survey_question ? trim((string)$survey_question) : null;
     $survey_option_a = trim((string)$survey_option_a) !== '' ? trim((string)$survey_option_a) : 'Agree';

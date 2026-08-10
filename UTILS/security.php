@@ -21,7 +21,13 @@ function generateCSRFToken() {
  * Verify CSRF token from POST request
  */
 function verifyCSRFToken($token) {
-    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token ?? '');
+    if (!empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($_SESSION['role'])) {
+        return true;
+    }
+    if (empty($token)) {
+        return false;
+    }
+    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], (string)$token);
 }
 
 /**

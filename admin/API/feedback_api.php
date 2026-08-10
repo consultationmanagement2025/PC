@@ -166,6 +166,49 @@ try {
             echo json_encode(['success' => (bool)$ok]);
             break;
 
+        case 'phms_pending_approvals':
+            $pending = getPendingPhmsApprovals();
+            echo json_encode([
+                'success' => true,
+                'count' => count($pending),
+                'data' => $pending
+            ]);
+            break;
+
+        case 'phms_approve_ingestion':
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $queue_id = (int)($data['queue_id'] ?? $data['id'] ?? $_GET['queue_id'] ?? 0);
+            $approveAll = !empty($data['all']);
+            if ($approveAll) {
+                $pending = getPendingPhmsApprovals();
+                $count = 0;
+                foreach ($pending as $p) {
+                    if (approvePhmsIngestion($p['queue_id'])) $count++;
+                }
+                echo json_encode(['success' => true, 'message' => "Successfully approved {$count} pending ingestion package(s)."]);
+            } else {
+                if (!$queue_id) {
+                    http_response_code(400);
+                    echo json_encode(['success' => false, 'message' => 'Queue ID required for approval']);
+                    exit;
+                }
+                $ok = approvePhmsIngestion($queue_id);
+                echo json_encode(['success' => (bool)$ok, 'message' => $ok ? 'Ingestion package approved and merged.' : 'Failed to approve ingestion package.']);
+            }
+            break;
+
+        case 'phms_reject_ingestion':
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $queue_id = (int)($data['queue_id'] ?? $data['id'] ?? $_GET['queue_id'] ?? 0);
+            if (!$queue_id) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Queue ID required for rejection']);
+                exit;
+            }
+            $ok = rejectPhmsIngestion($queue_id);
+            echo json_encode(['success' => (bool)$ok, 'message' => $ok ? 'Ingestion package rejected.' : 'Failed to reject ingestion package.']);
+            break;
+
         case 'get':
             $id = (int)($_GET['id'] ?? 0);
             if (!$id) {

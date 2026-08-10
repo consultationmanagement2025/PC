@@ -153,6 +153,7 @@ function analyzeFeedbackText($text) {
 }
 }
 
+if (!function_exists('buildConsultationSummary')) {
 function buildConsultationSummary($title, $rows) {
     $total = count($rows);
     $sentiment = ['positive' => 0, 'neutral' => 0, 'negative' => 0];
@@ -197,6 +198,7 @@ function buildConsultationSummary($title, $rows) {
         'summary' => $summary,
         'generated_at' => date('Y-m-d H:i:s'),
     ];
+}
 }
 
 function persistConsultationSummary($consultation_id, $summaryData, $generated_by = null, $generated_by_name = null, $generated_by_role = null) {

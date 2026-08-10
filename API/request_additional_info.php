@@ -27,12 +27,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Get JSON input
-$input = json_decode(file_get_contents('php://input'), true);
+// Get JSON or Form input
+$raw_input = json_decode(file_get_contents('php://input'), true) ?: [];
+$input = array_merge($_POST, $raw_input);
 
 $consultation_id = isset($input['consultation_id']) ? (int)$input['consultation_id'] : 0;
 $user_email = isset($input['user_email']) ? trim($input['user_email']) : '';
 $message = isset($input['message']) ? trim($input['message']) : '';
+$target_entity = isset($input['target_entity']) ? trim($input['target_entity']) : 'Admin & Committee';
+$priority = isset($input['priority']) && in_array(strtolower($input['priority']), ['normal', 'urgent']) ? strtolower($input['priority']) : 'normal';
 
 if ($consultation_id === 0) {
     echo json_encode(['success' => false, 'message' => 'Invalid consultation ID']);
@@ -63,15 +66,15 @@ if (!$consultation) {
 }
 
 // Insert into database
-$stmt = $conn->prepare("INSERT INTO info_requests (consultation_id, requested_by, user_email, message, created_at) VALUES (?, ?, ?, ?, NOW())");
+$stmt = $conn->prepare("INSERT INTO info_requests (consultation_id, requested_by, target_entity, user_email, message, priority, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW())");
 if (!$stmt) {
     echo json_encode(['success' => false, 'message' => 'Database error: ' . $conn->error]);
     exit;
 }
 
 $requested_by = (int)$_SESSION['user_id'];
-$target_email = !empty($user_email) ? $user_email : $consultation['user_email'];
-$stmt->bind_param('iiss', $consultation_id, $requested_by, $target_email, $message);
+$target_email = !empty($user_email) ? $user_email : ($consultation['user_email'] ?? 'admin@valenzuela.gov.ph');
+$stmt->bind_param('iissss', $consultation_id, $requested_by, $target_entity, $target_email, $message, $priority);
 
 if (!$stmt->execute()) {
     echo json_encode(['success' => false, 'message' => 'Failed to save request: ' . $stmt->error]);
@@ -79,6 +82,9 @@ if (!$stmt->execute()) {
 }
 
 $stmt->close();
+
+// Log expert notification
+@$conn->query("INSERT INTO expert_notifications (user_id, title, message, type, consultation_id, is_read, created_at) VALUES ($requested_by, 'Info Request Sent', 'Clarification request sent to $target_entity regarding consultation ID #$consultation_id.', 'info_request', $consultation_id, 0, NOW())");
 
 // In a real implementation, you would send an email notification here
 // For now, we'll just log it

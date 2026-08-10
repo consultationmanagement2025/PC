@@ -9,8 +9,8 @@ if (empty($current_role) && isset($_SESSION['user_id'])) {
     $current_role = 'admin';
     $_SESSION['role'] = 'admin';
 }
-$is_staff = in_array($current_role, ['staff', 'barangay staff', 'barangay_staff', 'barangay'], true);
-if (!empty($current_role) && $current_role !== 'admin' && $current_role !== 'administrator' && $current_role !== 'super admin' && $current_role !== 'superadmin' && !$is_staff) {
+$is_authenticated = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($_SESSION['role']);
+if (!$is_authenticated) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit;

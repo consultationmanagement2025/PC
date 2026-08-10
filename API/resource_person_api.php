@@ -8,9 +8,9 @@ session_start();
 require_once '../db.php';
 require_once '../DATABASE/audit-log.php';
 
-// Only allow admins
+// Allow admins, staff, and resource persons
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
-$allowed_roles = ['admin', 'administrator', 'super admin', 'superadmin'];
+$allowed_roles = ['admin', 'administrator', 'super admin', 'superadmin', 'resource person', 'resource_person', 'staff'];
 if (!in_array($current_role, $allowed_roles, true)) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
@@ -92,7 +92,6 @@ try {
             break;
 
         case 'list_approved':
-            // Get all approved resource persons
             $stmt = $conn->prepare("SELECT id, fullname, email, expertise_areas, qualifications, department, phone, approved_at FROM users WHERE role = 'resource person' AND verification_status = 'verified' ORDER BY approved_at DESC");
             $stmt->execute();
             $result = $stmt->get_result();
@@ -102,6 +101,109 @@ try {
             }
             $stmt->close();
             echo json_encode(['success' => true, 'data' => $resource_persons]);
+            break;
+
+        case 'get_consultation_details':
+            $c_id = (int)($_GET['consultation_id'] ?? 0);
+            if (!$c_id) {
+                echo json_encode(['success' => false, 'message' => 'Invalid consultation ID']);
+                exit;
+            }
+            $stmt = $conn->prepare("SELECT * FROM consultations WHERE id = ?");
+            $stmt->bind_param('i', $c_id);
+            $stmt->execute();
+            $cData = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            if (!$cData) {
+                echo json_encode(['success' => false, 'message' => 'Consultation not found']);
+                exit;
+            }
+
+            // Fetch report version history
+            $reports = [];
+            $rStmt = $conn->prepare("SELECT r.*, u.fullname as uploader_name FROM resolution_reports r LEFT JOIN users u ON r.uploaded_by = u.id WHERE r.consultation_id = ? ORDER BY r.id DESC");
+            if ($rStmt) {
+                $rStmt->bind_param('i', $c_id);
+                $rStmt->execute();
+                $rRes = $rStmt->get_result();
+                while ($rRow = $rRes->fetch_assoc()) {
+                    $reports[] = $rRow;
+                }
+                $rStmt->close();
+            }
+
+            // Fetch info requests
+            $info_requests = [];
+            $iStmt = $conn->prepare("SELECT i.*, u.fullname as requester_name FROM info_requests i LEFT JOIN users u ON i.requested_by = u.id WHERE i.consultation_id = ? ORDER BY i.id DESC");
+            if ($iStmt) {
+                $iStmt->bind_param('i', $c_id);
+                $iStmt->execute();
+                $iRes = $iStmt->get_result();
+                while ($iRow = $iRes->fetch_assoc()) {
+                    $info_requests[] = $iRow;
+                }
+                $iStmt->close();
+            }
+
+            // Fetch audit trail history for master document
+            $audit_trail = [];
+            $aStmt = $conn->prepare("SELECT * FROM consultation_document_audit_trail WHERE consultation_id = ? ORDER BY id DESC");
+            if ($aStmt) {
+                $aStmt->bind_param('i', $c_id);
+                $aStmt->execute();
+                $aRes = $aStmt->get_result();
+                while ($aRow = $aRes->fetch_assoc()) {
+                    $audit_trail[] = $aRow;
+                }
+                $aStmt->close();
+            }
+
+            // Parse inline expert notes JSON if exists
+            $parsed_expert_notes = null;
+            if (!empty($cData['expert_notes'])) {
+                $parsed_expert_notes = json_decode($cData['expert_notes'], true);
+            }
+
+            echo json_encode([
+                'success' => true,
+                'consultation' => $cData,
+                'parsed_expert_notes' => $parsed_expert_notes,
+                'reports' => $reports,
+                'info_requests' => $info_requests,
+                'audit_trail' => $audit_trail
+            ]);
+            break;
+
+        case 'get_notifications':
+            $user_id = (int)($_SESSION['user_id'] ?? 0);
+            $stmt = $conn->prepare("SELECT * FROM expert_notifications WHERE user_id = ? ORDER BY id DESC LIMIT 30");
+            $stmt->bind_param('i', $user_id);
+            $stmt->execute();
+            $nRes = $stmt->get_result();
+            $notifs = [];
+            while ($nRow = $nRes->fetch_assoc()) {
+                $notifs[] = $nRow;
+            }
+            $stmt->close();
+            echo json_encode(['success' => true, 'data' => $notifs]);
+            break;
+
+        case 'mark_notif_read':
+            $notif_id = (int)($_POST['id'] ?? 0);
+            $user_id = (int)($_SESSION['user_id'] ?? 0);
+            if ($notif_id > 0) {
+                $stmt = $conn->prepare("UPDATE expert_notifications SET is_read = 1 WHERE id = ? AND user_id = ?");
+                $stmt->bind_param('ii', $notif_id, $user_id);
+                $stmt->execute();
+                $stmt->close();
+            } else {
+                $stmt = $conn->prepare("UPDATE expert_notifications SET is_read = 1 WHERE user_id = ?");
+                $stmt->bind_param('i', $user_id);
+                $stmt->execute();
+                $stmt->close();
+            }
+            echo json_encode(['success' => true, 'message' => 'Notifications updated']);
             break;
 
         default:

@@ -26,7 +26,7 @@ $data = json_decode(file_get_contents('php://input'), true) ?? $_POST;
 $consultation_id = (int)($data['consultation_id'] ?? 0);
 $target_system = strtoupper(trim((string)($data['target_system'] ?? '')));
 
-if ($consultation_id <= 0 || !in_array($target_system, ['PHS', 'LRS', 'ORTS'], true)) {
+if ($consultation_id <= 0 || !in_array($target_system, ['PHS', 'LRS', 'ORTS', 'CMS'], true)) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'Invalid consultation ID or target system']);
     exit;
@@ -43,7 +43,27 @@ $counts = pcms_consultation_submission_counts($conn, $consultation_id);
 $consultation['submission_counts'] = $counts;
 
 try {
-    if ($target_system === 'PHS') {
+    if ($target_system === 'CMS') {
+        $cmsResult = pcms_send_cms_event([
+            'consultation_id' => $consultation_id,
+            'title'           => $consultation['title'] ?? 'Public Consultation',
+            'description'     => $data['description'] ?? $consultation['description'] ?? 'Consultation feedback requiring committee review.',
+            'event'           => $data['event'] ?? 'consultation_referred',
+            'committee_id'    => $data['committee_id'] ?? 3,
+            'committee_name'  => $data['committee_name'] ?? $consultation['committee_assigned'] ?? $consultation['category'] ?? 'Committee on Finance',
+            'referral_date'   => $data['referral_date'] ?? date('Y-m-d'),
+            'notes'           => $data['notes'] ?? 'Referred for committee hearing and action.'
+        ]);
+
+        echo json_encode([
+            'success'       => $cmsResult['success'],
+            'target_system' => 'CMS',
+            'message'       => $cmsResult['success'] 
+                                ? "Successfully sent event payload for Consultation #{$consultation_id} to CMS." 
+                                : "CMS integration payload dispatched (HTTP {$cmsResult['http_code']}).",
+            'cms_result'    => $cmsResult
+        ]);
+    } elseif ($target_system === 'PHS') {
         pcms_integration_on_consultation_updated($consultation, 'manual_phs_sync');
         echo json_encode([
             'success' => true,

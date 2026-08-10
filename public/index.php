@@ -417,24 +417,30 @@ if (!empty($types)) {
 }
 
 // Community Surveys
+if (empty($_COOKIE['pcms_device_token'])) {
+    $device_token = 'DEV-' . md5($_SERVER['REMOTE_ADDR'] . ($_SERVER['HTTP_USER_AGENT'] ?? ''));
+    @setcookie('pcms_device_token', $device_token, time() + (86400 * 365), '/');
+} else {
+    $device_token = $_COOKIE['pcms_device_token'];
+}
+$user_id = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 0;
+$user_email = $_SESSION['email'] ?? '';
+
 $surveys = [];
 $survey_query = "SELECT id, title, description, survey_question, survey_option_a, survey_option_b, response_mode, status, created_at, end_date, posts_count FROM consultations WHERE response_mode IN ('survey', 'hybrid') AND status IN ('active', 'viewed', 'replied', 'scheduled') ORDER BY created_at DESC LIMIT 6";
 $sRes = $conn->query($survey_query);
 if ($sRes) {
     while ($sRow = $sRes->fetch_assoc()) {
+        $sId = (int)$sRow['id'];
         // Get vote counts for option A and option B
         $vStats = getConsultationVoteStats($sId);
         $sRow['count_a'] = $vStats['agree_votes'];
         $sRow['count_b'] = $vStats['disagree_votes'];
         $sRow['total_votes'] = $vStats['total_votes'];
-        $sRow['pct_a'] = (int)$vStats['agree_percent'];
-        $sRow['pct_b'] = (int)$vStats['disagree_percent'];
+        $sRow['pct_a'] = round((float)$vStats['agree_percent'], 1);
+        $sRow['pct_b'] = round((float)$vStats['disagree_percent'], 1);
 
-        $user_vote = null;
-        if (isset($_SESSION['user_id'])) {
-            $user_vote = getUserConsultationVote($sId, (int)$_SESSION['user_id']);
-        }
-        $sRow['user_vote'] = $user_vote;
+        $sRow['user_vote'] = getUserConsultationVote($sId, $user_id, $device_token, $user_email);
 
         $surveys[] = $sRow;
     }
@@ -934,7 +940,7 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
                                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Active Poll
                                 </span>
                                 <span class="text-[11px] font-medium text-slate-400">
-                                    <i class="fa-solid fa-users text-slate-400"></i> <?php echo number_format($totVotes); ?> votes cast
+                                    <i class="fa-solid fa-users text-slate-400"></i> <span id="survey-total-votes-<?php echo $s['id']; ?>"><?php echo number_format($totVotes); ?></span> votes cast
                                 </span>
                             </div>
 
@@ -942,36 +948,32 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
                                 <?php echo htmlspecialchars($s['title']); ?>
                             </h4>
 
-                            <p class="text-sm font-bold text-slate-800 mb-2">
-                                <?php echo htmlspecialchars($s['survey_question'] ?? $s['title']); ?>
-                            </p>
-
                             <?php if (!empty($s['description'])): ?>
-                                <div class="text-xs text-slate-600 mb-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200 leading-relaxed max-h-36 overflow-y-auto">
+                                <div class="text-xs text-slate-600 mb-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 leading-relaxed max-h-36 overflow-y-auto">
                                     <i class="fa-solid fa-circle-info text-valenzuela-blue mr-1"></i>
                                     <?php echo nl2br(htmlspecialchars($s['description'])); ?>
                                 </div>
                             <?php endif; ?>
 
-                            <!-- Poll Progress Bars -->
-                            <div class="space-y-3 my-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                <div>
-                                    <div class="flex justify-between text-xs font-semibold text-slate-700 mb-1">
-                                        <span><?php echo htmlspecialchars($optA); ?></span>
-                                        <span id="survey-pct-a-<?php echo $s['id']; ?>"><?php echo $pctA; ?>%</span>
-                                    </div>
-                                    <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
-                                        <div id="survey-bar-a-<?php echo $s['id']; ?>" class="bg-valenzuela-blue h-2 rounded-full transition-all duration-500" style="width: <?php echo $pctA; ?>%"></div>
-                                    </div>
+                            <p class="text-sm font-bold text-slate-800 mb-3">
+                                <?php echo htmlspecialchars($s['survey_question'] ?? $s['title']); ?>
+                            </p>
+
+                            <!-- Poll Single-Line Progress Bar -->
+                            <div class="my-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-1.5">
+                                <div class="flex justify-between items-center text-xs font-bold text-slate-700">
+                                    <span class="text-emerald-700 flex items-center gap-1">
+                                        <i class="fa-solid fa-thumbs-up text-emerald-600 text-[10px]"></i>
+                                        <?php echo htmlspecialchars($optA); ?> (<span id="survey-pct-a-<?php echo $s['id']; ?>"><?php echo $pctA; ?>%</span>)
+                                    </span>
+                                    <span class="text-rose-700 flex items-center gap-1">
+                                        <?php echo htmlspecialchars($optB); ?> (<span id="survey-pct-b-<?php echo $s['id']; ?>"><?php echo $pctB; ?>%</span>)
+                                        <i class="fa-solid fa-thumbs-down text-rose-600 text-[10px]"></i>
+                                    </span>
                                 </div>
-                                <div>
-                                    <div class="flex justify-between text-xs font-semibold text-slate-700 mb-1">
-                                        <span><?php echo htmlspecialchars($optB); ?></span>
-                                        <span id="survey-pct-b-<?php echo $s['id']; ?>"><?php echo $pctB; ?>%</span>
-                                    </div>
-                                    <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
-                                        <div id="survey-bar-b-<?php echo $s['id']; ?>" class="bg-valenzuela-red h-2 rounded-full transition-all duration-500" style="width: <?php echo $pctB; ?>%"></div>
-                                    </div>
+                                <div class="w-full bg-slate-200 rounded-full h-2.5 flex overflow-hidden p-0.5 border border-slate-200/60">
+                                    <div id="survey-bar-a-<?php echo $s['id']; ?>" class="bg-emerald-500 h-full rounded-l-full transition-all duration-500" style="width: <?php echo $pctA; ?>%"></div>
+                                    <div id="survey-bar-b-<?php echo $s['id']; ?>" class="bg-rose-500 h-full rounded-r-full transition-all duration-500" style="width: <?php echo $pctB; ?>%"></div>
                                 </div>
                             </div>
                         </div>
@@ -1489,10 +1491,6 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
         let pendingChangeVote = null;
 
         function castSurveyVote(surveyId, optionChosen, confirmChange = false) {
-            if (!window.__IS_LOGGED_IN__) {
-                window.location.href = '<?php echo htmlspecialchars($citizenGoogleOAuthUrl); ?>';
-                return;
-            }
 
             const formData = new FormData();
             formData.append('api_action', 'submit_survey_vote');
@@ -1515,6 +1513,7 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
                     const barA = document.getElementById('survey-bar-a-' + surveyId);
                     const pctB = document.getElementById('survey-pct-b-' + surveyId);
                     const barB = document.getElementById('survey-bar-b-' + surveyId);
+                    const totalVotesEl = document.getElementById('survey-total-votes-' + surveyId);
 
                     if (pctA && barA && data.pct_a !== undefined) {
                         pctA.textContent = data.pct_a + '%';
@@ -1523,6 +1522,9 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
                     if (pctB && barB && data.pct_b !== undefined) {
                         pctB.textContent = data.pct_b + '%';
                         barB.style.width = data.pct_b + '%';
+                    }
+                    if (totalVotesEl && data.total_votes !== undefined) {
+                        totalVotesEl.textContent = data.total_votes;
                     }
 
                     const modal = document.getElementById('vote-success-modal');
@@ -1757,18 +1759,18 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
             const st = String(status || '').toLowerCase().trim();
             let currentStep = 1;
             if (st === 'draft' || st === 'pending' || st === 'new' || st === 'submitted' || !st) currentStep = 1;
-            else if (st === 'under_review' || st === 'reviewed' || st === 'viewed' || st === 'replied') currentStep = 2;
-            else if (st === 'active' || st === 'published_portal' || st === 'voting') currentStep = 3;
-            else if (st === 'scheduled' || st === 'committee' || st === 'forwarded') currentStep = 4;
-            else if (st === 'approved' || st === 'ordinance' || st === 'in_ordinance') currentStep = 5;
-            else if (st === 'completed' || st === 'closed' || st === 'officialized' || st === 'archived') currentStep = 6;
+            else if (st === 'active' || st === 'published_portal' || st === 'voting') currentStep = 2;
+            else if (st === 'closed' || st === 'closed_for_feedback' || st === 'ai_summary' || st === 'summarized' || st === 'synthesized') currentStep = 3;
+            else if (st === 'under_review' || st === 'reviewed' || st === 'viewed' || st === 'replied') currentStep = 4;
+            else if (st === 'scheduled' || st === 'committee' || st === 'forwarded' || st === 'approved' || st === 'ordinance') currentStep = 5;
+            else if (st === 'completed' || st === 'officialized' || st === 'archived' || st === 'enacted') currentStep = 6;
 
             const steps = [
-                { num: 1, name: 'Received', desc: 'Public consultation intake logged and pending evaluation by Resource Person', statusVal: 'pending' },
-                { num: 2, name: 'Vetting', desc: 'Reviewed, evaluated & prepared for public consultation by assigned Resource Person', statusVal: 'under_review' },
-                { num: 3, name: 'Public Portal', desc: 'Published live on the Public Portal for citizen voting, surveys, and public feedback', statusVal: 'active' },
-                { num: 4, name: 'Committee', desc: 'Dispatched to Committee Management System with public feedback synthesis report', statusVal: 'scheduled' },
-                { num: 5, name: 'Ordinance', desc: 'Forwarded to Ordinance System to draft and formalize findings into a city ordinance bill', statusVal: 'approved' },
+                { num: 1, name: 'Received', desc: 'Public consultation intake logged and registered into PCMS repository', statusVal: 'pending' },
+                { num: 2, name: 'Public Portal', desc: 'Published live on Public Portal for citizen voting, surveys, and public feedback', statusVal: 'active' },
+                { num: 3, name: 'AI Synthesis', desc: 'Consultation closes; PCMS AI Engine scans & synthesizes all citizen votes and comments', statusVal: 'ai_summary' },
+                { num: 4, name: 'RP Review', desc: 'Assigned Resource Person reviews AI Summary, adds expert evaluation & endorses report', statusVal: 'under_review' },
+                { num: 5, name: 'Committee & Ordinance', desc: 'Endorsed report sent to Committee System for hearings & Ordinance System for drafting', statusVal: 'scheduled' },
                 { num: 6, name: 'Officialized', desc: 'Enacted into official city ordinance & stored in permanent municipal archive', statusVal: 'completed' }
             ];
 
@@ -1926,17 +1928,31 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
                             if (res.feedback && res.feedback.length > 0) {
                                 html += '<h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mt-6 mb-3">My Feedback & Comments (' + res.feedback.length + ')</h4>';
                                 html += '<div id="feedback-list-container">';
-                                html += res.feedback.map(f => `
-                                    <div class="activity-item-card p-4 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200 text-xs space-y-2 mb-4 transition-colors shadow-xs" data-search="${escapeHtml(((f.consultation_title || '') + ' ' + (f.tracking_token || '') + ' ' + (f.message || '')).toLowerCase())}">
-                                        <div class="flex justify-between items-start">
-                                            <span class="font-bold text-slate-800 text-sm">${escapeHtml(f.consultation_title || 'General Feedback')}</span>
-                                            <span class="font-mono bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold">${escapeHtml(f.tracking_token || '')}</span>
+                                html += res.feedback.map(f => {
+                                    let statusBadge = '';
+                                    if (f.admin_response || f.status === 'responded' || f.status === 'approved') {
+                                        statusBadge = '<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full font-bold text-[11px] inline-flex items-center gap-1"><i class="fa-solid fa-circle-check text-emerald-600"></i> Responded by LGU Admin</span>';
+                                    } else if (f.status === 'under_review' || f.status === 'review') {
+                                        statusBadge = '<span class="bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full font-bold text-[11px] inline-flex items-center gap-1"><i class="fa-solid fa-hourglass-split text-blue-600"></i> Under Review</span>';
+                                    } else {
+                                        statusBadge = '<span class="bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full font-bold text-[11px] inline-flex items-center gap-1"><i class="fa-solid fa-clock text-amber-600"></i> Submitted to Public Consultation Office</span>';
+                                    }
+
+                                    return `
+                                        <div class="activity-item-card p-4 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border border-slate-200 text-xs space-y-2.5 mb-4 transition-colors shadow-xs" data-search="${escapeHtml(((f.consultation_title || '') + ' ' + (f.tracking_token || '') + ' ' + (f.message || '')).toLowerCase())}">
+                                            <div class="flex justify-between items-start">
+                                                <span class="font-bold text-slate-900 text-sm">${escapeHtml(f.consultation_title || 'General Feedback')}</span>
+                                                <span class="font-mono bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold">${escapeHtml(f.tracking_token || '')}</span>
+                                            </div>
+                                            <p class="text-slate-700 leading-relaxed bg-white p-3 rounded-xl border border-slate-200/80">${escapeHtml(f.message)}</p>
+                                            ${f.admin_response ? `<div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-xl text-valenzuela-blue font-medium"><strong>LGU Official Response:</strong> ${escapeHtml(f.admin_response)}</div>` : ''}
+                                            <div class="flex justify-between items-center pt-1 border-t border-slate-200/60">
+                                                <span class="text-[10px] text-slate-400">Submitted: ${escapeHtml(f.created_at || '')}</span>
+                                                ${statusBadge}
+                                            </div>
                                         </div>
-                                        <p class="text-slate-700 leading-relaxed">${escapeHtml(f.message)}</p>
-                                        ${f.admin_response ? `<div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-xl text-valenzuela-blue font-medium"><strong>Legislative Response:</strong> ${escapeHtml(f.admin_response)}</div>` : ''}
-                                        ${renderCitizenConnectingDotsTracker(f.status || 'pending', f.id, f.tracking_token)}
-                                    </div>
-                                `).join('');
+                                    `;
+                                }).join('');
                                 html += '</div>';
                             }
                         }

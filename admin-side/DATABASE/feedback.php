@@ -456,13 +456,19 @@ function initializeHearingQueueTable() {
       source_system VARCHAR(64) DEFAULT 'PHMS',
       consultation_id INT(11) DEFAULT NULL,
       payload_json LONGTEXT DEFAULT NULL,
+      approval_status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
       PRIMARY KEY (queue_id),
       KEY idx_hearing (phms_hearing_id),
-      KEY idx_status (status)
+      KEY idx_status (status),
+      KEY idx_approval (approval_status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
     
     $conn->query($sql);
+    $checkCol = $conn->query("SHOW COLUMNS FROM hearing_queue LIKE 'approval_status'");
+    if ($checkCol && $checkCol->num_rows === 0) {
+        $conn->query("ALTER TABLE hearing_queue ADD COLUMN approval_status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending'");
+    }
     return true;
 }
 
@@ -470,7 +476,9 @@ function initializeHearingQueueTable() {
 function getPhmsFeedbackQueue($filters = [], $limit = 50, $offset = 0) {
     global $conn;
     initializeHearingQueueTable();
-    seedPhmsHearingQueueIfEmpty(false);
+    if (function_exists('seedPhmsHearingQueueIfEmpty')) {
+        seedPhmsHearingQueueIfEmpty(false);
+    }
 
     $where = "1=1";
     if (!empty($filters['status'])) {
@@ -537,8 +545,10 @@ function getPhmsFeedbackQueueAsHearings($filters = [], $limit = 50, $offset = 0)
 
         $hearings[] = [
             'hearing_id' => (int)($row['phms_hearing_id'] ?: $row['queue_id']),
+            'queue_id' => (int)$row['queue_id'],
             'hearing_title' => $payload['hearing_title'] ?? $row['full_name'] ?? 'Public Hearing',
             'hearing_status' => strtolower($payload['hearing_status'] ?? $row['status'] ?? 'completed'),
+            'approval_status' => strtolower($row['approval_status'] ?? 'approved'),
             'hearing_date' => $payload['hearing_date'] ?? date('Y-m-d H:i:s', strtotime($row['created_at'] ?? 'now')),
             'feedback_count' => (int)($payload['feedback_count'] ?? count($citizenResponses)),
             'average_rating' => (float)($payload['avg_rating'] ?? $payload['average_rating'] ?? 3.5),
@@ -701,6 +711,76 @@ function updatePhmsQueueStatus($queue_id, $status) {
         return $ok;
     }
     return false;
+}
+
+// Get all pending PHMS ingestion packages
+function getPendingPhmsApprovals() {
+    global $conn;
+    initializeHearingQueueTable();
+    $sql = "SELECT hq.*, c.title as consultation_title
+            FROM hearing_queue hq
+            LEFT JOIN consultations c ON hq.consultation_id = c.id
+            WHERE hq.approval_status = 'pending' OR hq.approval_status IS NULL
+            ORDER BY hq.created_at DESC";
+    $res = $conn->query($sql);
+    $items = [];
+    if ($res && $res->num_rows > 0) {
+        while ($row = $res->fetch_assoc()) {
+            $payload = [];
+            if (!empty($row['payload_json'])) {
+                $payload = is_string($row['payload_json']) ? json_decode($row['payload_json'], true) : $row['payload_json'];
+            }
+            $responses = $payload['citizen_responses'] ?? $payload['citizen_feedback'] ?? [];
+            $row['parsed_payload'] = $payload;
+            $row['feedback_count'] = count($responses) ?: (int)($payload['feedback_count'] ?? 0);
+            $items[] = $row;
+        }
+    }
+    return $items;
+}
+
+// Approve an incoming PHMS queue item
+function approvePhmsIngestion($queue_id) {
+    global $conn;
+    initializeHearingQueueTable();
+    $queue_id = (int)$queue_id;
+    $stmt = $conn->prepare("UPDATE hearing_queue SET approval_status = 'approved', status = 'completed' WHERE queue_id = ? OR phms_hearing_id = ?");
+    if (!$stmt) {
+        error_log("approvePhmsIngestion prepare failed: " . $conn->error);
+        return false;
+    }
+    $stmt->bind_param("ii", $queue_id, $queue_id);
+    $ok = $stmt->execute();
+    $stmt->close();
+    if ($ok) {
+        try {
+            if (file_exists(__DIR__ . '/notifications.php')) {
+                require_once __DIR__ . '/notifications.php';
+                if (function_exists('createNotification')) {
+                    createNotification(0, "✅ Ingestion Package Approved: PHMS Transmittal #" . $queue_id . " approved and merged into PCMS.", "phms_approval");
+                }
+            }
+        } catch (Throwable $e) {
+            error_log("Notification creation warning: " . $e->getMessage());
+        }
+    }
+    return (bool)$ok;
+}
+
+// Reject an incoming PHMS queue item
+function rejectPhmsIngestion($queue_id) {
+    global $conn;
+    initializeHearingQueueTable();
+    $queue_id = (int)$queue_id;
+    $stmt = $conn->prepare("UPDATE hearing_queue SET approval_status = 'rejected', status = 'rejected' WHERE queue_id = ? OR phms_hearing_id = ?");
+    if (!$stmt) {
+        error_log("rejectPhmsIngestion prepare failed: " . $conn->error);
+        return false;
+    }
+    $stmt->bind_param("ii", $queue_id, $queue_id);
+    $ok = $stmt->execute();
+    $stmt->close();
+    return (bool)$ok;
 }
 
 ?>

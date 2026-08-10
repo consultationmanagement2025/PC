@@ -24,15 +24,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         } else {
             $hash = password_hash($password, PASSWORD_DEFAULT);
             $role = 'citizen'; // Default role for all new users
+            $username = strtolower(explode('@', $email)[0]);
 
             $stmt = $conn->prepare(
-                "INSERT INTO users (fullname, email, password, role, district, barangay) VALUES (?, ?, ?, ?, ?, ?)"
+                "INSERT INTO users (fullname, name, username, email, password, role, district, barangay, status, verification_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 'verified', NOW())"
             );
-            $stmt->bind_param("ssssss", $fullname, $email, $hash, $role, $district, $barangay);
+            if ($stmt) {
+                $stmt->bind_param("ssssssss", $fullname, $fullname, $username, $email, $hash, $role, $district, $barangay);
+                $success = $stmt->execute();
+                $stmt->close();
+            } else {
+                $success = false;
+            }
 
-            $message = $stmt->execute()
+            $message = $success
                 ? "Account created. You may login."
-                : "Registration failed";
+                : "Registration failed: " . htmlspecialchars($conn->error ?: 'Database error');
         }
     }
 }

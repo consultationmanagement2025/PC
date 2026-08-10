@@ -3462,20 +3462,19 @@ var _citizenData = [];
 var _userMgmtTab = 'citizens';
 
 function renderUsers(skipLoad = false) {
+    window._currentActiveSection = 'users';
     const breadcrumbCurrent = document.querySelector('.breadcrumb-current');
     if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'User Management';
 
-    const existingSection = document.getElementById('user-management-section');
-    if (existingSection && existingSection.parentNode && existingSection.parentNode.id === 'content-area') {
-        if (typeof hideManagedTemplateSections === 'function') {
-            hideManagedTemplateSections();
-        }
-        existingSection.style.display = 'block';
-        if (typeof showUserTab === 'function') {
-            const mappedTab = (_userMgmtTab === 'pending') ? 'pending' : ((_userMgmtTab === 'experts' || _userMgmtTab === 'resource-persons') ? 'resource-persons' : 'citizens');
-            showUserTab(mappedTab);
-        }
-        return;
+    const contentArea = document.getElementById('content-area') || document.getElementById('main-content') || document.querySelector('.content-area') || document.querySelector('main');
+    if (!contentArea) return;
+
+    if (typeof hideManagedTemplateSections === 'function') {
+        hideManagedTemplateSections();
+    }
+    const legacySec = document.getElementById('user-management-section');
+    if (legacySec) {
+        legacySec.style.display = 'none';
     }
 
     const totalCitizens = _citizenData.length;
@@ -3719,16 +3718,13 @@ function renderUsers(skipLoad = false) {
         </div>
     `;
 
-    const contentArea = document.getElementById('content-area') || document.getElementById('main-content') || document.querySelector('.content-area') || document.querySelector('main');
     if (contentArea) {
         contentArea.innerHTML = html;
     }
 
     if (!skipLoad) {
         loadCitizensFromApi().then(() => {
-            if (_userMgmtTab === 'citizens') renderCitizensTable();
-            if (_userMgmtTab === 'pending') loadPendingUserApplications();
-            if (_userMgmtTab === 'experts') loadApprovedUserExperts();
+            renderUsers(true);
         });
     } else {
         if (_userMgmtTab === 'citizens') renderCitizensTable();
@@ -3862,16 +3858,37 @@ async function viewCitizenDossier(email, name) {
         if (data.success) {
             let html = '';
 
-            if ((!data.proposals || data.proposals.length === 0) && (!data.activity || data.activity.length === 0)) {
-                html = '<div class="text-center py-6 text-slate-400">No proposals or survey votes recorded for this citizen yet.</div>';
+            const proposals = data.proposals || [];
+            let feedback = data.feedback;
+            let surveys = data.surveys;
+
+            // Fallback categorization if backend returns combined activity
+            if (!feedback || !surveys) {
+                feedback = [];
+                surveys = [];
+                (data.activity || []).forEach(a => {
+                    const cat = (a.category || '').toLowerCase().trim();
+                    if (cat === 'survey vote' || cat === 'survey' || cat === 'vote') {
+                        surveys.push(a);
+                    } else {
+                        feedback.push(a);
+                    }
+                });
+            }
+
+            const totalCount = proposals.length + feedback.length + surveys.length;
+
+            if (totalCount === 0) {
+                html = '<div class="text-center py-6 text-slate-400">No proposals, feedback, or survey votes recorded for this citizen yet.</div>';
             } else {
-                if (data.proposals && data.proposals.length > 0) {
-                    html += `<div class="font-bold text-slate-900 mb-2 text-xs uppercase tracking-wider text-red-600"><i class="bi bi-file-earmark-text"></i> Submitted Proposals (${data.proposals.length})</div><div class="space-y-2 mb-4">`;
-                    data.proposals.forEach(p => {
+                // Section 1: Submitted Proposals / Consultations
+                if (proposals.length > 0) {
+                    html += `<div class="font-bold text-slate-900 mb-2 text-xs uppercase tracking-wider text-red-600 flex items-center gap-1.5"><i class="bi bi-file-earmark-text"></i> Submitted Proposals (${proposals.length})</div><div class="space-y-2 mb-4">`;
+                    proposals.forEach(p => {
                         html += `
                             <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex justify-between items-center">
                                 <div>
-                                    <div class="font-bold text-slate-800">${escapeHtml(p.title)}</div>
+                                    <div class="font-bold text-slate-800 text-xs">${escapeHtml(p.title)}</div>
                                     <div class="text-[10px] text-slate-400">Tracking: ${escapeHtml(p.tracking_number || 'N/A')}</div>
                                 </div>
                                 <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-100 text-blue-800 uppercase">${escapeHtml(p.status)}</span>
@@ -3881,16 +3898,34 @@ async function viewCitizenDossier(email, name) {
                     html += `</div>`;
                 }
 
-                if (data.activity && data.activity.length > 0) {
-                    html += `<div class="font-bold text-slate-900 mb-2 text-xs uppercase tracking-wider text-blue-600"><i class="bi bi-check-square"></i> Votes & Feedback Queue (${data.activity.length})</div><div class="space-y-2">`;
-                    data.activity.forEach(a => {
+                // Section 2: Submitted Feedback
+                if (feedback.length > 0) {
+                    html += `<div class="font-bold text-slate-900 mb-2 text-xs uppercase tracking-wider text-amber-600 flex items-center gap-1.5"><i class="bi bi-chat-left-text"></i> Submitted Feedback (${feedback.length})</div><div class="space-y-2 mb-4">`;
+                    feedback.forEach(f => {
                         html += `
                             <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex justify-between items-center">
                                 <div>
-                                    <div class="font-bold text-slate-800">${escapeHtml(a.category || 'Feedback')} - ${escapeHtml(a.consultation_title || 'General')}</div>
-                                    <div class="text-[10px] text-slate-500">${escapeHtml(a.message || '')}</div>
+                                    <div class="font-bold text-slate-800 text-xs">${escapeHtml(f.category || 'Feedback')} - ${escapeHtml(f.consultation_title || 'General')}</div>
+                                    <div class="text-[10px] text-slate-500">${escapeHtml(f.message || '')}</div>
                                 </div>
-                                <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-100 text-emerald-800 uppercase">${escapeHtml(a.status)}</span>
+                                <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-100 text-emerald-800 uppercase">${escapeHtml(f.status || 'NEW')}</span>
+                            </div>
+                        `;
+                    });
+                    html += `</div>`;
+                }
+
+                // Section 3: Survey & Poll Votes
+                if (surveys.length > 0) {
+                    html += `<div class="font-bold text-slate-900 mb-2 text-xs uppercase tracking-wider text-emerald-600 flex items-center gap-1.5"><i class="bi bi-check2-square"></i> Survey Votes (${surveys.length})</div><div class="space-y-2">`;
+                    surveys.forEach(s => {
+                        html += `
+                            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex justify-between items-center">
+                                <div>
+                                    <div class="font-bold text-slate-800 text-xs">${escapeHtml(s.consultation_title ? ('Survey Vote - ' + s.consultation_title) : 'Survey Vote')}</div>
+                                    <div class="text-[10px] text-slate-500 font-medium">Choice: <span class="text-blue-700 font-bold">${escapeHtml(s.message || 'Voted')}</span></div>
+                                </div>
+                                <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-100 text-emerald-800 uppercase">${escapeHtml(s.status || 'CLOSED')}</span>
                             </div>
                         `;
                     });
@@ -11883,24 +11918,29 @@ function refreshPCSurveySelector(consultations) {
 
     const surveyMap = new Map();
 
-    // 1. Add consultations from AppData/source
+    // 1. Add consultations from AppData/source ONLY if they are surveys
     for (const c of source) {
         if (!c || !c.id) continue;
         const cid = String(c.id);
         const title = (c.title || c.survey_question || `Survey #${cid}`).trim();
         const mode = String(c.response_mode || '').toLowerCase();
-        const hasVotes = apiData[cid] && (apiData[cid].total_votes > 0 || apiData[cid].agree_votes > 0 || apiData[cid].disagree_votes > 0);
-        if (mode === 'survey' || c.survey_question || hasVotes) {
+        const question = String(c.survey_question || '').trim();
+
+        if (mode !== 'feedback' && (mode === 'survey' || (question !== '' && question !== 'null'))) {
             surveyMap.set(cid, title);
         }
     }
 
-    // 2. Add consultations from API vote stats data if not already present
+    // 2. Add consultations from API vote stats data ONLY if they are surveys
     for (const cid in apiData) {
         if (!surveyMap.has(cid)) {
             const item = apiData[cid];
-            const title = (item.survey_question || `Survey #${cid}`).trim();
-            surveyMap.set(cid, title);
+            const mode = String(item.mode || '').toLowerCase();
+            const question = String(item.survey_question || '').trim();
+            if (mode !== 'feedback' && (mode === 'survey' || (question !== '' && question !== 'null'))) {
+                const title = (item.title || item.survey_question || `Survey #${cid}`).trim();
+                surveyMap.set(cid, title);
+            }
         }
     }
 
@@ -12808,7 +12848,7 @@ function renderConsultationManagement() {
                                     <th class="px-6 py-3 text-left font-semibold text-gray-700">ID</th>
                                     <th class="px-6 py-3 text-left font-semibold text-gray-700">Title</th>
                                     <th class="px-6 py-3 text-left font-semibold text-gray-700">Date</th>
-                                    <th class="px-6 py-3 text-left font-semibold text-gray-700">Status</th>
+                                    <th class="px-6 py-3 text-center font-semibold text-gray-700">Status</th>
                                     <th class="px-6 py-3 text-center font-semibold text-gray-700">Feedback</th>
                                     <th class="px-6 py-3 text-center font-semibold text-gray-700">Documents</th>
                                     <th class="px-6 py-3 text-center font-semibold text-gray-700">Actions</th>
@@ -12832,7 +12872,7 @@ function renderConsultationManagement() {
                                     <th class="px-6 py-3 text-left font-semibold text-gray-700">Citizen Name</th>
                                     <th class="px-6 py-3 text-left font-semibold text-gray-700">Consultation Type</th>
                                     <th class="px-6 py-3 text-left font-semibold text-gray-700">Scheduled Date & Time</th>
-                                    <th class="px-6 py-3 text-left font-semibold text-gray-700">Status</th>
+                                    <th class="px-6 py-3 text-center font-semibold text-gray-700">Status</th>
                                     <th class="px-6 py-3 text-center font-semibold text-gray-700">Documents</th>
                                     <th class="px-6 py-3 text-center font-semibold text-gray-700">Actions</th>
                                 </tr>
@@ -14063,16 +14103,26 @@ function openCreateConsultationModal(createMode) {
 
     document.getElementById('consultation-category').value = '';
 
-    // Set start date to today and add date validation
+    // Set start date to today and reset input enabled states
     const today = new Date().toISOString().split('T')[0];
     const startDateInput = document.getElementById('consultation-start-date');
     const endDateInput = document.getElementById('consultation-end-date');
 
-    startDateInput.value = today;
-    startDateInput.min = today; // Prevent selecting past dates
+    if (startDateInput) {
+        startDateInput.disabled = false;
+        startDateInput.readOnly = false;
+        startDateInput.classList.remove('bg-gray-100', 'cursor-not-allowed');
+        startDateInput.value = today;
+        startDateInput.min = today;
+    }
 
-    endDateInput.value = '';
-    endDateInput.min = today; // Prevent selecting past dates
+    if (endDateInput) {
+        endDateInput.disabled = false;
+        endDateInput.readOnly = false;
+        endDateInput.classList.remove('bg-gray-100', 'cursor-not-allowed');
+        endDateInput.value = '';
+        endDateInput.min = today;
+    }
 
     const titleInput = document.getElementById('consultation-title');
     const categorySelect = document.getElementById('consultation-category');
@@ -14250,26 +14300,45 @@ function editConsultation(id) {
     const startDateInput = document.getElementById('consultation-start-date');
     const endDateInput = document.getElementById('consultation-end-date');
 
-    startDateInput.value = consultation.start_date || consultation.date || '';
-    endDateInput.value = consultation.end_date || '';
-
-    // Apply date validation for editing
-    const today = new Date().toISOString().split('T')[0];
-    startDateInput.min = today; // Prevent selecting past dates for new selection
-
-    // Add event listeners for date validation
-    startDateInput.addEventListener('change', function () {
-        endDateInput.min = this.value; // End date must be after start date
-        if (endDateInput.value && endDateInput.value < this.value) {
-            endDateInput.value = this.value; // Set end date to start date if it's before
+    const parseDateForInput = (val) => {
+        if (!val) return '';
+        const str = String(val).trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+            return str.substring(0, 10);
         }
-    });
-
-    endDateInput.addEventListener('change', function () {
-        if (this.value && this.value < startDateInput.value) {
-            this.value = startDateInput.value; // Prevent end date being before start date
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) {
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
         }
-    });
+        return '';
+    };
+
+    const rawStart = consultation.start_date || consultation.created_at || consultation.date || '';
+    const formattedStart = parseDateForInput(rawStart) || parseDateForInput(new Date());
+
+    if (startDateInput) {
+        startDateInput.removeAttribute('min');
+        startDateInput.value = formattedStart;
+        startDateInput.disabled = true; // Fixed: Start Date (Began/Posted Date) is fixed and locked when editing
+        startDateInput.readOnly = true;
+        startDateInput.classList.add('bg-gray-100', 'cursor-not-allowed');
+    }
+
+    const rawEnd = consultation.end_date || '';
+    const formattedEnd = parseDateForInput(rawEnd);
+
+    if (endDateInput) {
+        endDateInput.disabled = false;
+        endDateInput.readOnly = false;
+        endDateInput.classList.remove('bg-gray-100', 'cursor-not-allowed');
+        endDateInput.value = formattedEnd;
+        if (formattedStart) {
+            endDateInput.min = formattedStart;
+        }
+    }
 
     document.getElementById('consultation-description').value = consultation.description || '';
     const editModeRaw = String(consultation.response_mode || 'feedback').toLowerCase();
@@ -14321,8 +14390,28 @@ async function saveConsultation() {
     let title = document.getElementById('consultation-title').value.trim();
     let category = document.getElementById('consultation-category').value;
     let description = document.getElementById('consultation-description').value.trim();
-    const startDate = document.getElementById('consultation-start-date') ? document.getElementById('consultation-start-date').value : '';
-    const endDate = document.getElementById('consultation-end-date') ? document.getElementById('consultation-end-date').value : '';
+    const normalizeDateStr = (str) => {
+        if (!str) return '';
+        str = String(str).trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10);
+        const parts = str.split(/[\/\-]/);
+        if (parts.length === 3) {
+            if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+            if (parts[2].length === 4) {
+                let d = parseInt(parts[0], 10);
+                let m = parseInt(parts[1], 10);
+                let y = parseInt(parts[2], 10);
+                if (m > 12 && d <= 12) { const tmp = m; m = d; d = tmp; }
+                return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            }
+        }
+        return str;
+    };
+
+    let rawStartDate = document.getElementById('consultation-start-date') ? document.getElementById('consultation-start-date').value : '';
+    let rawEndDate = document.getElementById('consultation-end-date') ? document.getElementById('consultation-end-date').value : '';
+    const startDate = normalizeDateStr(rawStartDate);
+    const endDate = normalizeDateStr(rawEndDate);
     const responseMode = document.getElementById('consultation-response-mode').value;
     const surveyQuestion = document.getElementById('consultation-survey-question').value.trim();
 
@@ -14653,45 +14742,7 @@ function viewConsultationDetails(id) {
 
         ${aiRoutingHtml}
 
-        <!-- LGU 2 System Integrations Card (PHS & LRS) -->
-        <div class="bg-gradient-to-r from-blue-50/90 via-slate-50 to-emerald-50/90 border border-blue-200/80 rounded-xl p-4 shadow-xs space-y-3">
-            <div class="flex items-center justify-between">
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                    <i class="bi bi-diagram-3-fill text-blue-600 text-sm"></i> LGU 2 System Integrations (PHS & LRS)
-                </span>
-                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1">
-                    <i class="bi bi-shield-check"></i> Integration Active
-                </span>
-            </div>
-            
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <!-- PHS Integration Button -->
-                <div class="p-3 bg-white rounded-lg border border-gray-200 flex flex-col justify-between space-y-2.5 shadow-xs">
-                    <div>
-                        <div class="font-bold text-gray-900 flex items-center gap-1.5">
-                            <i class="bi bi-broadcast text-blue-600"></i> PHS (Public Hearing System)
-                        </div>
-                        <p class="text-[11px] text-gray-500 mt-0.5 leading-normal">Cross-reference live hearing & registrant queue order.</p>
-                    </div>
-                    <button onclick="triggerSystemIntegration(${consultation.id}, 'PHS')" id="sync-phs-btn-${consultation.id}" class="w-full py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition text-xs flex items-center justify-center gap-1.5 shadow-xs">
-                        <i class="bi bi-send-fill"></i> Sync with PHS
-                    </button>
-                </div>
 
-                <!-- LRS Integration Button -->
-                <div class="p-3 bg-white rounded-lg border border-gray-200 flex flex-col justify-between space-y-2.5 shadow-xs">
-                    <div>
-                        <div class="font-bold text-gray-900 flex items-center gap-1.5">
-                            <i class="bi bi-archive-fill text-emerald-600"></i> LRS (Legislative Records System)
-                        </div>
-                        <p class="text-[11px] text-gray-500 mt-0.5 leading-normal">Archive Public Input Summary PDF & feedback metrics.</p>
-                    </div>
-                    <button onclick="triggerSystemIntegration(${consultation.id}, 'LRS')" id="sync-lrs-btn-${consultation.id}" class="w-full py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition text-xs flex items-center justify-center gap-1.5 shadow-xs">
-                        <i class="bi bi-file-earmark-arrow-up-fill"></i> Export Summary to LRS
-                    </button>
-                </div>
-            </div>
-        </div>
 
         <!-- Feedback Responses Section -->
         <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
@@ -17932,7 +17983,8 @@ function pfpRenderConsultationFeedbackTable() {
             }
             const st = String(f.status || f.queue_status || '').toLowerCase();
             const msg = String(f.message || f.testimony || f.statement || '').trim().toLowerCase();
-            const isSurveyVote = msg === 'agree' || msg === 'disagree' || msg.length <= 15;
+            const fCat = String(f.category || f.type || f.subType || '').toLowerCase();
+            const isSurveyVote = fCat === 'survey vote' || fCat === 'survey' || fCat === 'vote' || f.is_survey_vote === true || msg === 'agree' || msg === 'disagree';
 
             if (isSurveyVote) {
                 publishedCount++;
@@ -17978,9 +18030,14 @@ function pfpRenderConsultationFeedbackTable() {
                 <td class="px-4 py-3.5 text-center font-semibold text-emerald-700 text-xs">${publishedCount}</td>
                 <td class="px-4 py-3.5 text-center font-semibold text-amber-700 text-xs">${pendingCount}</td>
                 <td class="px-4 py-3.5 text-center">
-                    <button type="button" onclick="pfpViewConsultationFeedback(${cid})" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs transition shadow-sm flex items-center gap-1 mx-auto cursor-pointer">
-                        <i class="bi bi-chat-left-text"></i> View Feedback
-                    </button>
+                    <div class="flex items-center justify-center gap-1.5">
+                        <button type="button" onclick="pfpViewConsultationFeedback(${cid})" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs transition shadow-sm flex items-center gap-1 cursor-pointer" title="View citizen feedback submissions">
+                            <i class="bi bi-chat-left-text"></i> View Feedback
+                        </button>
+                        <button type="button" onclick="pfpShowAiCommitteeBriefModal(${cid})" class="px-3 py-1.5 bg-rose-700 hover:bg-rose-800 text-white font-semibold rounded-lg text-xs transition shadow-sm flex items-center gap-1 cursor-pointer" title="Compile AI Brief & Executive Summary">
+                            <i class="bi bi-robot"></i> AI Brief
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
@@ -18071,7 +18128,8 @@ window.pfpShowConsultationFeedbackModal = function (consultationId) {
             const submittedAt = escapeHtmlHelper(resp.submitted_at || resp.date || resp.created_at || 'Recently');
             const status = escapeHtmlHelper(resp.status || resp.publication_status || 'published').toLowerCase();
 
-            const isSurveyVote = testimony.toLowerCase() === 'agree' || testimony.toLowerCase() === 'disagree' || testimony.length <= 15;
+            const rCat = String(resp.category || resp.type || resp.subType || '').toLowerCase();
+            const isSurveyVote = rCat === 'survey vote' || rCat === 'survey' || rCat === 'vote' || resp.is_survey_vote === true || testimony.toLowerCase() === 'agree' || testimony.toLowerCase() === 'disagree';
             const displayStatus = isSurveyVote ? 'VERIFIED VOTE' : status.toUpperCase();
             const statusClass = (isSurveyVote || status === 'published' || status === 'reviewed' || status === 'closed')
                 ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
@@ -19086,7 +19144,7 @@ function filterDocumentsByGroup(group) {
             if (group === 'consultation') {
                 return docType.includes('consultation') || docGroup.includes('consultation') || docType === 'ordinance' || docType === 'resolution' || docType === 'final_document' || docType === 'consultation_form' || docType === 'attachment';
             } else if (group === 'feedback') {
-                return docType.includes('feedback') || docGroup.includes('feedback');
+                return docType.includes('feedback') || docGroup.includes('feedback') || docType === 'response' || docType.includes('brief') || docType.includes('summary') || (doc.title && String(doc.title).toLowerCase().includes('feedback'));
             } else if (group === 'survey') {
                 return docType.includes('survey') || docGroup.includes('survey');
             } else if (group === 'reports') {
@@ -19192,37 +19250,38 @@ function renderConnectingDotsTracker(currentStatus, docOrConsultId, type = 'cons
 
     let steps = [];
     if (type === 'document') {
+        // Admin / Secretariat Official Document Workflow
         if (st === 'draft' || st === 'submitted' || st === 'pending' || !st) currentStep = 1;
-        else if (st === 'under_review' || st === 'reviewed') currentStep = 2;
+        else if (st === 'under_review' || st === 'reviewed' || st === 'viewed') currentStep = 2;
         else if (st === 'active' || st === 'public_review' || st === 'published_portal') currentStep = 3;
-        else if (st === 'forwarded_to_lrs' || st === 'forwarded' || st === 'committee') currentStep = 4;
-        else if (st === 'approved' || st === 'ordinance' || st === 'in_ordinance') currentStep = 5;
-        else if (st === 'published' || st === 'officialized' || st === 'archived' || st === 'closed' || st === 'rejected') currentStep = 6;
+        else if (st === 'closed' || st === 'closed_for_feedback' || st === 'ai_summary' || st === 'summarized' || st === 'synthesized') currentStep = 4;
+        else if (st === 'forwarded_to_lrs' || st === 'forwarded' || st === 'committee' || st === 'approved' || st === 'ordinance') currentStep = 5;
+        else if (st === 'published' || st === 'officialized' || st === 'archived' || st === 'completed' || st === 'rejected') currentStep = 6;
 
         steps = [
-            { num: 1, name: 'Document Registration', desc: 'Original document file registered in PCMS repository', statusVal: 'submitted' },
-            { num: 2, name: 'Resource Person Review', desc: 'Evaluated & verified by assigned Resource Person / Secretariat', statusVal: 'under_review' },
-            { num: 3, name: 'Live Public Portal', desc: 'Published live on the Public Portal for citizen feedback & stakeholder review', statusVal: 'active' },
-            { num: 4, name: 'Committee System Dispatch', desc: 'Forwarded to Committee Management System for formal committee evaluation', statusVal: 'forwarded' },
-            { num: 5, name: 'Ordinance System Processing', desc: 'Transmitted to Ordinance System to draft & formalize into city law', statusVal: 'approved' },
-            { num: 6, name: 'Officialized & Archived', desc: 'Enacted as official city ordinance, published & archived in city repository', statusVal: 'published' }
+            { num: 1, name: 'Document Registration', desc: 'Official proposed measure uploaded and registered in PCMS repository', statusVal: 'submitted' },
+            { num: 2, name: 'Resource Person Vetting', desc: 'Evaluated & prepared for public hearing by assigned Resource Person / Secretariat', statusVal: 'under_review' },
+            { num: 3, name: 'Live Public Portal', desc: 'Published live on Public Portal for citizen reading, voting & public feedback', statusVal: 'active' },
+            { num: 4, name: 'AI Feedback Synthesis', desc: 'PCMS AI Engine scans & summarizes all citizen votes and comments into a synthesis report', statusVal: 'ai_summary' },
+            { num: 5, name: 'Committee & Ordinance Systems', desc: 'Report dispatched to Committee System for hearings & Ordinance System for drafting', statusVal: 'forwarded' },
+            { num: 6, name: 'Officialized & Archived', desc: 'Enacted as official city ordinance, published & stored in permanent city archive', statusVal: 'published' }
         ];
     } else {
-        // Consultation
+        // Citizen Submitted Consultation Workflow
         if (st === 'draft' || st === 'pending' || st === 'new' || st === 'submitted' || !st) currentStep = 1;
-        else if (st === 'under_review' || st === 'reviewed' || st === 'viewed' || st === 'replied') currentStep = 2;
-        else if (st === 'active' || st === 'published_portal' || st === 'voting') currentStep = 3;
-        else if (st === 'scheduled' || st === 'committee' || st === 'forwarded') currentStep = 4;
-        else if (st === 'approved' || st === 'ordinance' || st === 'in_ordinance') currentStep = 5;
-        else if (st === 'completed' || st === 'closed' || st === 'officialized' || st === 'archived') currentStep = 6;
+        else if (st === 'active' || st === 'published_portal' || st === 'voting') currentStep = 2;
+        else if (st === 'closed' || st === 'closed_for_feedback' || st === 'ai_summary' || st === 'summarized' || st === 'synthesized') currentStep = 3;
+        else if (st === 'under_review' || st === 'reviewed' || st === 'viewed' || st === 'replied') currentStep = 4;
+        else if (st === 'scheduled' || st === 'committee' || st === 'forwarded' || st === 'approved' || st === 'ordinance') currentStep = 5;
+        else if (st === 'completed' || st === 'officialized' || st === 'archived' || st === 'enacted') currentStep = 6;
 
         steps = [
             { num: 1, name: 'Intake & Submission', desc: 'Public consultation intake logged and registered into PCMS repository', statusVal: 'pending' },
-            { num: 2, name: 'Resource Person Vetting', desc: 'Reviewed, evaluated & synthesized by assigned Resource Person', statusVal: 'under_review' },
-            { num: 3, name: 'Live Public Portal', desc: 'Active on Public Portal collecting citizen votes, surveys, and public feedback', statusVal: 'active' },
-            { num: 4, name: 'Forward to Committee System', desc: 'Dispatched to Committee Management System for committee deliberations', statusVal: 'scheduled' },
-            { num: 5, name: 'Forward to Ordinance System', desc: 'Forwarded to Ordinance System to formalize findings into an ordinance draft', statusVal: 'approved' },
-            { num: 6, name: 'Officialized Ordinance', desc: 'Enacted into official city ordinance & stored in permanent city archive', statusVal: 'completed' }
+            { num: 2, name: 'Live Public Portal', desc: 'Active on Public Portal collecting citizen votes, surveys, and public feedback', statusVal: 'active' },
+            { num: 3, name: 'AI Feedback Synthesis', desc: 'Consultation closes; PCMS AI Engine scans & synthesizes all citizen comments & votes', statusVal: 'ai_summary' },
+            { num: 4, name: 'Resource Person Review', desc: 'Assigned Resource Person reviews AI Summary, adds expert evaluation & endorses report', statusVal: 'under_review' },
+            { num: 5, name: 'Committee & Ordinance Systems', desc: 'Endorsed report sent to Committee System for hearings & Ordinance System for bill drafting', statusVal: 'scheduled' },
+            { num: 6, name: 'Officialized Ordinance', desc: 'Enacted into official city ordinance & stored in permanent municipal archive', statusVal: 'completed' }
         ];
     }
 
@@ -19257,7 +19316,7 @@ function renderConnectingDotsTracker(currentStatus, docOrConsultId, type = 'cons
         `;
     }).join('');
 
-    const currentStageInfo = steps[currentStep - 1];
+    const currentStageInfo = steps[currentStep - 1] || steps[0];
 
     return `
         <div class="flex flex-col items-center gap-1 my-1">
@@ -19267,12 +19326,12 @@ function renderConnectingDotsTracker(currentStatus, docOrConsultId, type = 'cons
                 <!-- Active Progress Line -->
                 <div class="absolute top-1/2 left-4 h-1 bg-gradient-to-r from-emerald-500 to-amber-500 -translate-y-1/2 rounded-full z-0 transition-all duration-500" style="width: ${linePercent}%;"></div>
                 
-                <!-- 5 Connecting Dots -->
+                <!-- 6 Connecting Dots -->
                 <div class="relative z-10 flex items-center justify-between w-full">
                     ${dotsHtml}
                 </div>
             </div>
-            <span class="text-[10px] font-black text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md uppercase tracking-wider shadow-2xs">${currentStep}/5 - ${currentStageInfo.name}</span>
+            <span class="text-[10px] font-black text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md uppercase tracking-wider shadow-2xs">${currentStep}/6 - ${currentStageInfo.name}</span>
         </div>
     `;
 }
@@ -21967,11 +22026,38 @@ function generateReport() {
 }
 
 function pfpTriggerAiCommitteeCompile() {
-    const selCid = String(document.getElementById('pfq-consultation')?.value || '').trim();
+    let selCid = String(document.getElementById('pfq-consultation')?.value || '').trim();
+    const selectEl = document.getElementById('pfq-consultation');
+
     if (!selCid) {
-        showNotification('Please select a specific Consultation Policy from the dropdown first.', 'info');
+        const opts = selectEl ? Array.from(selectEl.options).filter(o => o.value) : [];
+        if (opts.length > 0) {
+            const preferredOpt = opts.find(o => {
+                const c = (AppData.consultations || []).find(item => String(item.id) === String(o.value));
+                const st = String(c?.status || '').toLowerCase();
+                return st === 'closed' || st === 'completed';
+            }) || opts[0];
+
+            selCid = preferredOpt.value;
+            if (selectEl) selectEl.value = selCid;
+            showNotification(`Auto-selected consultation #${selCid} for AI synthesis.`, 'info');
+        } else if (Array.isArray(AppData.consultations) && AppData.consultations.length > 0) {
+            const preferredC = AppData.consultations.find(c => {
+                const st = String(c.status || '').toLowerCase();
+                return st === 'closed' || st === 'completed';
+            }) || AppData.consultations[0];
+
+            selCid = String(preferredC.id);
+            if (selectEl) selectEl.value = selCid;
+            showNotification(`Auto-selected consultation #${selCid} for AI synthesis.`, 'info');
+        }
+    }
+
+    if (!selCid) {
+        showNotification('No active or completed consultation policy found to summarize.', 'warning');
         return;
     }
+
     pfpShowAiCommitteeBriefModal(selCid);
 }
 
@@ -22221,18 +22307,21 @@ function renderAiCommitteeBriefModalHtml(brief) {
 async function pfpForwardBriefToCommittee(consultationId, committeeName) {
     if (!consultationId) return;
     try {
+        showNotification('Forwarding document & registering PDF in Document Management...', 'info');
         const res = await fetchWithTimeout('API/consultation_feedback_ai.php?action=forward_brief_to_committee', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ consultation_id: consultationId, committee: committeeName })
-        }, 5000);
+        }, 10000);
 
         const data = await res.json();
         if (res.ok && data.success) {
-            showNotification(`✅ Document successfully passed to LGU ${committeeName}!`, 'success', 6000);
+            showNotification(`✅ Document successfully passed to LGU ${committeeName}! Registered in Document Management archives.`, 'success', 6000);
             const modal = document.getElementById('pfq-ai-brief-modal');
             if (modal) modal.remove();
-            pfpRefreshData();
+            if (typeof pfpRefreshData === 'function') pfpRefreshData();
+            if (typeof renderDocumentsList === 'function') renderDocumentsList();
+            if (typeof fetchDocuments === 'function') fetchDocuments();
         } else {
             showNotification(data.message || 'Failed to forward to committee.', 'error');
         }

@@ -17656,32 +17656,6 @@ async function renderPublicFeedbackPortal() {
 
             <!-- TAB 2: PHMS System Feedback Container -->
             <div id="pfq-phms-container" class="space-y-4 hidden">
-                <!-- AI Analysis & Redundancy Prevention Header Banner -->
-                <div class="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-xl p-4 shadow-md flex flex-wrap items-center justify-between gap-4 border border-blue-700/50">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-xl text-blue-300 shadow-inner">
-                            <i class="bi bi-cpu-fill"></i>
-                        </div>
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <h4 class="font-extrabold text-sm text-white">AI Analysis & Redundancy Protection Engine</h4>
-                                <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-bold uppercase tracking-wider">Active Deduplication</span>
-                            </div>
-                            <p class="text-xs text-blue-200/80 mt-0.5">PHMS live hearing testimonies are automatically ingested and merged with PCMS online feedback. Synthesized items are flagged to skip redundant re-reading.</p>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3 text-xs">
-                        <div class="bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 text-center">
-                            <div class="text-[10px] text-blue-200 uppercase font-bold">Analyzed Feedback</div>
-                            <div class="text-sm font-extrabold text-emerald-400" id="phms-analyzed-count-badge">105 Testimonies</div>
-                        </div>
-                        <div class="bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 text-center">
-                            <div class="text-[10px] text-blue-200 uppercase font-bold">Duplicates Skipped</div>
-                            <div class="text-sm font-extrabold text-amber-300" id="phms-skipped-count-badge">0 Redundant</div>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="bg-white rounded-xl border border-blue-200 p-4 shadow-sm space-y-3 bg-blue-50/20">
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <div class="flex-1 min-w-[240px]">
@@ -17714,13 +17688,12 @@ async function renderPublicFeedbackPortal() {
                                 <th class="px-4 py-3 text-gray-900">DATE</th>
                                 <th class="px-4 py-3 text-gray-900 text-center">FEEDBACK</th>
                                 <th class="px-4 py-3 text-gray-900 text-center">AVG. RATING</th>
-                                <th class="px-4 py-3 text-gray-900 text-center">AI ANALYSIS STATUS</th>
                                 <th class="px-4 py-3 text-gray-900 text-center">ACTIONS</th>
                             </tr>
                         </thead>
                         <tbody id="pfq-phms-table-body">
                             <tr>
-                                <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                                <td colspan="5" class="px-4 py-8 text-center text-gray-500">
                                     <i class="bi bi-arrow-repeat animate-spin text-xl mb-1 block"></i> Loading PHMS Citizen Hearing Feedback...
                                 </td>
                             </tr>
@@ -17769,7 +17742,7 @@ async function pfpTriggerRealtimePhmsSync() {
     }
 }
 
-window.openPhmsDataApprovalSheetModal = function() {
+window.openPhmsDataApprovalSheetModal = async function() {
     const existing = document.getElementById('phms-approval-sheet-modal');
     if (existing) existing.remove();
 
@@ -17813,8 +17786,8 @@ window.openPhmsDataApprovalSheetModal = function() {
                         <span class="font-mono text-[11px] font-bold text-emerald-700">SHA256 (Bearer Verified)</span>
                     </div>
                     <div>
-                        <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Target LGU Committee</span>
-                        <span class="font-bold text-slate-800">Health & Sanitation Committee</span>
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Approval Status</span>
+                        <span class="font-bold text-amber-700 flex items-center gap-1" id="phms-pending-count-label"><i class="bi bi-hourglass-split"></i> Loading pending list...</span>
                     </div>
                 </div>
 
@@ -17829,36 +17802,17 @@ window.openPhmsDataApprovalSheetModal = function() {
                                 <tr>
                                     <th class="p-3">Hearing ID</th>
                                     <th class="p-3">Public Hearing Title</th>
-                                    <th class="p-3">Date & Venue</th>
+                                    <th class="p-3">Received At</th>
                                     <th class="p-3 text-center">Testimonies</th>
-                                    <th class="p-3 text-center">Sentiment</th>
                                     <th class="p-3 text-center">Status</th>
+                                    <th class="p-3 text-center">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-100 bg-white">
+                            <tbody id="phms-approval-sheet-body" class="divide-y divide-slate-100 bg-white">
                                 <tr>
-                                    <td class="p-3 font-mono font-bold text-blue-700">PH-2026-004</td>
-                                    <td class="p-3 font-bold text-slate-900">Consultation on Drainage Upgrades for Flood Control</td>
-                                    <td class="p-3 text-slate-600">Aug 4, 2026 • Session Hall A</td>
-                                    <td class="p-3 text-center font-bold text-slate-800">45 Entries</td>
-                                    <td class="p-3 text-center"><span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">Positive (74%)</span></td>
-                                    <td class="p-3 text-center"><span class="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold text-[10px]">READY FOR MERGE</span></td>
-                                </tr>
-                                <tr>
-                                    <td class="p-3 font-mono font-bold text-blue-700">PH-2026-003</td>
-                                    <td class="p-3 font-bold text-slate-900">Proposed Waste Segregation Enforcement Program</td>
-                                    <td class="p-3 text-slate-600">Jul 29, 2026 • Barangay Center</td>
-                                    <td class="p-3 text-center font-bold text-slate-800">32 Entries</td>
-                                    <td class="p-3 text-center"><span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[10px]">Neutral (68%)</span></td>
-                                    <td class="p-3 text-center"><span class="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold text-[10px]">READY FOR MERGE</span></td>
-                                </tr>
-                                <tr>
-                                    <td class="p-3 font-mono font-bold text-blue-700">PH-2026-002</td>
-                                    <td class="p-3 font-bold text-slate-900">Valenzuela Bike Lane Expansion Program</td>
-                                    <td class="p-3 text-slate-600">Jul 17, 2026 • City Auditorium</td>
-                                    <td class="p-3 text-center font-bold text-slate-800">28 Entries</td>
-                                    <td class="p-3 text-center"><span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">Positive (82%)</span></td>
-                                    <td class="p-3 text-center"><span class="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold text-[10px]">READY FOR MERGE</span></td>
+                                    <td colspan="6" class="p-6 text-center text-slate-500">
+                                        <i class="bi bi-arrow-repeat animate-spin text-lg block mb-1"></i> Checking pending PHMS ingestion packages...
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -17883,17 +17837,7 @@ window.openPhmsDataApprovalSheetModal = function() {
                             <input type="checkbox" checked disabled class="rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500">
                             <span>Duplicate Prevention: Unique testimony ID hash check performed to avoid double counting.</span>
                         </label>
-                        <label class="flex items-center gap-2 cursor-pointer font-semibold text-emerald-950">
-                            <input type="checkbox" checked disabled class="rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500">
-                            <span>AI NLP Processing: Sentiment score and keyword extraction pipeline executed cleanly.</span>
-                        </label>
                     </div>
-                </div>
-
-                <!-- Section 4: Remarks & Approval Authorization -->
-                <div class="bg-slate-100 rounded-xl p-4 border border-slate-200 space-y-3">
-                    <label class="block font-bold text-slate-800 text-xs">Secretariat Approval Remarks / Transmittal Notes:</label>
-                    <textarea id="phms-approval-remarks" rows="2" class="w-full p-2.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Enter administrative approval note for this PHMS data packet transmittal..."></textarea>
                 </div>
             </div>
 
@@ -17902,10 +17846,10 @@ window.openPhmsDataApprovalSheetModal = function() {
                 <span class="text-xs text-slate-500"><i class="bi bi-shield-lock-fill text-blue-700 mr-1"></i> Authorized Secretariat Sign-off Module</span>
                 <div class="flex items-center gap-3">
                     <button type="button" onclick="document.getElementById('phms-approval-sheet-modal').remove()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition cursor-pointer">
-                        Cancel / Reject
+                        Close
                     </button>
-                    <button type="button" onclick="approveAndIngestPhmsDataPackage()" class="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-2 cursor-pointer">
-                        <i class="bi bi-check-circle-fill"></i> Sign & Approve Data Ingestion
+                    <button type="button" id="phms-approve-all-btn" onclick="approveAndIngestPhmsDataPackage()" class="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-2 cursor-pointer">
+                        <i class="bi bi-check-circle-fill"></i> Approve All Pending Packages
                     </button>
                 </div>
             </div>
@@ -17913,14 +17857,124 @@ window.openPhmsDataApprovalSheetModal = function() {
     `;
 
     document.body.appendChild(modal);
+
+    // Fetch live pending list from backend API
+    try {
+        const res = await fetch('API/feedback_api.php?action=phms_pending_approvals');
+        const data = await res.json();
+        const tbody = document.getElementById('phms-approval-sheet-body');
+        const statusLabel = document.getElementById('phms-pending-count-label');
+        const approveAllBtn = document.getElementById('phms-approve-all-btn');
+
+        if (data && data.success && Array.isArray(data.data) && data.data.length > 0) {
+            const pendingList = data.data;
+            if (statusLabel) statusLabel.innerHTML = `<i class="bi bi-exclamation-circle-fill text-amber-600"></i> ${pendingList.length} Pending Approval`;
+
+            tbody.innerHTML = pendingList.map(item => {
+                const qId = item.queue_id || item.phms_hearing_id;
+                const hId = item.phms_hearing_id ? `PHMS-H#${item.phms_hearing_id}` : `Queue #${item.queue_id}`;
+                const title = escapeHtml(item.full_name || item.hearing_title || 'Public Hearing Payload');
+                const dateStr = item.created_at || 'Just now';
+                const count = item.feedback_count || 0;
+
+                return `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="p-3 font-mono font-bold text-blue-700">${hId}</td>
+                        <td class="p-3 font-bold text-slate-900">${title}</td>
+                        <td class="p-3 text-slate-600">${dateStr}</td>
+                        <td class="p-3 text-center font-bold text-slate-800">${count} Entries</td>
+                        <td class="p-3 text-center"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[10px]">PENDING APPROVAL</span></td>
+                        <td class="p-3 text-center">
+                            <div class="flex items-center justify-center gap-1.5">
+                                <button type="button" onclick="approveSinglePhmsPayload(${qId})" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-[11px] transition shadow-2xs">
+                                    Approve
+                                </button>
+                                <button type="button" onclick="rejectSinglePhmsPayload(${qId})" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded text-[11px] transition shadow-2xs">
+                                    Reject
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            if (statusLabel) statusLabel.innerHTML = `<i class="bi bi-check-circle-fill text-emerald-600"></i> All Packages Approved`;
+            if (approveAllBtn) approveAllBtn.style.display = 'none';
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="p-8 text-center text-slate-500">
+                        <i class="bi bi-patch-check-fill text-emerald-500 text-2xl block mb-2"></i>
+                        <strong class="text-slate-800 block text-xs">No Pending Ingestion Packages</strong>
+                        <span class="text-[11px] text-slate-500">All incoming PHMS data payloads have been reviewed and approved into PCMS.</span>
+                    </td>
+                </tr>
+            `;
+        }
+    } catch(e) {
+        console.warn('Error loading pending approvals:', e);
+    }
 };
 
-window.approveAndIngestPhmsDataPackage = function() {
-    showNotification('✅ PHMS Transmittal Sheet Approved! Ingested 3 Hearing Summaries into PCMS Queue.', 'success', 6000);
-    const modal = document.getElementById('phms-approval-sheet-modal');
-    if (modal) modal.remove();
-    if (typeof loadPhmsFeedbackFromApi === 'function') {
-        loadPhmsFeedbackFromApi(true);
+window.approveSinglePhmsPayload = async function(queueId) {
+    try {
+        const res = await fetch('API/feedback_api.php?action=phms_approve_ingestion', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ queue_id: queueId })
+        });
+        const data = await res.json();
+        if (data && data.success) {
+            if (typeof showNotification === 'function') showNotification('✅ PHMS Transmittal Approved & Merged into PCMS!', 'success');
+            openPhmsDataApprovalSheetModal();
+            if (typeof loadPhmsFeedbackFromApi === 'function') loadPhmsFeedbackFromApi(true);
+        } else {
+            if (typeof showNotification === 'function') showNotification('⚠️ ' + (data.message || 'Failed to approve'), 'warning');
+        }
+    } catch(e) {
+        if (typeof showNotification === 'function') showNotification('❌ Error approving payload: ' + e.message, 'error');
+    }
+};
+
+window.rejectSinglePhmsPayload = async function(queueId) {
+    try {
+        const res = await fetch('API/feedback_api.php?action=phms_reject_ingestion', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ queue_id: queueId })
+        });
+        const data = await res.json();
+        if (data && data.success) {
+            if (typeof showNotification === 'function') showNotification('ℹ️ PHMS Transmittal Payload Rejected.', 'info');
+            openPhmsDataApprovalSheetModal();
+            if (typeof loadPhmsFeedbackFromApi === 'function') loadPhmsFeedbackFromApi(true);
+        } else {
+            if (typeof showNotification === 'function') showNotification('⚠️ ' + (data.message || 'Failed to reject'), 'warning');
+        }
+    } catch(e) {
+        if (typeof showNotification === 'function') showNotification('❌ Error rejecting payload: ' + e.message, 'error');
+    }
+};
+
+window.approveAndIngestPhmsDataPackage = async function() {
+    try {
+        const res = await fetch('API/feedback_api.php?action=phms_approve_ingestion', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ all: true })
+        });
+        const data = await res.json();
+        if (data && data.success) {
+            if (typeof showNotification === 'function') showNotification('✅ ' + (data.message || 'All PHMS pending data packages approved!'), 'success', 6000);
+            const modal = document.getElementById('phms-approval-sheet-modal');
+            if (modal) modal.remove();
+            if (typeof loadPhmsFeedbackFromApi === 'function') {
+                loadPhmsFeedbackFromApi(true);
+            }
+        } else {
+            if (typeof showNotification === 'function') showNotification('⚠️ ' + (data.message || 'Failed to approve packages'), 'warning');
+        }
+    } catch(e) {
+        if (typeof showNotification === 'function') showNotification('❌ Error approving packages: ' + e.message, 'error');
     }
 };
 
@@ -18731,7 +18785,7 @@ function pfpRenderPhmsTable() {
         const errDetail = window._phms_last_fetch_error ? escapeHtml(window._phms_last_fetch_error) : 'Please ensure the PHMS server is running or click "Sync PHMS Data" to refresh.';
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" class="px-6 py-10 text-center">
+                <td colspan="5" class="px-6 py-10 text-center">
                     <div class="max-w-md mx-auto p-5 bg-amber-50/90 rounded-2xl border border-amber-200 text-amber-900 shadow-sm space-y-2">
                         <i class="bi bi-exclamation-triangle-fill text-2xl text-amber-600 block"></i>
                         <h4 class="font-bold text-sm">No PHMS Citizen Hearing Feedback Available</h4>
@@ -18758,8 +18812,13 @@ function pfpRenderPhmsTable() {
         const publishedCount = h.published_count ?? (h.published_responses ?? feedbackCount);
         const pendingCount = h.pending_count ?? 0;
 
-        let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-white uppercase tracking-wider">COMPLETED</span>';
-        if (status === 'active' || status === 'open') {
+        const approvalStatus = (h.approval_status || 'approved').toLowerCase();
+        let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-white uppercase tracking-wider inline-flex items-center gap-1"><i class="bi bi-check-circle-fill text-emerald-400 text-[10px]"></i> COMPLETED</span>';
+        if (approvalStatus === 'pending' || status === 'pending_approval') {
+            statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-white uppercase tracking-wider inline-flex items-center gap-1" title="Data package is awaiting admin approval in Ingestion Approval Sheet"><i class="bi bi-hourglass-split text-white text-[10px]"></i> PENDING APPROVAL</span>';
+        } else if (approvalStatus === 'rejected' || status === 'rejected') {
+            statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600 text-white uppercase tracking-wider inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-white text-[10px]"></i> REJECTED</span>';
+        } else if (status === 'active' || status === 'open') {
             statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase tracking-wider">ACTIVE</span>';
         }
 
@@ -18778,11 +18837,6 @@ function pfpRenderPhmsTable() {
                 <td class="px-4 py-3.5 text-center">
                     <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 font-semibold text-xs">
                         <i class="bi bi-star-fill text-amber-500 text-[11px]"></i> ${avgRating}
-                    </span>
-                </td>
-                <td class="px-4 py-3.5 text-center">
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100/90 text-emerald-800 border border-emerald-300 font-extrabold text-[10px] shadow-2xs" title="Testimonies synthesized into AI Brief; redundant entries auto-skipped">
-                        <i class="bi bi-cpu-fill text-emerald-600"></i> Analyzed (Auto-Skipped)
                     </span>
                 </td>
                 <td class="px-4 py-3.5 text-center">
@@ -22499,18 +22553,21 @@ function renderAiCommitteeBriefModalHtml(brief) {
 async function pfpForwardBriefToCommittee(consultationId, committeeName) {
     if (!consultationId) return;
     try {
+        showNotification('Forwarding document & registering PDF in Document Management...', 'info');
         const res = await fetchWithTimeout('API/consultation_feedback_ai.php?action=forward_brief_to_committee', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ consultation_id: consultationId, committee: committeeName })
-        }, 5000);
+        }, 10000);
 
         const data = await res.json();
         if (res.ok && data.success) {
-            showNotification(`✅ Document successfully passed to LGU ${committeeName}!`, 'success', 6000);
+            showNotification(`✅ Document successfully passed to LGU ${committeeName}! Registered in Document Management archives.`, 'success', 6000);
             const modal = document.getElementById('pfq-ai-brief-modal');
             if (modal) modal.remove();
-            pfpRefreshData();
+            if (typeof pfpRefreshData === 'function') pfpRefreshData();
+            if (typeof renderDocumentsList === 'function') renderDocumentsList();
+            if (typeof fetchDocuments === 'function') fetchDocuments();
         } else {
             showNotification(data.message || 'Failed to forward to committee.', 'error');
         }

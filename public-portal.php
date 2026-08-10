@@ -8937,54 +8937,23 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
 
 
 
-                                <p style="color:#374151; margin:0 0 1rem 0; font-weight:600;">
-
+                                <p style="color:#374151; margin:0 0 0.75rem 0; font-weight:700; font-size:0.95rem;">
                                     <?php echo htmlspecialchars($sr['survey_question']); ?>
-
                                 </p>
 
-
-
-                                <div style="display:flex; flex-direction:column; gap:0.85rem;">
-
-                                    <div>
-
-                                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
-
-                                            <span style="font-size:0.9rem; font-weight:700; color:#065f46;"><?php echo htmlspecialchars($sr['survey_option_a']); ?></span>
-
-                                            <span style="font-size:0.9rem; color:#065f46; font-weight:700;"><?php echo number_format($a_percent, 1); ?>% (<?php echo $a_votes; ?>)</span>
-
-                                        </div>
-
-                                        <div style="height:12px; background:#e5e7eb; border-radius:999px; overflow:hidden;">
-
-                                            <div style="height:100%; width:<?php echo max(0, min(100, $a_percent)); ?>%; background:linear-gradient(90deg, #10b981, #059669);"></div>
-
-                                        </div>
-
+                                <div style="background:#f8fafc; padding:0.85rem; border-radius:0.75rem; border:1px solid #e2e8f0;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.85rem; font-weight:700; margin-bottom:0.4rem;">
+                                        <span style="color:#047857; display:flex; align-items:center; gap:0.25rem;">
+                                            👍 <?php echo htmlspecialchars($sr['survey_option_a']); ?> (<?php echo number_format($a_percent, 1); ?>%)
+                                        </span>
+                                        <span style="color:#b91c1c; display:flex; align-items:center; gap:0.25rem;">
+                                            <?php echo htmlspecialchars($sr['survey_option_b']); ?> (<?php echo number_format($b_percent, 1); ?>%) 👎
+                                        </span>
                                     </div>
-
-
-
-                                    <div>
-
-                                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
-
-                                            <span style="font-size:0.9rem; font-weight:700; color:#7f1d1d;"><?php echo htmlspecialchars($sr['survey_option_b']); ?></span>
-
-                                            <span style="font-size:0.9rem; color:#7f1d1d; font-weight:700;"><?php echo number_format($b_percent, 1); ?>% (<?php echo $b_votes; ?>)</span>
-
-                                        </div>
-
-                                        <div style="height:12px; background:#e5e7eb; border-radius:999px; overflow:hidden;">
-
-                                            <div style="height:100%; width:<?php echo max(0, min(100, $b_percent)); ?>%; background:linear-gradient(90deg, #ef4444, #dc2626);"></div>
-
-                                        </div>
-
+                                    <div style="height:10px; background:#e2e8f0; border-radius:999px; overflow:hidden; display:flex;">
+                                        <div style="height:100%; width:<?php echo max(0, min(100, $a_percent)); ?>%; background:linear-gradient(90deg, #10b981, #059669); border-top-left-radius:999px; border-bottom-left-radius:999px;"></div>
+                                        <div style="height:100%; width:<?php echo max(0, min(100, $b_percent)); ?>%; background:linear-gradient(90deg, #ef4444, #dc2626); border-top-right-radius:999px; border-bottom-right-radius:999px;"></div>
                                     </div>
-
                                 </div>
 
 

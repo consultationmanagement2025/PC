@@ -523,15 +523,18 @@ try {
             break;
 
         case 'get_all_vote_stats':
-            // 1. Fetch survey options metadata from consultations
+            // 1. Fetch survey options metadata ONLY from consultations configured as surveys
             $consultationMeta = [];
-            $cRes = $conn->query("SELECT id, title, response_mode, survey_question, survey_option_a, survey_option_b FROM consultations");
+            $cRes = $conn->query("SELECT id, title, response_mode, survey_question, survey_option_a, survey_option_b 
+                                  FROM consultations 
+                                  WHERE LOWER(TRIM(response_mode)) = 'survey' 
+                                     OR (survey_question IS NOT NULL AND TRIM(survey_question) != '' AND TRIM(survey_question) != 'null')");
             if ($cRes) {
                 while ($cRow = $cRes->fetch_assoc()) {
                     $cid = (int)$cRow['id'];
                     $consultationMeta[$cid] = [
                         'title' => $cRow['title'] ?? '',
-                        'mode' => $cRow['response_mode'] ?? 'feedback',
+                        'mode' => $cRow['response_mode'] ?? 'survey',
                         'question' => $cRow['survey_question'] ?? '',
                         'option_a' => $cRow['survey_option_a'] ?? 'Agree',
                         'option_b' => $cRow['survey_option_b'] ?? 'Disagree'
@@ -562,13 +565,20 @@ try {
             if ($res) {
                 while ($row = $res->fetch_assoc()) {
                     $cid = (int)$row['consultation_id'];
+                    // ONLY include if this consultation is in $consultationMeta (meaning it is a survey)
+                    if (!isset($consultationMeta[$cid])) {
+                        continue;
+                    }
+
                     $opt = strtolower(trim($row['vote_option']));
                     $cnt = (int)$row['total'];
 
                     if (!isset($byConsultation[$cid])) {
-                        $meta = $consultationMeta[$cid] ?? [];
+                        $meta = $consultationMeta[$cid];
                         $byConsultation[$cid] = [
                             'consultation_id' => $cid,
+                            'title' => $meta['title'] ?? '',
+                            'mode' => $meta['mode'] ?? 'survey',
                             'agree_votes' => 0,
                             'disagree_votes' => 0,
                             'other_votes' => 0,
@@ -598,6 +608,25 @@ try {
                 }
             }
 
+            // Ensure all survey consultations from $consultationMeta are included in $byConsultation
+            foreach ($consultationMeta as $cid => $meta) {
+                if (!isset($byConsultation[$cid])) {
+                    $byConsultation[$cid] = [
+                        'consultation_id' => $cid,
+                        'title' => $meta['title'] ?? '',
+                        'mode' => $meta['mode'] ?? 'survey',
+                        'agree_votes' => 0,
+                        'disagree_votes' => 0,
+                        'other_votes' => 0,
+                        'total_votes' => 0,
+                        'survey_responses' => 0,
+                        'option_a_label' => !empty($meta['option_a']) ? $meta['option_a'] : 'Agree',
+                        'option_b_label' => !empty($meta['option_b']) ? $meta['option_b'] : 'Disagree',
+                        'survey_question' => $meta['question'] ?? ''
+                    ];
+                }
+            }
+
             // 3. Include survey_responses count if table exists
             $surveyResponsesCheck = $conn->query("SHOW TABLES LIKE 'survey_responses'");
             if ($surveyResponsesCheck && $surveyResponsesCheck->num_rows > 0) {
@@ -612,21 +641,7 @@ try {
                     while ($srRow = $srRes->fetch_assoc()) {
                         $cid = (int)$srRow['consultation_id'];
                         $cnt = (int)$srRow['response_count'];
-                        if ($cnt > 0) {
-                            if (!isset($byConsultation[$cid])) {
-                                $meta = $consultationMeta[$cid] ?? [];
-                                $byConsultation[$cid] = [
-                                    'consultation_id' => $cid,
-                                    'agree_votes' => 0,
-                                    'disagree_votes' => 0,
-                                    'other_votes' => 0,
-                                    'total_votes' => 0,
-                                    'survey_responses' => 0,
-                                    'option_a_label' => !empty($meta['option_a']) ? $meta['option_a'] : 'Option A',
-                                    'option_b_label' => !empty($meta['option_b']) ? $meta['option_b'] : 'Option B',
-                                    'survey_question' => $meta['question'] ?? ''
-                                ];
-                            }
+                        if ($cnt > 0 && isset($byConsultation[$cid])) {
                             $byConsultation[$cid]['survey_responses'] = $cnt;
                             if ($byConsultation[$cid]['total_votes'] === 0) {
                                 $byConsultation[$cid]['total_votes'] = $cnt;

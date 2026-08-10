@@ -4935,7 +4935,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                                             <tr>
                                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Document Title</th>
                                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">User</th>
-                                                <th class="px-6 py-3 text-left font-semibold text-gray-700">Status</th>
+                                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Status</th>
                                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Size</th>
                                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Downloads</th>
                                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Actions</th>

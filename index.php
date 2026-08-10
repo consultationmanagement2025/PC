@@ -1,3 +1,12 @@
+<?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once __DIR__ . '/config/google_oauth_config.php';
+$_citizenOAuthState = bin2hex(random_bytes(16));
+$_SESSION['citizen_google_oauth_state'] = $_citizenOAuthState;
+$googleOAuthUrl = getGoogleAuthUrl($_citizenOAuthState);
+?>
 <!DOCTYPE html>
 
 <html lang="en">
@@ -837,7 +846,7 @@
     </nav>
 
     <div class="header-buttons flex items-center gap-2">
-        <a href="public/google-auth.php" class="inline-flex flex-row items-center gap-2.5 bg-gradient-to-r from-red-700 to-red-900 hover:from-red-800 hover:to-black text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-md transition-all hover:scale-105 whitespace-nowrap">
+        <a href="<?php echo htmlspecialchars($googleOAuthUrl); ?>" class="inline-flex flex-row items-center gap-2.5 bg-gradient-to-r from-red-700 to-red-900 hover:from-red-800 hover:to-black text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-md transition-all hover:scale-105 whitespace-nowrap">
             <div class="w-4 h-4 rounded-full bg-white p-0.5 flex items-center justify-center shrink-0">
                 <svg class="w-full h-full" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
@@ -871,7 +880,7 @@
         </p>
 
         <div class="flex items-center">
-            <a href="public/google-auth.php" class="inline-flex flex-row items-center gap-3 bg-gradient-to-r from-red-600 to-red-800 hover:from-red-700 hover:to-red-950 text-white font-extrabold text-xs sm:text-sm px-6 py-3.5 rounded-2xl shadow-xl transition-all hover:scale-105 border border-red-500/30 whitespace-nowrap">
+            <a href="<?php echo htmlspecialchars($googleOAuthUrl); ?>" class="inline-flex flex-row items-center gap-3 bg-gradient-to-r from-red-600 to-red-800 hover:from-red-700 hover:to-red-950 text-white font-extrabold text-xs sm:text-sm px-6 py-3.5 rounded-2xl shadow-xl transition-all hover:scale-105 border border-red-500/30 whitespace-nowrap">
                 <div class="w-6 h-6 rounded-full bg-white p-1 flex items-center justify-center shrink-0">
                     <svg class="w-full h-full" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>

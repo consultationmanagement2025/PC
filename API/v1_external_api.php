@@ -196,11 +196,46 @@ try {
             echo json_encode(['success' => true, 'message' => 'Webhook payload validated (mock mode)', 'target_url' => $targetUrl]);
             break;
 
+        case 'update_ordinance_status':
+            $rawInput = file_get_contents('php://input');
+            $body = json_decode($rawInput, true) ?: $_POST;
+
+            $consultation_id = (int)($body['consultation_id'] ?? $_GET['consultation_id'] ?? 0);
+            $ordinance_no = trim($body['ordinance_no'] ?? $_GET['ordinance_no'] ?? 'ORD-' . date('Y') . '-' . sprintf('%03d', $consultation_id));
+            $status = trim($body['status'] ?? 'proceeded_to_ordinance');
+            $committee_name = trim($body['committee_name'] ?? 'Committee on Rules & Laws');
+
+            if (!$consultation_id) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'consultation_id parameter is required']);
+                exit;
+            }
+
+            if (isset($conn) && $conn) {
+                $stmt = $conn->prepare("UPDATE consultations SET status = ?, category = CONCAT(IFNULL(category,''), ' [Ordinance Pipeline]') WHERE id = ?");
+                if ($stmt) {
+                    $stmt->bind_param("si", $status, $consultation_id);
+                    $stmt->execute();
+                    $stmt->close();
+
+                    echo json_encode([
+                        'success' => true,
+                        'message' => 'Consultation status updated to Ordinance System successfully',
+                        'consultation_id' => $consultation_id,
+                        'new_status' => $status,
+                        'ordinance_no' => $ordinance_no,
+                        'committee' => $committee_name
+                    ]);
+                    exit;
+                }
+            }
+            break;
+
         default:
             http_response_code(400);
             echo json_encode([
                 'success' => false,
-                'message' => 'Invalid endpoint. Supported endpoints: consultations, surveys, feedback, citizens, webhooks'
+                'message' => 'Invalid endpoint. Supported endpoints: consultations, surveys, feedback, citizens, webhooks, update_ordinance_status'
             ]);
             break;
     }

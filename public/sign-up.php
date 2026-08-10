@@ -1,6 +1,11 @@
 <?php
 session_start();
 require_once '../db.php';
+require_once __DIR__ . '/../config/google_oauth_config.php';
+
+$_citizenOAuthState = bin2hex(random_bytes(16));
+$_SESSION['citizen_google_oauth_state'] = $_citizenOAuthState;
+$googleOAuthUrl = getGoogleAuthUrl($_citizenOAuthState);
 
 $errors = [];
 
@@ -53,13 +58,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Create new user
             $hashed_password = password_hash($password, PASSWORD_DEFAULT);
             $role = 'citizen';
-            $username = explode('@', $email)[0];
+            $username = strtolower(explode('@', $email)[0]);
             
-            $stmt = $conn->prepare("INSERT INTO users (fullname, username, email, password, role, district, barangay, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())");
+            $stmt = $conn->prepare("INSERT INTO users (fullname, name, username, email, password, role, district, barangay, status, verification_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 'verified', NOW())");
             if ($stmt) {
-                $stmt->bind_param('sssssss', $fullname, $username, $email, $hashed_password, $role, $district, $barangay);
+                $stmt->bind_param('ssssssss', $fullname, $fullname, $username, $email, $hashed_password, $role, $district, $barangay);
             } else {
-                $stmt = $conn->prepare("INSERT INTO users (fullname, email, password, role, district, barangay, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+                $stmt = $conn->prepare("INSERT INTO users (fullname, email, password, role, district, barangay, status, verification_status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'active', 'verified', NOW())");
                 if ($stmt) {
                     $stmt->bind_param('ssssss', $fullname, $email, $hashed_password, $role, $district, $barangay);
                 }
@@ -72,11 +77,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['full_name'] = $fullname;
                 $_SESSION['email'] = $email;
                 $_SESSION['role'] = $role;
+                $_SESSION['verification_status'] = 'verified';
                 
                 header('Location: sign-in.php?signup=success');
                 exit;
             } else {
-                $errors[] = 'Failed to create account: ' . ($conn->error ?: 'Database error');
+                $errors[] = 'Failed to create account: ' . ($conn->error ?: ($stmt ? $stmt->error : 'Database error'));
             }
             if ($stmt) $stmt->close();
         }
@@ -205,7 +211,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <!-- Prominent 1-Click Google SSO -->
                     <div class="mb-6">
-                        <a href="google-auth.php" class="w-full bg-white hover:bg-slate-50 text-slate-700 font-bold py-3.5 px-4 rounded-xl border border-slate-300 shadow-sm transition-all flex justify-center items-center gap-3 hover:shadow-md hover:border-slate-400 group">
+                        <a href="<?php echo htmlspecialchars($googleOAuthUrl); ?>" class="w-full bg-white hover:bg-slate-50 text-slate-700 font-bold py-3.5 px-4 rounded-xl border border-slate-300 shadow-sm transition-all flex justify-center items-center gap-3 hover:shadow-md hover:border-slate-400 group">
                             <svg class="w-5 h-5 transition-transform group-hover:scale-110" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
                                 <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.3 7.31 24 12 24z"/>

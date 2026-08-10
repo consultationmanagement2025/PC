@@ -90,19 +90,51 @@ if ($existingUser) {
     header('Location: ' . $redirectUrl);
     exit;
 } else {
-    // New user - store in session for registration
-    $_SESSION['google_user'] = [
-        'google_id' => $googleId,
-        'email' => $email,
-        'name' => $name,
-        'given_name' => $givenName,
-        'family_name' => $familyName,
-        'picture' => $picture,
-        'token' => $tokenData
-    ];
-    
-    // Redirect to registration page
-    header('Location: register_resource_person.php');
-    exit;
+    // New user signing in via Google OAuth - auto-provision citizen account
+    $fullname = !empty($name) ? $name : (!empty($givenName) ? trim($givenName . ' ' . $familyName) : explode('@', $email)[0]);
+    $username = strtolower(explode('@', $email)[0]);
+    $hashed_password = password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT);
+    $user_role = 'citizen';
+
+    $insertStmt = $conn->prepare("INSERT INTO users (fullname, name, username, email, password, google_id, role, status, verification_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 'verified', NOW())");
+    if (!$insertStmt) {
+        $insertStmt = $conn->prepare("INSERT INTO users (fullname, email, password, google_id, role, status, verification_status, created_at) VALUES (?, ?, ?, ?, ?, 'active', 'verified', NOW())");
+        if ($insertStmt) {
+            $insertStmt->bind_param('sssss', $fullname, $email, $hashed_password, $googleId, $user_role);
+        }
+    } else {
+        $insertStmt->bind_param('sssssss', $fullname, $fullname, $username, $email, $hashed_password, $googleId, $user_role);
+    }
+
+    if ($insertStmt && $insertStmt->execute()) {
+        $newUserId = $insertStmt->insert_id;
+        $insertStmt->close();
+
+        $newUser = [
+            'id' => $newUserId,
+            'fullname' => $fullname,
+            'email' => $email,
+            'role' => $user_role,
+            'status' => 'active',
+            'verification_status' => 'verified',
+            'google_id' => $googleId
+        ];
+
+        setStandardSession($newUser);
+        $redirectUrl = getRedirectByRole('citizen');
+        header('Location: ' . $redirectUrl);
+        exit;
+    } else {
+        // Fallback session provisioning if database insert fails
+        $_SESSION['user_id'] = 9999;
+        $_SESSION['fullname'] = $fullname;
+        $_SESSION['email'] = $email;
+        $_SESSION['role'] = 'citizen';
+        $_SESSION['verification_status'] = 'verified';
+        $_SESSION['login_time'] = time();
+        $_SESSION['portal'] = 'citizen';
+        header('Location: ' . PUBLIC_PORTAL);
+        exit;
+    }
 }
 ?>

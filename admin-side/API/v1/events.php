@@ -45,7 +45,7 @@ if ($phmsId > 0) {
             }
 
             $jsonStr = json_encode($mergedPayload);
-            $upd = $conn->prepare("UPDATE hearing_queue SET full_name = ?, email = ?, external_ref = ?, source_system = ?, payload_json = ?, updated_at = NOW() WHERE phms_hearing_id = ?");
+            $upd = $conn->prepare("UPDATE hearing_queue SET full_name = ?, email = ?, external_ref = ?, source_system = ?, payload_json = ?, approval_status = 'pending', status = 'pending_approval' WHERE phms_hearing_id = ?");
             if ($upd) {
                 $upd->bind_param("sssssi", $fullName, $email, $extRef, $srcSys, $jsonStr, $phmsId);
                 $upd->execute();
@@ -53,7 +53,7 @@ if ($phmsId > 0) {
             }
         } else {
             $jsonStr = json_encode($input);
-            $ins = $conn->prepare("INSERT INTO hearing_queue (phms_hearing_id, full_name, email, external_ref, source_system, payload_json) VALUES (?, ?, ?, ?, ?, ?)");
+            $ins = $conn->prepare("INSERT INTO hearing_queue (phms_hearing_id, full_name, email, external_ref, source_system, payload_json, approval_status, status) VALUES (?, ?, ?, ?, ?, ?, 'pending', 'pending_approval')");
             if ($ins) {
                 $ins->bind_param("isssss", $phmsId, $fullName, $email, $extRef, $srcSys, $jsonStr);
                 $ins->execute();
@@ -67,7 +67,8 @@ lgu2_log_request($conn, (int) $client['client_id'], $_SERVER['SCRIPT_NAME'] ?? '
 
 echo json_encode([
     'success' => true,
-    'message' => 'Event ingested and synchronized with hearing queue successfully',
+    'message' => 'Event ingested into PCMS Ingestion Approval Queue (Pending Administrator Approval)',
+    'approval_status' => 'pending',
     'request_id' => $requestId,
     'phms_hearing_id' => $phmsId
 ]);
