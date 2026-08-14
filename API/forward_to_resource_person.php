@@ -39,17 +39,58 @@ if (!in_array('deadline', $cCols)) @$conn->query("ALTER TABLE consultations ADD 
 if (!in_array('document_status', $cCols)) @$conn->query("ALTER TABLE consultations ADD COLUMN document_status VARCHAR(50) DEFAULT 'draft'");
 if (!in_array('ai_analyzed', $cCols)) @$conn->query("ALTER TABLE consultations ADD COLUMN ai_analyzed TINYINT(1) DEFAULT 0");
 if (!in_array('forwarded_to_expert', $cCols)) @$conn->query("ALTER TABLE consultations ADD COLUMN forwarded_to_expert TINYINT(1) DEFAULT 0");
+if (!in_array('ai_summary_json', $cCols)) @$conn->query("ALTER TABLE consultations ADD COLUMN ai_summary_json LONGTEXT DEFAULT NULL");
+
+// Compile AI Sentiment & Summary Across Citizen Feedback Posts
+$aiSummary = [
+    'total_posts' => 0,
+    'positive' => 0,
+    'neutral' => 0,
+    'negative' => 0,
+    'overall_sentiment' => 'neutral',
+    'avg_score' => 0,
+    'key_topics' => ['Public Feedback', 'Community Input'],
+    'generated_at' => date('Y-m-d H:i:s')
+];
+
+$postRes = $conn->query("SELECT content FROM posts WHERE consultation_id = $consultation_id");
+if ($postRes && $postRes->num_rows > 0) {
+    $totalScore = 0;
+    $posWords = ['good','great','excellent','satisfied','helpful','maayos','maganda','salamat','support','agree'];
+    $negWords = ['bad','poor','slow','delayed','broken','complaint','issue','unfair','mahirap','mabagal'];
+    
+    while ($pRow = $postRes->fetch_assoc()) {
+        $text = strtolower($pRow['content'] ?? '');
+        $aiSummary['total_posts']++;
+        $score = 0;
+        foreach ($posWords as $pw) { if (strpos($text, $pw) !== false) $score += 1; }
+        foreach ($negWords as $nw) { if (strpos($text, $nw) !== false) $score -= 1; }
+        $totalScore += $score;
+        if ($score > 0) $aiSummary['positive']++;
+        elseif ($score < 0) $aiSummary['negative']++;
+        else $aiSummary['neutral']++;
+    }
+    
+    if ($aiSummary['total_posts'] > 0) {
+        $avg = $totalScore / $aiSummary['total_posts'];
+        $aiSummary['avg_score'] = round($avg, 2);
+        if ($avg > 0.3) $aiSummary['overall_sentiment'] = 'positive';
+        elseif ($avg < -0.3) $aiSummary['overall_sentiment'] = 'negative';
+    }
+}
+
+$aiJson = json_encode($aiSummary);
 
 // Calculate deadline
 $deadline_date = date('Y-m-d H:i:s', strtotime("+$deadline_days days"));
 
-// Update consultation: mark forwarded_to_expert = 1, ai_analyzed = 1, document_status = 'sent_to_expert'
+// Update consultation: mark forwarded_to_expert = 1, ai_analyzed = 1, document_status = 'sent_to_expert', ai_summary_json
 if ($resource_person_id > 0) {
-    $upd = $conn->prepare("UPDATE consultations SET forwarded_to_expert = 1, ai_analyzed = 1, assigned_to = ?, deadline = ?, document_status = 'sent_to_expert' WHERE id = ?");
-    $upd->bind_param('isi', $resource_person_id, $deadline_date, $consultation_id);
+    $upd = $conn->prepare("UPDATE consultations SET forwarded_to_expert = 1, ai_analyzed = 1, assigned_to = ?, deadline = ?, document_status = 'sent_to_expert', ai_summary_json = ? WHERE id = ?");
+    $upd->bind_param('issi', $resource_person_id, $deadline_date, $aiJson, $consultation_id);
 } else {
-    $upd = $conn->prepare("UPDATE consultations SET forwarded_to_expert = 1, ai_analyzed = 1, deadline = ?, document_status = 'sent_to_expert' WHERE id = ?");
-    $upd->bind_param('si', $deadline_date, $consultation_id);
+    $upd = $conn->prepare("UPDATE consultations SET forwarded_to_expert = 1, ai_analyzed = 1, deadline = ?, document_status = 'sent_to_expert', ai_summary_json = ? WHERE id = ?");
+    $upd->bind_param('ssi', $deadline_date, $aiJson, $consultation_id);
 }
 
 if (!$upd->execute()) {

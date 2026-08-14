@@ -8478,9 +8478,12 @@ async function loadNotifications() {
 
 
         const items = Array.isArray(data.data && data.data.items) ? data.data.items : [];
-
-
-        AppData.notifications = items.map(mapDbNotificationToUi);
+        AppData.notifications = items.map(mapDbNotificationToUi).filter(n => {
+            const t = (n.title || '').toLowerCase();
+            const m = (n.message || '').toLowerCase();
+            const c = (n.category || n.type || '').toLowerCase();
+            return !(c.includes('phms') || t.includes('phms') || m.includes('phms feedback received') || m.includes('ingestion package approved'));
+        });
 
 
 
@@ -8781,11 +8784,11 @@ function openNotificationModal(id) {
 
                         <!-- Action Buttons -->
                         <div class="flex items-center gap-2">
-                            <button id="notif-detail-action" class="hidden px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-sm"></button>
-                            <button id="notif-detail-open" class="px-4 py-2.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-1.5 hover:shadow-lg">
+                            <button id="notif-detail-action" type="button" class="hidden px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-sm"></button>
+                            <button id="notif-detail-open" type="button" class="px-4 py-2.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-1.5 hover:shadow-lg">
                                 <i class="bi bi-box-arrow-up-right"></i> Open Related Page
                             </button>
-                            <button id="notif-detail-dismiss" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+                            <button id="notif-detail-dismiss" type="button" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
                                 Close
                             </button>
                         </div>
@@ -8797,12 +8800,12 @@ function openNotificationModal(id) {
         document.body.appendChild(modal);
 
         // Close handlers
-        modal.querySelector('#notif-detail-close').addEventListener('click', () => closeNotificationModal());
-        modal.querySelector('#notif-detail-dismiss').addEventListener('click', () => closeNotificationModal());
+        modal.querySelector('#notif-detail-close').addEventListener('click', (e) => { if (e && e.preventDefault) e.preventDefault(); closeNotificationModal(); });
+        modal.querySelector('#notif-detail-dismiss').addEventListener('click', (e) => { if (e && e.preventDefault) e.preventDefault(); closeNotificationModal(); });
 
         // Navigation handlers
-        modal.querySelector('#notif-detail-prev').addEventListener('click', () => navigateNotification(-1));
-        modal.querySelector('#notif-detail-next').addEventListener('click', () => navigateNotification(1));
+        modal.querySelector('#notif-detail-prev').addEventListener('click', (e) => { if (e && e.preventDefault) e.preventDefault(); navigateNotification(-1); });
+        modal.querySelector('#notif-detail-next').addEventListener('click', (e) => { if (e && e.preventDefault) e.preventDefault(); navigateNotification(1); });
     }
 
     // Dynamic Banner Header Colors based on priority/type
@@ -8831,18 +8834,60 @@ function openNotificationModal(id) {
         badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-white/20 text-white border border-white/30';
     }
 
+    const pfpNavigateToRelatedSection = function (notifObj) {
+        const cat = String(notifObj.category || '').toLowerCase();
+        const type = String(notifObj.type || '').toLowerCase();
+        const msg = String(notifObj.message || '').toLowerCase();
+        const title = String(notifObj.title || '').toLowerCase();
+
+        let targetSection = 'public-consultation';
+
+        if (cat.includes('phms') || type.includes('phms') || msg.includes('phms') || title.includes('phms') || cat.includes('feedback') || type === 'feedback') {
+            targetSection = 'public-feedback-queue';
+        } else if (cat.includes('document') || type.includes('document') || type === 'approval') {
+            targetSection = 'pc-documents';
+        } else if (cat.includes('user') || type.includes('user')) {
+            targetSection = 'users';
+        } else if (cat.includes('system') || cat.includes('report') || type.includes('alert') || type.includes('system') || cat.includes('ai engine')) {
+            targetSection = 'reports';
+        } else if (cat.includes('consultation') || type.includes('consultation')) {
+            targetSection = 'consultation-management';
+        }
+
+        if (targetSection === 'public-feedback-queue' && typeof renderPublicFeedbackQueueSection === 'function') {
+            renderPublicFeedbackQueueSection();
+            return;
+        }
+        if (targetSection === 'reports' && typeof renderSystemReportsSection === 'function') {
+            renderSystemReportsSection();
+            if (cat.includes('ai engine') || type.includes('ai')) {
+                setTimeout(() => { if (typeof switchSystemReportTab === 'function') switchSystemReportTab('ai'); }, 100);
+            }
+            return;
+        }
+
+        if (typeof showSection === 'function') {
+            showSection(targetSection);
+            return;
+        }
+
+        const navItem = document.querySelector(`[onclick*="${targetSection}"], [data-section="${targetSection}"]`);
+        if (navItem) {
+            navItem.click();
+        }
+    };
+
     // Action button
     const actionBtn = document.getElementById('notif-detail-action');
     if (notif.action) {
         actionBtn.textContent = notif.action;
         actionBtn.classList.remove('hidden');
-        actionBtn.onclick = function () {
+        actionBtn.onclick = function (e) {
+            if (e && e.preventDefault) e.preventDefault();
+            if (e && e.stopPropagation) e.stopPropagation();
             closeNotificationModal();
-            if (notif.category === 'documents') showSection('documents');
-            else if (notif.category === 'feedback') showSection('public-feedback-queue');
-            else if (notif.category === 'users') showSection('users');
-            else if (notif.category === 'system') showSection('audit');
-            else showSection('public-consultation');
+            pfpNavigateToRelatedSection(notif);
+            return false;
         };
     } else {
         actionBtn.classList.add('hidden');
@@ -8850,13 +8895,12 @@ function openNotificationModal(id) {
 
     // Open action
     const openBtn = document.getElementById('notif-detail-open');
-    openBtn.onclick = function () {
+    openBtn.onclick = function (e) {
+        if (e && e.preventDefault) e.preventDefault();
+        if (e && e.stopPropagation) e.stopPropagation();
         closeNotificationModal();
-        if (notif.type === 'document' || notif.type === 'approval') showSection('documents');
-        else if (notif.type === 'user') showSection('users');
-        else if (notif.type === 'feedback' || notif.type === 'phms_integration') showSection('public-feedback-queue');
-        else if (notif.type === 'alert' || notif.type === 'system') showSection('audit');
-        else showSection('public-consultation');
+        pfpNavigateToRelatedSection(notif);
+        return false;
     };
 
     // Update navigation state and counter
@@ -17743,6 +17787,7 @@ async function pfpTriggerRealtimePhmsSync() {
 }
 
 window.openPhmsDataApprovalSheetModal = async function() {
+    const escapeHtmlHelper = (str) => String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const existing = document.getElementById('phms-approval-sheet-modal');
     if (existing) existing.remove();
 
@@ -17873,7 +17918,7 @@ window.openPhmsDataApprovalSheetModal = async function() {
             tbody.innerHTML = pendingList.map(item => {
                 const qId = item.queue_id || item.phms_hearing_id;
                 const hId = item.phms_hearing_id ? `PHMS-H#${item.phms_hearing_id}` : `Queue #${item.queue_id}`;
-                const title = escapeHtml(item.full_name || item.hearing_title || 'Public Hearing Payload');
+                const title = escapeHtmlHelper(item.full_name || item.hearing_title || 'Public Hearing Payload');
                 const dateStr = item.created_at || 'Just now';
                 const count = item.feedback_count || 0;
 
@@ -18033,7 +18078,18 @@ function pfpRenderSurveyPollsTable() {
     const statusFilter = String(document.getElementById('pfq-survey-status')?.value || '').toLowerCase().trim();
 
     let consultations = Array.isArray(AppData.consultations)
-        ? AppData.consultations.filter(c => (String(c.status || '').toLowerCase() === 'active' || String(c.status || '').toLowerCase() === 'open' || (c.type !== 'user' && String(c.type || '').toLowerCase() !== 'user')) && (String(c.response_mode || '').toLowerCase() === 'survey' || c.is_survey === 1 || c.is_survey === true))
+        ? AppData.consultations.filter(c => {
+            const status = String(c.status || '').toLowerCase();
+            const mode = String(c.response_mode || '').toLowerCase();
+            const question = String(c.survey_question || '').trim();
+            const hasSurveyQuestion = question !== '' && question !== 'null' && question !== 'undefined';
+            const isSurvey = mode === 'survey' || c.is_survey === 1 || c.is_survey === true || (mode === 'hybrid' && hasSurveyQuestion);
+            if (!isSurvey) return false;
+
+            const isAllowedStatus = (status === 'active' || status === 'open' || status === 'closed' || status === 'completed');
+            const isNotUserType = c.type !== 'user' && String(c.type || '').toLowerCase() !== 'user';
+            return (isAllowedStatus || isNotUserType);
+        })
         : [];
 
     if (q) {
@@ -18087,21 +18143,33 @@ function pfpRenderSurveyPollsTable() {
 
         let agreeCount = 0;
         let disagreeCount = 0;
-        fbs.forEach(f => {
-            const msg = String(f.message || f.testimony || f.statement || '').trim().toLowerCase();
-            const isExplicitVote = (msg === 'agree' || msg === 'disagree' || msg === optA.toLowerCase() || msg === optB.toLowerCase());
-            if (!isExplicitVote) return;
+        let totalVotes = 0;
 
-            const isDis = msg === 'disagree' || msg === optB.toLowerCase();
-            const isAgr = msg === 'agree' || msg === optA.toLowerCase();
+        if (c.vote_stats && (c.vote_stats.total_votes > 0 || c.vote_stats.agree_votes > 0 || c.vote_stats.disagree_votes > 0)) {
+            agreeCount = Number(c.vote_stats.agree_votes || 0);
+            disagreeCount = Number(c.vote_stats.disagree_votes || 0);
+            totalVotes = Number(c.vote_stats.total_votes || (agreeCount + disagreeCount));
+        } else if (c.total_votes !== undefined || c.agree_votes !== undefined || c.disagree_votes !== undefined) {
+            agreeCount = Number(c.agree_votes || 0);
+            disagreeCount = Number(c.disagree_votes || 0);
+            totalVotes = Number(c.total_votes || (agreeCount + disagreeCount));
+        } else {
+            fbs.forEach(f => {
+                const msg = String(f.message || f.testimony || f.statement || '').trim().toLowerCase();
+                const isExplicitVote = (msg === 'agree' || msg === 'disagree' || msg === optA.toLowerCase() || msg === optB.toLowerCase());
+                if (!isExplicitVote) return;
 
-            if (isDis) disagreeCount++;
-            else if (isAgr) agreeCount++;
-        });
+                const isDis = msg === 'disagree' || msg === optB.toLowerCase();
+                const isAgr = msg === 'agree' || msg === optA.toLowerCase();
 
-        const totalVotes = agreeCount + disagreeCount;
+                if (isDis) disagreeCount++;
+                else if (isAgr) agreeCount++;
+            });
+            totalVotes = agreeCount + disagreeCount;
+        }
+
         const agreePct = totalVotes > 0 ? Math.round((agreeCount / totalVotes) * 100) : 0;
-        const disagreePct = totalVotes > 0 ? 100 - agreePct : 0;
+        const disagreePct = totalVotes > 0 ? (100 - agreePct) : 0;
 
         let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-white uppercase tracking-wider">CLOSED</span>';
         if (status === 'active' || status === 'open') {
@@ -18343,7 +18411,16 @@ window.pfpShowConsultationFeedbackModal = function (consultationId) {
         if (titleEl) titleEl.textContent = title;
         if (dateEl) dateEl.textContent = `📅 Date: ${dateStr} | Status: ${statusStr} | Total Submissions: ${responsesList.length}`;
 
-        if (!responsesList.length) {
+        const cMode = String(consultation?.response_mode || '').toLowerCase();
+        const cQuestion = String(consultation?.survey_question || '').trim();
+        const isSurveyType = consultation && (
+            cMode === 'survey' ||
+            cMode === 'hybrid' ||
+            (cQuestion !== '' && cQuestion !== 'null') ||
+            (consultation.vote_stats && Number(consultation.vote_stats.total_votes || 0) > 0)
+        );
+
+        if (!responsesList.length && !isSurveyType) {
             if (bodyEl) {
                 bodyEl.innerHTML = `
                     <div class="p-8 text-center text-gray-500 bg-slate-50 rounded-xl border border-slate-200">
@@ -18399,28 +18476,40 @@ window.pfpShowConsultationFeedbackModal = function (consultationId) {
 
         let surveyBoxHtml = '';
         let aiSurveyConclusionHtml = '';
-        if (consultation && String(consultation.response_mode || '').toLowerCase() === 'survey') {
-            const question = escapeHtmlHelper(consultation.survey_question || 'Do you support this proposed ordinance initiative?');
+        if (isSurveyType) {
+            const question = escapeHtmlHelper(consultation.survey_question || 'Do you support this proposed initiative?');
             const optA = escapeHtmlHelper(consultation.survey_option_a || 'Agree');
             const optB = escapeHtmlHelper(consultation.survey_option_b || 'Disagree');
 
             let agreeCount = 0;
             let disagreeCount = 0;
-            responsesList.forEach(r => {
-                const msg = String(r.message || r.testimony || r.statement || '').trim().toLowerCase();
-                const isDis = msg === 'disagree' || msg === optB.toLowerCase();
-                const isAgr = msg === 'agree' || msg === optA.toLowerCase();
+            let totalVotes = 0;
 
-                if (isDis) {
-                    disagreeCount++;
-                } else if (isAgr) {
-                    agreeCount++;
-                }
-            });
+            if (consultation.vote_stats && (consultation.vote_stats.total_votes > 0 || consultation.vote_stats.agree_votes > 0 || consultation.vote_stats.disagree_votes > 0)) {
+                agreeCount = Number(consultation.vote_stats.agree_votes || 0);
+                disagreeCount = Number(consultation.vote_stats.disagree_votes || 0);
+                totalVotes = Number(consultation.vote_stats.total_votes || (agreeCount + disagreeCount));
+            } else if (consultation.total_votes !== undefined || consultation.agree_votes !== undefined || consultation.disagree_votes !== undefined) {
+                agreeCount = Number(consultation.agree_votes || 0);
+                disagreeCount = Number(consultation.disagree_votes || 0);
+                totalVotes = Number(consultation.total_votes || (agreeCount + disagreeCount));
+            } else {
+                responsesList.forEach(r => {
+                    const msg = String(r.message || r.testimony || r.statement || '').trim().toLowerCase();
+                    const isDis = msg === 'disagree' || msg === optB.toLowerCase();
+                    const isAgr = msg === 'agree' || msg === optA.toLowerCase();
 
-            const totalVotes = agreeCount + disagreeCount;
+                    if (isDis) {
+                        disagreeCount++;
+                    } else if (isAgr) {
+                        agreeCount++;
+                    }
+                });
+                totalVotes = agreeCount + disagreeCount;
+            }
+
             const agreePct = totalVotes > 0 ? Math.round((agreeCount / totalVotes) * 100) : 0;
-            const disagreePct = totalVotes > 0 ? 100 - agreePct : 0;
+            const disagreePct = totalVotes > 0 ? (100 - agreePct) : 0;
 
             const isClosed = (consultation.status || '').toLowerCase() === 'closed' || (consultation.status || '').toLowerCase() === 'completed';
 
@@ -18480,6 +18569,15 @@ window.pfpShowConsultationFeedbackModal = function (consultationId) {
             `;
         }
 
+        let listDisplay = responsesHtml;
+        if (!responsesList.length) {
+            listDisplay = `
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-gray-500 text-xs">
+                    <i class="bi bi-info-circle mr-1 text-purple-600"></i> No written commentary attached. Citizen participation recorded via direct survey poll votes above.
+                </div>
+            `;
+        }
+
         bodyEl.innerHTML = `
             <div class="space-y-3">
                 ${aiSurveyConclusionHtml}
@@ -18487,7 +18585,7 @@ window.pfpShowConsultationFeedbackModal = function (consultationId) {
                 <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
                     Submitted Citizen Responses (${responsesList.length})
                 </div>
-                ${responsesHtml}
+                ${listDisplay}
             </div>
         `;
     };
@@ -18644,44 +18742,7 @@ async function loadPhmsFeedbackFromApi(isSync = false, limit = 50, offset = 0) {
                     window._phms_is_cached_data = true;
                 }
 
-                // Push external system receipt notification to top notification bar
-                if (hearingsList.length > 0) {
-                    if (!Array.isArray(AppData.notifications)) AppData.notifications = [];
-                    hearingsList.forEach(h => {
-                        const title = h.hearing_title || h.title || h.full_name || 'Public Hearing';
-                        const fbCount = h.feedback_count || 0;
-                        const notifTitle = `🔗 PHMS Feedback Received: ${title}`;
-                        const notifMsg = `Received ${fbCount} citizen hearing feedback response(s) from PHMS Public Hearing System for "${title}".`;
 
-                        const exists = AppData.notifications.some(n => n.title === notifTitle || (n.message && n.message.includes(title)));
-                        if (!exists) {
-                            AppData.notifications.unshift({
-                                id: Date.now() + Math.floor(Math.random() * 1000),
-                                title: notifTitle,
-                                message: notifMsg,
-                                category: 'External Integration',
-                                priority: 'high',
-                                read: false,
-                                time: 'Just now',
-                                timestamp: new Date().toISOString()
-                            });
-                        }
-                    });
-
-                    // Trigger top navigation bar update
-                    if (typeof loadNotifications === 'function') {
-                        try { loadNotifications(); } catch (_) { }
-                    } else {
-                        const unreadCount = AppData.notifications.filter(n => !n.read).length;
-                        const badge = document.getElementById('notif-badge') || document.getElementById('notification-badge');
-                        if (badge) {
-                            if (unreadCount > 0) {
-                                badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
-                                badge.classList.remove('hidden');
-                            }
-                        }
-                    }
-                }
 
                 if (isSync && typeof showNotification === 'function') {
                     showNotification(`✅ PHMS Integration: ${hearingsList.length} hearing feedback items synchronized.`, 'success');
@@ -18850,13 +18911,11 @@ function pfpRenderPhmsTable() {
 }
 
 function pfpShowPhmsDetailModal(hearingId) {
-    console.log('[PHMS Modal Delegation L17775] Delegating to top-level modal renderer for hearingId:', hearingId);
-    if (typeof window.pfpShowPhmsDetailModal === 'function') {
+    console.log('[PHMS Modal Delegation] Delegating to top-level modal renderer for hearingId:', hearingId);
+    if (typeof window.pfpShowPhmsDetailModal === 'function' && window.pfpShowPhmsDetailModal !== pfpShowPhmsDetailModal) {
         window.pfpShowPhmsDetailModal(hearingId);
     }
 }
-
-window.pfpShowPhmsDetailModal = pfpShowPhmsDetailModal;
 
 if (!window._phms_global_click_listener) {
     window._phms_global_click_listener = true;
@@ -22700,6 +22759,9 @@ async function renderSystemReportsSection() {
                 <button id="sys-report-tab-documents" onclick="switchSystemReportTab('documents')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none sys-report-tab">
                     <i class="bi bi-folder2"></i> Document Governance Reports
                 </button>
+                <button id="sys-report-tab-audit" onclick="switchSystemReportTab('audit')" class="px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 flex items-center gap-2 transition focus:outline-none sys-report-tab">
+                    <i class="bi bi-shield-check"></i> Audit & Security Logs
+                </button>
             </div>
 
             <!-- Active Report View Container -->
@@ -22876,7 +22938,197 @@ function switchSystemReportTab(tabName) {
                 </div>
             </div>
         `;
+    } else if (tabName === 'audit') {
+        container.innerHTML = `
+            <div class="space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-base font-bold text-gray-900 flex items-center gap-2">
+                            <i class="bi bi-shield-check text-slate-800"></i> Audit Log & Security Trail (Figure 14 Service)
+                        </h3>
+                        <p class="text-xs text-gray-500">Automated audit logging service tracking User Activities, System Ingestion Events, Admin Operations, and Security Monitoring.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="pfpExportAuditLogsCsv()" class="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs transition flex items-center gap-1.5 shadow-sm">
+                            <i class="bi bi-download"></i> Export Audit CSV
+                        </button>
+                        <button onclick="pfpLoadAuditLogsTab()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg text-xs transition flex items-center gap-1">
+                            <i class="bi bi-arrow-repeat"></i> Refresh Feed
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <span class="text-gray-500 font-bold block text-[10px] uppercase">Recorded Events</span>
+                        <span id="audit-stat-total" class="text-xl font-black text-slate-900">--</span>
+                        <span class="text-[10px] text-slate-600 block mt-0.5">Total Audit Entries</span>
+                    </div>
+                    <div class="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                        <span class="text-blue-800 font-bold block text-[10px] uppercase">User Activities</span>
+                        <span id="audit-stat-users" class="text-xl font-black text-blue-900">--</span>
+                        <span class="text-[10px] text-blue-700 block mt-0.5">Logins & Submissions</span>
+                    </div>
+                    <div class="p-3 bg-purple-50 border border-purple-200 rounded-xl">
+                        <span class="text-purple-800 font-bold block text-[10px] uppercase">System Events</span>
+                        <span id="audit-stat-system" class="text-xl font-black text-purple-900">--</span>
+                        <span class="text-[10px] text-purple-700 block mt-0.5">API & Integration Events</span>
+                    </div>
+                    <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                        <span class="text-emerald-800 font-bold block text-[10px] uppercase">Audit Service</span>
+                        <span class="text-xl font-black text-emerald-700">Active</span>
+                        <span class="text-[10px] text-emerald-700 block mt-0.5">Continuous Monitoring</span>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-2 flex-1 min-w-[220px]">
+                        <i class="bi bi-search text-gray-400"></i>
+                        <input type="text" id="audit-log-search" onkeyup="pfpFilterAuditLogsTable()" placeholder="Search action, user, or details..." class="w-full bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-red-600">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <select id="audit-log-filter-action" onchange="pfpFilterAuditLogsTable()" class="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-red-600">
+                            <option value="">All Action Types</option>
+                            <option value="login">User Login / Auth</option>
+                            <option value="system">System Event</option>
+                            <option value="create">Create Item</option>
+                            <option value="update">Update Item</option>
+                            <option value="delete">Delete Item</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-100 border-b border-slate-200 uppercase tracking-wider text-[11px] font-bold text-gray-700">
+                            <tr>
+                                <th class="px-4 py-3">Timestamp</th>
+                                <th class="px-4 py-3">Actor / User</th>
+                                <th class="px-4 py-3">Action Recorded</th>
+                                <th class="px-4 py-3">Target / Entity</th>
+                                <th class="px-4 py-3">IP Address</th>
+                                <th class="px-4 py-3 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-logs-table-body">
+                            <tr>
+                                <td colspan="6" class="p-8 text-center text-gray-500">
+                                    <i class="bi bi-arrow-repeat animate-spin text-xl mb-1 block"></i> Fetching system audit log entries...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+        pfpLoadAuditLogsTab();
     }
+}
+
+window._cachedAuditLogs = [];
+
+async function pfpLoadAuditLogsTab() {
+    const tbody = document.getElementById('audit-logs-table-body');
+    if (!tbody) return;
+
+    try {
+        const res = await fetch('API/get_audit_logs_api.php');
+        const logs = await res.json();
+        window._cachedAuditLogs = Array.isArray(logs) ? logs : [];
+        pfpRenderAuditLogsRows(window._cachedAuditLogs);
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-red-600">Failed to load audit logs: ${escapeHtml(e.message)}</td></tr>`;
+    }
+}
+
+function pfpRenderAuditLogsRows(logs) {
+    const tbody = document.getElementById('audit-logs-table-body');
+    if (!tbody) return;
+
+    const totalEl = document.getElementById('audit-stat-total');
+    const userEl = document.getElementById('audit-stat-users');
+    const sysEl = document.getElementById('audit-stat-system');
+
+    if (totalEl) totalEl.textContent = logs.length;
+    if (userEl) userEl.textContent = logs.filter(l => (l.action || '').toLowerCase().includes('login') || (l.action || '').toLowerCase().includes('post') || (l.action || '').toLowerCase().includes('feedback')).length;
+    if (sysEl) sysEl.textContent = logs.filter(l => (l.admin_user || '').toLowerCase().includes('system') || (l.entity_type || '').toLowerCase().includes('system')).length;
+
+    if (!logs.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-gray-500">No audit log entries recorded.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = logs.map(l => {
+        const isSys = (l.admin_user || '').toLowerCase().includes('system') || (l.entity_type || '').toLowerCase().includes('system');
+        const userBadge = isSys 
+            ? '<span class="px-2 py-0.5 bg-purple-100 text-purple-800 font-bold rounded text-[10px]"><i class="bi bi-gear-fill mr-1"></i>SYSTEM</span>'
+            : `<span class="font-bold text-gray-800">${escapeHtml(l.admin_user || 'User')}</span>`;
+
+        return `
+            <tr class="border-b border-gray-100 hover:bg-slate-50 transition">
+                <td class="px-4 py-3 font-mono text-[11px] text-gray-500 whitespace-nowrap">${escapeHtml(l.timestamp || '')}</td>
+                <td class="px-4 py-3">${userBadge}</td>
+                <td class="px-4 py-3 font-semibold text-gray-900">${escapeHtml(l.action || '')}</td>
+                <td class="px-4 py-3 text-gray-600">${escapeHtml(l.entity_type || 'General')} ${l.entity_id ? '#' + l.entity_id : ''}</td>
+                <td class="px-4 py-3 font-mono text-[11px] text-gray-500">${escapeHtml(l.ip_address || '127.0.0.1')}</td>
+                <td class="px-4 py-3 text-center">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800">
+                        ${escapeHtml(l.status || 'SUCCESS')}
+                    </span>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function pfpFilterAuditLogsTable() {
+    const q = (document.getElementById('audit-log-search')?.value || '').toLowerCase().trim();
+    const actionFilter = (document.getElementById('audit-log-filter-action')?.value || '').toLowerCase().trim();
+    
+    let filtered = window._cachedAuditLogs || [];
+    if (q) {
+        filtered = filtered.filter(l => 
+            (l.admin_user || '').toLowerCase().includes(q) ||
+            (l.action || '').toLowerCase().includes(q) ||
+            (l.description || '').toLowerCase().includes(q) ||
+            (l.entity_type || '').toLowerCase().includes(q)
+        );
+    }
+    if (actionFilter) {
+        filtered = filtered.filter(l => (l.action || '').toLowerCase().includes(actionFilter));
+    }
+    pfpRenderAuditLogsRows(filtered);
+}
+
+function pfpExportAuditLogsCsv() {
+    const logs = window._cachedAuditLogs || [];
+    if (!logs.length) {
+        if (typeof showNotification === 'function') showNotification('No audit log data to export.', 'warning');
+        else alert('No audit log data to export.');
+        return;
+    }
+
+    const headers = ['ID', 'Timestamp', 'Actor/User', 'Action', 'Entity Type', 'Entity ID', 'IP Address', 'Status', 'Details'];
+    const rows = logs.map(l => [
+        l.id,
+        `"${l.timestamp || ''}"`,
+        `"${l.admin_user || ''}"`,
+        `"${l.action || ''}"`,
+        `"${l.entity_type || ''}"`,
+        l.entity_id || '',
+        `"${l.ip_address || ''}"`,
+        `"${l.status || ''}"`,
+        `"${(l.description || '').replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `PCMS_Audit_Logs_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 window.openApproveCitizenSubmissionModal = function (consultationId) {
@@ -23170,6 +23422,63 @@ window.rejectResourcePersonApp = function(id, fullname) {
     })
     .catch(err => alert('❌ Error: ' + err.message));
 };
+
+// ==========================================
+// PCMS SESSION TIMEOUT IDLE MODAL MANAGER
+// ==========================================
+function showSessionExpiredModal() {
+    if (document.getElementById('pcms-session-timeout-modal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'pcms-session-timeout-modal';
+    modal.className = 'fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-50 p-4';
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center space-y-4 border border-amber-200 animate-in fade-in zoom-in duration-200">
+            <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-600 mx-auto flex items-center justify-center text-2xl shadow-inner">
+                <i class="bi bi-clock-history"></i>
+            </div>
+            <div>
+                <h3 class="text-xl font-extrabold text-slate-900">Session Expired</h3>
+                <p class="text-xs text-slate-500 mt-1">Your session has timed out due to inactivity.</p>
+            </div>
+            <div class="pt-2">
+                <button onclick="window.location.href='login.php'" class="w-full px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2">
+                    <i class="bi bi-box-arrow-in-right text-sm"></i>
+                    <span>Back to Login Page</span>
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function initSessionTimeoutManager() {
+    window._pcmsLastActivityTime = Date.now();
+    const resetTimer = () => { window._pcmsLastActivityTime = Date.now(); };
+
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
+        window.addEventListener(evt, resetTimer, { passive: true });
+    });
+
+    // Check idle every 15 seconds (1800000ms = 30 min threshold)
+    setInterval(() => {
+        if (Date.now() - window._pcmsLastActivityTime >= 1800000) {
+            showSessionExpiredModal();
+        }
+    }, 15000);
+
+    // Also show if URL contains ?timeout=1
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('timeout') === '1') {
+        showSessionExpiredModal();
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSessionTimeoutManager);
+} else {
+    initSessionTimeoutManager();
+}
+
 
 
 

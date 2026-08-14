@@ -107,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $expertise_areas = trim($_POST['expertise_areas_legacy'] ?? '');
     }
 
-    // Process Department / Office
+    // Process Department / Office (Optional)
     $department = trim($_POST['department'] ?? '');
     if ($department === 'Others' || !empty($_POST['department_custom'])) {
         $department_custom = trim($_POST['department_custom'] ?? '');
@@ -115,11 +115,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $department = $department_custom;
         }
     }
+    if (empty($department) || $department === 'Others') {
+        $department = 'General / Independent Expert';
+    }
 
     $qualifications = trim($_POST['qualifications'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     
-    if (empty($fullname) || empty($email) || empty($expertise_areas) || empty($qualifications) || empty($department)) {
+    if (empty($fullname) || empty($email) || empty($expertise_areas) || empty($qualifications)) {
         $error = 'Please fill in all required fields and select at least one area of expertise.';
     } else {
         // Check if email already exists
@@ -297,12 +300,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
 
-            <!-- Department / Office / Organization -->
+            <!-- Department / Office / Organization (Optional) -->
             <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">Department / Office / Organization *</label>
-                <select name="department" id="department-select" onchange="toggleCustomDepartment()" required
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Department / Office / Organization <span class="text-slate-400 font-normal">(Optional)</span></label>
+                <select name="department" id="department-select" onchange="toggleCustomDepartment()"
                         class="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 outline-none bg-white">
-                    <option value="">-- Select Department / Office --</option>
+                    <option value="">-- Select Department / Office (Optional) --</option>
                     <?php foreach ($official_departments as $dept): ?>
                         <option value="<?php echo htmlspecialchars($dept); ?>"><?php echo htmlspecialchars($dept); ?></option>
                     <?php endforeach; ?>

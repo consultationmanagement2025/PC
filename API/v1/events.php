@@ -1,64 +1,75 @@
 <?php
 /**
- * Inbound Webhook / Event Ingestion Endpoint for PCMS Integration (LGU2 standard)
- * Handles hearing_notice, hearing_queue_item, citizen_feedback, and PHMS integration payloads.
+ * Inbound Webhook / Event Ingestion Endpoint for PCMS Integration (LGU-2 standard)
+ * Handles hearing_registrant, hearing_notice, hearing_queue_item, and PHMS integration payloads.
  */
 require_once __DIR__ . '/bootstrap.php';
 
 $conn = $GLOBALS['integration_conn'];
 $requestId = $GLOBALS['integration_request_id'];
-$client = lgu2_require_auth($conn, $requestId, ['events:write', 'hearings:write', 'registrations:write']);
+
+// Requires sync:write or event scopes
+$client = lgu2_require_auth($conn, $requestId, ['sync:write', 'events:write', 'hearings:write', 'registrations:write']);
 
 $input = lgu2_json_input();
 if (empty($input) && isset($_POST['payload_json'])) {
     $input = json_decode($_POST['payload_json'], true) ?: [];
 }
 
-$event = $input['event'] ?? $input['event_type'] ?? 'unknown';
-$srcSys = !empty($client['source_system']) ? $client['source_system'] : 'PHMS';
+$event = (string) ($input['event'] ?? $input['event_type'] ?? 'unknown');
+$srcSys = !empty($client['source_system']) ? $client['source_system'] : (string) ($input['source_system'] ?? 'PHMS');
 $extRef = (string) ($input['external_ref'] ?? $input['ref'] ?? '');
 
-lgu2_inbox_record($conn, $event, $srcSys, $extRef !== '' ? $extRef : null, $input);
+$inboxId = lgu2_inbox_record($conn, $event, $srcSys, $extRef !== '' ? $extRef : null, $input);
 
-$phmsId = (int) ($input['phms_hearing_id'] ?? $input['hearing_id'] ?? $input['id'] ?? 0);
-$fullName = trim((string) ($input['hearing_title'] ?? $input['full_name'] ?? $input['title'] ?? $input['registrant_name'] ?? 'Public Hearing'));
-$email = trim((string) ($input['email'] ?? 'phms-integration@valenzuela.gov.ph'));
+$phmsId = (int) ($input['phms_hearing_id'] ?? $input['hearing_id'] ?? $input['public_hearing_id'] ?? 0);
+$regId = (int) ($input['phms_registration_id'] ?? $input['registration_id'] ?? 0);
+$fullName = trim((string) ($input['full_name'] ?? $input['hearing_title'] ?? $input['title'] ?? 'Public Registrant'));
+$email = trim((string) ($input['email'] ?? ''));
+$consultationId = (int) ($input['consultation_id'] ?? 0);
+$status = (string) ($input['status'] ?? 'queued');
 
-if ($phmsId > 0) {
-    $chk = $conn->prepare("SELECT queue_id, payload_json FROM hearing_queue WHERE phms_hearing_id = ?");
-    if ($chk) {
-        $chk->bind_param("i", $phmsId);
-        $chk->execute();
-        $res = $chk->get_result();
-        $existing = $res ? $res->fetch_assoc() : null;
-        $chk->close();
+if ($phmsId > 0 || $regId > 0) {
+    $jsonStr = json_encode($input);
+    
+    // Check by registration ID first if present, otherwise by hearing ID
+    $existing = null;
+    if ($regId > 0) {
+        $chk = $conn->prepare("SELECT queue_id, payload_json FROM hearing_queue WHERE phms_registration_id = ? LIMIT 1");
+        if ($chk) {
+            $chk->bind_param("i", $regId);
+            $chk->execute();
+            $res = $chk->get_result();
+            $existing = $res ? $res->fetch_assoc() : null;
+            $chk->close();
+        }
+    }
+    
+    if (!$existing && $phmsId > 0 && $event !== 'hearing_registrant') {
+        $chk = $conn->prepare("SELECT queue_id, payload_json FROM hearing_queue WHERE phms_hearing_id = ? AND (phms_registration_id IS NULL OR phms_registration_id = 0) LIMIT 1");
+        if ($chk) {
+            $chk->bind_param("i", $phmsId);
+            $chk->execute();
+            $res = $chk->get_result();
+            $existing = $res ? $res->fetch_assoc() : null;
+            $chk->close();
+        }
+    }
 
-        if ($existing) {
-            $oldPayload = json_decode($existing['payload_json'] ?? '[]', true) ?: [];
-            $mergedPayload = array_merge($oldPayload, $input);
-
-            if (!empty($input['citizen_responses'])) {
-                $mergedPayload['citizen_responses'] = $input['citizen_responses'];
-            }
-            if (!empty($input['citizen_feedback'])) {
-                $mergedPayload['citizen_feedback'] = $input['citizen_feedback'];
-            }
-
-            $jsonStr = json_encode($mergedPayload);
-            $upd = $conn->prepare("UPDATE hearing_queue SET full_name = ?, email = ?, external_ref = ?, source_system = ?, payload_json = ?, approval_status = 'pending', status = 'pending_approval' WHERE phms_hearing_id = ?");
-            if ($upd) {
-                $upd->bind_param("sssssi", $fullName, $email, $extRef, $srcSys, $jsonStr, $phmsId);
-                $upd->execute();
-                $upd->close();
-            }
-        } else {
-            $jsonStr = json_encode($input);
-            $ins = $conn->prepare("INSERT INTO hearing_queue (phms_hearing_id, full_name, email, external_ref, source_system, payload_json, approval_status, status) VALUES (?, ?, ?, ?, ?, ?, 'pending', 'pending_approval')");
-            if ($ins) {
-                $ins->bind_param("isssss", $phmsId, $fullName, $email, $extRef, $srcSys, $jsonStr);
-                $ins->execute();
-                $ins->close();
-            }
+    if ($existing) {
+        $queueId = (int) $existing['queue_id'];
+        $upd = $conn->prepare("UPDATE hearing_queue SET phms_hearing_id = ?, phms_registration_id = ?, full_name = ?, email = ?, status = ?, external_ref = ?, source_system = ?, consultation_id = ?, payload_json = ? WHERE queue_id = ?");
+        if ($upd) {
+            $upd->bind_param("iisssssisi", $phmsId, $regId, $fullName, $email, $status, $extRef, $srcSys, $consultationId, $jsonStr, $queueId);
+            $upd->execute();
+            $upd->close();
+        }
+    } else {
+        $ins = $conn->prepare("INSERT INTO hearing_queue (phms_hearing_id, phms_registration_id, full_name, email, status, external_ref, source_system, consultation_id, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        if ($ins) {
+            $ins->bind_param("iisssssis", $phmsId, $regId, $fullName, $email, $status, $extRef, $srcSys, $consultationId, $jsonStr);
+            $ins->execute();
+            $ins->close();
         }
     }
 }
@@ -67,9 +78,11 @@ lgu2_log_request($conn, (int) $client['client_id'], $_SERVER['SCRIPT_NAME'] ?? '
 
 echo json_encode([
     'success' => true,
-    'message' => 'Event ingested into PCMS Ingestion Approval Queue (Pending Administrator Approval)',
-    'approval_status' => 'pending',
+    'message' => 'Event ingested successfully into PCMS',
+    'event' => $event,
     'request_id' => $requestId,
-    'phms_hearing_id' => $phmsId
+    'inbox_id' => $inboxId,
+    'phms_hearing_id' => $phmsId,
+    'phms_registration_id' => $regId
 ]);
 ?>

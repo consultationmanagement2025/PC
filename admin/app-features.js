@@ -8478,9 +8478,12 @@ async function loadNotifications() {
 
 
         const items = Array.isArray(data.data && data.data.items) ? data.data.items : [];
-
-
-        AppData.notifications = items.map(mapDbNotificationToUi);
+        AppData.notifications = items.map(mapDbNotificationToUi).filter(n => {
+            const t = (n.title || '').toLowerCase();
+            const m = (n.message || '').toLowerCase();
+            const c = (n.category || n.type || '').toLowerCase();
+            return !(c.includes('phms') || t.includes('phms') || m.includes('phms feedback received') || m.includes('ingestion package approved'));
+        });
 
 
 
@@ -17654,7 +17657,7 @@ async function renderPublicFeedbackPortal() {
                 </div>
             </div>
 
-            <!-- TAB 3: PHMS System Feedback Container -->
+            <!-- TAB 2: PHMS System Feedback Container -->
             <div id="pfq-phms-container" class="space-y-4 hidden">
                 <div class="bg-white rounded-xl border border-blue-200 p-4 shadow-sm space-y-3 bg-blue-50/20">
                     <div class="flex flex-wrap items-center justify-between gap-3">
@@ -17742,6 +17745,243 @@ async function pfpTriggerRealtimePhmsSync() {
     }
 }
 
+window.openPhmsDataApprovalSheetModal = async function() {
+    const escapeHtmlHelper = (str) => String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const existing = document.getElementById('phms-approval-sheet-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'phms-approval-sheet-modal';
+    modal.style.cssText = 'position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: 100vw !important; height: 100vh !important; background-color: rgba(15, 23, 42, 0.88) !important; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex !important; align-items: center !important; justify-content: center !important; z-index: 9999999 !important; padding: 1rem !important; margin: 0 !important;';
+
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-150">
+            <!-- Modal Header -->
+            <div class="bg-gradient-to-r from-blue-900 via-slate-900 to-slate-900 text-white p-6 flex items-start justify-between border-b border-blue-800/40">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-blue-600/30 border border-blue-400/40 flex items-center justify-center text-blue-300 text-xl font-bold">
+                        <i class="bi bi-shield-check"></i>
+                    </div>
+                    <div>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                            <i class="bi bi-arrow-left-right mr-1"></i> PHMS ➔ PCMS Inter-System Transmittal
+                        </span>
+                        <h3 class="text-xl font-extrabold text-white mt-1">PHMS Data Ingestion Approval Sheet</h3>
+                        <p class="text-xs text-slate-300">Document Control ID: <strong class="text-blue-300 font-mono">XFER-PHMS-PCMS-2026-0809-001</strong> | Standard Interoperability Protocol</p>
+                    </div>
+                </div>
+                <button type="button" onclick="document.getElementById('phms-approval-sheet-modal').remove()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white text-xl font-bold flex items-center justify-center transition leading-none cursor-pointer">&times;</button>
+            </div>
+
+            <!-- Modal Content -->
+            <div class="p-6 max-h-[72vh] overflow-y-auto space-y-6 text-xs text-slate-700">
+                <!-- Section 1: System Transmittal Header -->
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Origin System</span>
+                        <span class="font-bold text-blue-900 flex items-center gap-1"><i class="bi bi-building"></i> PHMS (Public Hearing System)</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Destination System</span>
+                        <span class="font-bold text-red-900 flex items-center gap-1"><i class="bi bi-laptop"></i> PCMS Citizen Portal</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">API Security Token</span>
+                        <span class="font-mono text-[11px] font-bold text-emerald-700">SHA256 (Bearer Verified)</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Approval Status</span>
+                        <span class="font-bold text-amber-700 flex items-center gap-1" id="phms-pending-count-label"><i class="bi bi-hourglass-split"></i> Loading pending list...</span>
+                    </div>
+                </div>
+
+                <!-- Section 2: Incoming Data Package Manifest -->
+                <div>
+                    <h4 class="font-extrabold text-slate-900 text-sm mb-2.5 flex items-center gap-1.5">
+                        <i class="bi bi-box-seam text-blue-600"></i> Transmitted Data Payload Manifest (PHMS ➔ PCMS)
+                    </h4>
+                    <div class="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-slate-100 font-bold text-[11px] text-slate-700 border-b border-slate-200 uppercase">
+                                <tr>
+                                    <th class="p-3">Hearing ID</th>
+                                    <th class="p-3">Public Hearing Title</th>
+                                    <th class="p-3">Received At</th>
+                                    <th class="p-3 text-center">Testimonies</th>
+                                    <th class="p-3 text-center">Status</th>
+                                    <th class="p-3 text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="phms-approval-sheet-body" class="divide-y divide-slate-100 bg-white">
+                                <tr>
+                                    <td colspan="6" class="p-6 text-center text-slate-500">
+                                        <i class="bi bi-arrow-repeat animate-spin text-lg block mb-1"></i> Checking pending PHMS ingestion packages...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Section 3: Verification & Compliance Checklist -->
+                <div>
+                    <h4 class="font-extrabold text-slate-900 text-sm mb-2.5 flex items-center gap-1.5">
+                        <i class="bi bi-check2-square text-emerald-600"></i> Compliance & Validation Checklist
+                    </h4>
+                    <div class="bg-emerald-50/60 border border-emerald-200 rounded-xl p-4 space-y-2">
+                        <label class="flex items-center gap-2 cursor-pointer font-semibold text-emerald-950">
+                            <input type="checkbox" checked disabled class="rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500">
+                            <span>Data Privacy Act of 2012 (RA 10173): Citizen Personal Identifiable Information (PII) anonymized.</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer font-semibold text-emerald-950">
+                            <input type="checkbox" checked disabled class="rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500">
+                            <span>CORS & Authorization Token: Verified valid Bearer token from PHMS domain.</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer font-semibold text-emerald-950">
+                            <input type="checkbox" checked disabled class="rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500">
+                            <span>Duplicate Prevention: Unique testimony ID hash check performed to avoid double counting.</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-slate-50 px-6 py-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                <span class="text-xs text-slate-500"><i class="bi bi-shield-lock-fill text-blue-700 mr-1"></i> Authorized Secretariat Sign-off Module</span>
+                <div class="flex items-center gap-3">
+                    <button type="button" onclick="document.getElementById('phms-approval-sheet-modal').remove()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition cursor-pointer">
+                        Close
+                    </button>
+                    <button type="button" id="phms-approve-all-btn" onclick="approveAndIngestPhmsDataPackage()" class="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-2 cursor-pointer">
+                        <i class="bi bi-check-circle-fill"></i> Approve All Pending Packages
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Fetch live pending list from backend API
+    try {
+        const res = await fetch('API/feedback_api.php?action=phms_pending_approvals');
+        const data = await res.json();
+        const tbody = document.getElementById('phms-approval-sheet-body');
+        const statusLabel = document.getElementById('phms-pending-count-label');
+        const approveAllBtn = document.getElementById('phms-approve-all-btn');
+
+        if (data && data.success && Array.isArray(data.data) && data.data.length > 0) {
+            const pendingList = data.data;
+            if (statusLabel) statusLabel.innerHTML = `<i class="bi bi-exclamation-circle-fill text-amber-600"></i> ${pendingList.length} Pending Approval`;
+
+            tbody.innerHTML = pendingList.map(item => {
+                const qId = item.queue_id || item.phms_hearing_id;
+                const hId = item.phms_hearing_id ? `PHMS-H#${item.phms_hearing_id}` : `Queue #${item.queue_id}`;
+                const title = escapeHtmlHelper(item.full_name || item.hearing_title || 'Public Hearing Payload');
+                const dateStr = item.created_at || 'Just now';
+                const count = item.feedback_count || 0;
+
+                return `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="p-3 font-mono font-bold text-blue-700">${hId}</td>
+                        <td class="p-3 font-bold text-slate-900">${title}</td>
+                        <td class="p-3 text-slate-600">${dateStr}</td>
+                        <td class="p-3 text-center font-bold text-slate-800">${count} Entries</td>
+                        <td class="p-3 text-center"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[10px]">PENDING APPROVAL</span></td>
+                        <td class="p-3 text-center">
+                            <div class="flex items-center justify-center gap-1.5">
+                                <button type="button" onclick="approveSinglePhmsPayload(${qId})" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-[11px] transition shadow-2xs">
+                                    Approve
+                                </button>
+                                <button type="button" onclick="rejectSinglePhmsPayload(${qId})" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded text-[11px] transition shadow-2xs">
+                                    Reject
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            if (statusLabel) statusLabel.innerHTML = `<i class="bi bi-check-circle-fill text-emerald-600"></i> All Packages Approved`;
+            if (approveAllBtn) approveAllBtn.style.display = 'none';
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="p-8 text-center text-slate-500">
+                        <i class="bi bi-patch-check-fill text-emerald-500 text-2xl block mb-2"></i>
+                        <strong class="text-slate-800 block text-xs">No Pending Ingestion Packages</strong>
+                        <span class="text-[11px] text-slate-500">All incoming PHMS data payloads have been reviewed and approved into PCMS.</span>
+                    </td>
+                </tr>
+            `;
+        }
+    } catch(e) {
+        console.warn('Error loading pending approvals:', e);
+    }
+};
+
+window.approveSinglePhmsPayload = async function(queueId) {
+    try {
+        const res = await fetch('API/feedback_api.php?action=phms_approve_ingestion', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ queue_id: queueId })
+        });
+        const data = await res.json();
+        if (data && data.success) {
+            if (typeof showNotification === 'function') showNotification('✅ PHMS Transmittal Approved & Merged into PCMS!', 'success');
+            openPhmsDataApprovalSheetModal();
+            if (typeof loadPhmsFeedbackFromApi === 'function') loadPhmsFeedbackFromApi(true);
+        } else {
+            if (typeof showNotification === 'function') showNotification('⚠️ ' + (data.message || 'Failed to approve'), 'warning');
+        }
+    } catch(e) {
+        if (typeof showNotification === 'function') showNotification('❌ Error approving payload: ' + e.message, 'error');
+    }
+};
+
+window.rejectSinglePhmsPayload = async function(queueId) {
+    try {
+        const res = await fetch('API/feedback_api.php?action=phms_reject_ingestion', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ queue_id: queueId })
+        });
+        const data = await res.json();
+        if (data && data.success) {
+            if (typeof showNotification === 'function') showNotification('ℹ️ PHMS Transmittal Payload Rejected.', 'info');
+            openPhmsDataApprovalSheetModal();
+            if (typeof loadPhmsFeedbackFromApi === 'function') loadPhmsFeedbackFromApi(true);
+        } else {
+            if (typeof showNotification === 'function') showNotification('⚠️ ' + (data.message || 'Failed to reject'), 'warning');
+        }
+    } catch(e) {
+        if (typeof showNotification === 'function') showNotification('❌ Error rejecting payload: ' + e.message, 'error');
+    }
+};
+
+window.approveAndIngestPhmsDataPackage = async function() {
+    try {
+        const res = await fetch('API/feedback_api.php?action=phms_approve_ingestion', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ all: true })
+        });
+        const data = await res.json();
+        if (data && data.success) {
+            if (typeof showNotification === 'function') showNotification('✅ ' + (data.message || 'All PHMS pending data packages approved!'), 'success', 6000);
+            const modal = document.getElementById('phms-approval-sheet-modal');
+            if (modal) modal.remove();
+            if (typeof loadPhmsFeedbackFromApi === 'function') {
+                loadPhmsFeedbackFromApi(true);
+            }
+        } else {
+            if (typeof showNotification === 'function') showNotification('⚠️ ' + (data.message || 'Failed to approve packages'), 'warning');
+        }
+    } catch(e) {
+        if (typeof showNotification === 'function') showNotification('❌ Error approving packages: ' + e.message, 'error');
+    }
+};
+
 function switchPublicFeedbackTab(tabName) {
     window.__current_pfq_tab__ = tabName;
 
@@ -17797,7 +18037,18 @@ function pfpRenderSurveyPollsTable() {
     const statusFilter = String(document.getElementById('pfq-survey-status')?.value || '').toLowerCase().trim();
 
     let consultations = Array.isArray(AppData.consultations)
-        ? AppData.consultations.filter(c => (String(c.status || '').toLowerCase() === 'active' || String(c.status || '').toLowerCase() === 'open' || (c.type !== 'user' && String(c.type || '').toLowerCase() !== 'user')) && (String(c.response_mode || '').toLowerCase() === 'survey' || c.is_survey === 1 || c.is_survey === true))
+        ? AppData.consultations.filter(c => {
+            const status = String(c.status || '').toLowerCase();
+            const mode = String(c.response_mode || '').toLowerCase();
+            const question = String(c.survey_question || '').trim();
+            const hasSurveyQuestion = question !== '' && question !== 'null' && question !== 'undefined';
+            const isSurvey = mode === 'survey' || c.is_survey === 1 || c.is_survey === true || (mode === 'hybrid' && hasSurveyQuestion);
+            if (!isSurvey) return false;
+
+            const isAllowedStatus = (status === 'active' || status === 'open' || status === 'closed' || status === 'completed');
+            const isNotUserType = c.type !== 'user' && String(c.type || '').toLowerCase() !== 'user';
+            return (isAllowedStatus || isNotUserType);
+        })
         : [];
 
     if (q) {
@@ -17851,21 +18102,33 @@ function pfpRenderSurveyPollsTable() {
 
         let agreeCount = 0;
         let disagreeCount = 0;
-        fbs.forEach(f => {
-            const msg = String(f.message || f.testimony || f.statement || '').trim().toLowerCase();
-            const isExplicitVote = (msg === 'agree' || msg === 'disagree' || msg === optA.toLowerCase() || msg === optB.toLowerCase());
-            if (!isExplicitVote) return;
+        let totalVotes = 0;
 
-            const isDis = msg === 'disagree' || msg === optB.toLowerCase();
-            const isAgr = msg === 'agree' || msg === optA.toLowerCase();
+        if (c.vote_stats && (c.vote_stats.total_votes > 0 || c.vote_stats.agree_votes > 0 || c.vote_stats.disagree_votes > 0)) {
+            agreeCount = Number(c.vote_stats.agree_votes || 0);
+            disagreeCount = Number(c.vote_stats.disagree_votes || 0);
+            totalVotes = Number(c.vote_stats.total_votes || (agreeCount + disagreeCount));
+        } else if (c.total_votes !== undefined || c.agree_votes !== undefined || c.disagree_votes !== undefined) {
+            agreeCount = Number(c.agree_votes || 0);
+            disagreeCount = Number(c.disagree_votes || 0);
+            totalVotes = Number(c.total_votes || (agreeCount + disagreeCount));
+        } else {
+            fbs.forEach(f => {
+                const msg = String(f.message || f.testimony || f.statement || '').trim().toLowerCase();
+                const isExplicitVote = (msg === 'agree' || msg === 'disagree' || msg === optA.toLowerCase() || msg === optB.toLowerCase());
+                if (!isExplicitVote) return;
 
-            if (isDis) disagreeCount++;
-            else if (isAgr) agreeCount++;
-        });
+                const isDis = msg === 'disagree' || msg === optB.toLowerCase();
+                const isAgr = msg === 'agree' || msg === optA.toLowerCase();
 
-        const totalVotes = agreeCount + disagreeCount;
+                if (isDis) disagreeCount++;
+                else if (isAgr) agreeCount++;
+            });
+            totalVotes = agreeCount + disagreeCount;
+        }
+
         const agreePct = totalVotes > 0 ? Math.round((agreeCount / totalVotes) * 100) : 0;
-        const disagreePct = totalVotes > 0 ? 100 - agreePct : 0;
+        const disagreePct = totalVotes > 0 ? (100 - agreePct) : 0;
 
         let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-white uppercase tracking-wider">CLOSED</span>';
         if (status === 'active' || status === 'open') {
@@ -18107,7 +18370,16 @@ window.pfpShowConsultationFeedbackModal = function (consultationId) {
         if (titleEl) titleEl.textContent = title;
         if (dateEl) dateEl.textContent = `📅 Date: ${dateStr} | Status: ${statusStr} | Total Submissions: ${responsesList.length}`;
 
-        if (!responsesList.length) {
+        const cMode = String(consultation?.response_mode || '').toLowerCase();
+        const cQuestion = String(consultation?.survey_question || '').trim();
+        const isSurveyType = consultation && (
+            cMode === 'survey' ||
+            cMode === 'hybrid' ||
+            (cQuestion !== '' && cQuestion !== 'null') ||
+            (consultation.vote_stats && Number(consultation.vote_stats.total_votes || 0) > 0)
+        );
+
+        if (!responsesList.length && !isSurveyType) {
             if (bodyEl) {
                 bodyEl.innerHTML = `
                     <div class="p-8 text-center text-gray-500 bg-slate-50 rounded-xl border border-slate-200">
@@ -18163,28 +18435,40 @@ window.pfpShowConsultationFeedbackModal = function (consultationId) {
 
         let surveyBoxHtml = '';
         let aiSurveyConclusionHtml = '';
-        if (consultation && String(consultation.response_mode || '').toLowerCase() === 'survey') {
-            const question = escapeHtmlHelper(consultation.survey_question || 'Do you support this proposed ordinance initiative?');
+        if (isSurveyType) {
+            const question = escapeHtmlHelper(consultation.survey_question || 'Do you support this proposed initiative?');
             const optA = escapeHtmlHelper(consultation.survey_option_a || 'Agree');
             const optB = escapeHtmlHelper(consultation.survey_option_b || 'Disagree');
 
             let agreeCount = 0;
             let disagreeCount = 0;
-            responsesList.forEach(r => {
-                const msg = String(r.message || r.testimony || r.statement || '').trim().toLowerCase();
-                const isDis = msg === 'disagree' || msg === optB.toLowerCase();
-                const isAgr = msg === 'agree' || msg === optA.toLowerCase();
+            let totalVotes = 0;
 
-                if (isDis) {
-                    disagreeCount++;
-                } else if (isAgr) {
-                    agreeCount++;
-                }
-            });
+            if (consultation.vote_stats && (consultation.vote_stats.total_votes > 0 || consultation.vote_stats.agree_votes > 0 || consultation.vote_stats.disagree_votes > 0)) {
+                agreeCount = Number(consultation.vote_stats.agree_votes || 0);
+                disagreeCount = Number(consultation.vote_stats.disagree_votes || 0);
+                totalVotes = Number(consultation.vote_stats.total_votes || (agreeCount + disagreeCount));
+            } else if (consultation.total_votes !== undefined || consultation.agree_votes !== undefined || consultation.disagree_votes !== undefined) {
+                agreeCount = Number(consultation.agree_votes || 0);
+                disagreeCount = Number(consultation.disagree_votes || 0);
+                totalVotes = Number(consultation.total_votes || (agreeCount + disagreeCount));
+            } else {
+                responsesList.forEach(r => {
+                    const msg = String(r.message || r.testimony || r.statement || '').trim().toLowerCase();
+                    const isDis = msg === 'disagree' || msg === optB.toLowerCase();
+                    const isAgr = msg === 'agree' || msg === optA.toLowerCase();
 
-            const totalVotes = agreeCount + disagreeCount;
+                    if (isDis) {
+                        disagreeCount++;
+                    } else if (isAgr) {
+                        agreeCount++;
+                    }
+                });
+                totalVotes = agreeCount + disagreeCount;
+            }
+
             const agreePct = totalVotes > 0 ? Math.round((agreeCount / totalVotes) * 100) : 0;
-            const disagreePct = totalVotes > 0 ? 100 - agreePct : 0;
+            const disagreePct = totalVotes > 0 ? (100 - agreePct) : 0;
 
             const isClosed = (consultation.status || '').toLowerCase() === 'closed' || (consultation.status || '').toLowerCase() === 'completed';
 
@@ -18244,6 +18528,15 @@ window.pfpShowConsultationFeedbackModal = function (consultationId) {
             `;
         }
 
+        let listDisplay = responsesHtml;
+        if (!responsesList.length) {
+            listDisplay = `
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-gray-500 text-xs">
+                    <i class="bi bi-info-circle mr-1 text-purple-600"></i> No written commentary attached. Citizen participation recorded via direct survey poll votes above.
+                </div>
+            `;
+        }
+
         bodyEl.innerHTML = `
             <div class="space-y-3">
                 ${aiSurveyConclusionHtml}
@@ -18251,7 +18544,7 @@ window.pfpShowConsultationFeedbackModal = function (consultationId) {
                 <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
                     Submitted Citizen Responses (${responsesList.length})
                 </div>
-                ${responsesHtml}
+                ${listDisplay}
             </div>
         `;
     };
@@ -18408,44 +18701,7 @@ async function loadPhmsFeedbackFromApi(isSync = false, limit = 50, offset = 0) {
                     window._phms_is_cached_data = true;
                 }
 
-                // Push external system receipt notification to top notification bar
-                if (hearingsList.length > 0) {
-                    if (!Array.isArray(AppData.notifications)) AppData.notifications = [];
-                    hearingsList.forEach(h => {
-                        const title = h.hearing_title || h.title || h.full_name || 'Public Hearing';
-                        const fbCount = h.feedback_count || 0;
-                        const notifTitle = `🔗 PHMS Feedback Received: ${title}`;
-                        const notifMsg = `Received ${fbCount} citizen hearing feedback response(s) from PHMS Public Hearing System for "${title}".`;
 
-                        const exists = AppData.notifications.some(n => n.title === notifTitle || (n.message && n.message.includes(title)));
-                        if (!exists) {
-                            AppData.notifications.unshift({
-                                id: Date.now() + Math.floor(Math.random() * 1000),
-                                title: notifTitle,
-                                message: notifMsg,
-                                category: 'External Integration',
-                                priority: 'high',
-                                read: false,
-                                time: 'Just now',
-                                timestamp: new Date().toISOString()
-                            });
-                        }
-                    });
-
-                    // Trigger top navigation bar update
-                    if (typeof loadNotifications === 'function') {
-                        try { loadNotifications(); } catch (_) { }
-                    } else {
-                        const unreadCount = AppData.notifications.filter(n => !n.read).length;
-                        const badge = document.getElementById('notif-badge') || document.getElementById('notification-badge');
-                        if (badge) {
-                            if (unreadCount > 0) {
-                                badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
-                                badge.classList.remove('hidden');
-                            }
-                        }
-                    }
-                }
 
                 if (isSync && typeof showNotification === 'function') {
                     showNotification(`✅ PHMS Integration: ${hearingsList.length} hearing feedback items synchronized.`, 'success');
@@ -18614,13 +18870,11 @@ function pfpRenderPhmsTable() {
 }
 
 function pfpShowPhmsDetailModal(hearingId) {
-    console.log('[PHMS Modal Delegation L17775] Delegating to top-level modal renderer for hearingId:', hearingId);
-    if (typeof window.pfpShowPhmsDetailModal === 'function') {
+    console.log('[PHMS Modal Delegation] Delegating to top-level modal renderer for hearingId:', hearingId);
+    if (typeof window.pfpShowPhmsDetailModal === 'function' && window.pfpShowPhmsDetailModal !== pfpShowPhmsDetailModal) {
         window.pfpShowPhmsDetailModal(hearingId);
     }
 }
-
-window.pfpShowPhmsDetailModal = pfpShowPhmsDetailModal;
 
 if (!window._phms_global_click_listener) {
     window._phms_global_click_listener = true;
@@ -22169,129 +22423,143 @@ function renderAiCommitteeBriefModalHtml(brief) {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'pfq-ai-brief-modal';
-        modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4';
+        modal.className = 'fixed inset-0 bg-slate-900/70 backdrop-blur-md flex items-center justify-center z-50 p-4 sm:p-6 overflow-y-auto';
         document.body.appendChild(modal);
     }
 
     const problemsHtml = (brief.problems || []).map((p, idx) => `
-        <tr class="border-b border-gray-100">
-            <td class="px-3 py-2 font-bold text-gray-800">${idx + 1}. ${escapeHtml(p.category)}</td>
-            <td class="px-3 py-2 text-gray-700">${escapeHtml(p.issue)}</td>
-            <td class="px-3 py-2 text-center">
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${p.severity === 'high' ? 'bg-red-100 text-red-800' : (p.severity === 'medium' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700')}">
-                    ${escapeHtml(p.severity || 'normal').toUpperCase()}
+        <tr class="border-b border-slate-100 hover:bg-slate-50/80 transition">
+            <td class="px-4 py-3 font-bold text-slate-800 text-xs w-1/4">${idx + 1}. ${escapeHtml(p.category)}</td>
+            <td class="px-4 py-3 text-slate-700 text-xs leading-relaxed">${escapeHtml(p.issue)}</td>
+            <td class="px-4 py-3 text-center w-28">
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${p.severity === 'high' ? 'bg-red-100 text-red-800 border border-red-200' : (p.severity === 'medium' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700 border border-slate-200')}">
+                    ${escapeHtml(p.severity || 'normal')}
                 </span>
             </td>
         </tr>
     `).join('');
 
     const solutionsHtml = (brief.solutions || []).map((s, idx) => `
-        <div class="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100">
-            <div class="font-bold text-emerald-900 text-xs flex items-center gap-1.5 mb-1">
-                <i class="bi bi-check-circle-fill text-emerald-600"></i> ${idx + 1}. Policy Recommendation (${escapeHtml(s.category)})
+        <div class="p-3.5 bg-emerald-50/70 rounded-xl border border-emerald-200/80 shadow-2xs space-y-1">
+            <div class="font-extrabold text-emerald-950 text-xs flex items-center gap-2">
+                <i class="bi bi-check-circle-fill text-emerald-600 text-sm"></i>
+                <span>${idx + 1}. Policy Recommendation (${escapeHtml(s.category)})</span>
             </div>
-            <p class="text-xs text-gray-700 leading-relaxed">${escapeHtml(s.recommendation)}</p>
+            <p class="text-xs text-slate-700 leading-relaxed pl-5 font-medium">${escapeHtml(s.recommendation)}</p>
         </div>
     `).join('');
 
     modal.innerHTML = `
-        <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden animate-in fade-in zoom-in duration-150 border border-gray-200">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full my-auto overflow-hidden animate-in fade-in zoom-in duration-200 border border-slate-200">
             <!-- Modal Header -->
-            <div class="bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white p-6 flex items-center justify-between">
-                <div>
-                    <span class="px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-bold uppercase tracking-wider">
-                        <i class="bi bi-robot"></i> Official AI Committee Synthesis Document
-                    </span>
-                    <h2 class="text-lg font-extrabold mt-1 text-white">
+            <div class="bg-gradient-to-r from-red-800 via-red-900 to-slate-900 text-white p-6 sm:p-7 flex items-start justify-between gap-4 border-b border-red-900/50">
+                <div class="space-y-1.5">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="px-3 py-1 rounded-full bg-white/15 backdrop-blur-xs text-white text-[10px] font-extrabold uppercase tracking-wider border border-white/20 flex items-center gap-1.5">
+                            <i class="bi bi-robot text-red-300"></i> Official AI Committee Synthesis Document
+                        </span>
+                        <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-400/30 uppercase tracking-wider">
+                            CLOSED
+                        </span>
+                    </div>
+                    <h2 class="text-xl sm:text-2xl font-black text-white leading-tight">
                         ${escapeHtml(brief.title || 'Consultation Feedback Brief')}
                     </h2>
-                    <p class="text-xs text-red-100 mt-0.5">Assigned LGU Committee: <strong>${escapeHtml(brief.committee_assigned)}</strong> | Status: <strong>CLOSED</strong></p>
+                    <p class="text-xs text-red-100/90 font-medium">Assigned LGU Committee: <strong class="text-white font-bold">${escapeHtml(brief.committee_assigned)}</strong></p>
                 </div>
-                <button onclick="document.getElementById('pfq-ai-brief-modal').remove()" class="text-white hover:text-red-200 text-2xl font-bold">&times;</button>
+                <button onclick="document.getElementById('pfq-ai-brief-modal').remove()" class="text-slate-300 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-full transition text-lg leading-none" title="Close Modal">&times;</button>
             </div>
 
-            <!-- Modal Content -->
-            <div class="p-6 space-y-6 text-xs max-h-[75vh] overflow-y-auto">
-                <!-- Summary Metadata Box -->
-                <div class="grid grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-center">
-                    <div>
-                        <span class="text-gray-400 font-semibold uppercase text-[10px] block">Total Citizen Feedback</span>
-                        <span class="text-2xl font-black text-gray-900">${brief.stats?.total_submissions || 0}</span>
+            <!-- Modal Body -->
+            <div class="p-6 sm:p-8 space-y-6 max-h-[75vh] overflow-y-auto bg-slate-50/30">
+                <!-- Summary Metrics Bar -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs text-center">
+                    <div class="p-2">
+                        <span class="text-slate-500 font-bold uppercase text-[10px] tracking-wider block mb-1">Total Citizen Feedback</span>
+                        <span class="text-3xl font-black text-slate-900">${brief.stats?.total_submissions || 0}</span>
                     </div>
-                    <div>
-                        <span class="text-gray-400 font-semibold uppercase text-[10px] block">Dominant Public Tone</span>
-                        <span class="text-base font-extrabold capitalize ${brief.stats?.dominant_sentiment === 'negative' ? 'text-red-600' : 'text-emerald-600'}">
+                    <div class="p-2 border-y sm:border-y-0 sm:border-x border-slate-100">
+                        <span class="text-slate-500 font-bold uppercase text-[10px] tracking-wider block mb-1">Dominant Public Tone</span>
+                        <span class="text-lg font-black capitalize ${brief.stats?.dominant_sentiment === 'negative' ? 'text-red-600' : 'text-emerald-600'}">
                             ${brief.stats?.dominant_sentiment || 'Neutral'}
                         </span>
                     </div>
-                    <div>
-                        <span class="text-gray-400 font-semibold uppercase text-[10px] block">Transmittal Target</span>
-                        <span class="text-xs font-bold text-purple-800 block truncate" title="${escapeHtml(brief.committee_assigned)}">${escapeHtml(brief.committee_assigned)}</span>
+                    <div class="p-2">
+                        <span class="text-slate-500 font-bold uppercase text-[10px] tracking-wider block mb-1">Transmittal Target</span>
+                        <span class="text-xs font-extrabold text-purple-900 block truncate px-2 py-1 bg-purple-50 rounded-lg border border-purple-100" title="${escapeHtml(brief.committee_assigned)}">${escapeHtml(brief.committee_assigned)}</span>
                     </div>
+                </div>
+
                 <!-- Integrated Multi-System Source Merging Box -->
-                <div class="bg-gradient-to-r from-blue-50 via-purple-50 to-indigo-50 p-4 rounded-xl border border-blue-200/80 shadow-sm space-y-2">
+                <div class="bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-purple-50/90 p-5 rounded-2xl border border-blue-200/80 shadow-2xs space-y-3">
                     <div class="flex items-center justify-between flex-wrap gap-2">
-                        <span class="text-xs font-extrabold text-blue-950 uppercase tracking-wider flex items-center gap-1.5">
-                            <i class="bi bi-diagram-3-fill text-blue-600"></i> Integrated Multi-System Source Merging
+                        <span class="text-xs font-extrabold text-blue-950 uppercase tracking-wider flex items-center gap-2">
+                            <i class="bi bi-diagram-3-fill text-blue-600 text-sm"></i> Integrated Multi-System Source Merging & Provenance
                         </span>
-                        <span class="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-900 font-bold text-[10px] border border-blue-200">PCMS ↔ PHMS Synchronized</span>
+                        <span class="px-3 py-1 rounded-full bg-blue-100 text-blue-900 font-bold text-[10px] border border-blue-200 shadow-2xs">PCMS ↔ PHMS Live Interconnected</span>
                     </div>
-                    <p class="text-xs text-slate-800 leading-relaxed font-semibold">
+                    <p class="text-xs text-slate-700 leading-relaxed font-medium">
                         ${escapeHtml(brief.merged_sources?.summary_text || `Unified AI Analysis merged all online PCMS citizen feedback and cross-referenced PHMS Live Public Hearing records.`)}
                     </p>
-                    <div class="flex items-center gap-3 pt-1 text-[11px] font-bold">
-                        <span class="px-2.5 py-1 bg-white text-slate-800 rounded-lg border border-slate-200 shadow-2xs flex items-center gap-1.5"><i class="bi bi-globe text-blue-600"></i> PCMS Online Submissions: <strong class="text-blue-950">${brief.merged_sources?.pcms_portal_count || 0}</strong></span>
-                        <span class="px-2.5 py-1 bg-white text-slate-800 rounded-lg border border-slate-200 shadow-2xs flex items-center gap-1.5"><i class="bi bi-building-gear text-purple-600"></i> PHMS Live Hearing Testimonies: <strong class="text-purple-950">${brief.merged_sources?.phms_hearing_count || 0}</strong></span>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs font-bold">
+                        <div class="px-4 py-2.5 bg-white text-slate-800 rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-2">
+                            <span class="flex items-center gap-2 text-slate-700"><i class="bi bi-globe text-blue-600 text-sm"></i> PCMS Online Consultation Portal:</span>
+                            <strong class="text-blue-950 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 text-xs">${brief.merged_sources?.pcms_portal_count || 0} Submissions</strong>
+                        </div>
+                        <div class="px-4 py-2.5 bg-white text-slate-800 rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-2">
+                            <span class="flex items-center gap-2 text-slate-700"><i class="bi bi-building-gear text-purple-600 text-sm"></i> PHMS Live Hearing Testimonies:</span>
+                            <strong class="text-purple-950 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-200 text-xs">${brief.merged_sources?.phms_hearing_count || 0} Testimonies</strong>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Section 1: Identified Problems -->
-                <div>
-                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-red-700 flex items-center gap-1.5 mb-2">
-                        <i class="bi bi-exclamation-triangle-fill"></i> Section 1: Identified Citizen Problems & Grievances
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-red-700 flex items-center gap-2">
+                        <i class="bi bi-exclamation-triangle-fill text-red-600"></i> Section 1: Identified Citizen Problems & Grievances
                     </h3>
-                    <div class="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <div class="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
                         <table class="w-full text-left text-xs">
-                            <thead class="bg-gray-50 border-b border-gray-200 text-[11px] uppercase font-bold text-gray-600">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase font-extrabold text-slate-600">
                                 <tr>
-                                    <th class="px-3 py-2">Category</th>
-                                    <th class="px-3 py-2">Identified Grievance / Issues</th>
-                                    <th class="px-3 py-2 text-center">Severity</th>
+                                    <th class="px-4 py-2.5">Category</th>
+                                    <th class="px-4 py-2.5">Identified Grievance / Issues</th>
+                                    <th class="px-4 py-2.5 text-center">Severity</th>
                                 </tr>
                             </thead>
-                            <tbody>${problemsHtml}</tbody>
+                            <tbody class="divide-y divide-slate-100">${problemsHtml}</tbody>
                         </table>
                     </div>
                 </div>
 
                 <!-- Section 2: AI Recommended Solutions -->
-                <div>
-                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5 mb-2">
-                        <i class="bi bi-lightbulb-fill"></i> Section 2: AI Synthesized Solutions & Actionable Policy Steps
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-2">
+                        <i class="bi bi-lightbulb-fill text-emerald-600"></i> Section 2: AI Synthesized Solutions & Actionable Policy Steps
                     </h3>
-                    <div class="space-y-2">${solutionsHtml}</div>
+                    <div class="space-y-2.5">${solutionsHtml}</div>
                 </div>
 
                 <!-- Section 3: Executive Conclusion -->
-                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200">
-                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-blue-900 flex items-center gap-1.5 mb-1.5">
-                        <i class="bi bi-file-earmark-check-fill"></i> Section 3: Executive Conclusion & Transmittal Note
+                <div class="bg-gradient-to-r from-slate-900 to-blue-950 text-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-800 space-y-2.5">
+                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-blue-300 flex items-center gap-2">
+                        <i class="bi bi-file-earmark-check-fill text-blue-400 text-sm"></i> Section 3: Executive Conclusion & Transmittal Note
                     </h3>
-                    <p class="text-xs text-blue-950 font-medium leading-relaxed">${escapeHtml(brief.conclusion)}</p>
-                    <p class="text-[11px] text-blue-700 font-semibold mt-2 border-t border-blue-200/60 pt-2">${escapeHtml(brief.transmittal_note)}</p>
+                    <p class="text-xs text-slate-200 font-medium leading-relaxed">${escapeHtml(brief.conclusion)}</p>
+                    <p class="text-[11px] text-blue-300 font-semibold border-t border-slate-700/80 pt-2.5">${escapeHtml(brief.transmittal_note)}</p>
                 </div>
             </div>
 
             <!-- Modal Footer -->
-            <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
-                <button onclick="window.print()" class="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-bold rounded-lg text-xs transition flex items-center gap-1.5">
-                    <i class="bi bi-printer"></i> Print / Save PDF
+            <div class="bg-slate-50 px-6 sm:px-8 py-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                <button onclick="window.print()" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition shadow-2xs flex items-center gap-2">
+                    <i class="bi bi-printer text-slate-500"></i> Print / Save PDF
                 </button>
-                <div class="flex items-center gap-2">
-                    <button onclick="document.getElementById('pfq-ai-brief-modal').remove()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg text-xs transition">
+                <div class="flex items-center gap-3">
+                    <button onclick="document.getElementById('pfq-ai-brief-modal').remove()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition">
                         Cancel
                     </button>
-                    <button onclick="pfpForwardBriefToCommittee(${brief.consultation_id}, '${escapeHtml(brief.committee_assigned)}')" class="px-5 py-2 bg-red-700 hover:bg-red-800 text-white font-extrabold rounded-lg text-xs transition shadow flex items-center gap-1.5">
+                    <button onclick="pfpForwardBriefToCommittee(${brief.consultation_id}, '${escapeHtml(brief.committee_assigned)}')" class="px-5 py-2 bg-red-700 hover:bg-red-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-2">
                         <i class="bi bi-send-fill"></i> Pass Document to Committee
                     </button>
                 </div>
@@ -22920,6 +23188,63 @@ window.rejectResourcePersonApp = function(id, fullname) {
     })
     .catch(err => alert('❌ Error: ' + err.message));
 };
+
+// ==========================================
+// PCMS SESSION TIMEOUT IDLE MODAL MANAGER
+// ==========================================
+function showSessionExpiredModal() {
+    if (document.getElementById('pcms-session-timeout-modal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'pcms-session-timeout-modal';
+    modal.className = 'fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-50 p-4';
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center space-y-4 border border-amber-200 animate-in fade-in zoom-in duration-200">
+            <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-600 mx-auto flex items-center justify-center text-2xl shadow-inner">
+                <i class="bi bi-clock-history"></i>
+            </div>
+            <div>
+                <h3 class="text-xl font-extrabold text-slate-900">Session Expired</h3>
+                <p class="text-xs text-slate-500 mt-1">Your session has timed out due to inactivity.</p>
+            </div>
+            <div class="pt-2">
+                <button onclick="window.location.href='login.php'" class="w-full px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2">
+                    <i class="bi bi-box-arrow-in-right text-sm"></i>
+                    <span>Back to Login Page</span>
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function initSessionTimeoutManager() {
+    window._pcmsLastActivityTime = Date.now();
+    const resetTimer = () => { window._pcmsLastActivityTime = Date.now(); };
+
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
+        window.addEventListener(evt, resetTimer, { passive: true });
+    });
+
+    // Check idle every 15 seconds (1800000ms = 30 min threshold)
+    setInterval(() => {
+        if (Date.now() - window._pcmsLastActivityTime >= 1800000) {
+            showSessionExpiredModal();
+        }
+    }, 15000);
+
+    // Also show if URL contains ?timeout=1
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('timeout') === '1') {
+        showSessionExpiredModal();
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSessionTimeoutManager);
+} else {
+    initSessionTimeoutManager();
+}
+
 
 
 

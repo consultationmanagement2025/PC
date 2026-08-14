@@ -554,7 +554,9 @@ try {
 
             $categoryIssues = [];
             foreach ($allFeedback as $fb) {
-                $text = $fb['content'] ?? '';
+                $text = trim((string)($fb['content'] ?? ''));
+                if ($text === '') continue;
+                
                 $cat = trim((string)($fb['category'] ?? 'General Services'));
                 if (!$cat || $cat === 'General Feedback') $cat = 'Public Policy & Service Quality';
 
@@ -563,13 +565,19 @@ try {
                 if (isset($sentiments[$tag])) $sentiments[$tag]++;
 
                 if (!isset($categoryIssues[$cat])) {
-                    $categoryIssues[$cat] = ['negative_count' => 0, 'total' => 0, 'samples' => []];
+                    $categoryIssues[$cat] = ['negative_count' => 0, 'total' => 0, 'samples' => [], 'all_samples' => []];
                 }
                 $categoryIssues[$cat]['total']++;
+                
+                $snippet = mb_substr($text, 0, 200) . (mb_strlen($text) > 200 ? '...' : '');
+                if (count($categoryIssues[$cat]['all_samples']) < 5) {
+                    $categoryIssues[$cat]['all_samples'][] = '"' . $snippet . '"';
+                }
+
                 if ($tag === 'negative' || $analysis['urgency'] === 'high' || $analysis['urgency'] === 'critical') {
                     $categoryIssues[$cat]['negative_count']++;
                     if (count($categoryIssues[$cat]['samples']) < 3) {
-                        $categoryIssues[$cat]['samples'][] = mb_substr($text, 0, 150) . (mb_strlen($text) > 150 ? '...' : '');
+                        $categoryIssues[$cat]['samples'][] = '"' . $snippet . '"';
                     }
                 }
             }
@@ -577,26 +585,34 @@ try {
             if (empty($categoryIssues)) {
                 $problems[] = [
                     'category' => 'Public Consultation Participation',
-                    'issue' => 'No critical citizen grievances recorded during consultation period.',
+                    'issue' => 'No citizen grievances or feedback submissions recorded during the consultation period.',
                     'severity' => 'low'
                 ];
                 $solutions[] = [
                     'category' => 'Public Consultation Participation',
-                    'recommendation' => 'Proceed with standard policy review and monitor post-implementation feedback.'
+                    'recommendation' => 'Proceed with standard departmental policy review and monitor post-implementation feedback.'
                 ];
             } else {
                 foreach ($categoryIssues as $cat => $data) {
-                    $issueSample = !empty($data['samples']) ? implode('; ', $data['samples']) : "Recorded concerns regarding {$cat}.";
+                    $quotes = !empty($data['samples']) ? $data['samples'] : $data['all_samples'];
+                    $issueSample = !empty($quotes) ? implode('; ', $quotes) : "Citizen feedback submitted regarding {$cat}.";
+                    
+                    $severity = 'low';
+                    if ($data['negative_count'] > 2) $severity = 'high';
+                    elseif ($data['negative_count'] > 0 || $data['total'] >= 3) $severity = 'medium';
+
                     $problems[] = [
                         'category' => $cat,
-                        'issue' => $issueSample,
+                        'issue' => "Citizen Feedback & Grievances: " . $issueSample,
                         'frequency' => $data['total'],
-                        'severity' => $data['negative_count'] > 2 ? 'high' : ($data['negative_count'] > 0 ? 'medium' : 'low')
+                        'severity' => $severity
                     ];
 
+                    $cleanGrievance = !empty($quotes[0]) ? rtrim($quotes[0], '"') : $cat;
+                    $cleanGrievance = ltrim($cleanGrievance, '"');
                     $solutions[] = [
                         'category' => $cat,
-                        'recommendation' => "Establish targeted LGU departmental guidelines for {$cat}, address identified citizen bottlenecks, and institute weekly compliance monitoring."
+                        'recommendation' => "Address citizen input (" . mb_substr($cleanGrievance, 0, 100) . "...): Establish LGU departmental guidelines, resolve identified service bottlenecks, and monitor implementation."
                     ];
                 }
             }

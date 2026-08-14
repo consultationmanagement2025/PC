@@ -104,7 +104,45 @@ $stmt->close();
 // Create expert notification
 @$conn->query("INSERT INTO expert_notifications (user_id, title, message, type, consultation_id, is_read, created_at) VALUES ($user_id, 'Report Uploaded ($version_label)', 'Your resolution paper ($version_label) was uploaded and submitted to the Secretariat.', 'report_submission', $consultation_id, 0, NOW())");
 
-// Mark consultation status as endorsed by technical expert
-@$conn->query("UPDATE consultations SET status = 'endorsed' WHERE id = $consultation_id");
+// Fetch consultation title & user name for document publishing
+$cTitle = "Resolution Report #$consultation_id";
+$uName = $_SESSION['fullname'] ?? 'Resource Person';
+$cRes = $conn->query("SELECT title FROM consultations WHERE id = $consultation_id LIMIT 1");
+if ($cRes && $cRow = $cRes->fetch_assoc()) {
+    if (!empty($cRow['title'])) {
+        $cTitle = "Updated Master Doc: " . $cRow['title'];
+    }
+}
 
-echo json_encode(['success' => true, 'message' => 'Resolution report uploaded and consultation endorsed successfully']);
+// Auto-publish updated master document to admin_documents table
+@$conn->query("CREATE TABLE IF NOT EXISTS admin_documents (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    reference VARCHAR(100) DEFAULT '',
+    title VARCHAR(255) NOT NULL,
+    type VARCHAR(50) DEFAULT 'resolution_report',
+    status VARCHAR(50) DEFAULT 'approved',
+    document_date DATE DEFAULT NULL,
+    description LONGTEXT,
+    tags TEXT,
+    uploaded_by VARCHAR(255) DEFAULT NULL,
+    file_path VARCHAR(500) DEFAULT NULL,
+    file_size VARCHAR(50) DEFAULT NULL,
+    views INT DEFAULT 0,
+    downloads INT DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+$docStmt = $conn->prepare("INSERT INTO admin_documents (reference, title, type, status, document_date, description, tags, uploaded_by, file_path, file_size, created_at) VALUES (?, ?, 'resolution_report', 'approved', CURDATE(), ?, 'RP Reviewed, Examined Master Document', ?, ?, ?, NOW())");
+if ($docStmt) {
+    $ref = "RP-DOC-" . $consultation_id;
+    $fSize = (string)filesize($filepath);
+    $docStmt->bind_param('ssssss', $ref, $cTitle, $notes, $uName, $filepath, $fSize);
+    $docStmt->execute();
+    $docStmt->close();
+}
+
+// Mark consultation status as endorsed by technical expert & document_status = 'approved'
+@$conn->query("UPDATE consultations SET status = 'endorsed', document_status = 'approved', synced_at = NOW() WHERE id = $consultation_id");
+
+echo json_encode(['success' => true, 'message' => 'Resolution report uploaded, updated master document published, and consultation endorsed successfully']);

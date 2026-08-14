@@ -19,10 +19,9 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Check session timeout (30 minutes)
-if (!checkSessionTimeout(1800)) {
-    session_unset();
-    session_destroy();
+// Reset session timeout activity clock while on login page (no session timeout on login page)
+if (session_status() === PHP_SESSION_ACTIVE) {
+    $_SESSION['last_activity'] = time();
 }
 
 require __DIR__ . '/db.php';
@@ -426,7 +425,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['verify_2fa_code'])) {
                 <p class="text-sm md:text-base text-gray-600 mt-1">Sign in to access your account</p>
             </div>
             
-            <!-- Error Message -->
             <?php if ($error): ?>
                 <div class="mb-4 px-3 md:px-4 py-2.5 md:py-3 rounded-lg flex items-center text-sm bg-red-50 border border-red-200 text-red-700">
                     <i class="bi bi-exclamation-circle mr-2 flex-shrink-0"></i>
@@ -575,7 +573,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['verify_2fa_code'])) {
                 </a>
 
                 <!-- Guest Access Button -->
-                <a href="public-portal.php" class="w-full flex items-center justify-center px-4 py-2.5 border-2 border-red-600 rounded-lg hover:bg-red-50 transition font-medium text-red-600 gap-2 no-underline">
+                <a href="https://consultation.spvalenzuela.com/" target="_blank" rel="noopener noreferrer" class="w-full flex items-center justify-center px-4 py-2.5 border-2 border-red-600 rounded-lg hover:bg-red-50 transition font-medium text-red-600 gap-2 no-underline">
                     <i class="bi bi-globe text-lg"></i>
                     <span class="text-sm font-semibold">View Public Consultations</span>
                 </a>
@@ -741,88 +739,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['verify_2fa_code'])) {
             });
         }
 
-        // Session timeout warning system
-        let warningShown = false;
-        let countdownInterval;
-        
-        function showSessionWarning(minutesLeft) {
-            if (warningShown) return;
-            
-            warningShown = true;
-            let timeLeft = minutesLeft * 60; // Convert to seconds
-            
-            // Create warning modal
-            const warningDiv = document.createElement('div');
-            warningDiv.id = 'session-warning';
-            warningDiv.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-            warningDiv.innerHTML = `
-                <div class='bg-white rounded-lg p-6 max-w-md mx-4'>
-                    <div class='text-center'>
-                        <i class='bi bi-exclamation-triangle text-yellow-500 text-4xl mb-4'></i>
-                        <h3 class='text-lg font-bold text-gray-900 mb-2'>Session Expiring Soon</h3>
-                        <p class='text-gray-600 mb-4'>Your session will expire in <span id='countdown'>${minutesLeft}:00</span> due to inactivity.</p>
-                        <p class='text-sm text-gray-500 mb-4'>Click anywhere or continue working to extend your session.</p>
-                        <button onclick='extendSession()' class='bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg'>
-                            Extend Session
-                        </button>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(warningDiv);
-            
-            // Start countdown
-            countdownInterval = setInterval(() => {
-                timeLeft--;
-                const minutes = Math.floor(timeLeft / 60);
-                const seconds = timeLeft % 60;
-                const countdownEl = document.getElementById('countdown');
-                if (countdownEl) {
-                    countdownEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                }
-                
-                if (timeLeft <= 0) {
-                    clearInterval(countdownInterval);
-                    window.location.href = 'login.php?timeout=1';
-                }
-            }, 1000);
-        }
-        
-        function extendSession() {
-            // Remove warning
-            const warningDiv = document.getElementById('session-warning');
-            if (warningDiv) {
-                warningDiv.remove();
-            }
-            
-            // Reset warning flag
-            warningShown = false;
-            
-            // Clear countdown
-            if (countdownInterval) {
-                clearInterval(countdownInterval);
-            }
-            
-            // Make a request to extend session (ping server)
-            fetch(window.location.href, {method: 'HEAD'});
-        }
-        
-        // Monitor user activity
-        let activityTimer;
-        function resetActivityTimer() {
-            clearTimeout(activityTimer);
-            activityTimer = setTimeout(() => {
-                // Show warning with a 2-minute countdown.
-                showSessionWarning(2);
-            }, 60 * 1000); // Trigger warning after 1 minute inactivity
-        }
-        
-        // Activity events
-        ['mousedown', 'keydown', 'scroll', 'touchstart'].forEach(event => {
-            document.addEventListener(event, resetActivityTimer, true);
-        });
-        
-        // Start monitoring
-        resetActivityTimer();
+        // Session timeout warning disabled on login page (no session timeout while on login page)
+        function showSessionWarning(minutesLeft) {}
+        function extendSession() {}
+        function resetActivityTimer() {}
 
         // Forgot Password Modal Functions
         function openForgotPasswordModal(event) {

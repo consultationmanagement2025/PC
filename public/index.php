@@ -129,15 +129,17 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
             }
 
             $user_id = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 0;
-            $user_email = isset($_SESSION['email']) ? strtolower(trim($_SESSION['email'])) : trim($_POST['guest_email'] ?? '');
-            $device_token = trim($_POST['device_token'] ?? ('DEV-' . md5($_SERVER['REMOTE_ADDR'] . ($_SERVER['HTTP_USER_AGENT'] ?? ''))));
+            if ($user_id <= 0) {
+                echo json_encode([
+                    'success' => false,
+                    'require_login' => true,
+                    'message' => 'Please sign in with your Google account to cast your vote on community surveys.'
+                ]);
+                exit;
+            }
 
             require_once __DIR__ . '/../DATABASE/consultations.php';
-            if ($user_id > 0) {
-                submitConsultationVote($survey_id, $user_id, $option_chosen);
-            } else {
-                submitConsultationGuestVote($survey_id, $device_token, $option_chosen, $user_email, null, null, 1);
-            }
+            submitConsultationVote($survey_id, $user_id, $option_chosen);
 
             $stats = getConsultationVoteStats($survey_id);
 
@@ -159,36 +161,37 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
     }
 
     if ($action === 'get_my_activity') {
-        $user_email = $_SESSION['email'] ?? '';
+        $user_email = trim($_SESSION['email'] ?? '');
         $user_id = (int)($_SESSION['user_id'] ?? 0);
+        $user_name = trim($_SESSION['fullname'] ?? $_SESSION['full_name'] ?? '');
 
         $feedback = [];
         $proposals = [];
 
-        if ($user_email !== '' || $user_id > 0) {
-            if ($user_email !== '') {
-                $fStmt = $conn->prepare("SELECT f.id, f.consultation_id, f.category, f.message, f.created_at, f.admin_response, f.responded_at, f.status, f.tracking_token, c.title as consultation_title FROM feedback f LEFT JOIN consultations c ON f.consultation_id = c.id WHERE f.guest_email = ? ORDER BY f.created_at DESC LIMIT 50");
-                if ($fStmt) {
-                    $fStmt->bind_param('s', $user_email);
-                    $fStmt->execute();
-                    $fRes = $fStmt->get_result();
-                    while ($fRow = $fRes->fetch_assoc()) {
-                        $feedback[] = $fRow;
-                    }
-                    $fStmt->close();
-                }
-            }
-
-            $userName = $_SESSION['fullname'] ?? $_SESSION['full_name'] ?? '';
-            $pStmt = $conn->prepare("SELECT id, title, description, category, status, created_at, tracking_number FROM consultations WHERE (created_by > 0 AND created_by = ?) OR user_name = ? ORDER BY created_at DESC LIMIT 20");
+        if ($user_email !== '' || $user_id > 0 || $user_name !== '') {
+            $pStmt = $conn->prepare("SELECT id, title, description, category, status, type, created_at, tracking_number, committee_assigned, assigned_to, ai_committee_brief FROM consultations WHERE (user_id > 0 AND user_id = ?) OR (user_email = ? AND user_email != '') OR (user_name = ? AND user_name != '') ORDER BY created_at DESC LIMIT 50");
             if ($pStmt) {
-                $pStmt->bind_param('is', $user_id, $userName);
+                $pStmt->bind_param('iss', $user_id, $user_email, $user_name);
                 $pStmt->execute();
                 $pRes = $pStmt->get_result();
                 while ($pRow = $pRes->fetch_assoc()) {
+                    if (empty($pRow['tracking_number'])) {
+                        $pRow['tracking_number'] = 'TRK-' . date('Y') . '-' . str_pad($pRow['id'], 6, '0', STR_PAD_LEFT);
+                    }
                     $proposals[] = $pRow;
                 }
                 $pStmt->close();
+            }
+
+            $fStmt = $conn->prepare("SELECT f.id, f.consultation_id, f.category, f.message, f.created_at, f.admin_response, f.responded_at, f.status, f.tracking_token, c.title as consultation_title FROM feedback f LEFT JOIN consultations c ON f.consultation_id = c.id WHERE (f.guest_email = ? AND f.guest_email != '') OR (f.guest_name = ? AND f.guest_name != '') ORDER BY f.created_at DESC LIMIT 50");
+            if ($fStmt) {
+                $fStmt->bind_param('ss', $user_email, $user_name);
+                $fStmt->execute();
+                $fRes = $fStmt->get_result();
+                while ($fRow = $fRes->fetch_assoc()) {
+                    $feedback[] = $fRow;
+                }
+                $fStmt->close();
             }
         }
 
@@ -208,22 +211,32 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
             exit;
         }
 
-        // Search proposal by tracking_number in consultations
-        $pStmt = $conn->prepare("SELECT id, title, category, description, status, created_at, tracking_number, user_name FROM consultations WHERE tracking_number = ? LIMIT 1");
-        $pStmt->bind_param('s', $code);
+        $codeUpper = strtoupper($code);
+        $numericId = 0;
+        if (preg_match('/(\d+)$/', $codeUpper, $matches)) {
+            $numericId = (int)$matches[1];
+        }
+
+        // Search proposal by exact tracking_number, numeric ID, or fuzzy matching
+        $pStmt = $conn->prepare("SELECT id, title, category, description, status, created_at, tracking_number, user_name FROM consultations WHERE UPPER(tracking_number) = ? OR (id = ? AND ? > 0) OR tracking_number LIKE ? LIMIT 1");
+        $likePattern = '%' . $codeUpper . '%';
+        $pStmt->bind_param('siis', $codeUpper, $numericId, $numericId, $likePattern);
         $pStmt->execute();
         $pRes = $pStmt->get_result();
         if ($pRes && $pRes->num_rows > 0) {
             $data = $pRes->fetch_assoc();
             $pStmt->close();
+            if (empty($data['tracking_number'])) {
+                $data['tracking_number'] = 'TRK-' . date('Y') . '-' . str_pad($data['id'], 6, '0', STR_PAD_LEFT);
+            }
             echo json_encode(['success' => true, 'type' => 'proposal', 'data' => $data]);
             exit;
         }
         $pStmt->close();
 
-        // Search feedback by tracking_token in feedback
-        $fStmt = $conn->prepare("SELECT f.id, f.guest_name, f.category, f.message, f.status, f.admin_response, f.responded_at, f.created_at, f.tracking_token, c.title as consultation_title FROM feedback f LEFT JOIN consultations c ON f.consultation_id = c.id WHERE f.tracking_token = ? LIMIT 1");
-        $fStmt->bind_param('s', $code);
+        // Search feedback by tracking_token
+        $fStmt = $conn->prepare("SELECT f.id, f.guest_name, f.category, f.message, f.status, f.admin_response, f.responded_at, f.created_at, f.tracking_token, c.title as consultation_title FROM feedback f LEFT JOIN consultations c ON f.consultation_id = c.id WHERE UPPER(f.tracking_token) = ? OR f.tracking_token LIKE ? LIMIT 1");
+        $fStmt->bind_param('ss', $codeUpper, $likePattern);
         $fStmt->execute();
         $fRes = $fStmt->get_result();
         if ($fRes && $fRes->num_rows > 0) {
@@ -235,43 +248,6 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
         $fStmt->close();
 
         echo json_encode(['success' => false, 'message' => 'No proposal or feedback found matching tracking code: ' . htmlspecialchars($code)]);
-        exit;
-    }
-
-    if ($action === 'get_my_activity') {
-        $email = trim($_SESSION['email'] ?? '');
-        $user_name = trim($_SESSION['fullname'] ?? $_SESSION['full_name'] ?? '');
-        
-        if (empty($email) && empty($user_name) && !isset($_SESSION['user_id'])) {
-            echo json_encode(['success' => false, 'message' => 'Please sign in to view your activity history.']);
-            exit;
-        }
-
-        $proposals = [];
-        if (!empty($email) || !empty($user_name)) {
-            $stmt = $conn->prepare("SELECT id, title, category, description, status, created_at, tracking_number FROM consultations WHERE (user_email = ? OR (user_name = ? AND user_name != '')) AND type = 'user' ORDER BY created_at DESC");
-            $stmt->bind_param('ss', $email, $user_name);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            while ($row = $res->fetch_assoc()) {
-                $proposals[] = $row;
-            }
-            $stmt->close();
-        }
-
-        $feedback_list = [];
-        if (!empty($email) || !empty($user_name)) {
-            $fStmt = $conn->prepare("SELECT f.id, f.message, f.category, f.status, f.created_at, f.tracking_token, f.admin_response, c.title as consultation_title FROM feedback f LEFT JOIN consultations c ON f.consultation_id = c.id WHERE (f.guest_email = ? OR (f.guest_name = ? AND f.guest_name != '')) ORDER BY f.created_at DESC");
-            $fStmt->bind_param('ss', $email, $user_name);
-            $fStmt->execute();
-            $fRes = $fStmt->get_result();
-            while ($fRow = $fRes->fetch_assoc()) {
-                $feedback_list[] = $fRow;
-            }
-            $fStmt->close();
-        }
-
-        echo json_encode(['success' => true, 'proposals' => $proposals, 'feedback' => $feedback_list]);
         exit;
     }
 
@@ -1491,6 +1467,10 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
         let pendingChangeVote = null;
 
         function castSurveyVote(surveyId, optionChosen, confirmChange = false) {
+            if (!window.__IS_LOGGED_IN__) {
+                showRequireLoginModal();
+                return;
+            }
 
             const formData = new FormData();
             formData.append('api_action', 'submit_survey_vote');
@@ -1506,6 +1486,10 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
             })
             .then(res => res.json())
             .then(data => {
+                if (data.require_login) {
+                    showRequireLoginModal();
+                    return;
+                }
                 if (data.success) {
                     closeChangeVoteModal();
 
@@ -1728,21 +1712,24 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
                     if (res.success) {
                         const d = res.data;
                         const statusColors = {
-                            'pending': 'bg-amber-100 text-amber-800',
-                            'active': 'bg-emerald-100 text-emerald-800',
-                            'reviewed': 'bg-blue-100 text-blue-800',
-                            'closed': 'bg-slate-100 text-slate-800'
+                            'pending': 'bg-amber-100 text-amber-800 border border-amber-200',
+                            'active': 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+                            'reviewed': 'bg-blue-100 text-blue-800 border border-blue-200',
+                            'closed': 'bg-slate-100 text-slate-800 border border-slate-200'
                         };
-                        const statusBadge = statusColors[d.status] || 'bg-slate-100 text-slate-800';
+                        const statusBadge = statusColors[d.status] || 'bg-slate-100 text-slate-800 border border-slate-200';
+                        const trackingCodeDisplay = d.tracking_number || d.tracking_token || code;
+                        const isProposal = (res.type === 'proposal' || d.tracking_number || d.title);
 
                         container.innerHTML = `
                             <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2">
                                 <div class="flex justify-between items-center">
-                                    <span class="font-mono font-bold text-valenzuela-blue">${escapeHtml(code)}</span>
+                                    <span class="font-mono font-bold text-valenzuela-blue">${escapeHtml(trackingCodeDisplay)}</span>
                                     <span class="px-2 py-0.5 rounded-full font-bold uppercase ${statusBadge}">${escapeHtml(d.status)}</span>
                                 </div>
                                 <h5 class="font-bold text-slate-900 text-sm">${escapeHtml(d.title || d.consultation_title || 'Citizen Submission')}</h5>
-                                <p class="text-slate-600">${escapeHtml(d.description || d.message || '')}</p>
+                                <p class="text-slate-600 leading-relaxed">${escapeHtml(d.description || d.message || '')}</p>
+                                ${isProposal ? renderCitizenConnectingDotsTracker(d.status, d.id, trackingCodeDisplay) : ''}
                                 ${d.admin_response ? `<div class="mt-3 p-3 bg-white rounded-xl border border-blue-200 text-valenzuela-blue"><strong>Legislative Response:</strong> ${escapeHtml(d.admin_response)}</div>` : '<p class="text-[11px] text-slate-400 italic mt-2">Under review by City Legislative Committee.</p>'}
                             </div>
                         `;
@@ -1755,15 +1742,28 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
         /* ==========================================================
            CITIZEN 6-STAGE REAL-TIME LEGISLATIVE TRACKER
            ========================================================== */
-        function renderCitizenConnectingDotsTracker(status, itemId, trackingCode) {
+        function renderCitizenConnectingDotsTracker(status, itemId, trackingCode, itemObj) {
             const st = String(status || '').toLowerCase().trim();
+            const typeStr = String(itemObj?.type || '').toLowerCase().trim();
+            const commAssigned = String(itemObj?.committee_assigned || '').trim();
+            const assignedTo = itemObj?.assigned_to;
+            const hasAiBrief = Boolean(itemObj?.ai_committee_brief && itemObj?.ai_committee_brief !== '');
+
             let currentStep = 1;
-            if (st === 'draft' || st === 'pending' || st === 'new' || st === 'submitted' || !st) currentStep = 1;
-            else if (st === 'active' || st === 'published_portal' || st === 'voting') currentStep = 2;
-            else if (st === 'closed' || st === 'closed_for_feedback' || st === 'ai_summary' || st === 'summarized' || st === 'synthesized') currentStep = 3;
-            else if (st === 'under_review' || st === 'reviewed' || st === 'viewed' || st === 'replied') currentStep = 4;
-            else if (st === 'scheduled' || st === 'committee' || st === 'forwarded' || st === 'approved' || st === 'ordinance') currentStep = 5;
-            else if (st === 'completed' || st === 'officialized' || st === 'archived' || st === 'enacted') currentStep = 6;
+
+            if (['completed', 'officialized', 'archived', 'enacted', 'resolved', 'passed'].includes(st)) {
+                currentStep = 6;
+            } else if (['scheduled', 'committee', 'forwarded', 'approved', 'ordinance', 'endorsed', 'committee_assigned', 'in_committee'].includes(st) || commAssigned !== '') {
+                currentStep = 5;
+            } else if (['under_review', 'reviewed', 'viewed', 'replied', 'assigned', 'rp_review', 'rp_assigned', 'forwarded_rp'].includes(st) || (assignedTo && Number(assignedTo) > 0)) {
+                currentStep = 4;
+            } else if (['closed', 'closed_for_feedback', 'ai_summary', 'summarized', 'synthesized', 'synthesizing', 'ai_synthesis'].includes(st) || hasAiBrief) {
+                currentStep = 3;
+            } else if (['active', 'open', 'published', 'published_portal', 'voting', 'official', 'live'].includes(st) || typeStr === 'official') {
+                currentStep = 2;
+            } else {
+                currentStep = 1;
+            }
 
             const steps = [
                 { num: 1, name: 'Received', desc: 'Public consultation intake logged and registered into PCMS repository', statusVal: 'pending' },
@@ -1920,7 +1920,7 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
                                             <span>Category: <strong class="text-slate-700">${escapeHtml(p.category || 'General')}</strong></span>
                                             <span class="text-[10px] text-slate-400">${escapeHtml(p.created_at || '')}</span>
                                         </div>
-                                        ${renderCitizenConnectingDotsTracker(p.status, p.id, p.tracking_number)}
+                                        ${renderCitizenConnectingDotsTracker(p.status, p.id, p.tracking_number, p)}
                                     </div>
                                 `).join('');
                                 html += '</div>';

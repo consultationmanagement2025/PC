@@ -490,6 +490,14 @@ try {
             $stmt->bind_param('si', $status, $id);
             $ok = $stmt->execute();
             $stmt->close();
+
+            if ($ok && ($status === 'closed' || $status === 'archived')) {
+                require_once __DIR__ . '/../DATABASE/documents.php';
+                if (function_exists('autoProcessClosedSurvey')) {
+                    autoProcessClosedSurvey($conn, $id, 0);
+                }
+            }
+
             echo json_encode(['success' => (bool)$ok]);
             break;
 

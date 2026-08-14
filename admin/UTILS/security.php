@@ -303,7 +303,16 @@ function validateFileUpload($file, $max_size = 5242880, $allowed_extensions = ['
  * @param int $timeout_seconds Default 2 minutes
  */
 if (!function_exists('checkSessionTimeout')) {
-function checkSessionTimeout($timeout_seconds = 120) {
+function checkSessionTimeout($timeout_seconds = 1800) {
+    // Disable session timeout on login page
+    $script = strtolower(basename($_SERVER['PHP_SELF'] ?? ''));
+    if ($script === 'login.php' || strpos($_SERVER['REQUEST_URI'] ?? '', 'login.php') !== false) {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION['last_activity'] = time();
+        }
+        return true;
+    }
+
     if (isset($_SESSION['last_activity'])) {
         if (time() - $_SESSION['last_activity'] > $timeout_seconds) {
             session_unset();

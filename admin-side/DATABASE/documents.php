@@ -36,6 +36,9 @@ function initializeAdminDocumentsTable() {
 function getDocuments($limit = 200, $offset = 0) {
     global $conn;
     initializeAdminDocumentsTable();
+    if (function_exists('autoSyncClosedSurveysToDocuments')) {
+        autoSyncClosedSurveysToDocuments($conn);
+    }
 
     $stmt = $conn->prepare("SELECT id, reference, title, type, status, document_date, description, tags, uploaded_by, file_path, file_size, views, downloads, created_at, updated_at FROM admin_documents ORDER BY created_at DESC LIMIT ? OFFSET ?");
     if (!$stmt) return [];

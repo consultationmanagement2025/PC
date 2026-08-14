@@ -6,8 +6,8 @@
  * 2. Only AFTER AI analysis is completed AND Admin has forwarded/assigned to Resource Person
  */
 session_start();
-require_once '../db.php';
-require_once '../UTILS/session_check.php';
+require_once 'db.php';
+require_once 'UTILS/session_check.php';
 
 // Check if user is logged in and is a resource person or admin/staff
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
@@ -266,7 +266,7 @@ unset($c);
     <title>Resource Person Workspace - Valenzuela PCMS</title>
     <link rel="icon" type="image/png" href="images/logo.webp">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="../ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css">
     <!-- Google Fonts: Plus Jakarta Sans & Inter (Admin Side Font Family) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -291,7 +291,7 @@ unset($c);
             </button>
             <div class="flex items-center gap-2">
                 <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center p-0.5 shadow">
-                    <img src="../images/logo.webp" alt="Logo" class="w-full h-full object-contain" onerror="this.src='ASSETS/images/logo.png'">
+                    <img src="images/logo.webp" alt="Logo" class="w-full h-full object-contain" onerror="this.src='ASSETS/images/logo.png'">
                 </div>
                 <span class="font-bold text-sm">PCMS Expert Portal</span>
             </div>
@@ -303,7 +303,7 @@ unset($c);
                     <span class="absolute top-0 right-0 w-4 h-4 bg-amber-400 text-slate-950 font-bold text-[9px] rounded-full flex items-center justify-center"><?php echo $unread_notif_count; ?></span>
                 <?php endif; ?>
             </button>
-            <a href="../logout.php" class="text-xs bg-red-950/60 px-3 py-1 rounded-lg border border-red-700/50 flex items-center gap-1">
+            <a href="logout.php" class="text-xs bg-red-950/60 px-3 py-1 rounded-lg border border-red-700/50 flex items-center gap-1">
                 <i class="bi bi-box-arrow-right"></i> Exit
             </a>
         </div>
@@ -314,7 +314,7 @@ unset($c);
         <!-- Logo Header Section -->
         <div class="p-6 border-b border-red-700/60 flex items-center gap-3">
             <div class="w-14 h-14 bg-white rounded-full flex items-center justify-center p-1 shadow-md shrink-0">
-                <img src="../images/logo.webp" alt="Valenzuela Logo" class="w-full h-full object-contain" onerror="this.src='ASSETS/images/logo.png'">
+                <img src="images/logo.webp" alt="Valenzuela Logo" class="w-full h-full object-contain" onerror="this.src='ASSETS/images/logo.png'">
             </div>
             <div>
                 <h1 class="text-lg font-bold leading-tight">PCMS</h1>
@@ -373,7 +373,7 @@ unset($c);
 
         <!-- Sidebar Footer Sign Out -->
         <div class="p-4 border-t border-red-700/60">
-            <a href="../logout.php" class="w-full bg-red-950 hover:bg-black text-white py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 border border-red-700/50 shadow-sm no-underline">
+            <a href="logout.php" class="w-full bg-red-950 hover:bg-black text-white py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 border border-red-700/50 shadow-sm no-underline">
                 <i class="bi bi-box-arrow-right text-sm"></i> Sign Out Portal
             </a>
         </div>
@@ -391,7 +391,7 @@ unset($c);
                 <div>
                     <h2 class="text-lg font-bold text-slate-800 leading-tight">Resource Person Workspace</h2>
                     <div class="flex items-center gap-2 text-xs text-slate-500">
-                        <a href="../index.php" class="hover:text-red-600">Home</a>
+                        <a href="index.php" class="hover:text-red-600">Home</a>
                         <i class="bi bi-chevron-right text-[10px]"></i>
                         <span class="text-slate-800 font-medium">Expertise-Filtered Advisory Portal</span>
                     </div>
@@ -626,63 +626,60 @@ unset($c);
         </main>
     </div>
 
-        <!-- Admin-Style Notification Drawer -->
-    <div id="notif-drawer" class="fixed inset-y-0 right-0 w-full sm:w-96 bg-white shadow-2xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-200">
-        <!-- Header Banner with Admin Gradient -->
-        <div class="bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white p-5 flex items-center justify-between shadow-md">
+    <!-- Admin-Style Notification Popover Dropdown -->
+    <div id="notif-drawer" class="hidden fixed top-16 right-4 sm:right-8 w-80 sm:w-[380px] bg-white rounded-2xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden transition-all duration-200" style="max-height: 480px; z-index: 99999 !important;">
+        <!-- Header (Clean White Header matching Admin Dropdown in Pic 1) -->
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
+            <h3 class="font-extrabold text-gray-900 text-sm md:text-base">Notifications</h3>
             <div class="flex items-center gap-3">
-                <div class="w-9 h-9 rounded-xl bg-white/10 text-amber-300 flex items-center justify-center text-lg shadow-inner border border-white/20">
-                    <i class="bi bi-bell-fill"></i>
-                </div>
-                <div>
-                    <h3 class="font-black text-sm tracking-wide">Notifications & Alerts</h3>
-                    <p class="text-[11px] text-white/70">Expert Advisory Updates</p>
-                </div>
+                <button type="button" onclick="markAllNotificationsRead()" class="text-xs font-bold text-red-600 hover:text-red-700 transition cursor-pointer">Mark all read</button>
+                <button type="button" onclick="toggleNotificationDrawer()" class="text-gray-400 hover:text-gray-600 text-xl leading-none cursor-pointer ml-1" title="Close">&times;</button>
             </div>
-            <button onclick="toggleNotificationDrawer()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white text-base transition flex items-center justify-center">&times;</button>
         </div>
 
-        <!-- Action Bar -->
-        <div class="p-3.5 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs">
-            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                <i class="bi bi-bell text-amber-600"></i> <?php echo $unread_notif_count; ?> Unread Alert(s)
-            </span>
-            <button onclick="markAllNotificationsRead()" class="text-red-700 hover:text-red-900 font-extrabold text-[11px] flex items-center gap-1 hover:underline transition">
-                <i class="bi bi-check2-all"></i> Mark all read
-            </button>
-        </div>
-
-        <!-- Notifications Body -->
-        <div class="flex-1 overflow-y-auto p-3 space-y-2.5">
+        <!-- Notifications List (Matching Pic 1 Identically) -->
+        <div class="overflow-y-auto max-h-[400px] divide-y divide-gray-100">
             <?php if (empty($notifications_list)): ?>
-                <div class="p-10 text-center text-slate-400 space-y-3 my-auto">
-                    <div class="w-14 h-14 rounded-2xl bg-slate-100 text-slate-300 mx-auto flex items-center justify-center text-2xl border border-slate-200">
-                        <i class="bi bi-bell-slash"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs font-bold text-slate-600">No Notifications Yet</p>
-                        <p class="text-[11px] text-slate-400 mt-0.5">Dispatched consultations and admin updates will appear here.</p>
-                    </div>
-                </div>
+                <div class="p-8 text-center text-gray-400 text-xs font-medium">No notifications yet</div>
             <?php else: ?>
                 <?php foreach ($notifications_list as $n): ?>
                     <?php 
                         $type = strtolower($n['type'] ?? 'info');
-                        $badgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
-                        if ($type === 'assignment') $badgeClass = 'bg-red-100 text-red-800 border-red-200';
-                        elseif ($type === 'approval') $badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
-                        elseif ($type === 'rejection') $badgeClass = 'bg-rose-100 text-rose-800 border-rose-200';
+                        $iconBg = 'bg-amber-50 border-amber-100';
+                        $iconText = 'text-amber-600';
+                        $iconClass = 'bi-calendar-check';
+
+                        if (strpos($type, 'assignment') !== false) {
+                            $iconBg = 'bg-amber-50 border-amber-100';
+                            $iconText = 'text-amber-600';
+                            $iconClass = 'bi-calendar-check';
+                        } elseif (strpos($type, 'annotation') !== false || strpos($type, 'inline') !== false) {
+                            $iconBg = 'bg-amber-50 border-amber-100';
+                            $iconText = 'text-amber-600';
+                            $iconClass = 'bi-calendar-check';
+                        } elseif (strpos($type, 'info') !== false || strpos($type, 'response') !== false) {
+                            $iconBg = 'bg-amber-50 border-amber-100';
+                            $iconText = 'text-amber-600';
+                            $iconClass = 'bi-calendar-check';
+                        } elseif (strpos($type, 'feedback') !== false || strpos($type, 'approval') !== false) {
+                            $iconBg = 'bg-amber-50 border-amber-100';
+                            $iconText = 'text-amber-600';
+                            $iconClass = 'bi-calendar-check';
+                        }
                     ?>
                     <div onclick="openNotificationDetailModal('<?php echo htmlspecialchars(addslashes($n['title'])); ?>', '<?php echo htmlspecialchars(addslashes($n['message'])); ?>', '<?php echo strtoupper($n['type']); ?>', '<?php echo date('M j, Y g:i A', strtotime($n['created_at'])); ?>')"
-                         class="p-4 rounded-2xl border transition-all duration-200 cursor-pointer space-y-2 shadow-2xs hover:shadow-md <?php echo !$n['is_read'] ? 'bg-amber-50/70 border-amber-300/80 hover:bg-amber-100/70' : 'bg-white border-slate-200/80 hover:bg-slate-50'; ?>">
-                        <div class="flex items-center justify-between">
-                            <span class="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border <?php echo $badgeClass; ?>">
-                                <?php echo htmlspecialchars($n['type']); ?>
-                            </span>
-                            <span class="text-[10px] text-slate-400 font-medium"><i class="bi bi-clock mr-1"></i><?php echo date('M j, g:i a', strtotime($n['created_at'])); ?></span>
+                         class="p-4 transition hover:bg-gray-50/80 flex items-start gap-3.5 relative cursor-pointer <?php echo !$n['is_read'] ? 'bg-white font-medium' : 'bg-gray-50/40 opacity-75'; ?>">
+                        <div class="w-10 h-10 rounded-2xl <?php echo $iconBg; ?> <?php echo $iconText; ?> border flex items-center justify-center shrink-0 mt-0.5">
+                            <i class="bi <?php echo $iconClass; ?> text-base"></i>
                         </div>
-                        <h4 class="font-bold text-xs text-slate-900 leading-snug"><?php echo htmlspecialchars($n['title']); ?></h4>
-                        <p class="text-[11px] text-slate-600 line-clamp-2 leading-relaxed"><?php echo htmlspecialchars($n['message']); ?></p>
+                        <div class="flex-1 min-w-0 pr-3">
+                            <div class="font-bold text-gray-900 text-xs leading-snug"><?php echo htmlspecialchars($n['title']); ?></div>
+                            <div class="text-xs text-gray-500 mt-0.5 leading-relaxed font-normal"><?php echo htmlspecialchars($n['message']); ?></div>
+                            <div class="text-[11px] text-gray-400 mt-1 font-medium"><?php echo date('n/j/Y, g:i:s A', strtotime($n['created_at'])); ?></div>
+                        </div>
+                        <?php if (!$n['is_read']): ?>
+                            <span class="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0 mt-1.5 ring-4 ring-red-50" title="Unread"></span>
+                        <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
             <?php endif; ?>
@@ -887,7 +884,7 @@ unset($c);
                 </div>
             </div>
 
-            <form action="../API/request_additional_info.php" method="POST" class="space-y-4">
+            <form action="API/request_additional_info.php" method="POST" class="space-y-4">
                 <input type="hidden" name="consultation_id" id="info-consultation-id">
 
                 <div class="grid grid-cols-2 gap-3">
@@ -966,11 +963,11 @@ unset($c);
 
     function toggleNotificationDrawer() {
         var dr = document.getElementById('notif-drawer');
-        if (dr) dr.classList.toggle('translate-x-full');
+        if (dr) dr.classList.toggle('hidden');
     }
 
     function markAllNotificationsRead() {
-        fetch('../API/resource_person_api.php?action=mark_notif_read', { method: 'POST' })
+        fetch('API/resource_person_api.php?action=mark_notif_read', { method: 'POST' })
         .then(r => r.json())
         .then(data => {
             if (data.success) {
@@ -1014,7 +1011,7 @@ unset($c);
         document.getElementById('inline-modal-version').textContent = version || 'v1.0';
 
         // Load consultation base description & existing expert notes
-        fetch(`../API/resource_person_api.php?action=get_consultation_details&consultation_id=${id}`)
+        fetch(`API/resource_person_api.php?action=get_consultation_details&consultation_id=${id}`)
         .then(r => r.json())
         .then(data => {
             if (data.success && data.consultation) {
@@ -1057,7 +1054,7 @@ unset($c);
         btn.disabled = true;
         btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin"></i> Saving to Master Document...';
 
-        fetch('../API/save_inline_expert_input.php', {
+        fetch('API/save_inline_expert_input.php', {
             method: 'POST',
             body: formData
         })
@@ -1083,7 +1080,7 @@ unset($c);
         const tbody = document.getElementById('audit-trail-table-body');
         tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-400"><i class="bi bi-arrow-repeat animate-spin block text-lg mb-1"></i> Loading document audit log...</td></tr>';
 
-        fetch(`../API/resource_person_api.php?action=get_consultation_details&consultation_id=${id}`)
+        fetch(`API/resource_person_api.php?action=get_consultation_details&consultation_id=${id}`)
         .then(r => r.json())
         .then(data => {
             if (data.success && data.audit_trail && data.audit_trail.length > 0) {
@@ -1139,6 +1136,46 @@ unset($c);
             clock.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
     }, 1000);
+
+    // Session Timeout Idle Modal Manager
+    (function() {
+        function showSessionExpiredModal() {
+            if (document.getElementById('pcms-session-timeout-modal')) return;
+            const modal = document.createElement('div');
+            modal.id = 'pcms-session-timeout-modal';
+            modal.className = 'fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-50 p-4';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center space-y-4 border border-amber-200 animate-in fade-in zoom-in duration-200">
+                    <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-600 mx-auto flex items-center justify-center text-2xl shadow-inner">
+                        <i class="bi bi-clock-history"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-extrabold text-slate-900">Session Expired</h3>
+                        <p class="text-xs text-slate-500 mt-1">Your session has timed out due to inactivity.</p>
+                    </div>
+                    <div class="pt-2">
+                        <button onclick="window.location.href='login.php'" class="w-full px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2">
+                            <i class="bi bi-box-arrow-in-right text-sm"></i>
+                            <span>Back to Login Page</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        var lastAct = Date.now();
+        var resetAct = function() { lastAct = Date.now(); };
+        ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(function(evt) {
+            window.addEventListener(evt, resetAct, { passive: true });
+        });
+        setInterval(function() {
+            if (Date.now() - lastAct >= 1800000) { showSessionExpiredModal(); }
+        }, 15000);
+
+        var urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('timeout') === '1') { showSessionExpiredModal(); }
+    })();
     </script>
 </body>
 </html>

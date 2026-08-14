@@ -3302,13 +3302,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
                             <!-- User Profile Dropdown -->
-
-
-
                             <div class="relative">
-
-
-
                                 <button id="profile-btn" type="button" class="flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-lg transition" aria-haspopup="true" style="cursor:pointer; position:relative; z-index:10;">
 
 

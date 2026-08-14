@@ -624,20 +624,6 @@ function syncPhmsCollectionToDatabase(array $hearings) {
                 $stmt->execute();
             }
         }
-        // Add system notification for received PHMS hearing feedback records
-        require_once __DIR__ . '/notifications.php';
-        foreach ($hearings as $h) {
-            $hearingId = (int)($h['hearing_id'] ?? $h['id'] ?? 0);
-            if ($hearingId <= 0) continue;
-            $title = $conn->real_escape_string($h['hearing_title'] ?? $h['title'] ?? $h['full_name'] ?? ('Public Hearing #' . $hearingId));
-            $fbCount = (int)($h['feedback_count'] ?? 0);
-            $msg = "🔗 PHMS Feedback Received: Ingested {$fbCount} citizen hearing feedback response(s) for \"{$title}\".";
-            
-            $chkRes = $conn->query("SELECT id FROM notifications WHERE message LIKE '%" . substr($title, 0, 30) . "%' AND created_at >= CURDATE() LIMIT 1");
-            if (!$chkRes || $chkRes->num_rows === 0) {
-                createNotification(0, $msg, 'phms_integration');
-            }
-        }
 
         $conn->commit();
         return true;
@@ -773,18 +759,7 @@ function approvePhmsIngestion($queue_id) {
     $stmt->bind_param("ii", $queue_id, $queue_id);
     $ok = $stmt->execute();
     $stmt->close();
-    if ($ok) {
-        try {
-            if (file_exists(__DIR__ . '/notifications.php')) {
-                require_once __DIR__ . '/notifications.php';
-                if (function_exists('createNotification')) {
-                    createNotification(0, "✅ Ingestion Package Approved: PHMS Transmittal #" . $queue_id . " approved and merged into PCMS.", "phms_approval");
-                }
-            }
-        } catch (Throwable $e) {
-            error_log("Notification creation warning: " . $e->getMessage());
-        }
-    }
+    // PHMS Ingestion package approved and merged into PCMS
     return (bool)$ok;
 }
 
