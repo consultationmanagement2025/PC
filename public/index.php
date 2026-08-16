@@ -589,7 +589,7 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
                         <i class="fa-solid fa-bullhorn text-amber-500"></i> Updates
                     </a>
                     <?php endif; ?>
-                    <a href="#submit-consultation" class="hover:text-valenzuela-blue transition-colors py-2 flex items-center gap-1.5">
+                    <a href="#submit-consultation" onclick="openConcernModal(); return false;" class="hover:text-valenzuela-blue transition-colors py-2 flex items-center gap-1.5">
                         <i class="fa-solid fa-paper-plane text-emerald-600"></i> Submit Concern
                     </a>
                     <button onclick="showTrackModal()" class="hover:text-valenzuela-blue transition-colors py-2 flex items-center gap-1.5 text-slate-700 font-semibold bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
@@ -655,7 +655,7 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
             <a href="#surveys" class="block font-medium text-slate-700 hover:text-valenzuela-blue py-1 flex items-center gap-2">
                 <i class="fa-solid fa-square-poll-horizontal text-valenzuela-red w-5"></i> Surveys
             </a>
-            <a href="#submit-consultation" class="block font-medium text-slate-700 hover:text-valenzuela-blue py-1 flex items-center gap-2">
+            <a href="#submit-consultation" onclick="openConcernModal(); return false;" class="block font-medium text-slate-700 hover:text-valenzuela-blue py-1 flex items-center gap-2">
                 <i class="fa-solid fa-paper-plane text-emerald-600 w-5"></i> Submit Concern
             </a>
             <button onclick="showTrackModal()" class="w-full text-left font-medium text-slate-700 hover:text-valenzuela-blue py-1 flex items-center gap-2">
@@ -986,156 +986,150 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
             </div>
         </section>
 
-        <!-- Submit Citizen Proposal / Concern Section -->
-        <section id="submit-consultation" class="scroll-mt-24 pt-6 border-t border-slate-200">
-            <div class="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl relative text-white">
-                <div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(#ffffff 1px, transparent 1px); background-size: 24px 24px;"></div>
+    <!-- Floating Feedback & Concern Widget (Bottom Left) -->
+    <div class="fixed bottom-6 left-6 z-40 flex flex-col items-start select-none">
+        <!-- Floating Tooltip / Speech Bubble Callout -->
+        <div id="concern-floating-tooltip" class="mb-3 bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-2xl shadow-2xl border border-slate-700/80 flex items-center gap-2 animate-bounce">
+            <span class="w-2 h-2 rounded-full bg-valenzuela-red animate-ping shrink-0"></span>
+            <span>Submit your concern here! 💬</span>
+            <button onclick="document.getElementById('concern-floating-tooltip').classList.add('hidden')" class="text-slate-400 hover:text-white ml-1 text-xs p-0.5" title="Dismiss">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-5 relative z-10">
-                    
-                    <!-- Left Sidebar Info -->
-                    <div class="lg:col-span-2 p-8 lg:p-12 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-800">
-                        <div>
-                            <span class="inline-block bg-valenzuela-red text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-4">
-                                Citizen Legislative Proposal
-                            </span>
-                            <h3 class="text-3xl font-extrabold mb-4 leading-tight">
-                                Submit a Concern or Ordinance Proposal
-                            </h3>
-                            <p class="text-slate-300 text-sm leading-relaxed mb-8">
-                                Do you have a suggestion for local policy or a community issue in your Barangay? Submit your proposal directly to the Legislative Office for review and public consultation.
-                            </p>
+        <!-- Floating Action Button -->
+        <button onclick="openConcernModal()" class="group bg-gradient-to-r from-valenzuela-red to-red-700 hover:from-red-700 hover:to-valenzuela-red text-white shadow-2xl rounded-full px-5 py-3.5 flex items-center gap-3 font-extrabold text-xs sm:text-sm transition-all hover:scale-105 border border-white/20 active:scale-95">
+            <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white shrink-0 group-hover:rotate-12 transition-transform">
+                <i class="fa-solid fa-paper-plane text-sm"></i>
+            </div>
+            <span class="tracking-wide">Submit Concern</span>
+        </button>
+    </div>
 
-                            <ul class="space-y-4">
-                                <li class="flex items-start gap-3">
-                                    <div class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
-                                        <i class="fa-solid fa-check text-xs"></i>
-                                    </div>
-                                    <div>
-                                        <strong class="block text-sm text-white">Instant Tracking Code</strong>
-                                        <span class="text-xs text-slate-400">Receive a unique tracking ID (TRK-2026-XXXXX) to track legislative progress.</span>
-                                    </div>
-                                </li>
-                                <li class="flex items-start gap-3">
-                                    <div class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
-                                        <i class="fa-solid fa-shield-halved text-xs"></i>
-                                    </div>
-                                    <div>
-                                        <strong class="block text-sm text-white">Direct Legislative Review</strong>
-                                        <span class="text-xs text-slate-400">Proposals are evaluated by City Council committees for potential ordinance drafting.</span>
-                                    </div>
-                                </li>
-                            </ul>
-                        </div>
-
-                        <div class="mt-8 pt-6 border-t border-slate-800 text-xs text-slate-400 flex items-center gap-2">
-                            <i class="fa-solid fa-circle-info text-valenzuela-blue"></i> Need help? Use our AI Legislative Chatbot in the bottom right!
-                        </div>
-                    </div>
-
-                    <!-- Proposal Form -->
-                    <div class="lg:col-span-3 bg-white p-8 lg:p-12 text-slate-800">
-                        <?php if ($submission_success): ?>
-                            <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-6 rounded-2xl mb-6">
-                                <div class="flex items-start gap-3">
-                                    <i class="fa-solid fa-circle-check text-emerald-600 text-2xl mt-0.5"></i>
-                                    <div>
-                                        <h4 class="text-base font-bold">Proposal Submitted Successfully!</h4>
-                                        <p class="text-sm mt-1 text-emerald-700">Thank you for contributing to Valenzuela City governance. Your tracking code is:</p>
-                                        <div class="mt-3 inline-flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-emerald-300 shadow-sm">
-                                            <span class="font-mono text-base font-bold text-valenzuela-blue"><?php echo htmlspecialchars($generated_tracking_number); ?></span>
-                                            <button onclick="copyToClipboard('<?php echo htmlspecialchars($generated_tracking_number); ?>')" class="text-xs text-slate-500 hover:text-valenzuela-blue font-semibold">
-                                                <i class="fa-regular fa-copy"></i> Copy
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-
-                        <?php if ($submission_error): ?>
-                            <div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl mb-6 text-sm flex items-center gap-2">
-                                <i class="fa-solid fa-circle-exclamation text-lg"></i>
-                                <span><?php echo htmlspecialchars($submission_error); ?></span>
-                            </div>
-                        <?php endif; ?>
-
-                        <form method="POST" enctype="multipart/form-data" class="space-y-5">
-                            <input type="hidden" name="submit_consultation" value="1">
-
-                            <div>
-                                <label for="title" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                                    Proposal Title / Concern Subject <span class="text-red-500">*</span>
-                                </label>
-                                <input type="text" id="title" name="title" required placeholder="e.g. Solar Street Lighting Ordinance for Public Parks" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-valenzuela-blue focus:border-valenzuela-blue outline-none text-sm transition-all">
-                            </div>
-
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label for="category" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                                        Category <span class="text-red-500">*</span>
-                                    </label>
-                                    <select id="category" name="category" required class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-valenzuela-blue focus:border-valenzuela-blue outline-none text-sm transition-all bg-white">
-                                        <option value="" disabled selected>Select category</option>
-                                        <option value="infrastructure">Infrastructure & Public Works</option>
-                                        <option value="health">Health & Sanitation</option>
-                                        <option value="environment">Environment & Waste Management</option>
-                                        <option value="education">Education & Youth</option>
-                                        <option value="transportation">Traffic & Public Transport</option>
-                                        <option value="governance">Governance & Transparency</option>
-                                        <option value="other">Other Community Issue</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label for="target_area" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                                        Target Barangay / Area
-                                    </label>
-                                    <input type="text" id="target_area" name="target_area" placeholder="e.g. Brgy. Malinta, Karuhatan, Citywide" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-valenzuela-blue focus:border-valenzuela-blue outline-none text-sm transition-all">
-                                </div>
-                            </div>
-
-                            <div>
-                                <label for="description" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                                    Detailed Description & Proposed Solution <span class="text-red-500">*</span>
-                                </label>
-                                <textarea id="description" name="description" rows="4" required placeholder="Explain the community concern, why legislative action is needed, and how it will benefit Valenzuelanos..." class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-valenzuela-blue focus:border-valenzuela-blue outline-none text-sm transition-all resize-none"></textarea>
-                            </div>
-
-                            <!-- User Info Fields if Guest -->
-                            <?php if (!$is_logged_in): ?>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                <div>
-                                    <label class="block text-xs font-bold text-slate-700 mb-1">Your Full Name</label>
-                                    <input type="text" name="guest_name" required placeholder="Juan Dela Cruz" class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-slate-700 mb-1">Your Email Address</label>
-                                    <input type="email" name="guest_email" required placeholder="juan@example.com" class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm">
-                                </div>
-                            </div>
-                            <?php endif; ?>
-
-                            <div>
-                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                                    Attach Documents / Supporting Evidence (Optional)
-                                </label>
-                                <div class="border-2 border-dashed border-slate-300 rounded-xl p-5 text-center hover:bg-slate-50 transition-colors cursor-pointer" onclick="document.getElementById('file-upload-input').click()">
-                                    <i class="fa-solid fa-cloud-arrow-up text-3xl text-slate-400 mb-2"></i>
-                                    <p class="text-xs text-slate-600 font-semibold">Click to upload files or drag & drop</p>
-                                    <p class="text-[11px] text-slate-400 mt-1">PDF, DOCX, PNG, JPG up to 10MB</p>
-                                    <input type="file" id="file-upload-input" name="file_upload" class="hidden" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg">
-                                </div>
-                                <div id="selected-file-name" class="text-xs text-emerald-600 font-semibold mt-2 hidden"></div>
-                            </div>
-
-                            <button type="submit" class="w-full bg-valenzuela-red hover:bg-red-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-paper-plane"></i> Submit Legislative Proposal
-                            </button>
-                        </form>
-                    </div>
+    <!-- Submit Concern / Ordinance Proposal Floating Modal -->
+    <div id="submit-concern-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto hidden">
+        <div id="submit-consultation" class="bg-white rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl border border-slate-200 relative max-h-[92vh] flex flex-col animate-fadeIn">
+            
+            <!-- Modal Top Header -->
+            <div class="bg-slate-900 p-6 sm:p-8 text-white relative border-b border-slate-800 shrink-0">
+                <button onclick="closeConcernModal()" class="absolute top-5 right-5 w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+                <div class="max-w-2xl">
+                    <span class="inline-block bg-valenzuela-red text-white text-[10px] sm:text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2.5">
+                        Citizen Legislative Proposal
+                    </span>
+                    <h3 class="text-2xl sm:text-3xl font-extrabold leading-tight">
+                        Submit a Concern or Ordinance Proposal
+                    </h3>
+                    <p class="text-slate-300 text-xs sm:text-sm leading-relaxed mt-2">
+                        Do you have a suggestion for local policy or a community issue in your Barangay? Submit your proposal directly to the Legislative Office for review and public consultation.
+                    </p>
                 </div>
             </div>
-        </section>
+
+            <!-- Modal Scrollable Content Form -->
+            <div class="p-6 sm:p-8 overflow-y-auto flex-grow text-slate-800 bg-slate-50/50">
+                <?php if (!empty($submission_success)): ?>
+                    <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-6 rounded-2xl mb-6">
+                        <div class="flex items-start gap-3">
+                            <i class="fa-solid fa-circle-check text-emerald-600 text-2xl mt-0.5"></i>
+                            <div>
+                                <h4 class="text-base font-bold">Proposal Submitted Successfully!</h4>
+                                <p class="text-sm mt-1 text-emerald-700">Thank you for contributing to Valenzuela City governance. Your tracking code is:</p>
+                                <div class="mt-3 inline-flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-emerald-300 shadow-sm">
+                                    <span class="font-mono text-base font-bold text-valenzuela-blue"><?php echo htmlspecialchars($generated_tracking_number); ?></span>
+                                    <button onclick="copyToClipboard('<?php echo htmlspecialchars($generated_tracking_number); ?>')" class="text-xs text-slate-500 hover:text-valenzuela-blue font-semibold">
+                                        <i class="fa-regular fa-copy"></i> Copy
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <?php if (!empty($submission_error)): ?>
+                    <div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl mb-6 text-sm flex items-center gap-2">
+                        <i class="fa-solid fa-circle-exclamation text-lg"></i>
+                        <span><?php echo htmlspecialchars($submission_error); ?></span>
+                    </div>
+                <?php endif; ?>
+
+                <form method="POST" enctype="multipart/form-data" class="space-y-5 bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-xs">
+                    <input type="hidden" name="submit_consultation" value="1">
+
+                    <div>
+                        <label for="title" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                            Proposal Title / Concern Subject <span class="text-red-500">*</span>
+                        </label>
+                        <input type="text" id="title" name="title" required placeholder="e.g. Solar Street Lighting Ordinance for Public Parks" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-valenzuela-blue focus:border-valenzuela-blue outline-none text-sm transition-all bg-white">
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="category" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                                Category <span class="text-red-500">*</span>
+                            </label>
+                            <select id="category" name="category" required class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-valenzuela-blue focus:border-valenzuela-blue outline-none text-sm transition-all bg-white">
+                                <option value="" disabled selected>Select category</option>
+                                <option value="infrastructure">Infrastructure & Public Works</option>
+                                <option value="health">Health & Sanitation</option>
+                                <option value="environment">Environment & Waste Management</option>
+                                <option value="education">Education & Youth</option>
+                                <option value="transportation">Traffic & Public Transport</option>
+                                <option value="governance">Governance & Transparency</option>
+                                <option value="other">Other Community Issue</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="target_area" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                                Target Barangay / Area
+                            </label>
+                            <input type="text" id="target_area" name="target_area" placeholder="e.g. Brgy. Malinta, Karuhatan, Citywide" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-valenzuela-blue focus:border-valenzuela-blue outline-none text-sm transition-all bg-white">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="description" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                            Detailed Description & Proposed Solution <span class="text-red-500">*</span>
+                        </label>
+                        <textarea id="description" name="description" rows="4" required placeholder="Explain the community concern, why legislative action is needed, and how it will benefit Valenzuelanos..." class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-valenzuela-blue focus:border-valenzuela-blue outline-none text-sm transition-all resize-none bg-white"></textarea>
+                    </div>
+
+                    <!-- User Info Fields if Guest -->
+                    <?php if (!$is_logged_in): ?>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Your Full Name</label>
+                            <input type="text" name="guest_name" required placeholder="Juan Dela Cruz" class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Your Email Address</label>
+                            <input type="email" name="guest_email" required placeholder="juan@example.com" class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm bg-white">
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                            Attach Documents / Supporting Evidence (Optional)
+                        </label>
+                        <div class="border-2 border-dashed border-slate-300 rounded-xl p-5 text-center hover:bg-slate-50 transition-colors cursor-pointer bg-white" onclick="document.getElementById('file-upload-input').click()">
+                            <i class="fa-solid fa-cloud-arrow-up text-3xl text-slate-400 mb-2"></i>
+                            <p class="text-xs text-slate-600 font-semibold">Click to upload files or drag & drop</p>
+                            <p class="text-[11px] text-slate-400 mt-1">PDF, DOCX, PNG, JPG up to 10MB</p>
+                            <input type="file" id="file-upload-input" name="file_upload" class="hidden" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg">
+                        </div>
+                        <div id="selected-file-name" class="text-xs text-emerald-600 font-semibold mt-2 hidden"></div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-valenzuela-red hover:bg-red-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-paper-plane"></i> Submit Legislative Proposal
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
 
     </main>
 
@@ -1452,6 +1446,28 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
             navigator.clipboard.writeText(text);
             showToast('Tracking Code copied to clipboard: ' + text);
         }
+
+        function openConcernModal() {
+            const m = document.getElementById('submit-concern-modal');
+            if (m) {
+                m.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+            }
+        }
+
+        function closeConcernModal() {
+            const m = document.getElementById('submit-concern-modal');
+            if (m) {
+                m.classList.add('hidden');
+                document.body.classList.remove('overflow-hidden');
+            }
+        }
+
+        <?php if (!empty($submission_success) || !empty($submission_error)): ?>
+        document.addEventListener('DOMContentLoaded', function() {
+            openConcernModal();
+        });
+        <?php endif; ?>
 
         function showRequireLoginModal() {
             const m = document.getElementById('require-login-modal');
