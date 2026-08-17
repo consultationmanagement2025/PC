@@ -66,8 +66,8 @@ class ConsultationPDFGenerator {
                 'solutions' => [
                     ['category' => 'LGU Policy Amendment', 'recommendation' => 'Adopt automated flood level sensors and mandate quarterly barangay canal desilting schedules prior to final ordinance enactment.']
                 ],
-                'conclusion' => "PCMS AI Engine merged citizen submissions from PCMS Online Portal and PHMS Public Hearing System. Dominant public sentiment is Positive.",
-                'transmittal_note' => "Compiled by PCMS System AI Engine for formal transmittal to the LGU Standing Committee."
+                'conclusion' => "Compiled citizen submissions from PCMS Online Portal and PHMS Public Hearing System. Dominant public sentiment is Positive.",
+                'transmittal_note' => "Certified and validated for formal transmittal to ORTS (Ordinance Routing & Tracking System)."
             ];
         }
 
@@ -150,7 +150,7 @@ class ConsultationPDFGenerator {
             if ($briefData && !empty($briefData['merged_sources'])) {
                 $m = $briefData['merged_sources'];
                 $s = $briefData['stats'] ?? [];
-                $html .= "<div class=\"section-title\">3. Merged PHMS Public Hearing & Citizen Feedback Analysis</div>";
+                $html .= "<div class=\"section-title\">3. Community Feedback Analysis</div>";
                 $html .= "<div class=\"phms-box\">";
                 $html .= "<strong>Cross-System Integration:</strong> " . htmlspecialchars($m['summary_text'] ?? '') . "<br><br>";
                 $html .= "• <strong>Total Submissions Analyzed:</strong> " . ($m['total_submissions'] ?? 45) . " (PCMS Online Portal: " . ($m['pcms_portal_count'] ?? 42) . " | PHMS Live Hearings: " . ($m['phms_hearing_count'] ?? 3) . ")<br>";
@@ -160,20 +160,20 @@ class ConsultationPDFGenerator {
                 }
                 $html .= "</div>";
 
-                // Problems extracted by AI
+                // Problems extracted
                 if (!empty($briefData['problems'])) {
-                    $html .= "<strong style=\"display:block;margin:8px 0 4px 0;\">Top Community Concerns Extracted by AI:</strong>";
-                    $html .= "<table class=\"issue-table\"><thead><tr><th>Category</th><th>Extracted Citizen Issue</th><th>Severity Tag</th></tr></thead><tbody>";
+                    $html .= "<strong style=\"display:block;margin:8px 0 4px 0;\">Main Community Issues Identified:</strong>";
+                    $html .= "<table class=\"issue-table\"><thead><tr><th>Category</th><th>Citizen Issue / Grievance</th><th>Priority Tag</th></tr></thead><tbody>";
                     foreach ($briefData['problems'] as $p) {
                         $html .= "<tr><td>" . htmlspecialchars($p['category'] ?? 'General') . "</td><td>" . htmlspecialchars($p['issue'] ?? '') . "</td><td><strong>" . strtoupper(htmlspecialchars($p['severity'] ?? 'normal')) . "</strong></td></tr>";
                     }
                     $html .= "</tbody></table>";
                 }
 
-                // Solutions extracted by AI
+                // Solutions
                 if (!empty($briefData['solutions'])) {
-                    $html .= "<strong style=\"display:block;margin:8px 0 4px 0;\">Synthesized LGU Committee Policy Recommendations:</strong>";
-                    $html .= "<table class=\"issue-table\"><thead><tr><th>Policy Category</th><th>Recommended Committee Amendment</th></tr></thead><tbody>";
+                    $html .= "<strong style=\"display:block;margin:8px 0 4px 0;\">Committee Recommendations & Proposed Actions:</strong>";
+                    $html .= "<table class=\"issue-table\"><thead><tr><th>Policy Category</th><th>Recommended Committee Action / Solution</th></tr></thead><tbody>";
                     foreach ($briefData['solutions'] as $sol) {
                         $html .= "<tr><td>" . htmlspecialchars($sol['category'] ?? 'Policy') . "</td><td>" . htmlspecialchars($sol['recommendation'] ?? '') . "</td></tr>";
                     }
@@ -262,10 +262,10 @@ class ConsultationPDFGenerator {
         $content .= "(CITY OF VALENZUELA) Tj\n";
         $content .= "0 -22 Td\n";
         $content .= "/F1 13 Tf\n";
-        $content .= "(Public Consultation Office & AI Feedback Brief) Tj\n";
+        $content .= "(Public Consultation Feedback Summary & Transmittal Brief) Tj\n";
         $content .= "0 -18 Td\n";
         $content .= "/F1 10 Tf\n";
-        $content .= "(Official Record & PHMS Integration Brief) Tj\n";
+        $content .= "(Official Record & Community Feedback Synthesis) Tj\n";
         $content .= "0 -22 Td\n";
         $content .= "(----------------------------------------------------------------------------------------------------) Tj\n";
         $content .= "0 -20 Td\n";
@@ -302,51 +302,64 @@ class ConsultationPDFGenerator {
         $lines = explode("\n", $wrappedDesc);
         $lineCount = 0;
         foreach ($lines as $line) {
-            if ($lineCount > 6) break;
+            if ($lineCount > 5) break;
             $content .= "(" . trim($line) . ") Tj\n";
             $content .= "0 -12 Td\n";
             $lineCount++;
         }
 
-        // Section: Merged PHMS Feedback Analysis
+        // Section: Merged PHMS & Citizen Feedback Analysis
         if ($briefData && !empty($briefData['merged_sources'])) {
             $m = $briefData['merged_sources'];
             $s = $briefData['stats'] ?? [];
             $totalSub = $m['total_submissions'] ?? 45;
             $pcmsSub = $m['pcms_portal_count'] ?? 42;
             $phmsSub = $m['phms_hearing_count'] ?? 3;
-            $domSent = $this->escapeString($s['dominant_sentiment'] ?? 'Positive (74%)');
+            $domSent = $this->escapeString($s['dominant_sentiment'] ?? 'Positive');
 
-            $content .= "0 -16 Td\n";
+            $content .= "0 -14 Td\n";
             $content .= "/F1 11 Tf\n";
-            $content .= "(MERGED PHMS & CITIZEN FEEDBACK ANALYSIS) Tj\n";
+            $content .= "(COMMUNITY FEEDBACK ANALYSIS) Tj\n";
             $content .= "0 -14 Td\n";
             $content .= "/F1 9 Tf\n";
-            $content .= "(Merged Total Submissions: $totalSub | PCMS Portal: $pcmsSub | PHMS Hearings: $phmsSub) Tj\n";
+            $content .= "(Total Submissions Analyzed: $totalSub | PCMS Portal: $pcmsSub | PHMS Hearings: $phmsSub) Tj\n";
             $content .= "0 -12 Td\n";
             $content .= "(Dominant Community Sentiment: $domSent) Tj\n";
             $content .= "0 -14 Td\n";
 
+            if (!empty($briefData['conclusion'])) {
+                $content .= "/F1 10 Tf\n";
+                $content .= "(EXECUTIVE SUMMARY:) Tj\n";
+                $content .= "0 -12 Td\n";
+                $content .= "/F1 9 Tf\n";
+                $wrappedConc = wordwrap($this->escapeString($briefData['conclusion']), 85, "\n");
+                foreach (array_slice(explode("\n", $wrappedConc), 0, 2) as $cLine) {
+                    $content .= "(" . trim($cLine) . ") Tj\n";
+                    $content .= "0 -12 Td\n";
+                }
+                $content .= "0 -4 Td\n";
+            }
+
             if (!empty($briefData['problems'])) {
                 $content .= "/F1 10 Tf\n";
-                $content .= "(AI EXTRACTED COMMUNITY ISSUES:) Tj\n";
+                $content .= "(MAIN COMMUNITY ISSUES IDENTIFIED:) Tj\n";
                 $content .= "0 -12 Td\n";
                 $content .= "/F1 9 Tf\n";
                 foreach (array_slice($briefData['problems'], 0, 2) as $p) {
                     $pCat = $this->escapeString($p['category'] ?? 'Issue');
                     $pIss = $this->escapeString($p['issue'] ?? '');
-                    $pSev = strtoupper($this->escapeString($p['severity'] ?? 'normal'));
-                    $content .= "(- [$pSev] $pCat: $pIss) Tj\n";
+                    $content .= "(- $pCat: \"$pIss\") Tj\n";
                     $content .= "0 -12 Td\n";
                 }
+                $content .= "0 -4 Td\n";
             }
 
             if (!empty($briefData['solutions'])) {
                 $content .= "/F1 10 Tf\n";
-                $content .= "(SYNTHESIZED COMMITTEE RECOMMENDATIONS:) Tj\n";
+                $content .= "(RECOMMENDATIONS & ACTION PLAN:) Tj\n";
                 $content .= "0 -12 Td\n";
                 $content .= "/F1 9 Tf\n";
-                foreach (array_slice($briefData['solutions'], 0, 1) as $sol) {
+                foreach (array_slice($briefData['solutions'], 0, 2) as $sol) {
                     $sRec = $this->escapeString($sol['recommendation'] ?? '');
                     $content .= "(- Action: $sRec) Tj\n";
                     $content .= "0 -12 Td\n";

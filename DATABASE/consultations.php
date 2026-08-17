@@ -107,6 +107,7 @@ function initializeConsultationsTable() {
         'tracking_number' => "VARCHAR(32) DEFAULT NULL",
         'outcome' => "ENUM('solved','needs-follow-up','escalated') DEFAULT NULL",
         'remarks' => "LONGTEXT DEFAULT NULL",
+        'admin_response' => "TEXT DEFAULT NULL",
         'ai_committee_brief' => "LONGTEXT DEFAULT NULL",
         'committee_forwarded_at' => "DATETIME DEFAULT NULL",
         'committee_assigned' => "VARCHAR(150) DEFAULT NULL",

@@ -173,7 +173,7 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
         $proposals = [];
 
         if ($user_email !== '' || $user_id > 0 || $user_name !== '') {
-            $pStmt = $conn->prepare("SELECT id, title, description, category, status, type, created_at, tracking_number, committee_assigned, assigned_to, ai_committee_brief FROM consultations WHERE (user_id > 0 AND user_id = ?) OR (user_email = ? AND user_email != '') OR (user_name = ? AND user_name != '') ORDER BY created_at DESC LIMIT 50");
+            $pStmt = $conn->prepare("SELECT id, title, description, category, status, type, created_at, tracking_number, committee_assigned, assigned_to, ai_committee_brief, admin_response, remarks FROM consultations WHERE (user_id > 0 AND user_id = ?) OR (user_email = ? AND user_email != '') OR (user_name = ? AND user_name != '') ORDER BY created_at DESC LIMIT 50");
             if ($pStmt) {
                 $pStmt->bind_param('iss', $user_id, $user_email, $user_name);
                 $pStmt->execute();
@@ -222,7 +222,7 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
         }
 
         // Search proposal by exact tracking_number, numeric ID, or fuzzy matching
-        $pStmt = $conn->prepare("SELECT id, title, category, description, status, created_at, tracking_number, user_name FROM consultations WHERE UPPER(tracking_number) = ? OR (id = ? AND ? > 0) OR tracking_number LIKE ? LIMIT 1");
+        $pStmt = $conn->prepare("SELECT id, title, category, description, status, created_at, tracking_number, user_name, admin_response, remarks FROM consultations WHERE UPPER(tracking_number) = ? OR (id = ? AND ? > 0) OR tracking_number LIKE ? LIMIT 1");
         $likePattern = '%' . $codeUpper . '%';
         $pStmt->bind_param('siis', $codeUpper, $numericId, $numericId, $likePattern);
         $pStmt->execute();
@@ -2108,6 +2108,8 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
                             'pending': 'bg-amber-100 text-amber-800 border border-amber-200',
                             'active': 'bg-emerald-100 text-emerald-800 border border-emerald-200',
                             'reviewed': 'bg-blue-100 text-blue-800 border border-blue-200',
+                            'rejected': 'bg-rose-100 text-rose-800 border border-rose-200',
+                            'declined': 'bg-rose-100 text-rose-800 border border-rose-200',
                             'closed': 'bg-slate-100 text-slate-800 border border-slate-200'
                         };
                         const statusBadge = statusColors[d.status] || 'bg-slate-100 text-slate-800 border border-slate-200';
@@ -2122,8 +2124,7 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
                                 </div>
                                 <h5 class="font-bold text-slate-900 text-sm">${escapeHtml(d.title || d.consultation_title || 'Citizen Submission')}</h5>
                                 <p class="text-slate-600 leading-relaxed">${escapeHtml(d.description || d.message || '')}</p>
-                                ${isProposal ? renderCitizenConnectingDotsTracker(d.status, d.id, trackingCodeDisplay) : ''}
-                                ${d.admin_response ? `<div class="mt-3 p-3 bg-white rounded-xl border border-blue-200 text-valenzuela-blue"><strong>Legislative Response:</strong> ${escapeHtml(d.admin_response)}</div>` : '<p class="text-[11px] text-slate-400 italic mt-2">Under review by City Legislative Committee.</p>'}
+                                ${isProposal ? renderCitizenConnectingDotsTracker(d.status, d.id, trackingCodeDisplay, d) : ''}
                             </div>
                         `;
                     } else {
@@ -2137,6 +2138,23 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
            ========================================================== */
         function renderCitizenConnectingDotsTracker(status, itemId, trackingCode, itemObj) {
             const st = String(status || '').toLowerCase().trim();
+            if (st === 'rejected' || st === 'declined') {
+                const rejectionReason = itemObj?.admin_response || itemObj?.remarks || 'Submission does not meet LGU public consultation requirements.';
+                return `
+                    <div class="mt-3 p-3.5 bg-rose-50 rounded-2xl border border-rose-200 text-slate-800 text-xs space-y-1.5 shadow-2xs">
+                        <div class="font-extrabold text-rose-700 flex items-center gap-2 uppercase text-[11px] tracking-wider">
+                            <i class="fa-solid fa-circle-xmark text-rose-600 text-sm"></i> Status: Declined by LGU Secretariat
+                        </div>
+                        <p class="font-medium text-slate-700 leading-relaxed pl-5">
+                            "${escapeHtml(rejectionReason)}"
+                        </p>
+                        <div class="text-[10px] text-rose-600 font-medium pl-5 pt-0.5">
+                            You may submit a revised proposal or contact the Public Consultation Office for guidance.
+                        </div>
+                    </div>
+                `;
+            }
+
             const typeStr = String(itemObj?.type || '').toLowerCase().trim();
             const commAssigned = String(itemObj?.committee_assigned || '').trim();
             const assignedTo = itemObj?.assigned_to;
@@ -2146,7 +2164,7 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
 
             if (['completed', 'officialized', 'archived', 'enacted', 'resolved', 'passed'].includes(st)) {
                 currentStep = 6;
-            } else if (['scheduled', 'committee', 'forwarded', 'approved', 'ordinance', 'endorsed', 'committee_assigned', 'in_committee'].includes(st) || commAssigned !== '') {
+            } else if (['scheduled', 'committee', 'forwarded', 'approved', 'ordinance', 'endorsed', 'committee_assigned', 'in_committee', 'orts', 'forwarded_orts', 'orts_drafting'].includes(st) || commAssigned !== '') {
                 currentStep = 5;
             } else if (['under_review', 'reviewed', 'viewed', 'replied', 'assigned', 'rp_review', 'rp_assigned', 'forwarded_rp'].includes(st) || (assignedTo && Number(assignedTo) > 0)) {
                 currentStep = 4;
@@ -2163,7 +2181,7 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
                 { num: 2, name: 'Public Portal', desc: 'Published live on Public Portal for citizen voting, surveys, and public feedback', statusVal: 'active' },
                 { num: 3, name: 'AI Synthesis', desc: 'Consultation closes; PCMS AI Engine scans & synthesizes all citizen votes and comments', statusVal: 'ai_summary' },
                 { num: 4, name: 'RP Review', desc: 'Assigned Resource Person reviews AI Summary, adds expert evaluation & endorses report', statusVal: 'under_review' },
-                { num: 5, name: 'Committee & Ordinance', desc: 'Endorsed report sent to Committee System for hearings & Ordinance System for drafting', statusVal: 'scheduled' },
+                { num: 5, name: 'ORTS Routing', desc: 'AI-summarized & RP-validated report dispatched directly to ORTS for ordinance drafting & tracking', statusVal: 'scheduled' },
                 { num: 6, name: 'Officialized', desc: 'Enacted into official city ordinance & stored in permanent municipal archive', statusVal: 'completed' }
             ];
 

@@ -638,9 +638,9 @@ try {
             }
 
             $phmsTitleList = !empty($phmsHearingTitles) ? implode(', ', array_keys($phmsHearingTitles)) : 'PHMS Integration Service';
-            $sourcesSummary = "Unified AI Analysis merged a total of {$totalCount} citizen submission(s) across systems: {$pcmsCount} submission(s) from PCMS Online Citizen Portal and {$phmsCount} testimony response(s) from PHMS Live Public Hearing System (" . $phmsTitleList . ").";
+            $sourcesSummary = "Merged a total of {$totalCount} citizen submission(s) across systems: {$pcmsCount} submission(s) from PCMS Online Citizen Portal and {$phmsCount} testimony response(s) from PHMS Live Public Hearing System (" . $phmsTitleList . ").";
 
-            $conclusionText = "Following formal closure of Public Consultation #{$consultationId} (\"{$consultation['title']}\"), the PCMS AI Engine merged {$totalCount} citizen submission(s) from PCMS Online Portal and PHMS Public Hearing System. The general public sentiment is classified as '{$dominantSentiment}'. It is formally recommended that the {$assignedCommittee} adopt the synthesized policy resolutions prior to final ordinance enactment.";
+            $conclusionText = "Following formal closure of Public Consultation #{$consultationId} (\"{$consultation['title']}\"), {$totalCount} citizen submission(s) from PCMS Online Portal and PHMS Public Hearing System were compiled and analyzed. The general public sentiment is classified as '{$dominantSentiment}'. It is formally recommended that the {$assignedCommittee} adopt the policy resolutions prior to final ordinance enactment.";
 
             $brief = [
                 'consultation_id' => $consultationId,
@@ -666,7 +666,7 @@ try {
                 'problems' => $problems,
                 'solutions' => $solutions,
                 'conclusion' => $conclusionText,
-                'transmittal_note' => "Compiled by PCMS System AI for formal transmittal to the LGU {$assignedCommittee}."
+                'transmittal_note' => "Certified and validated for formal transmittal to ORTS (Ordinance Routing & Tracking System)."
             ];
 
             // Persist brief to consultations table
@@ -715,6 +715,7 @@ try {
             ]);
             break;
 
+        case 'forward_brief_to_orts':
         case 'forward_brief_to_committee':
             if (!isAdminRole($_SESSION['role'] ?? '')) {
                 http_response_code(403);
@@ -724,7 +725,8 @@ try {
 
             $data = json_decode(file_get_contents('php://input'), true);
             $consultationId = (int)($data['consultation_id'] ?? 0);
-            $committeeName = trim((string)($data['committee'] ?? ''));
+            $targetSystem   = trim((string)($data['target'] ?? 'ORTS'));
+            $committeeName = trim((string)($data['committee'] ?? 'ORTS Ordinance Routing System'));
 
             if ($consultationId <= 0) {
                 http_response_code(400);
@@ -734,7 +736,7 @@ try {
 
             // Verify consultation exists
             $cRow = null;
-            $chkStmt = $conn->prepare("SELECT status, committee_assigned, title FROM consultations WHERE id = ? LIMIT 1");
+            $chkStmt = $conn->prepare("SELECT status, committee_assigned, title, reference_number, ai_committee_brief FROM consultations WHERE id = ? LIMIT 1");
             if ($chkStmt) {
                 $chkStmt->bind_param('i', $consultationId);
                 $chkStmt->execute();
@@ -750,11 +752,11 @@ try {
             }
 
             if (!$committeeName) {
-                $committeeName = $cRow['committee_assigned'] ?: 'Health & Sanitation Committee';
+                $committeeName = 'ORTS Ordinance Routing System';
             }
 
-            // Ensure consultation status is set to closed and committee metadata updated upon forwarding
-            $fwdStmt = $conn->prepare("UPDATE consultations SET status = 'closed', committee_assigned = ?, committee_forwarded_at = NOW() WHERE id = ?");
+            // Ensure consultation status is set to forwarded_orts (Stage 5)
+            $fwdStmt = $conn->prepare("UPDATE consultations SET status = 'forwarded_orts', committee_assigned = ?, committee_forwarded_at = NOW() WHERE id = ?");
             if ($fwdStmt) {
                 $fwdStmt->bind_param('si', $committeeName, $consultationId);
                 $fwdStmt->execute();
@@ -762,7 +764,7 @@ try {
             }
 
             // Update all linked feedback entries
-            $fbFwdStmt = $conn->prepare("UPDATE feedback SET status = 'forwarded', lifecycle_stage = 'considered_in_policy', committee_assigned = ? WHERE consultation_id = ?");
+            $fbFwdStmt = $conn->prepare("UPDATE feedback SET status = 'forwarded_orts', lifecycle_stage = 'transmitted_to_orts', committee_assigned = ? WHERE consultation_id = ?");
             if ($fbFwdStmt) {
                 $fbFwdStmt->bind_param('si', $committeeName, $consultationId);
                 $fbFwdStmt->execute();
@@ -785,19 +787,30 @@ try {
                 logAction(
                     $_SESSION['user_id'] ?? null,
                     $_SESSION['fullname'] ?? 'Admin',
-                    'forward_ai_committee_brief',
+                    'forward_ai_brief_to_orts',
                     'consultation',
                     $consultationId,
                     null,
                     null,
                     'success',
-                    "Forwarded compiled AI Committee Brief for Consultation #{$consultationId} to LGU {$committeeName}"
+                    "Direct transmittal of compiled AI Summary & RP-validated report for Consultation #{$consultationId} to ORTS (Ordinance Routing & Tracking System)"
                 );
+            }
+
+            // Dispatch cURL HTTP POST payload directly to ORTS API endpoint (https://ort.spvalenzuela.com/api/v1/events.php)
+            $ortsResult = null;
+            if (file_exists(__DIR__ . '/../UTILS/orts_integration_utils.php')) {
+                require_once __DIR__ . '/../UTILS/orts_integration_utils.php';
+                if (function_exists('sendToOrtsApi')) {
+                    $ortsResult = sendToOrtsApi($consultationId, $conn);
+                }
             }
 
             echo json_encode([
                 'success' => true,
-                'message' => "AI Committee Brief for Consultation #{$consultationId} successfully forwarded to LGU {$committeeName}.",
+                'message' => "AI-Summarized & Resource Person-validated report for Consultation #{$consultationId} successfully transmitted directly to ORTS (Ordinance Routing & Tracking System).",
+                'target_system' => 'ORTS',
+                'orts_api_dispatch' => $ortsResult,
                 'generated_documents' => $generatedDocs
             ]);
             break;

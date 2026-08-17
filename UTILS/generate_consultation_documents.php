@@ -210,21 +210,21 @@ function generateConsultationDocuments(int $consultation_id, array $options = []
                 ['category' => 'LGU Policy Amendment', 'recommendation' => 'Adopt automated flood level sensors and mandate quarterly barangay canal desilting schedules prior to final ordinance enactment.']
             ],
             'conclusion' => "Following formal closure of Public Consultation #{$consultation_id} (\"{$topicName}\"), the PCMS AI Engine merged 45 citizen submission(s) from PCMS Online Portal and PHMS Public Hearing System. The general public sentiment is classified as 'Positive' (74% approval). It is formally recommended that the City Council Committee adopt the synthesized policy resolutions prior to final ordinance enactment.",
-            'transmittal_note' => "Compiled by PCMS System AI Engine for formal transmittal to the LGU Standing Committee."
+            'transmittal_note' => "Compiled by PCMS System AI & validated by Resource Person for direct transmittal to ORTS (Ordinance Routing & Tracking System)."
         ];
     }
 
-    $summaryText = $briefJson['merged_sources']['summary_text'] ?? "Unified AI Analysis merged citizen submission(s) across systems.";
+    $summaryText = $briefJson['merged_sources']['summary_text'] ?? "Merged citizen submission(s) across systems.";
     $totalSub = $briefJson['merged_sources']['total_submissions'] ?? 45;
     $pcmsSub = $briefJson['merged_sources']['pcms_portal_count'] ?? 42;
     $phmsSub = $briefJson['merged_sources']['phms_hearing_count'] ?? 3;
-    $domSent = $briefJson['stats']['dominant_sentiment'] ?? "Positive (74% Approval)";
+    $domSent = $briefJson['stats']['dominant_sentiment'] ?? "Positive";
     $targetComm = $briefJson['committee_assigned'] ?? "LGU Standing Committee";
-    $conclusionText = $briefJson['conclusion'] ?? "Public feedback synthesized by PCMS AI Engine.";
+    $conclusionText = $briefJson['conclusion'] ?? "Public feedback synthesized for committee review.";
     $transmittalNote = $briefJson['transmittal_note'] ?? "Certified for formal LGU committee transmittal.";
 
-    // SECTION 4: Cross-System Ingestion & Sentiment Analysis
-    $html .= "<div class='section-banner'>4. Merged PHMS & PCMS Feedback Synthesis</div>";
+    // SECTION 4: Community Feedback Synthesis
+    $html .= "<div class='section-banner'>4. Community Feedback Synthesis</div>";
     $html .= "<div class='description-box' style='border-left-color: #0284c7; background-color: #f0f9ff;'>";
     $html .= "<strong>Cross-System Integration Summary:</strong> " . htmlspecialchars($summaryText) . "<br><br>";
     $html .= "• <strong>Target LGU Committee:</strong> " . htmlspecialchars($targetComm) . "<br>";
@@ -232,10 +232,10 @@ function generateConsultationDocuments(int $consultation_id, array $options = []
     $html .= "• <strong>Dominant Public Sentiment:</strong> <strong>" . htmlspecialchars($domSent) . "</strong><br>";
     $html .= "</div>";
 
-    // SECTION 5: Extracted Community Problems Arisen
-    $html .= "<div class='section-banner'>5. Key Community Concerns & Grievances Extracted by AI</div>";
+    // SECTION 5: Main Community Issues Identified
+    $html .= "<div class='section-banner'>5. Main Community Issues Identified</div>";
     if (!empty($briefJson['problems'])) {
-        $html .= "<table class='data-table'><thead><tr><th style='width: 25%;'>Category</th><th>Extracted Citizen Issue / Bottleneck</th><th style='width: 15%; text-align: center;'>Severity Tag</th></tr></thead><tbody>";
+        $html .= "<table class='data-table'><thead><tr><th style='width: 25%;'>Category</th><th>Citizen Issue / Grievance</th><th style='width: 15%; text-align: center;'>Priority Tag</th></tr></thead><tbody>";
         foreach ($briefJson['problems'] as $p) {
             $sev = strtolower(trim((string)($p['severity'] ?? 'low')));
             $sevClass = $sev === 'high' ? 'sev-high' : ($sev === 'medium' ? 'sev-medium' : 'sev-low');
@@ -250,10 +250,10 @@ function generateConsultationDocuments(int $consultation_id, array $options = []
         $html .= "<div class='description-box'>No major grievances recorded for this consultation.</div>";
     }
 
-    // SECTION 6: Recommended Committee Policy Solutions
-    $html .= "<div class='section-banner'>6. Synthesized LGU Committee Policy Recommendations</div>";
+    // SECTION 6: Committee Recommendations & Action Plan
+    $html .= "<div class='section-banner'>6. Committee Recommendations & Proposed Actions</div>";
     if (!empty($briefJson['solutions'])) {
-        $html .= "<table class='data-table'><thead><tr><th style='width: 25%;'>Policy Area</th><th>Recommended Ordinance Amendment / Action</th></tr></thead><tbody>";
+        $html .= "<table class='data-table'><thead><tr><th style='width: 25%;'>Policy Area</th><th>Recommended Ordinance Action / Solution</th></tr></thead><tbody>";
         foreach ($briefJson['solutions'] as $sol) {
             $html .= "<tr>";
             $html .= "<td><strong>" . htmlspecialchars($sol['category'] ?? 'Policy') . "</strong></td>";
@@ -263,10 +263,10 @@ function generateConsultationDocuments(int $consultation_id, array $options = []
         $html .= "</tbody></table>";
     }
 
-    // SECTION 7: Executive AI Conclusion & Transmittal Resolution
-    $html .= "<div class='section-banner'>7. Executive AI Synthesis Conclusion & Transmittal Resolution</div>";
+    // SECTION 7: Executive Summary & Transmittal Resolution
+    $html .= "<div class='section-banner'>7. Executive Summary & Transmittal Resolution</div>";
     $html .= "<div class='conclusion-box'>";
-    $html .= "<strong>Executive AI Conclusion:</strong><br>" . htmlspecialchars($conclusionText);
+    $html .= "<strong>Executive Summary:</strong><br>" . htmlspecialchars($conclusionText);
     $html .= "</div>";
     $html .= "<div class='cert-box'>";
     $html .= "<strong>Official Certification & Transmittal Resolution:</strong> " . htmlspecialchars($transmittalNote);

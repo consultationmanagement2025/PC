@@ -644,7 +644,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     
 
-    $valid_statuses = ['draft', 'pending', 'active', 'viewed', 'replied', 'completed', 'closed', 'archived'];
+    $valid_statuses = ['draft', 'pending', 'active', 'viewed', 'replied', 'completed', 'closed', 'archived', 'rejected', 'declined', 'forwarded_orts'];
 
     
 
@@ -663,6 +663,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         require_once 'db.php';
 
         
+
+        if ($new_status === 'declined' || $new_status === 'rejected') {
+            $reason = trim($_POST['reason'] ?? $_POST['remarks'] ?? 'Submission declined by LGU Secretariat');
+            $stmt = $conn->prepare("UPDATE consultations SET status = ?, admin_response = ?, remarks = ?, updated_at = NOW() WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param('sssi', $new_status, $reason, $reason, $consultation_id);
+                $ok = $stmt->execute();
+                $stmt->close();
+                echo json_encode(['success' => $ok]);
+                exit;
+            }
+        }
 
         $stmt = $conn->prepare("UPDATE consultations SET status = ? WHERE id = ?");
 
@@ -3345,13 +3357,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
                             <!-- User Profile Dropdown -->
-
-
-
                             <div class="relative">
-
-
-
                                 <button id="profile-btn" type="button" class="flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-lg transition" aria-haspopup="true" style="cursor:pointer; position:relative; z-index:10;">
 
 
@@ -5014,6 +5020,303 @@ $totalPages = ceil($totalLogs / $pageSize);
 
                     </section>
 
+                    <script>
+                    function showUserTab(tabName) {
+                        var cSec = document.getElementById('citizens-section');
+                        var pSec = document.getElementById('pending-applications-section');
+                        var rSec = document.getElementById('resource-persons-section');
+                        
+                        var tCit = document.getElementById('tab-citizens');
+                        var tPen = document.getElementById('tab-pending');
+                        var tRes = document.getElementById('tab-resource-persons');
+
+                        [tCit, tPen, tRes].forEach(function(btn) {
+                            if (btn) {
+                                btn.classList.remove('bg-valenzuela-red', 'text-white', 'shadow-sm', 'text-slate-600', 'hover:bg-gray-100');
+                            }
+                        });
+
+                        if (cSec) cSec.classList.add('hidden');
+                        if (pSec) pSec.classList.add('hidden');
+                        if (rSec) rSec.classList.add('hidden');
+
+                        if (tabName === 'citizens') {
+                            if (cSec) cSec.classList.remove('hidden');
+                            if (tCit) tCit.classList.add('bg-valenzuela-red', 'text-white', 'shadow-sm');
+                            if (tPen) tPen.classList.add('text-slate-600', 'hover:bg-gray-100');
+                            if (tRes) tRes.classList.add('text-slate-600', 'hover:bg-gray-100');
+                        } else if (tabName === 'pending') {
+                            if (pSec) pSec.classList.remove('hidden');
+                            if (tPen) tPen.classList.add('bg-valenzuela-red', 'text-white', 'shadow-sm');
+                            if (tCit) tCit.classList.add('text-slate-600', 'hover:bg-gray-100');
+                            if (tRes) tRes.classList.add('text-slate-600', 'hover:bg-gray-100');
+                            loadPendingResourcePersonApplications();
+                        } else if (tabName === 'resource-persons') {
+                            if (rSec) rSec.classList.remove('hidden');
+                            if (tRes) tRes.classList.add('bg-valenzuela-red', 'text-white', 'shadow-sm');
+                            if (tCit) tCit.classList.add('text-slate-600', 'hover:bg-gray-100');
+                            if (tPen) tPen.classList.add('text-slate-600', 'hover:bg-gray-100');
+                            loadApprovedResourcePersons();
+                        }
+                    }
+
+                    function loadPendingResourcePersonApplications() {
+                        var container = document.getElementById('pending-applications-list');
+                        var badge = document.getElementById('pending-count');
+                        if (!container) return;
+
+                        container.innerHTML = '<div class="text-center py-12 text-slate-500 col-span-full"><i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-red-600"></i><p>Loading pending applications...</p></div>';
+
+                        fetch('API/resource_person_api.php?action=list_pending')
+                            .then(r => r.json())
+                            .then(res => {
+                                if (!res.success || !res.data) {
+                                    container.innerHTML = '<div class="text-center py-8 text-slate-500 col-span-full"><p>Failed to load applications.</p></div>';
+                                    return;
+                                }
+                                var apps = res.data;
+                                if (badge) badge.innerText = apps.length;
+
+                                if (apps.length === 0) {
+                                    container.innerHTML = '<div class="text-center py-12 text-slate-500 col-span-full"><i class="fa-solid fa-circle-check text-4xl mb-3 text-emerald-400"></i><p class="font-medium text-slate-700">No pending resource person applications</p></div>';
+                                    return;
+                                }
+
+                                container.innerHTML = apps.map(function(app) {
+                                    return `
+                                    <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 hover:shadow-md transition">
+                                        <div class="flex justify-between items-start">
+                                            <div>
+                                                <h4 class="font-bold text-slate-800 text-base">${escapeHtml(app.fullname || 'Applicant')}</h4>
+                                                <p class="text-xs text-slate-500">${escapeHtml(app.email || '')}</p>
+                                            </div>
+                                            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Pending</span>
+                                        </div>
+
+                                        <div class="space-y-2 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                            <p><strong class="text-slate-800">Department:</strong> ${escapeHtml(app.department || 'N/A')}</p>
+                                            <p><strong class="text-slate-800">Phone:</strong> ${escapeHtml(app.phone || 'N/A')}</p>
+                                            <p><strong class="text-slate-800">Expertise:</strong> ${escapeHtml(app.expertise_areas || 'N/A')}</p>
+                                            <p><strong class="text-slate-800">Qualifications:</strong> ${escapeHtml(app.qualifications || 'N/A')}</p>
+                                        </div>
+
+                                        <div class="flex gap-2 pt-1">
+                                            <button onclick="approveResourcePerson(${app.id})" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold py-2 px-3 rounded-xl transition flex items-center justify-center gap-1">
+                                                <i class="fa-solid fa-check"></i> Approve
+                                            </button>
+                                            <button onclick="rejectResourcePerson(${app.id})" class="flex-1 bg-rose-100 hover:bg-rose-200 text-rose-700 text-xs font-semibold py-2 px-3 rounded-xl transition flex items-center justify-center gap-1">
+                                                <i class="fa-solid fa-xmark"></i> Reject
+                                            </button>
+                                        </div>
+                                    </div>`;
+                                }).join('');
+                            })
+                            .catch(err => {
+                                container.innerHTML = '<div class="text-center py-8 text-slate-500 col-span-full"><p>Error connecting to server.</p></div>';
+                            });
+                    }
+
+                    function approveResourcePerson(userId, fullname) {
+                        const modalId = 'custom-approve-modal';
+                        let existingModal = document.getElementById(modalId);
+                        if (existingModal) existingModal.remove();
+
+                        const nameStr = fullname ? `for <strong class="text-slate-900">${fullname}</strong>` : 'this Resource Person application';
+
+                        const modal = document.createElement('div');
+                        modal.id = modalId;
+                        modal.className = 'fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4';
+                        modal.innerHTML = `
+                            <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 border border-slate-200 text-center relative space-y-5">
+                                <button onclick="document.getElementById('${modalId}').remove()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-xl font-bold">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                                <div class="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto text-3xl">
+                                    <i class="bi bi-person-check-fill"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-bold text-slate-900">Approve Resource Person</h3>
+                                    <p class="text-xs text-slate-500 mt-1">Are you sure you want to approve ${nameStr}? They will gain official access to the Expert Portal.</p>
+                                </div>
+                                <div class="flex gap-3 pt-2">
+                                    <button onclick="document.getElementById('${modalId}').remove()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 px-4 rounded-2xl font-semibold text-xs transition">
+                                        Cancel
+                                    </button>
+                                    <button onclick="confirmApproveResourcePerson(${userId}, '${modalId}')" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-2xl font-semibold text-xs transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
+                                        <i class="bi bi-check-circle-fill"></i> Confirm Approval
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        document.body.appendChild(modal);
+                    }
+
+                    function confirmApproveResourcePerson(userId, modalId) {
+                        var formData = new FormData();
+                        formData.append('user_id', userId);
+
+                        fetch('API/resource_person_api.php?action=approve', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(r => r.json())
+                        .then(data => {
+                            var modal = document.getElementById(modalId);
+                            if (modal) modal.remove();
+                            if (data.success) {
+                                alert('Resource Person application approved successfully!');
+                                if (typeof loadPendingResourcePersonApplications === 'function') loadPendingResourcePersonApplications();
+                                if (typeof loadPendingUserApplications === 'function') loadPendingUserApplications();
+                            } else {
+                                alert('Error: ' + (data.message || 'Approval failed'));
+                            }
+                        })
+                        .catch(err => alert('Failed to approve application.'));
+                    }
+
+                    function rejectResourcePerson(userId) {
+                        const modalId = 'custom-reject-modal';
+                        let existingModal = document.getElementById(modalId);
+                        if (existingModal) existingModal.remove();
+
+                        const modal = document.createElement('div');
+                        modal.id = modalId;
+                        modal.className = 'fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4';
+                        modal.innerHTML = `
+                            <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 border border-slate-200 text-left relative space-y-4">
+                                <button onclick="document.getElementById('${modalId}').remove()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-xl font-bold">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                                <div class="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-2xl">
+                                    <i class="bi bi-person-x-fill"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-bold text-slate-900">Reject Application</h3>
+                                    <p class="text-xs text-slate-500 mt-0.5">Please provide a brief reason for rejecting this application.</p>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Rejection Rationale *</label>
+                                    <textarea id="reject-reason-input" rows="3" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 outline-none" placeholder="e.g. Incomplete credentials, irrelevant department..."></textarea>
+                                </div>
+                                <div class="flex gap-3 pt-2">
+                                    <button onclick="document.getElementById('${modalId}').remove()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 px-4 rounded-2xl font-semibold text-xs transition">
+                                        Cancel
+                                    </button>
+                                    <button onclick="confirmRejectResourcePerson(${userId}, '${modalId}')" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-2xl font-semibold text-xs transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
+                                        <i class="bi bi-x-circle-fill"></i> Confirm Rejection
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        document.body.appendChild(modal);
+                    }
+
+                    function confirmRejectResourcePerson(userId, modalId) {
+                        const reasonInput = document.getElementById('reject-reason-input');
+                        const reason = reasonInput ? reasonInput.value.trim() : '';
+                        if (!reason) {
+                            alert('Please enter a reason for rejection.');
+                            return;
+                        }
+
+                        var formData = new FormData();
+                        formData.append('user_id', userId);
+                        formData.append('reason', reason);
+
+                        fetch('API/resource_person_api.php?action=reject', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(r => r.json())
+                        .then(data => {
+                            var modal = document.getElementById(modalId);
+                            if (modal) modal.remove();
+                            if (data.success) {
+                                alert('Application rejected.');
+                                if (typeof loadPendingResourcePersonApplications === 'function') loadPendingResourcePersonApplications();
+                                if (typeof loadPendingUserApplications === 'function') loadPendingUserApplications();
+                            } else {
+                                alert('Error: ' + (data.message || 'Rejection failed'));
+                            }
+                        })
+                        .catch(err => alert('Failed to reject application.'));
+                    }
+                        .then(data => {
+                            if (data.success) {
+                                alert('Application rejected.');
+                                loadPendingResourcePersonApplications();
+                            } else {
+                                alert('Error: ' + (data.message || 'Rejection failed'));
+                            }
+                        })
+                        .catch(err => alert('Failed to reject application.'));
+                    }
+
+                    function loadApprovedResourcePersons() {
+                        var container = document.getElementById('resource-persons-list');
+                        if (!container) return;
+
+                        container.innerHTML = '<div class="text-center py-12 text-slate-500 col-span-full"><i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-red-600"></i><p>Loading resource persons...</p></div>';
+
+                        fetch('API/resource_person_api.php?action=list_approved')
+                            .then(r => r.json())
+                            .then(res => {
+                                if (!res.success || !res.data) {
+                                    container.innerHTML = '<div class="text-center py-8 text-slate-500 col-span-full"><p>Failed to load resource persons.</p></div>';
+                                    return;
+                                }
+                                var list = res.data;
+                                if (list.length === 0) {
+                                    container.innerHTML = '<div class="text-center py-12 text-slate-500 col-span-full"><i class="fa-solid fa-user-check text-4xl mb-3 text-slate-300"></i><p>No approved resource persons registered yet.</p></div>';
+                                    return;
+                                }
+
+                                container.innerHTML = list.map(function(rp) {
+                                    return `
+                                    <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3 hover:shadow-md transition">
+                                        <div class="flex justify-between items-start">
+                                            <div class="flex items-center gap-3">
+                                                <div class="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-sm">
+                                                    <i class="bi bi-person-badge"></i>
+                                                </div>
+                                                <div>
+                                                    <h4 class="font-bold text-slate-800 text-sm">${escapeHtml(rp.fullname || 'Resource Person')}</h4>
+                                                    <p class="text-xs text-slate-500">${escapeHtml(rp.department || 'Department')}</p>
+                                                </div>
+                                            </div>
+                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">Verified</span>
+                                        </div>
+
+                                        <div class="space-y-1.5 text-xs text-slate-600 pt-2 border-t border-slate-100">
+                                            <p><i class="bi bi-envelope mr-1.5 text-slate-400"></i>${escapeHtml(rp.email || 'N/A')}</p>
+                                            <p><i class="bi bi-telephone mr-1.5 text-slate-400"></i>${escapeHtml(rp.phone || 'N/A')}</p>
+                                            <p><i class="bi bi-award mr-1.5 text-slate-400"></i><strong>Expertise:</strong> ${escapeHtml(rp.expertise_areas || 'General')}</p>
+                                        </div>
+                                    </div>`;
+                                }).join('');
+                            })
+                            .catch(err => {
+                                container.innerHTML = '<div class="text-center py-8 text-slate-500 col-span-full"><p>Error fetching resource persons.</p></div>';
+                            });
+                    }
+
+                    function escapeHtml(str) {
+                        if (typeof str !== 'string') return '';
+                        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+                    }
+
+                    document.addEventListener('DOMContentLoaded', function() {
+                        fetch('API/resource_person_api.php?action=list_pending')
+                            .then(r => r.json())
+                            .then(res => {
+                                if (res.success && res.data) {
+                                    var badge = document.getElementById('pending-count');
+                                    if (badge) badge.innerText = res.data.length;
+                                }
+                            }).catch(function(){});
+                    });
+                    </script>
+
 
 
 
@@ -5153,6 +5456,9 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
                                 <div class="flex items-center gap-2 flex-wrap">
+    <button type="button" onclick="openPCCalendarModal()" class="btn-outline px-4 py-2" title="Open Consultation Calendar">
+        <i class="bi bi-calendar3 mr-2"></i>Calendar
+    </button>
     <button type="button" onclick="openModuleReportModal('consultations')" class="btn-outline px-4 py-2">
         <i class="bi bi-file-earmark-bar-graph mr-2"></i>Generate Report
     </button>
@@ -5218,18 +5524,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
                             </div>
 
-                            <!-- Calendar Display -->
-                            <div class="bg-white rounded-lg shadow-sm p-4 border-l-4 border-purple-600 mt-6">
-                                <div class="flex items-center justify-between mb-2">
-                                    <div class="text-gray-600 text-sm font-medium">Consultation Calendar</div>
-                                    <div class="flex gap-1">
-                                        <button onclick="consultationCalendarChangeMonth(-1)" class="p-1 hover:bg-gray-100 rounded text-gray-600"><i class="bi bi-chevron-left"></i></button>
-                                        <button onclick="consultationCalendarChangeMonth(1)" class="p-1 hover:bg-gray-100 rounded text-gray-600"><i class="bi bi-chevron-right"></i></button>
-                                    </div>
-                                </div>
-                                <div id="consultation-calendar-label" class="text-center font-bold text-gray-900 text-sm mb-2"></div>
-                                <div id="consultation-calendar-grid" class="grid grid-cols-7 gap-1 text-xs"></div>
-                            </div>
+
 
 
 
@@ -5325,8 +5620,10 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                                         <option value="replied" <?= $status === 'replied' ? 'selected' : '' ?>>Replied</option>
                                                                         <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>>Completed</option>
                                                                         <option value="closed" <?= $status === 'closed' ? 'selected' : '' ?>>Closed</option>
+                                                                        <option value="declined" <?= ($status === 'declined' || $status === 'rejected') ? 'selected' : '' ?>>Declined</option>
                                                                         <option value="archived" <?= $status === 'archived' ? 'selected' : '' ?>>Archived</option>
                                                                     </select>
+                                                                    <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openDeclineCitizenSubmissionModal(<?= (int)$c['id'] ?>)" class="text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Decline</button>
                                                                 <?php else: ?>
                                                                     <select disabled class="text-xs border rounded px-1 py-0.5 opacity-60 cursor-not-allowed">
                                                                         <option>Set Status</option>
@@ -5419,8 +5716,10 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                                         <option value="replied" <?= $status === 'replied' ? 'selected' : '' ?>>Replied</option>
                                                                         <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>>Completed</option>
                                                                         <option value="closed" <?= $status === 'closed' ? 'selected' : '' ?>>Closed</option>
+                                                                        <option value="declined" <?= ($status === 'declined' || $status === 'rejected') ? 'selected' : '' ?>>Declined</option>
                                                                         <option value="archived" <?= $status === 'archived' ? 'selected' : '' ?>>Archived</option>
                                                                     </select>
+                                                                    <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openDeclineCitizenSubmissionModal(<?= (int)$c['id'] ?>)" class="text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Decline</button>
                                                                 <?php else: ?>
                                                                     <select disabled class="text-xs border rounded px-1 py-0.5 opacity-60 cursor-not-allowed">
                                                                         <option>Set Status</option>
@@ -5504,8 +5803,10 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                                         <option value="replied" <?= $status === 'replied' ? 'selected' : '' ?>>Replied</option>
                                                                         <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>>Completed</option>
                                                                         <option value="closed" <?= $status === 'closed' ? 'selected' : '' ?>>Closed</option>
+                                                                        <option value="declined" <?= ($status === 'declined' || $status === 'rejected') ? 'selected' : '' ?>>Declined</option>
                                                                         <option value="archived" <?= $status === 'archived' ? 'selected' : '' ?>>Archived</option>
                                                                     </select>
+                                                                    <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openDeclineCitizenSubmissionModal(<?= (int)$c['id'] ?>)" class="text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Decline</button>
                                                                 <?php else: ?>
                                                                     <select disabled class="text-xs border rounded px-1 py-0.5 opacity-60 cursor-not-allowed">
                                                                         <option>Set Status</option>
@@ -8781,6 +9082,16 @@ $totalPages = ceil($totalLogs / $pageSize);
                 if (event && event.target) {
                     event.target.value = '';
                 }
+                return;
+            }
+
+            if (newStatus === 'declined' || newStatus === 'rejected') {
+                if (typeof openDeclineCitizenSubmissionModal === 'function') {
+                    openDeclineCitizenSubmissionModal(consultationId);
+                } else if (typeof confirmDeclineCitizenSubmission === 'function') {
+                    confirmDeclineCitizenSubmission(consultationId);
+                }
+                if (event && event.target) event.target.value = '';
                 return;
             }
 

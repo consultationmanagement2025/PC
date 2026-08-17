@@ -644,7 +644,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     
 
-    $valid_statuses = ['draft', 'pending', 'active', 'viewed', 'replied', 'completed', 'closed', 'archived'];
+    $valid_statuses = ['draft', 'pending', 'active', 'viewed', 'replied', 'completed', 'closed', 'archived', 'rejected', 'declined', 'forwarded_orts'];
 
     
 
@@ -663,6 +663,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         require_once 'db.php';
 
         
+
+        if ($new_status === 'declined' || $new_status === 'rejected') {
+            $reason = trim($_POST['reason'] ?? $_POST['remarks'] ?? 'Submission declined by LGU Secretariat');
+            $stmt = $conn->prepare("UPDATE consultations SET status = ?, admin_response = ?, remarks = ?, updated_at = NOW() WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param('sssi', $new_status, $reason, $reason, $consultation_id);
+                $ok = $stmt->execute();
+                $stmt->close();
+                echo json_encode(['success' => $ok]);
+                exit;
+            }
+        }
 
         $stmt = $conn->prepare("UPDATE consultations SET status = ? WHERE id = ?");
 
@@ -5608,8 +5620,10 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                                         <option value="replied" <?= $status === 'replied' ? 'selected' : '' ?>>Replied</option>
                                                                         <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>>Completed</option>
                                                                         <option value="closed" <?= $status === 'closed' ? 'selected' : '' ?>>Closed</option>
+                                                                        <option value="declined" <?= ($status === 'declined' || $status === 'rejected') ? 'selected' : '' ?>>Declined</option>
                                                                         <option value="archived" <?= $status === 'archived' ? 'selected' : '' ?>>Archived</option>
                                                                     </select>
+                                                                    <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openDeclineCitizenSubmissionModal(<?= (int)$c['id'] ?>)" class="text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Decline</button>
                                                                 <?php else: ?>
                                                                     <select disabled class="text-xs border rounded px-1 py-0.5 opacity-60 cursor-not-allowed">
                                                                         <option>Set Status</option>
@@ -5702,8 +5716,10 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                                         <option value="replied" <?= $status === 'replied' ? 'selected' : '' ?>>Replied</option>
                                                                         <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>>Completed</option>
                                                                         <option value="closed" <?= $status === 'closed' ? 'selected' : '' ?>>Closed</option>
+                                                                        <option value="declined" <?= ($status === 'declined' || $status === 'rejected') ? 'selected' : '' ?>>Declined</option>
                                                                         <option value="archived" <?= $status === 'archived' ? 'selected' : '' ?>>Archived</option>
                                                                     </select>
+                                                                    <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openDeclineCitizenSubmissionModal(<?= (int)$c['id'] ?>)" class="text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Decline</button>
                                                                 <?php else: ?>
                                                                     <select disabled class="text-xs border rounded px-1 py-0.5 opacity-60 cursor-not-allowed">
                                                                         <option>Set Status</option>
@@ -5787,8 +5803,10 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                                         <option value="replied" <?= $status === 'replied' ? 'selected' : '' ?>>Replied</option>
                                                                         <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>>Completed</option>
                                                                         <option value="closed" <?= $status === 'closed' ? 'selected' : '' ?>>Closed</option>
+                                                                        <option value="declined" <?= ($status === 'declined' || $status === 'rejected') ? 'selected' : '' ?>>Declined</option>
                                                                         <option value="archived" <?= $status === 'archived' ? 'selected' : '' ?>>Archived</option>
                                                                     </select>
+                                                                    <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openDeclineCitizenSubmissionModal(<?= (int)$c['id'] ?>)" class="text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Decline</button>
                                                                 <?php else: ?>
                                                                     <select disabled class="text-xs border rounded px-1 py-0.5 opacity-60 cursor-not-allowed">
                                                                         <option>Set Status</option>
@@ -9064,6 +9082,16 @@ $totalPages = ceil($totalLogs / $pageSize);
                 if (event && event.target) {
                     event.target.value = '';
                 }
+                return;
+            }
+
+            if (newStatus === 'declined' || newStatus === 'rejected') {
+                if (typeof openDeclineCitizenSubmissionModal === 'function') {
+                    openDeclineCitizenSubmissionModal(consultationId);
+                } else if (typeof confirmDeclineCitizenSubmission === 'function') {
+                    confirmDeclineCitizenSubmission(consultationId);
+                }
+                if (event && event.target) event.target.value = '';
                 return;
             }
 

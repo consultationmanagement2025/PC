@@ -40,6 +40,10 @@ const AppData = {
 
 };
 
+window.escapeHtml = function(str) {
+    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+};
+
 window.pfpShowPhmsDetailModal = function (hearingId) {
     console.log('[PHMS Detail Modal] Launching for hearingId:', hearingId);
     const oldModal = document.getElementById('phms-detail-modal');
@@ -8738,11 +8742,11 @@ function openNotificationModal(id) {
 
                         <!-- Action Buttons -->
                         <div class="flex items-center gap-2">
-                            <button id="notif-detail-action" class="hidden px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-sm"></button>
-                            <button id="notif-detail-open" class="px-4 py-2.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-1.5 hover:shadow-lg">
+                            <button id="notif-detail-action" type="button" class="hidden px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-sm"></button>
+                            <button id="notif-detail-open" type="button" class="px-4 py-2.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-1.5 hover:shadow-lg">
                                 <i class="bi bi-box-arrow-up-right"></i> Open Related Page
                             </button>
-                            <button id="notif-detail-dismiss" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+                            <button id="notif-detail-dismiss" type="button" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
                                 Close
                             </button>
                         </div>
@@ -8754,12 +8758,12 @@ function openNotificationModal(id) {
         document.body.appendChild(modal);
 
         // Close handlers
-        modal.querySelector('#notif-detail-close').addEventListener('click', () => closeNotificationModal());
-        modal.querySelector('#notif-detail-dismiss').addEventListener('click', () => closeNotificationModal());
+        modal.querySelector('#notif-detail-close').addEventListener('click', (e) => { if (e && e.preventDefault) e.preventDefault(); closeNotificationModal(); });
+        modal.querySelector('#notif-detail-dismiss').addEventListener('click', (e) => { if (e && e.preventDefault) e.preventDefault(); closeNotificationModal(); });
 
         // Navigation handlers
-        modal.querySelector('#notif-detail-prev').addEventListener('click', () => navigateNotification(-1));
-        modal.querySelector('#notif-detail-next').addEventListener('click', () => navigateNotification(1));
+        modal.querySelector('#notif-detail-prev').addEventListener('click', (e) => { if (e && e.preventDefault) e.preventDefault(); navigateNotification(-1); });
+        modal.querySelector('#notif-detail-next').addEventListener('click', (e) => { if (e && e.preventDefault) e.preventDefault(); navigateNotification(1); });
     }
 
     // Dynamic Banner Header Colors based on priority/type
@@ -8788,18 +8792,60 @@ function openNotificationModal(id) {
         badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-white/20 text-white border border-white/30';
     }
 
+    const pfpNavigateToRelatedSection = function (notifObj) {
+        const cat = String(notifObj.category || '').toLowerCase();
+        const type = String(notifObj.type || '').toLowerCase();
+        const msg = String(notifObj.message || '').toLowerCase();
+        const title = String(notifObj.title || '').toLowerCase();
+
+        let targetSection = 'public-consultation';
+
+        if (cat.includes('phms') || type.includes('phms') || msg.includes('phms') || title.includes('phms') || cat.includes('feedback') || type === 'feedback') {
+            targetSection = 'public-feedback-queue';
+        } else if (cat.includes('document') || type.includes('document') || type === 'approval') {
+            targetSection = 'pc-documents';
+        } else if (cat.includes('user') || type.includes('user')) {
+            targetSection = 'users';
+        } else if (cat.includes('system') || cat.includes('report') || type.includes('alert') || type.includes('system') || cat.includes('ai engine')) {
+            targetSection = 'reports';
+        } else if (cat.includes('consultation') || type.includes('consultation')) {
+            targetSection = 'consultation-management';
+        }
+
+        if (targetSection === 'public-feedback-queue' && typeof renderPublicFeedbackQueueSection === 'function') {
+            renderPublicFeedbackQueueSection();
+            return;
+        }
+        if (targetSection === 'reports' && typeof renderSystemReportsSection === 'function') {
+            renderSystemReportsSection();
+            if (cat.includes('ai engine') || type.includes('ai')) {
+                setTimeout(() => { if (typeof switchSystemReportTab === 'function') switchSystemReportTab('ai'); }, 100);
+            }
+            return;
+        }
+
+        if (typeof showSection === 'function') {
+            showSection(targetSection);
+            return;
+        }
+
+        const navItem = document.querySelector(`[onclick*="${targetSection}"], [data-section="${targetSection}"]`);
+        if (navItem) {
+            navItem.click();
+        }
+    };
+
     // Action button
     const actionBtn = document.getElementById('notif-detail-action');
     if (notif.action) {
         actionBtn.textContent = notif.action;
         actionBtn.classList.remove('hidden');
-        actionBtn.onclick = function () {
+        actionBtn.onclick = function (e) {
+            if (e && e.preventDefault) e.preventDefault();
+            if (e && e.stopPropagation) e.stopPropagation();
             closeNotificationModal();
-            if (notif.category === 'documents') showSection('documents');
-            else if (notif.category === 'feedback') showSection('public-feedback-queue');
-            else if (notif.category === 'users') showSection('users');
-            else if (notif.category === 'system') showSection('audit');
-            else showSection('public-consultation');
+            pfpNavigateToRelatedSection(notif);
+            return false;
         };
     } else {
         actionBtn.classList.add('hidden');
@@ -8807,13 +8853,12 @@ function openNotificationModal(id) {
 
     // Open action
     const openBtn = document.getElementById('notif-detail-open');
-    openBtn.onclick = function () {
+    openBtn.onclick = function (e) {
+        if (e && e.preventDefault) e.preventDefault();
+        if (e && e.stopPropagation) e.stopPropagation();
         closeNotificationModal();
-        if (notif.type === 'document' || notif.type === 'approval') showSection('documents');
-        else if (notif.type === 'user') showSection('users');
-        else if (notif.type === 'feedback' || notif.type === 'phms_integration') showSection('public-feedback-queue');
-        else if (notif.type === 'alert' || notif.type === 'system') showSection('audit');
-        else showSection('public-consultation');
+        pfpNavigateToRelatedSection(notif);
+        return false;
     };
 
     // Update navigation state and counter
@@ -9556,18 +9601,11 @@ function formatDate(dateString) {
 
 
 async function renderPublicConsultation() {
-
-
-    // Update page title and breadcrumb
-
-
-
+    if (window._currentActiveSection && window._currentActiveSection !== 'public-consultation' && window._currentActiveSection !== 'consultation-dashboard') {
+        return;
+    }
 
     const breadcrumbCurrent = document.querySelector('.breadcrumb-current');
-
-
-
-
     if (breadcrumbCurrent) breadcrumbCurrent.textContent = 'Public Consultation';
 
     const contentArea = document.getElementById('content-area');
@@ -9583,6 +9621,11 @@ async function renderPublicConsultation() {
         ]);
     } catch (e) {
         console.warn('Consultation overview bootstrap failed:', e);
+    }
+
+    if (window._currentActiveSection && window._currentActiveSection !== 'public-consultation' && window._currentActiveSection !== 'consultation-dashboard') {
+        console.log('[renderPublicConsultation] Active section changed to ' + window._currentActiveSection + ' - aborting overview injection.');
+        return;
     }
 
 
@@ -10085,6 +10128,9 @@ async function renderPublicConsultation() {
 
     // Render charts — must wait for DOM injection at line ~10045 to complete
     setTimeout(() => {
+        if (window._currentActiveSection && window._currentActiveSection !== 'public-consultation' && window._currentActiveSection !== 'consultation-dashboard') {
+            return;
+        }
         const filtered = Array.isArray(AppData.consultations) ? AppData.consultations : [];
         console.log('[renderPublicConsultation] setTimeout fired, rendering charts & calendar with', filtered.length, 'consultations');
         renderPCStatusChart(filtered);
@@ -10100,10 +10146,16 @@ async function renderPublicConsultation() {
             loadFeedbackFromApi(),
             loadIssuesFromApi()
         ]).then(() => {
+            if (window._currentActiveSection && window._currentActiveSection !== 'public-consultation' && window._currentActiveSection !== 'consultation-dashboard') {
+                return;
+            }
             renderPCFeedbackSentimentChart();
             renderPCSurveyAnswersChart(Array.isArray(AppData.consultations) ? AppData.consultations : []);
             renderPCDashboardCalendar();
         }).catch((e) => {
+            if (window._currentActiveSection && window._currentActiveSection !== 'public-consultation' && window._currentActiveSection !== 'consultation-dashboard') {
+                return;
+            }
             console.error(e);
             renderPCFeedbackSentimentChart();
             renderPCSurveyAnswersChart(Array.isArray(AppData.consultations) ? AppData.consultations : []);
@@ -13797,7 +13849,9 @@ function renderConsultationsTable() {
         if (!consultation) return false;
         const t = String(consultation.type || '').toLowerCase();
         if (t === 'user') return true;
-        if (consultation.userName || consultation.user_email || consultation.userEmail) return true;
+        const uName = String(consultation.userName || consultation.user_name || '').toLowerCase();
+        if (uName && !uName.includes('system administrator') && !uName.includes('admin')) return true;
+        if (consultation.userEmail || consultation.user_email) return true;
         return false;
     }
 
@@ -13856,9 +13910,19 @@ function renderConsultationsTable() {
             const consultationType = String(consultation.title || '-');
             const scheduledDateTime = consultation.date ? new Date(consultation.date).toLocaleString() : '-';
 
-            const approveBtn = (st === 'pending' || st === 'new' || !st || st === 'draft')
-                ? `<button onclick="openApproveCitizenSubmissionModal(${consultation.id})" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer" title="Approve & Launch Live Consultation on Public Portal"><i class="bi bi-check-circle-fill"></i> Approve & Publish</button>`
-                : `<span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-lg text-[11px] flex items-center gap-1"><i class="bi bi-globe"></i> Live Public</span>`;
+            let approveBtn = `<span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-lg text-[11px] flex items-center gap-1"><i class="bi bi-globe"></i> Live Public</span>`;
+            if (st === 'pending' || st === 'new' || !st || st === 'draft') {
+                approveBtn = `
+                    <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openApproveCitizenSubmissionModal(${consultation.id})" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer" title="Approve & Launch Live Consultation on Public Portal">
+                        <i class="bi bi-check-circle-fill"></i> Approve & Publish
+                    </button>
+                    <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openDeclineCitizenSubmissionModal(${consultation.id})" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer" title="Decline this citizen submission">
+                        <i class="bi bi-x-circle-fill"></i> Decline
+                    </button>
+                `;
+            } else if (st === 'rejected' || st === 'declined') {
+                approveBtn = `<span class="px-2.5 py-1 bg-rose-100 text-rose-800 border border-rose-300 font-bold rounded-lg text-[11px] flex items-center gap-1"><i class="bi bi-x-circle-fill text-rose-600"></i> Declined</span>`;
+            }
 
             userRows.push(`
                 <tr class="border-b hover:bg-gray-50 transition">
@@ -13869,7 +13933,7 @@ function renderConsultationsTable() {
                     <td class="px-6 py-4 text-center">${consultStatusTrackerHtml}</td>
                     <td class="px-6 py-4 text-center"><span class="inline-flex items-center gap-1 text-gray-600"><i class="bi bi-file-text"></i>${consultation.documentsAttached || 0}</span></td>
                     <td class="px-6 py-4 text-center">
-                        <div class="flex gap-2 justify-center items-center">
+                        <div class="flex gap-2 justify-center items-center flex-wrap">
                             <button onclick="viewConsultationDetails(${consultation.id})" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-semibold transition border border-blue-200 cursor-pointer" title="View Details">
                                 <i class="bi bi-eye font-bold"></i> View
                             </button>
@@ -13961,13 +14025,26 @@ function getFilteredConsultations() {
     const selectedCategory = document.getElementById('consultation-sort')?.value || '';
 
 
+
+
     if (searchTerm) {
+
+
         filtered = filtered.filter(c => (c.title || '').toLowerCase().includes(searchTerm));
+
+
     }
+
+
+
+
 
     if (statusFilter && statusFilter !== 'all') {
         filtered = filtered.filter(c => String(c.status || '').toLowerCase() === statusFilter.toLowerCase());
     }
+
+
+
 
     if (selectedCategory && selectedCategory !== 'all') {
         filtered = filtered.filter(c => {
@@ -13978,7 +14055,12 @@ function getFilteredConsultations() {
         });
     }
 
+
+
+
     return filtered;
+
+
 }
 
 
@@ -14003,18 +14085,84 @@ function guessConsultationCategoryFromTitle(title) {
     if (!normalized) return '';
 
     const categoryMap = [
-        { category: 'Public Utilities & Facilities', keywords: ['misting', 'poles', 'water', 'electricity', 'power', 'utility', 'streetlight', 'drainage', 'sewer', 'pipes', 'hydrant', 'lottery'] },
-        { category: 'Urban Planning, Housing & Development', keywords: ['housing', 'urban', 'road', 'street', 'flood control', 'planning', 'zoning', 'sidewalk', 'transport', 'parking', 'relocation'] },
-        { category: 'Health & Sanitation', keywords: ['health', 'sanitation', 'clinic', 'hospital', 'mosquito', 'waste', 'garbage', 'toilet', 'clean', 'sewerage'] },
-        { category: 'Social Services', keywords: ['youth', 'elderly', 'welfare', 'social', 'assistance', 'senior', 'child', 'family'] },
-        { category: 'Food & Agriculture', keywords: ['food', 'agriculture', 'farm', 'livestock', 'market', 'produce', 'planting', 'crop'] },
-        { category: 'Higher & Technical Education', keywords: ['school', 'education', 'training', 'college', 'technical', 'scholarship', 'classroom'] },
-        { category: 'Justice & Human Rights', keywords: ['justice', 'rights', 'police', 'security', 'law', 'legal', 'human rights', 'complaint'] },
-        { category: 'Ways & Means', keywords: ['budget', 'appropriation', 'finance', 'funding', 'tax', 'revenue', 'grant', 'expense'] },
-        { category: 'Market & Slaughterhouse', keywords: ['market', 'slaughterhouse', 'vendors', 'stall', 'public market', 'butcher'] },
-        { category: 'Cooperatives', keywords: ['cooperative', 'co-op', 'cooperatives'] },
-        { category: 'Women, Family & Gender Equality', keywords: ['women', 'family', 'gender', 'equal', 'mother', 'father', 'childcare', 'parenting'] },
-        { category: 'Rules & Privileges', keywords: ['rule', 'privilege', 'ordinance', 'policy', 'regulation', 'permit'] }
+        { 
+            category: 'Public Utilities & Facilities', 
+            keywords: [
+                'lamp', 'light', 'lighting', 'road', 'street', 'facility', 'facilities', 'infrastructure', 
+                'misting', 'poles', 'water', 'electricity', 'power', 'utility', 'streetlight', 'street light', 
+                'drainage', 'sewer', 'pipes', 'hydrant', 'bridge', 'pavement', 'traffic', 'telecom', 'internet', 
+                'cable', 'post', 'pathway', 'gutter', 'alley'
+            ] 
+        },
+        { 
+            category: 'Urban Planning, Housing & Development', 
+            keywords: [
+                'park', 'parks', 'open space', 'open spaces', 'playground', 'greenery', 'housing', 'urban', 
+                'flood control', 'planning', 'zoning', 'sidewalk', 'transport', 'parking', 'relocation', 
+                'subdivision', 'building', 'land', 'plaza', 'recreation'
+            ] 
+        },
+        { 
+            category: 'Health & Sanitation', 
+            keywords: [
+                'health', 'sanitation', 'clinic', 'hospital', 'mosquito', 'waste', 'garbage', 'toilet', 
+                'clean', 'sewerage', 'dengue', 'vaccine', 'medical', 'medicine', 'outpatient', 'pharmacy', 
+                'quarantine', 'disease', 'wellness', 'hygiene'
+            ] 
+        },
+        { 
+            category: 'Social Services', 
+            keywords: [
+                'youth', 'elderly', 'welfare', 'social', 'assistance', 'senior', 'child', 'children', 
+                'family', 'pwd', 'handicapped', 'indigent', 'pension', 'relief', 'aid', 'subsidy', 'disabled'
+            ] 
+        },
+        { 
+            category: 'Food & Agriculture', 
+            keywords: [
+                'food', 'agriculture', 'farm', 'livestock', 'produce', 'planting', 'crop', 'paddy', 
+                'rice', 'vegetable', 'meat', 'poultry', 'fishery', 'fish', 'harvest'
+            ] 
+        },
+        { 
+            category: 'Higher & Technical Education', 
+            keywords: [
+                'school', 'education', 'training', 'college', 'technical', 'scholarship', 'classroom', 
+                'university', 'tesda', 'student', 'teacher', 'learning', 'tuition', 'academic'
+            ] 
+        },
+        { 
+            category: 'Justice & Human Rights', 
+            keywords: [
+                'justice', 'rights', 'police', 'security', 'law', 'legal', 'human rights', 'complaint', 
+                'court', 'barangay tanod', 'crime', 'peace', 'patrol'
+            ] 
+        },
+        { 
+            category: 'Ways & Means', 
+            keywords: [
+                'budget', 'appropriation', 'finance', 'funding', 'tax', 'revenue', 'grant', 'expense', 
+                'fiscal', 'bonds', 'audit', 'treasury'
+            ] 
+        },
+        { 
+            category: 'Market & Slaughterhouse', 
+            keywords: [
+                'market', 'slaughterhouse', 'vendors', 'stall', 'public market', 'butcher', 'tiangge', 'talipapa'
+            ] 
+        },
+        { 
+            category: 'Cooperatives', 
+            keywords: ['cooperative', 'co-op', 'cooperatives', 'credit union', 'livelihood group'] 
+        },
+        { 
+            category: 'Women, Family & Gender Equality', 
+            keywords: ['women', 'family', 'gender', 'equal', 'mother', 'father', 'childcare', 'parenting', 'maternity', 'lgbt'] 
+        },
+        { 
+            category: 'Rules & Privileges', 
+            keywords: ['rule', 'privilege', 'ordinance', 'policy', 'regulation', 'permit', 'charter', 'resolution', 'code'] 
+        }
     ];
 
     for (const entry of categoryMap) {
@@ -14025,6 +14173,52 @@ function guessConsultationCategoryFromTitle(title) {
 
     return '';
 }
+
+// Global real-time auto-category selector listener across all forms & modals
+document.addEventListener('input', function(e) {
+    const target = e.target;
+    if (!target) return;
+    
+    const isTitleField = target.id === 'consultation-title' || 
+                         target.id === 'concern-title' || 
+                         target.id === 'topic-title' ||
+                         target.name === 'title' ||
+                         target.name === 'topic_title' ||
+                         target.name === 'consultation_title' ||
+                         (target.placeholder && (target.placeholder.toLowerCase().includes('title') || target.placeholder.toLowerCase().includes('ordinance')));
+
+    if (isTitleField) {
+        const form = target.closest('form') || target.closest('.modal') || target.closest('div') || document;
+        const categorySelect = form.querySelector('#consultation-category, #concern-category, select[name="category"], select[name="topic_category"]');
+        
+        if (categorySelect) {
+            const currentVal = categorySelect.value;
+            const suggestedCategory = guessConsultationCategoryFromTitle(target.value);
+            
+            if (!currentVal || categorySelect.dataset.autoSelected === 'true') {
+                if (suggestedCategory) {
+                    for (let i = 0; i < categorySelect.options.length; i++) {
+                        const opt = categorySelect.options[i];
+                        if (opt.value.toLowerCase() === suggestedCategory.toLowerCase() || opt.text.toLowerCase() === suggestedCategory.toLowerCase()) {
+                            categorySelect.selectedIndex = i;
+                            categorySelect.dataset.autoSelected = 'true';
+                            break;
+                        }
+                    }
+                } else if (categorySelect.dataset.autoSelected === 'true') {
+                    categorySelect.value = '';
+                    delete categorySelect.dataset.autoSelected;
+                }
+            }
+        }
+    }
+});
+
+document.addEventListener('change', function(e) {
+    if (e.target && (e.target.tagName === 'SELECT')) {
+        delete e.target.dataset.autoSelected;
+    }
+});
 
 function openCreateConsultationModal(createMode) {
 
@@ -17115,24 +17309,14 @@ function openFeedbackResponseModal(id) {
                     ` : `
                         <div class="p-4 bg-purple-50/70 border border-purple-200 rounded-lg space-y-3">
                             <div class="flex items-center justify-between">
-                                <label class="font-bold text-purple-900 text-sm flex items-center">
-                                    <i class="bi bi-diagram-3 mr-1 text-purple-700"></i> Stage 4: LGU Committee Routing
+                                <label class="font-bold text-indigo-900 text-sm flex items-center">
+                                    <i class="bi bi-diagram-3 mr-1 text-indigo-700"></i> Stage 4: Direct Transmittal to ORTS
                                 </label>
-                                ${f.committee_assigned ? `<span class="text-xs font-bold px-2 py-0.5 bg-purple-200 text-purple-900 rounded">Assigned: ${escapeHtml(f.committee_assigned)}</span>` : '<span class="text-xs text-purple-600 font-medium">Currently Unassigned</span>'}
+                                ${f.committee_assigned ? `<span class="text-xs font-bold px-2 py-0.5 bg-indigo-200 text-indigo-900 rounded">Target: ${escapeHtml(f.committee_assigned)}</span>` : '<span class="text-xs text-indigo-600 font-medium">Target: ORTS (Ordinance Routing & Tracking System)</span>'}
                             </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                <div class="sm:col-span-2">
-                                    <select id="pfq-modal-committee-select" class="w-full px-3 py-1.5 border border-purple-300 rounded text-xs font-medium focus:ring-purple-500">
-                                        <option value="">-- Select Target LGU Committee --</option>
-                                        <option value="Urban Planning & Infrastructure">Urban Planning & Infrastructure</option>
-                                        <option value="Environmental Management & Sanitation">Environmental Management & Sanitation</option>
-                                        <option value="Health & Social Services">Health & Social Services</option>
-                                        <option value="Finance, Budget & Appropriations">Finance, Budget & Appropriations</option>
-                                        <option value="Rules, Laws & Governance">Rules, Laws & Governance</option>
-                                    </select>
-                                </div>
-                                <button onclick="submitForwardToCommittee(${Number(f.id)})" class="w-full px-3 py-1.5 bg-purple-700 text-white rounded text-xs font-bold hover:bg-purple-800 shadow">
-                                    <i class="bi bi-send-check mr-1"></i> Forward to Committee
+                            <div class="grid grid-cols-1 gap-2">
+                                <button onclick="submitForwardToCommittee(${Number(f.id)})" class="w-full px-3 py-2 bg-indigo-700 text-white rounded text-xs font-bold hover:bg-indigo-800 shadow flex items-center justify-center gap-1 cursor-pointer">
+                                    <i class="bi bi-send-check mr-1"></i> Forward to ORTS
                                 </button>
                             </div>
                         </div>
@@ -17186,24 +17370,23 @@ function openFeedbackResponseModal(id) {
 
 async function submitForwardToCommittee(id) {
     const select = document.getElementById('pfq-modal-committee-select');
-    const committee = select ? select.value.trim() : '';
-
+    let committee = select ? select.value.trim() : '';
     if (!committee) {
-        showNotification('Please select a target LGU Committee.', 'error');
-        return;
+        committee = 'ORTS Ordinance Routing System';
     }
 
     try {
-        const res = await fetch('API/feedback_api.php?action=forward', {
+        const res = await fetch('API/consultation_feedback_ai.php?action=forward_brief_to_orts', {
             method: 'POST',
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                id: Number(id),
+                consultation_id: Number(id),
                 committee: committee,
-                notes: 'Forwarded via Admin Feedback Queue'
+                target: 'ORTS',
+                notes: 'Transmitted directly to ORTS'
             })
         });
 
@@ -17214,16 +17397,16 @@ async function submitForwardToCommittee(id) {
 
         const row = AppData.feedback.find(f => Number(f.id) === Number(id));
         if (row) {
-            row.status = 'forwarded';
+            row.status = 'forwarded_orts';
             row.committee_assigned = committee;
         }
 
         closeFeedbackModal();
         pfpRenderStats();
         pfpRenderTable();
-        showNotification(data.message || `Feedback forwarded to ${committee}!`, 'success');
+        showNotification(data.message || `AI Brief & Report transmitted directly to ORTS!`, 'success');
     } catch (err) {
-        showNotification(err && err.message ? String(err.message) : 'Failed to forward feedback.', 'error');
+        showNotification(err && err.message ? String(err.message) : 'Failed to transmit to ORTS.', 'error');
     }
 }
 
@@ -19443,7 +19626,7 @@ function renderConnectingDotsTracker(currentStatus, docOrConsultId, type = 'cons
         else if (st === 'under_review' || st === 'reviewed' || st === 'viewed') currentStep = 2;
         else if (st === 'active' || st === 'public_review' || st === 'published_portal') currentStep = 3;
         else if (st === 'closed' || st === 'closed_for_feedback' || st === 'ai_summary' || st === 'summarized' || st === 'synthesized') currentStep = 4;
-        else if (st === 'forwarded_to_lrs' || st === 'forwarded' || st === 'committee' || st === 'approved' || st === 'ordinance') currentStep = 5;
+        else if (st === 'forwarded_to_lrs' || st === 'forwarded' || st === 'committee' || st === 'approved' || st === 'ordinance' || st === 'orts' || st === 'forwarded_orts' || st === 'orts_drafting') currentStep = 5;
         else if (st === 'published' || st === 'officialized' || st === 'archived' || st === 'completed' || st === 'rejected') currentStep = 6;
 
         steps = [
@@ -19451,7 +19634,7 @@ function renderConnectingDotsTracker(currentStatus, docOrConsultId, type = 'cons
             { num: 2, name: 'Resource Person Vetting', desc: 'Evaluated & prepared for public hearing by assigned Resource Person / Secretariat', statusVal: 'under_review' },
             { num: 3, name: 'Live Public Portal', desc: 'Published live on Public Portal for citizen reading, voting & public feedback', statusVal: 'active' },
             { num: 4, name: 'AI Feedback Synthesis', desc: 'PCMS AI Engine scans & summarizes all citizen votes and comments into a synthesis report', statusVal: 'ai_summary' },
-            { num: 5, name: 'Committee & Ordinance Systems', desc: 'Report dispatched to Committee System for hearings & Ordinance System for drafting', statusVal: 'forwarded' },
+            { num: 5, name: 'Ordinance Routing & Tracking (ORTS)', desc: 'Validated report dispatched directly to ORTS for ordinance drafting & tracking', statusVal: 'forwarded' },
             { num: 6, name: 'Officialized & Archived', desc: 'Enacted as official city ordinance, published & stored in permanent city archive', statusVal: 'published' }
         ];
     } else {
@@ -19460,7 +19643,7 @@ function renderConnectingDotsTracker(currentStatus, docOrConsultId, type = 'cons
         else if (st === 'active' || st === 'published_portal' || st === 'voting') currentStep = 2;
         else if (st === 'closed' || st === 'closed_for_feedback' || st === 'ai_summary' || st === 'summarized' || st === 'synthesized') currentStep = 3;
         else if (st === 'under_review' || st === 'reviewed' || st === 'viewed' || st === 'replied') currentStep = 4;
-        else if (st === 'scheduled' || st === 'committee' || st === 'forwarded' || st === 'approved' || st === 'ordinance') currentStep = 5;
+        else if (st === 'scheduled' || st === 'committee' || st === 'forwarded' || st === 'approved' || st === 'ordinance' || st === 'orts' || st === 'forwarded_orts' || st === 'orts_drafting') currentStep = 5;
         else if (st === 'completed' || st === 'officialized' || st === 'archived' || st === 'enacted') currentStep = 6;
 
         steps = [
@@ -19468,7 +19651,7 @@ function renderConnectingDotsTracker(currentStatus, docOrConsultId, type = 'cons
             { num: 2, name: 'Live Public Portal', desc: 'Active on Public Portal collecting citizen votes, surveys, and public feedback', statusVal: 'active' },
             { num: 3, name: 'AI Feedback Synthesis', desc: 'Consultation closes; PCMS AI Engine scans & synthesizes all citizen comments & votes', statusVal: 'ai_summary' },
             { num: 4, name: 'Resource Person Review', desc: 'Assigned Resource Person reviews AI Summary, adds expert evaluation & endorses report', statusVal: 'under_review' },
-            { num: 5, name: 'Committee & Ordinance Systems', desc: 'Endorsed report sent to Committee System for hearings & Ordinance System for bill drafting', statusVal: 'scheduled' },
+            { num: 5, name: 'Ordinance Routing & Tracking (ORTS)', desc: 'AI-summarized & RP-validated report sent directly to ORTS for ordinance drafting & tracking', statusVal: 'scheduled' },
             { num: 6, name: 'Officialized Ordinance', desc: 'Enacted into official city ordinance & stored in permanent municipal archive', statusVal: 'completed' }
         ];
     }
@@ -22394,7 +22577,7 @@ function renderAiCommitteeBriefModalHtml(brief) {
                 <div class="space-y-1.5">
                     <div class="flex items-center gap-2 flex-wrap">
                         <span class="px-3 py-1 rounded-full bg-white/15 backdrop-blur-xs text-white text-[10px] font-extrabold uppercase tracking-wider border border-white/20 flex items-center gap-1.5">
-                            <i class="bi bi-robot text-red-300"></i> Official AI Committee Synthesis Document
+                            <i class="bi bi-file-earmark-text-fill text-red-300"></i> Official Consultation Feedback Synthesis Brief
                         </span>
                         <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-400/30 uppercase tracking-wider">
                             CLOSED
@@ -22470,10 +22653,10 @@ function renderAiCommitteeBriefModalHtml(brief) {
                     </div>
                 </div>
 
-                <!-- Section 2: AI Recommended Solutions -->
+                <!-- Section 2: Recommended Solutions -->
                 <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
                     <h3 class="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-2">
-                        <i class="bi bi-lightbulb-fill text-emerald-600"></i> Section 2: AI Synthesized Solutions & Actionable Policy Steps
+                        <i class="bi bi-lightbulb-fill text-emerald-600"></i> Section 2: Recommended Committee Solutions & Policy Action Plan
                     </h3>
                     <div class="space-y-2.5">${solutionsHtml}</div>
                 </div>
@@ -22497,8 +22680,8 @@ function renderAiCommitteeBriefModalHtml(brief) {
                     <button onclick="document.getElementById('pfq-ai-brief-modal').remove()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition">
                         Cancel
                     </button>
-                    <button onclick="pfpForwardBriefToCommittee(${brief.consultation_id}, '${escapeHtml(brief.committee_assigned)}')" class="px-5 py-2 bg-red-700 hover:bg-red-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-2">
-                        <i class="bi bi-send-fill"></i> Pass Document to Committee
+                    <button onclick="pfpForwardBriefToOrts(${brief.consultation_id})" class="px-5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-2 cursor-pointer" title="Transmit to ORTS (Ordinance Routing & Tracking System)">
+                        <i class="bi bi-send-check-fill"></i> Forward to ORTS
                     </button>
                 </div>
             </div>
@@ -22506,30 +22689,34 @@ function renderAiCommitteeBriefModalHtml(brief) {
     `;
 }
 
-async function pfpForwardBriefToCommittee(consultationId, committeeName) {
+async function pfpForwardBriefToOrts(consultationId) {
     if (!consultationId) return;
     try {
-        showNotification('Forwarding document & registering PDF in Document Management...', 'info');
-        const res = await fetchWithTimeout('API/consultation_feedback_ai.php?action=forward_brief_to_committee', {
+        showNotification('Forwarding document directly to ORTS & registering PDF in Document Management...', 'info');
+        const res = await fetchWithTimeout('API/consultation_feedback_ai.php?action=forward_brief_to_orts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ consultation_id: consultationId, committee: committeeName })
-        }, 10000);
+            body: JSON.stringify({ consultation_id: consultationId, target: 'ORTS' })
+        }, 12000);
 
         const data = await res.json();
         if (res.ok && data.success) {
-            showNotification(`✅ Document successfully passed to LGU ${committeeName}! Registered in Document Management archives.`, 'success', 6000);
+            showNotification(`✅ AI Brief & Validated Report transmitted directly to ORTS (Ordinance Routing & Tracking System)! Registered in Document Management archives.`, 'success', 6000);
             const modal = document.getElementById('pfq-ai-brief-modal');
             if (modal) modal.remove();
             if (typeof pfpRefreshData === 'function') pfpRefreshData();
             if (typeof renderDocumentsList === 'function') renderDocumentsList();
             if (typeof fetchDocuments === 'function') fetchDocuments();
         } else {
-            showNotification(data.message || 'Failed to forward to committee.', 'error');
+            showNotification(data.message || 'Failed to forward to ORTS.', 'error');
         }
     } catch (e) {
         showNotification(`Error: ${e.message}`, 'error');
     }
+}
+
+async function pfpForwardBriefToCommittee(consultationId, committeeName) {
+    return pfpForwardBriefToOrts(consultationId);
 }
 
 async function renderReportsSection() {
@@ -23031,11 +23218,6 @@ function pfpExportAuditLogsCsv() {
 window.openApproveCitizenSubmissionModal = function (consultationId) {
     const cid = Number(consultationId);
     const consultation = (AppData.consultations || []).find(c => Number(c.id) === cid);
-    if (!consultation) {
-        if (typeof alertToast === 'function') alertToast('Submission not found.', 'error');
-        else alert('Submission not found.');
-        return;
-    }
 
     const old = document.getElementById('approve-submission-modal');
     if (old) old.remove();
@@ -23044,9 +23226,9 @@ window.openApproveCitizenSubmissionModal = function (consultationId) {
     modal.id = 'approve-submission-modal';
     modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; background-color: rgba(15, 23, 42, 0.85); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 999999; padding: 1rem;';
 
-    const title = escapeHtml(consultation.title || 'Citizen Submission');
-    const desc = escapeHtml(consultation.description || 'No description provided.');
-    const citizen = escapeHtml(consultation.userName || consultation.user_name || 'Citizen');
+    const title = escapeHtml(consultation ? (consultation.title || 'Citizen Submission') : `Submission #${cid}`);
+    const desc = escapeHtml(consultation ? (consultation.description || 'No description provided.') : 'Citizen consultation proposal submission.');
+    const citizen = escapeHtml(consultation ? (consultation.userName || consultation.user_name || 'Citizen') : 'Citizen');
 
     modal.innerHTML = `
         <div class="bg-white rounded-2xl max-w-xl w-full shadow-2xl overflow-hidden border border-slate-200 animate-fadeIn">
@@ -23120,18 +23302,19 @@ window.openApproveCitizenSubmissionModal = function (consultationId) {
 window.confirmApproveCitizenSubmission = function (consultationId) {
     const cid = Number(consultationId);
     const consultation = (AppData.consultations || []).find(c => Number(c.id) === cid);
-    if (!consultation) return;
 
     const committee = document.getElementById('approve-committee-select')?.value || 'Rules & Governance Committee';
     const responseMode = document.getElementById('approve-response-mode')?.value || 'feedback';
     const expiryDate = document.getElementById('approve-expiry-date')?.value || '';
 
-    // Update in-memory AppData
-    consultation.status = 'active';
-    consultation.type = 'official';
-    consultation.committee = committee;
-    consultation.response_mode = responseMode;
-    if (expiryDate) consultation.end_date = expiryDate;
+    // Update in-memory AppData if present
+    if (consultation) {
+        consultation.status = 'active';
+        consultation.type = 'official';
+        consultation.committee = committee;
+        consultation.response_mode = responseMode;
+        if (expiryDate) consultation.end_date = expiryDate;
+    }
 
     // Send API update request
     fetchWithTimeout('API/consultations_api.php?action=approve_publish', {
@@ -23161,6 +23344,143 @@ window.confirmApproveCitizenSubmission = function (consultationId) {
         alertToast('Citizen Submission approved! It is now live on the Public Portal.', 'success');
     }
     renderConsultationManagementSection();
+};
+
+window.openDeclineCitizenSubmissionModal = function (consultationId) {
+    const cid = Number(consultationId);
+    const consultation = (AppData.consultations || []).find(c => Number(c.id) === cid);
+
+    const old = document.getElementById('decline-submission-modal');
+    if (old) old.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'decline-submission-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; background-color: rgba(15, 23, 42, 0.85); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 999999; padding: 1rem;';
+
+    const title = escapeHtml(consultation ? (consultation.title || 'Citizen Submission') : `Submission #${cid}`);
+    const desc = escapeHtml(consultation ? (consultation.description || 'No description provided.') : 'Citizen consultation proposal submission.');
+    const citizen = escapeHtml(consultation ? (consultation.userName || consultation.user_name || 'Citizen') : 'Citizen');
+
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl max-w-xl w-full shadow-2xl overflow-hidden border border-slate-200 animate-fadeIn">
+            <div class="bg-gradient-to-r from-rose-800 to-red-900 text-white p-5 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="bi bi-x-circle-fill text-rose-300 text-xl"></i>
+                    <div>
+                        <h3 class="font-extrabold text-sm uppercase tracking-wider">Decline Citizen Submission</h3>
+                        <p class="text-[11px] text-rose-100">Reject citizen proposal and update status record</p>
+                    </div>
+                </div>
+                <button type="button" onclick="event.preventDefault(); event.stopPropagation(); document.getElementById('decline-submission-modal').remove()" class="text-white/80 hover:text-white text-xl font-bold transition focus:outline-none">&times;</button>
+            </div>
+            
+            <div class="p-6 space-y-4 text-xs">
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                    <span class="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">Submitted Proposal</span>
+                    <h4 class="font-extrabold text-slate-900 text-sm">${title}</h4>
+                    <p class="text-slate-600 font-medium">${desc}</p>
+                    <span class="text-[11px] text-slate-400 font-medium block pt-1">Submitted by: <strong>${citizen}</strong></span>
+                </div>
+
+                <div class="space-y-2 pt-1">
+                    <label class="block font-bold text-slate-700 mb-1">Reason for Declining / Rejection Remarks</label>
+                    <textarea id="decline-submission-reason" rows="3" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-rose-500" placeholder="Provide reason for declining this citizen proposal...">Submission does not meet LGU public consultation requirements.</textarea>
+                </div>
+
+                <div class="p-3 bg-rose-50 rounded-lg border border-rose-200 text-rose-900 text-[11px] flex items-center gap-2 font-medium">
+                    <i class="bi bi-exclamation-triangle-fill text-rose-600 text-sm shrink-0"></i>
+                    <span>This action will decline the submission and mark its status as 'Declined'.</span>
+                </div>
+            </div>
+
+            <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+                <button type="button" onclick="event.preventDefault(); event.stopPropagation(); document.getElementById('decline-submission-modal').remove()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition">
+                    Cancel
+                </button>
+                <button type="button" onclick="confirmDeclineCitizenSubmission(${cid}, event)" class="px-5 py-2 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 hover:to-red-800 text-white font-extrabold text-xs rounded-xl transition shadow flex items-center gap-1.5 cursor-pointer">
+                    <i class="bi bi-x-lg"></i> Confirm & Decline
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+};
+
+window.confirmDeclineCitizenSubmission = async function (consultationId, event) {
+    if (event) {
+        try { event.preventDefault(); event.stopPropagation(); } catch (_) {}
+    }
+    const cid = Number(consultationId);
+    const reason = document.getElementById('decline-submission-reason')?.value || 'Submission declined by LGU Secretariat.';
+
+    const modal = document.getElementById('decline-submission-modal');
+    if (modal) modal.remove();
+
+    let apiEndpoint = 'API/consultations_api.php?action=decline_submission';
+    try {
+        const res = await fetch(apiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: cid,
+                status: 'rejected',
+                reason: reason
+            })
+        });
+        const data = await res.json();
+        const isSuccess = data && (data.success === true || data.success === 'true' || data.success == 1 || (data.message && data.message.toLowerCase().includes('declined')));
+        
+        if (isSuccess) {
+            const consultation = (AppData.consultations || []).find(c => Number(c.id) === cid);
+            if (consultation) {
+                consultation.status = 'rejected';
+                consultation.admin_response = reason;
+                consultation.remarks = reason;
+            }
+            if (typeof alertToast === 'function') {
+                alertToast('Citizen Submission has been declined.', 'info');
+            }
+            if (typeof loadConsultationsFromApi === 'function') {
+                await loadConsultationsFromApi().catch(() => {});
+            }
+            if (typeof renderConsultationsTable === 'function') {
+                renderConsultationsTable();
+            }
+            if (typeof renderConsultationManagement === 'function') {
+                renderConsultationManagement();
+            }
+            // Update static PHP table rows dynamically if present in DOM
+            const statusBadge = document.getElementById(`consultation-status-badge-${cid}`);
+            if (statusBadge) {
+                statusBadge.className = 'inline-flex px-2 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-800';
+                statusBadge.textContent = 'Declined';
+            }
+        } else {
+            alert('Failed to decline submission: ' + (data?.message || 'Server error'));
+        }
+    } catch (err) {
+        console.error('Decline error:', err);
+        try {
+            const fbRes = await fetch('system-template-full.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `action=update_consultation_status&consultation_id=${cid}&status=rejected&reason=${encodeURIComponent(reason)}`
+            });
+            const fbData = await fbRes.json();
+            if (fbData && fbData.success) {
+                const consultation = (AppData.consultations || []).find(c => Number(c.id) === cid);
+                if (consultation) {
+                    consultation.status = 'rejected';
+                }
+                if (typeof renderConsultationsTable === 'function') {
+                    renderConsultationsTable();
+                }
+                return;
+            }
+        } catch (_) {}
+        alert('Error communicating with server while declining submission.');
+    }
 };
 
 window.loadPendingUserApplications = async function() {

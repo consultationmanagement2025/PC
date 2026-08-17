@@ -96,7 +96,7 @@ try {
         'active' => 2, 'voting' => 2, 'published_portal' => 2,
         'closed' => 3, 'ai_summary' => 3, 'summarized' => 3,
         'under_review' => 4, 'reviewed' => 4,
-        'committee' => 5, 'scheduled' => 5, 'forwarded' => 5, 'approved' => 5, 'ordinance' => 5, 'forwarded_to_lrs' => 5,
+        'committee' => 5, 'scheduled' => 5, 'forwarded' => 5, 'approved' => 5, 'ordinance' => 5, 'forwarded_to_lrs' => 5, 'orts' => 5, 'forwarded_orts' => 5, 'orts_drafting' => 5,
         'officialized' => 6, 'enacted' => 6, 'completed' => 6, 'published' => 6, 'archived' => 6
     ];
 
