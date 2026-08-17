@@ -5766,12 +5766,26 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                     </td>
                                                     <td class="p-2"><?= !empty($c['created_at']) ? htmlspecialchars(date('M d, Y H:i', strtotime($c['created_at']))) : '-' ?></td>
                                                     <td class="p-2">
-                                                        <span class="inline-flex px-2 py-1 rounded-full text-xs font-medium <?= $status === 'active' ? 'bg-green-100 text-green-800' : (($status === 'closed') ? 'bg-gray-200 text-gray-800' : 'bg-yellow-100 text-yellow-800') ?>">
-                                                            <?= htmlspecialchars(ucfirst($status)) ?>
-                                                        </span>
+                                                        <?php if ($status === 'declined' || $status === 'rejected'): ?>
+                                                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                                                <i class="bi bi-x-circle-fill text-rose-600 text-[10px]"></i> Declined
+                                                            </span>
+                                                        <?php elseif ($status === 'active'): ?>
+                                                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-200">
+                                                                <i class="bi bi-globe text-green-600 text-[10px]"></i> Active
+                                                            </span>
+                                                        <?php elseif ($status === 'closed'): ?>
+                                                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-800">
+                                                                Closed
+                                                            </span>
+                                                        <?php else: ?>
+                                                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
+                                                                <?= htmlspecialchars(ucfirst($status)) ?>
+                                                            </span>
+                                                        <?php endif; ?>
                                                     </td>
                                                     <td class="p-2">
-                                                        <div class="flex gap-1 flex-wrap <?php echo $is_read_only_super_admin ? 'readonly-locked' : ''; ?>">
+                                                        <div class="flex gap-1 flex-wrap items-center <?php echo $is_read_only_super_admin ? 'readonly-locked' : ''; ?>">
                                                             <?php if (!$is_read_only_super_admin): ?>
                                                                 <button onclick="openForwardToExpertModal(<?= (int)$c['id'] ?>, '<?= htmlspecialchars(addslashes($c['title'] ?? '')) ?>', '<?= htmlspecialchars(addslashes($c['category'] ?? '')) ?>')" class="text-red-700 hover:text-red-900 text-xs font-bold bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded border border-red-200 inline-flex items-center gap-1"><i class="bi bi-send-fill text-[10px]"></i> Forward to Expert</button>
                                                              <button onclick="openExportChooser(<?= (int)$c['id'] ?>)" class="text-purple-600 hover:text-purple-800 text-xs font-medium">Export</button>
@@ -5795,18 +5809,22 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                             <?php endif; ?>
                                                             <?php if ($status !== 'archived'): ?>
                                                                 <?php if (!$is_read_only_super_admin): ?>
-                                                                    <select onchange="updateConsultationStatus(<?= (int)$c['id'] ?>, this.value, event)" class="text-xs border rounded px-1 py-0.5">
-                                                                        <option value="">Set Status</option>
-                                                                        <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>Pending Review</option>
-                                                                        <option value="active" <?= $status === 'active' ? 'selected' : '' ?>>Active</option>
-                                                                        <option value="viewed" <?= $status === 'viewed' ? 'selected' : '' ?>>Viewed</option>
-                                                                        <option value="replied" <?= $status === 'replied' ? 'selected' : '' ?>>Replied</option>
-                                                                        <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>>Completed</option>
-                                                                        <option value="closed" <?= $status === 'closed' ? 'selected' : '' ?>>Closed</option>
-                                                                        <option value="declined" <?= ($status === 'declined' || $status === 'rejected') ? 'selected' : '' ?>>Declined</option>
-                                                                        <option value="archived" <?= $status === 'archived' ? 'selected' : '' ?>>Archived</option>
-                                                                    </select>
-                                                                    <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openDeclineCitizenSubmissionModal(<?= (int)$c['id'] ?>)" class="text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Decline</button>
+                                                                    <?php if ($status === 'declined' || $status === 'rejected'): ?>
+                                                                        <span class="text-xs font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Declined</span>
+                                                                    <?php else: ?>
+                                                                        <select onchange="updateConsultationStatus(<?= (int)$c['id'] ?>, this.value, event)" class="text-xs border rounded px-1 py-0.5">
+                                                                            <option value="">Set Status</option>
+                                                                            <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>Pending Review</option>
+                                                                            <option value="active" <?= $status === 'active' ? 'selected' : '' ?>>Active</option>
+                                                                            <option value="viewed" <?= $status === 'viewed' ? 'selected' : '' ?>>Viewed</option>
+                                                                            <option value="replied" <?= $status === 'replied' ? 'selected' : '' ?>>Replied</option>
+                                                                            <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>>Completed</option>
+                                                                            <option value="closed" <?= $status === 'closed' ? 'selected' : '' ?>>Closed</option>
+                                                                            <option value="declined" <?= ($status === 'declined' || $status === 'rejected') ? 'selected' : '' ?>>Declined</option>
+                                                                            <option value="archived" <?= $status === 'archived' ? 'selected' : '' ?>>Archived</option>
+                                                                        </select>
+                                                                        <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openDeclineCitizenSubmissionModal(<?= (int)$c['id'] ?>)" class="text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Decline</button>
+                                                                    <?php endif; ?>
                                                                 <?php else: ?>
                                                                     <select disabled class="text-xs border rounded px-1 py-0.5 opacity-60 cursor-not-allowed">
                                                                         <option>Set Status</option>

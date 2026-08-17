@@ -13461,12 +13461,9 @@ async function loadConsultationsFromApi() {
     try {
 
 
-        const res = await fetchWithTimeout('API/consultations_api.php?action=list&limit=200&offset=0', {
-
-
-            headers: { 'Accept': 'application/json' }
-
-
+        const res = await fetchWithTimeout(`API/consultations_api.php?action=list&limit=200&offset=0&_t=${Date.now()}`, {
+            cache: 'no-store',
+            headers: { 'Accept': 'application/json', 'Cache-Control': 'no-cache' }
         }, 5000);
 
 
@@ -14872,6 +14869,15 @@ function viewConsultationDetails(id) {
                     <i class="bi bi-text-paragraph text-red-600 text-sm"></i> Description & Proposal Details
                 </div>
                 <div class="text-xs text-gray-700 leading-relaxed whitespace-pre-line bg-gray-50/50 p-3.5 rounded-lg border border-gray-100">${escapeHtml(consultation.description)}</div>
+            </div>
+        ` : ''}
+
+        ${(st === 'rejected' || st === 'declined') ? `
+            <div class="bg-rose-50/90 border border-rose-200 rounded-xl p-4 shadow-xs">
+                <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-700 mb-1.5">
+                    <i class="bi bi-x-circle-fill text-rose-600 text-sm"></i> Declined by Secretariat / Reviewer
+                </div>
+                <p class="text-xs text-rose-900 leading-relaxed whitespace-pre-line">${escapeHtml(consultation.admin_response || consultation.remarks || 'This citizen proposal did not meet LGU public consultation requirements.')}</p>
             </div>
         ` : ''}
 
@@ -19617,6 +19623,19 @@ function filterDocumentsByGroup(group) {
    ========================================================== */
 function renderConnectingDotsTracker(currentStatus, docOrConsultId, type = 'consultation') {
     const st = String(currentStatus || '').toLowerCase().trim();
+
+    // If consultation or document was declined/rejected, show clear terminal status
+    if (st === 'rejected' || st === 'declined') {
+        return `
+            <div class="flex flex-col items-center gap-0.5 my-1">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[11px] rounded-full shadow-2xs">
+                    <i class="bi bi-x-circle-fill text-rose-600 text-xs"></i> Intake Declined
+                </span>
+                <span class="text-[9px] font-bold text-rose-500 uppercase tracking-wider">Proposal Closed</span>
+            </div>
+        `;
+    }
+
     let currentStep = 1;
 
     let steps = [];
@@ -23417,9 +23436,32 @@ window.confirmDeclineCitizenSubmission = async function (consultationId, event) 
     const modal = document.getElementById('decline-submission-modal');
     if (modal) modal.remove();
 
-    let apiEndpoint = 'API/consultations_api.php?action=decline_submission';
+    // 1. INSTANT OPTIMISTIC UI UPDATE
+    if (Array.isArray(AppData.consultations)) {
+        const item = AppData.consultations.find(c => Number(c.id) === cid);
+        if (item) {
+            item.status = 'rejected';
+            item.admin_response = reason;
+            item.remarks = reason;
+        }
+    }
+    if (typeof renderConsultationsTable === 'function') {
+        renderConsultationsTable();
+    }
+    if (typeof renderConsultationManagement === 'function') {
+        renderConsultationManagement();
+    }
+    if (typeof alertToast === 'function') {
+        alertToast('Citizen Submission has been declined.', 'info');
+    } else if (typeof showNotification === 'function') {
+        showNotification('Citizen Submission has been declined.', 'info');
+    }
+
+    let executedSuccessfully = false;
+
+    // 2. Persist to API
     try {
-        const res = await fetch(apiEndpoint, {
+        const res = await fetch('API/consultations_api.php?action=decline_submission', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -23429,38 +23471,15 @@ window.confirmDeclineCitizenSubmission = async function (consultationId, event) 
             })
         });
         const data = await res.json();
-        const isSuccess = data && (data.success === true || data.success === 'true' || data.success == 1 || (data.message && data.message.toLowerCase().includes('declined')));
-        
-        if (isSuccess) {
-            const consultation = (AppData.consultations || []).find(c => Number(c.id) === cid);
-            if (consultation) {
-                consultation.status = 'rejected';
-                consultation.admin_response = reason;
-                consultation.remarks = reason;
-            }
-            if (typeof alertToast === 'function') {
-                alertToast('Citizen Submission has been declined.', 'info');
-            }
-            if (typeof loadConsultationsFromApi === 'function') {
-                await loadConsultationsFromApi().catch(() => {});
-            }
-            if (typeof renderConsultationsTable === 'function') {
-                renderConsultationsTable();
-            }
-            if (typeof renderConsultationManagement === 'function') {
-                renderConsultationManagement();
-            }
-            // Update static PHP table rows dynamically if present in DOM
-            const statusBadge = document.getElementById(`consultation-status-badge-${cid}`);
-            if (statusBadge) {
-                statusBadge.className = 'inline-flex px-2 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-800';
-                statusBadge.textContent = 'Declined';
-            }
-        } else {
-            alert('Failed to decline submission: ' + (data?.message || 'Server error'));
+        if (data && (data.success === true || data.success === 'true' || data.success == 1 || (data.message && data.message.toLowerCase().includes('declined')))) {
+            executedSuccessfully = true;
         }
-    } catch (err) {
-        console.error('Decline error:', err);
+    } catch (e) {
+        console.warn('API endpoint decline fetch failed, trying template endpoint...', e);
+    }
+
+    // 3. Fallback to system-template-full.php status update endpoint
+    if (!executedSuccessfully) {
         try {
             const fbRes = await fetch('system-template-full.php', {
                 method: 'POST',
@@ -23468,18 +23487,20 @@ window.confirmDeclineCitizenSubmission = async function (consultationId, event) 
                 body: `action=update_consultation_status&consultation_id=${cid}&status=rejected&reason=${encodeURIComponent(reason)}`
             });
             const fbData = await fbRes.json();
-            if (fbData && fbData.success) {
-                const consultation = (AppData.consultations || []).find(c => Number(c.id) === cid);
-                if (consultation) {
-                    consultation.status = 'rejected';
-                }
-                if (typeof renderConsultationsTable === 'function') {
-                    renderConsultationsTable();
-                }
-                return;
+            if (fbData && (fbData.success === true || fbData.success === 'true' || fbData.success == 1)) {
+                executedSuccessfully = true;
             }
-        } catch (_) {}
-        alert('Error communicating with server while declining submission.');
+        } catch (e2) {
+            console.error('Template endpoint decline fetch failed:', e2);
+        }
+    }
+
+    // 4. Fresh re-sync from server with cache-busting
+    if (typeof loadConsultationsFromApi === 'function') {
+        await loadConsultationsFromApi().catch(() => {});
+    }
+    if (typeof renderConsultationsTable === 'function') {
+        renderConsultationsTable();
     }
 };
 

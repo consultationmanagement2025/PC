@@ -18,9 +18,8 @@ require_once __DIR__ . '/../email_config.php';
 
 
 // Allow admin or staff roles to access create/update consultation endpoints
-
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
-$is_authenticated = isset($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($_SESSION['role']);
+$is_authenticated = isset($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($_SESSION['role']) || !empty($_SESSION['admin_id']) || !empty($_SESSION['fullname']) || !empty($_SESSION['username']) || !empty($_SESSION['admin_logged_in']);
 
 $action = $_POST['action'] ?? ($_GET['action'] ?? 'list');
 $read_actions = ['list', 'get', 'get_vote_stats', 'get_all_vote_stats', 'debug'];
