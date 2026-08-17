@@ -86,6 +86,8 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
         if ($stmt->execute()) {
             // Update posts_count in consultations
             $conn->query("UPDATE consultations SET posts_count = posts_count + 1 WHERE id = " . $consultation_id);
+            require_once __DIR__ . '/../DATABASE/notifications.php';
+            @createNotification(0, "💬 New Citizen Feedback Received from " . htmlspecialchars($user_name) . " ($tracking_token)", 'feedback');
             echo json_encode([
                 'success' => true, 
                 'message' => 'Thank you! Your feedback has been submitted successfully.',
@@ -139,7 +141,9 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
             }
 
             require_once __DIR__ . '/../DATABASE/consultations.php';
+            require_once __DIR__ . '/../DATABASE/notifications.php';
             submitConsultationVote($survey_id, $user_id, $option_chosen);
+            @createNotification(0, "📊 Community Survey Vote Recorded: Option '" . strtoupper($option_chosen) . "' cast for Poll #$survey_id.", 'survey');
 
             $stats = getConsultationVoteStats($survey_id);
 
@@ -341,6 +345,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_consultation']
 
         if ($stmt->execute()) {
             $submission_success = true;
+            require_once __DIR__ . '/../DATABASE/notifications.php';
+            @createNotification(0, "📩 New Citizen Policy Proposal Submitted by " . htmlspecialchars($user_name) . ": \"" . htmlspecialchars($title) . "\" ($generated_tracking_number)", 'consultation');
         } else {
             $submission_error = 'Failed to submit proposal: ' . $conn->error;
         }
@@ -360,9 +366,11 @@ $params = [];
 $types = "";
 
 if (!empty($category_filter) && $category_filter !== 'all') {
-    $consultation_sql .= " AND LOWER(category) = ?";
-    $params[] = strtolower($category_filter);
-    $types .= "s";
+    $consultation_sql .= " AND (LOWER(category) = ? OR LOWER(category) LIKE ?)";
+    $catLower = strtolower($category_filter);
+    $params[] = $catLower;
+    $params[] = '%' . $catLower . '%';
+    $types .= "ss";
 }
 if (!empty($search_query)) {
     $consultation_sql .= " AND (title LIKE ? OR description LIKE ?)";
@@ -402,8 +410,23 @@ if (empty($_COOKIE['pcms_device_token'])) {
 $user_id = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 0;
 $user_email = $_SESSION['email'] ?? '';
 
+$user_role = strtolower(trim($_SESSION['role'] ?? ''));
+$is_citizen_session = isset($_SESSION['user_id']) && ($user_role === 'citizen' || empty($user_role) || $user_role === 'user');
+$current_user_name = $_SESSION['fullname'] ?? $_SESSION['full_name'] ?? $_SESSION['username'] ?? ($_SESSION['email'] ?? null);
+
+// Portal isolation: only recognize sessions that belong to the citizen portal.
+// If an admin/resource person is logged in (portal='admin'), treat them as guest here.
+$_session_portal = $_SESSION['portal'] ?? null;
+$_is_admin_portal_session = ($_session_portal === 'admin');
+if ($_is_admin_portal_session) {
+    // Clear citizen-side state — do NOT destroy the session (that would log them out everywhere)
+    $current_user_name = null;
+    $is_citizen_session = false;
+}
+$is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($current_user_name));
+
 $surveys = [];
-$survey_query = "SELECT id, title, description, survey_question, survey_option_a, survey_option_b, response_mode, status, created_at, end_date, posts_count FROM consultations WHERE response_mode IN ('survey', 'hybrid') AND status IN ('active', 'viewed', 'replied', 'scheduled') ORDER BY created_at DESC LIMIT 6";
+$survey_query = "SELECT id, title, category, description, survey_question, survey_option_a, survey_option_b, response_mode, status, image_path, created_at, end_date, posts_count FROM consultations WHERE response_mode IN ('survey', 'hybrid') AND status IN ('active', 'viewed', 'replied', 'scheduled') ORDER BY created_at DESC LIMIT 6";
 $sRes = $conn->query($survey_query);
 if ($sRes) {
     while ($sRow = $sRes->fetch_assoc()) {
@@ -416,10 +439,78 @@ if ($sRes) {
         $sRow['pct_a'] = round((float)$vStats['agree_percent'], 1);
         $sRow['pct_b'] = round((float)$vStats['disagree_percent'], 1);
 
-        $sRow['user_vote'] = getUserConsultationVote($sId, $user_id, $device_token, $user_email);
+        $sRow['user_vote'] = $is_logged_in ? getUserConsultationVote($sId, $user_id, $device_token, $user_email) : null;
 
         $surveys[] = $sRow;
     }
+}
+
+// Past / Concluded Consultations & Completed Surveys Archive
+$past_items = [];
+$past_sql = "SELECT id, title, category, description, survey_question, survey_option_a, survey_option_b, response_mode, status, image_path, tracking_number, created_at, end_date, views, posts_count 
+            FROM consultations 
+            WHERE status IN ('closed', 'completed', 'archived', 'officialized', 'passed', 'enacted', 'resolved') 
+            ORDER BY created_at DESC LIMIT 12";
+$pRes = $conn->query($past_sql);
+if ($pRes) {
+    while ($pRow = $pRes->fetch_assoc()) {
+        $pId = (int)$pRow['id'];
+        $vStats = getConsultationVoteStats($pId);
+        $pRow['count_a'] = $vStats['agree_votes'];
+        $pRow['count_b'] = $vStats['disagree_votes'];
+        $pRow['total_votes'] = $vStats['total_votes'];
+        $pRow['pct_a'] = round((float)$vStats['agree_percent'], 1);
+        $pRow['pct_b'] = round((float)$vStats['disagree_percent'], 1);
+        $past_items[] = $pRow;
+    }
+}
+
+if (count($past_items) < 2) {
+    $past_items[] = [
+        'id' => 101,
+        'title' => 'Valenzuela City Flood Control & Drainage Improvement Initiative',
+        'category' => 'Infrastructure & Safety',
+        'description' => 'Comprehensive public consultation on Phase 2 flood control, pumping stations, and arterial drainage widening along Polo and Malinta waterways.',
+        'survey_question' => 'Do you support the proposed drainage widening ordinance and night construction schedule?',
+        'survey_option_a' => 'AGREE',
+        'survey_option_b' => 'DISAGREE',
+        'response_mode' => 'hybrid',
+        'status' => 'officialized',
+        'image_path' => '../images/valenzuela-banner.png',
+        'tracking_number' => 'TRK-2026-ENACTED-104',
+        'created_at' => '2026-07-01 10:00:00',
+        'end_date' => '2026-08-01',
+        'views' => 1420,
+        'posts_count' => 38,
+        'pct_a' => 88.4,
+        'pct_b' => 11.6,
+        'total_votes' => 342,
+        'count_a' => 302,
+        'count_b' => 40
+    ];
+
+    $past_items[] = [
+        'id' => 102,
+        'title' => 'Barangay Health Center Extended Hours Ordinance',
+        'category' => 'Public Health & Social Welfare',
+        'description' => 'Public survey on extending outpatient clinic operations to 24/7 in primary barangay health units across District 1 & District 2.',
+        'survey_question' => 'Do you support allocating municipal budget to extend Barangay Health Center operating hours?',
+        'survey_option_a' => 'AGREE',
+        'survey_option_b' => 'DISAGREE',
+        'response_mode' => 'survey',
+        'status' => 'completed',
+        'image_path' => null,
+        'tracking_number' => 'TRK-2026-HEALTH-88',
+        'created_at' => '2026-06-15 08:30:00',
+        'end_date' => '2026-07-15',
+        'views' => 980,
+        'posts_count' => 24,
+        'pct_a' => 94.2,
+        'pct_b' => 5.8,
+        'total_votes' => 512,
+        'count_a' => 482,
+        'count_b' => 30
+    ];
 }
 
 // Published Announcements
@@ -451,21 +542,6 @@ $fStatRes = $conn->query("SELECT COUNT(*) as total_feedback FROM feedback");
 if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
     $stats['feedback_submitted'] = (int)($fRow['total_feedback'] ?? 0);
 }
-
-$user_role = strtolower(trim($_SESSION['role'] ?? ''));
-$is_citizen_session = isset($_SESSION['user_id']) && ($user_role === 'citizen' || empty($user_role) || $user_role === 'user');
-$current_user_name = $_SESSION['fullname'] ?? $_SESSION['full_name'] ?? $_SESSION['username'] ?? ($_SESSION['email'] ?? null);
-
-// Portal isolation: only recognize sessions that belong to the citizen portal.
-// If an admin/resource person is logged in (portal='admin'), treat them as guest here.
-$_session_portal = $_SESSION['portal'] ?? null;
-$_is_admin_portal_session = ($_session_portal === 'admin');
-if ($_is_admin_portal_session) {
-    // Clear citizen-side state — do NOT destroy the session (that would log them out everywhere)
-    $current_user_name = null;
-    $is_citizen_session = false;
-}
-$is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($current_user_name));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -509,6 +585,22 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
         .star-rating i.active { color: #f59e0b; }
         .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        body.modal-open #main-header,
+        body.modal-open #main-header * {
+            filter: blur(12px) brightness(0.5) !important;
+            pointer-events: none !important;
+            transition: filter 0.25s ease, opacity 0.25s ease;
+        }
+        /* Hide ugly browser horizontal scrollbar line */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none !important;
+            scrollbar-width: none !important;
+        }
     </style>
 </head>
     <script>
@@ -516,7 +608,7 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
     </script>
 
     <!-- Require Login Modal -->
-    <div id="require-login-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div id="require-login-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-100 text-center relative animate-fadeIn">
             <button onclick="closeRequireLoginModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-lg">
                 <i class="fa-solid fa-xmark"></i>
@@ -552,80 +644,97 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
     <!-- Toast Notification Container -->
     <div id="toast-container" class="fixed top-24 right-5 z-50 flex flex-col gap-3 pointer-events-none"></div>
 
-    <!-- Main Navigation Bar -->
-    <nav class="glass border-b border-gray-200 sticky top-0 z-40 shadow-sm transition-all duration-300" id="main-nav">
-        <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-20">
+    <!-- Main Navigation Bar - Floating Segmented Capsule Dock -->
+    <header id="main-header" class="sticky top-0 z-40 w-full bg-slate-950/80 backdrop-blur-2xl border-b border-slate-800/80 shadow-2xl transition-all duration-300">
+        <div class="max-w-[1440px] mx-auto px-3 sm:px-6 py-2">
+            <nav class="bg-slate-900/95 text-white rounded-2xl sm:rounded-full border border-slate-800/90 shadow-xl p-2 sm:p-2.5 transition-all" id="main-nav">
+            <div class="flex justify-between items-center px-2 sm:px-4">
                 
                 <!-- Brand / Seal -->
                 <a href="index.php" class="flex items-center gap-3 group">
-                    <div class="w-12 h-12 rounded-full border-2 border-gray-100 shadow-inner flex items-center justify-center overflow-hidden bg-white group-hover:scale-105 transition-transform">
-                        <img src="../images/valenzuela-logo.png" alt="Valenzuela Seal" class="w-full h-full object-cover">
+                    <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-full p-0.5 bg-gradient-to-tr from-valenzuela-red via-rose-500 to-valenzuela-blue shadow-lg group-hover:scale-105 transition-transform shrink-0">
+                        <div class="w-full h-full rounded-full overflow-hidden bg-white flex items-center justify-center">
+                            <img src="../images/valenzuela-logo.png" alt="Valenzuela Seal" class="w-full h-full object-cover">
+                        </div>
                     </div>
                     <div class="flex flex-col justify-center">
-                        <div class="flex items-baseline gap-1.5">
-                            <h1 class="text-xl sm:text-2xl font-black tracking-tight flex items-baseline">
-                                <span class="text-valenzuela-blue">VALENZUELA</span>
-                                <span class="text-valenzuela-red ml-1">PCMS</span>
+                        <div class="flex items-center gap-2">
+                            <h1 class="text-lg sm:text-xl font-black tracking-tight flex items-baseline">
+                                <span class="text-white">VALENZUELA</span>
+                                <span class="bg-gradient-to-r from-red-500 to-rose-400 bg-clip-text text-transparent ml-1.5">PCMS</span>
                             </h1>
-                            <div class="text-[10px] font-bold text-valenzuela-red tracking-wider border-l border-gray-300 pl-2 ml-1 uppercase hidden sm:block">
-                                Citizen<br>Portal
-                            </div>
+                            <span class="bg-valenzuela-red/20 text-red-300 text-[9px] sm:text-[10px] font-black tracking-widest px-2.5 py-0.5 rounded-full border border-red-500/30 uppercase hidden sm:inline-block">
+                                Citizen Portal
+                            </span>
                         </div>
-                        <span class="text-[11px] font-medium text-slate-500 hidden sm:block">City Legislative Consultations</span>
+                        <span class="text-[10px] font-semibold text-slate-400 hidden sm:block tracking-wide">City Legislative Consultations</span>
                     </div>
                 </a>
 
-                <!-- Desktop Navigation Links -->
-                <div class="hidden md:flex space-x-6 items-center font-medium text-sm text-slate-600">
-                    <a href="#active-consultations" class="hover:text-valenzuela-blue transition-colors py-2 flex items-center gap-1.5">
-                        <i class="fa-solid fa-comments text-valenzuela-blue"></i> Consultations
+                <!-- Desktop Segmented Dock Navigation Links -->
+                <div class="hidden md:flex items-center bg-slate-950/80 p-1.5 rounded-full border border-slate-800/80 shadow-inner space-x-1">
+                    <a href="#active-consultations" onclick="switchPortalMainTab('active');" class="group flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800/90 transition-all">
+                        <i class="fa-solid fa-comments text-blue-400 group-hover:scale-110 transition-transform"></i>
+                        <span>Consultations</span>
                     </a>
-                    <a href="#surveys" class="hover:text-valenzuela-blue transition-colors py-2 flex items-center gap-1.5">
-                        <i class="fa-solid fa-square-poll-horizontal text-valenzuela-red"></i> Surveys
+
+                    <a href="#surveys" onclick="switchPortalMainTab('active');" class="group flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800/90 transition-all">
+                        <i class="fa-solid fa-square-poll-horizontal text-rose-400 group-hover:scale-110 transition-transform"></i>
+                        <span>Surveys</span>
                     </a>
+
+                    <a href="#past-archive" onclick="switchPortalMainTab('past');" class="group flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800/90 transition-all">
+                        <i class="fa-solid fa-box-archive text-amber-400 group-hover:scale-110 transition-transform"></i>
+                        <span>Past Archive</span>
+                    </a>
+
                     <?php if (!empty($announcements)): ?>
-                    <a href="#announcements" class="hover:text-valenzuela-blue transition-colors py-2 flex items-center gap-1.5">
-                        <i class="fa-solid fa-bullhorn text-amber-500"></i> Updates
+                    <a href="#announcements" class="group flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800/90 transition-all">
+                        <i class="fa-solid fa-bullhorn text-amber-400 group-hover:scale-110 transition-transform"></i>
+                        <span>Updates</span>
                     </a>
                     <?php endif; ?>
-                    <a href="#submit-consultation" onclick="openConcernModal(); return false;" class="hover:text-valenzuela-blue transition-colors py-2 flex items-center gap-1.5">
-                        <i class="fa-solid fa-paper-plane text-emerald-600"></i> Submit Concern
+
+                    <a href="#submit-consultation" onclick="openConcernModal(); return false;" class="group flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800/90 transition-all">
+                        <i class="fa-solid fa-paper-plane text-emerald-400 group-hover:scale-110 transition-transform"></i>
+                        <span>Submit Concern</span>
                     </a>
-                    <button onclick="showTrackModal()" class="hover:text-valenzuela-blue transition-colors py-2 flex items-center gap-1.5 text-slate-700 font-semibold bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-                        <i class="fa-solid fa-magnifying-glass text-valenzuela-blue"></i> Track Status
+
+                    <button onclick="showTrackModal()" class="group flex items-center gap-2 px-4 py-2 rounded-full text-xs font-extrabold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 border border-blue-400/30 shadow-md shadow-blue-600/20 transition-all active:scale-95 ml-1">
+                        <i class="fa-solid fa-magnifying-glass text-blue-200 group-hover:rotate-12 transition-transform"></i>
+                        <span>Track Status</span>
                     </button>
                 </div>
 
                 <!-- Right Authentication Actions -->
-                <div class="hidden md:flex items-center gap-4">
+                <div class="hidden md:flex items-center gap-3">
                     <?php if ($is_logged_in): ?>
                         <div class="relative group" id="user-dropdown-container">
-                            <button class="flex items-center gap-2.5 bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-full transition-colors border border-slate-200">
-                                <div class="w-7 h-7 rounded-full bg-valenzuela-blue text-white flex items-center justify-center font-bold text-xs">
+                            <button class="flex items-center gap-2.5 bg-slate-800/90 hover:bg-slate-800 px-3.5 py-1.5 rounded-full transition-colors border border-slate-700">
+                                <div class="w-6 h-6 rounded-full bg-valenzuela-blue text-white flex items-center justify-center font-bold text-xs">
                                     <?php echo strtoupper(substr($current_user_name ?? 'C', 0, 1)); ?>
                                 </div>
-                                <span class="text-xs font-bold text-slate-800 max-w-[120px] truncate"><?php echo htmlspecialchars($current_user_name); ?></span>
+                                <span class="text-xs font-bold text-slate-200 max-w-[110px] truncate"><?php echo htmlspecialchars($current_user_name); ?></span>
                                 <i class="fa-solid fa-chevron-down text-xs text-slate-400"></i>
                             </button>
 
                             <!-- Dropdown Menu -->
-                            <div class="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-2 hidden group-hover:block transition-all z-50">
-                                <div class="px-4 py-2 border-b border-gray-100">
-                                    <p class="text-xs font-bold text-slate-800"><?php echo htmlspecialchars($current_user_name); ?></p>
-                                    <p class="text-[11px] text-slate-500 truncate"><?php echo htmlspecialchars($_SESSION['email'] ?? ''); ?></p>
+                            <div class="absolute right-0 mt-2 w-56 bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-800 py-2 hidden group-hover:block transition-all z-50">
+                                <div class="px-4 py-2.5 border-b border-slate-800">
+                                    <p class="text-xs font-bold text-white"><?php echo htmlspecialchars($current_user_name); ?></p>
+                                    <p class="text-[11px] text-slate-400 truncate"><?php echo htmlspecialchars($_SESSION['email'] ?? ''); ?></p>
                                 </div>
-                                <button onclick="showMyActivityModal()" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors">
+                                <button onclick="showMyActivityModal()" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 flex items-center gap-2 transition-colors">
                                     <i class="fa-solid fa-clock-history text-valenzuela-blue"></i> My Submissions & Votes
                                 </button>
-                                <div class="border-t border-gray-100 my-1"></div>
-                                <a href="sign-out.php" class="block w-full text-left px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors">
+                                <div class="border-t border-slate-800 my-1"></div>
+                                <a href="sign-out.php" class="block w-full text-left px-4 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-950/30 flex items-center gap-2 transition-colors">
                                     <i class="fa-solid fa-right-from-bracket"></i> Sign Out
                                 </a>
                             </div>
                         </div>
                     <?php else: ?>
-                        <a href="<?php echo htmlspecialchars($citizenGoogleOAuthUrl); ?>" class="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs border border-slate-300 hover:border-slate-400 px-4 py-2 rounded-full transition-all shadow-sm hover:shadow">
+                        <a href="<?php echo htmlspecialchars($citizenGoogleOAuthUrl); ?>" class="flex items-center gap-2 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs px-4 py-2 rounded-full transition-all shadow-md hover:shadow-lg">
                             <svg class="w-4 h-4" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
                                 <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.3 7.31 24 12 24z"/>
@@ -688,65 +797,96 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
             </div>
         </div>
     </nav>
+</header>
 
     <!-- Main Container -->
-    <main class="flex-grow max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12 w-full">
+    <main class="flex-grow max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-8 space-y-8 w-full">
 
         <!-- Hero / Welcome Section -->
-        <header class="bg-gradient-to-r from-red-950 via-slate-900 to-blue-950 rounded-3xl p-6 sm:p-10 text-white shadow-2xl relative overflow-hidden flex flex-col lg:flex-row items-center justify-between gap-8 border border-white/10">
-            <!-- Subtle Background Accents -->
-            <div class="absolute -right-20 -top-20 w-96 h-96 bg-red-600/20 rounded-full blur-3xl pointer-events-none"></div>
-            <div class="absolute -left-20 -bottom-20 w-96 h-96 bg-blue-600/15 rounded-full blur-3xl pointer-events-none"></div>
+        <header class="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 rounded-2xl sm:rounded-3xl px-5 pt-3.5 pb-4 sm:px-7 sm:pt-4 sm:pb-5 text-white shadow-xl relative overflow-hidden border border-slate-800/90 space-y-3.5">
+            <!-- Subtle Background Glowing Accents -->
+            <div class="absolute -right-20 -top-20 w-80 h-80 bg-red-600/15 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -left-20 -bottom-20 w-80 h-80 bg-blue-600/15 rounded-full blur-3xl pointer-events-none"></div>
 
-            <div class="z-10 max-w-2xl">
-                <?php if (isset($_GET['login']) && $_GET['login'] === 'success'): ?>
-                    <div class="inline-flex items-center gap-2 bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-bold px-3.5 py-1.5 rounded-full mb-3 backdrop-blur-md shadow-inner">
-                        <i class="fa-solid fa-circle-check text-emerald-400"></i> Welcome back, <?php echo htmlspecialchars($current_user_name ?? 'Citizen'); ?>!
+            <!-- Top Row: Left Title & Description | Right 4 Stat Boxes in ONE SINGLE LINE -->
+            <div class="z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
+                <!-- Left Title & Subtitle -->
+                <div class="max-w-xl">
+                    <?php if (isset($_GET['login']) && $_GET['login'] === 'success'): ?>
+                        <div class="inline-flex items-center gap-2 bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-bold px-3 py-1 rounded-full mb-2 backdrop-blur-md">
+                            <i class="fa-solid fa-circle-check text-emerald-400"></i> Welcome back, <?php echo htmlspecialchars($current_user_name ?? 'Citizen'); ?>!
+                        </div>
+                    <?php endif; ?>
+
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="inline-flex items-center gap-1.5 bg-slate-800/90 text-blue-300 text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider border border-slate-700/80">
+                            <i class="fa-solid fa-building-columns text-valenzuela-red"></i> Valenzuela City Legislative Office
+                        </span>
                     </div>
-                <?php endif; ?>
 
-                <span class="inline-flex items-center gap-1.5 bg-white/10 text-blue-200 text-[11px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider mb-3 border border-white/15 backdrop-blur-md">
-                    <i class="fa-solid fa-building-columns text-red-400"></i> Valenzuela City Legislative Office
-                </span>
+                    <h2 class="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight leading-snug text-white">
+                        Shape City Ordinances & Community Policies
+                    </h2>
+                    <p class="text-slate-300 text-xs sm:text-sm leading-relaxed font-medium mt-1.5">
+                        Participate directly in local governance. Voice your thoughts on consultations, vote on surveys, and submit proposal topics.
+                    </p>
+                </div>
 
-                <h2 class="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight mb-4">
-                    Shape City Ordinances & Community Policies
-                </h2>
-
-                <p class="text-slate-300 text-xs sm:text-sm leading-relaxed mb-6">
-                    Participate directly in local governance. Voice your thoughts on active city consultations, vote on community surveys, and submit citizen proposal topics to the City Council.
-                </p>
-
-                <!-- Search Bar -->
-                <form action="#active-consultations" method="GET" class="flex flex-col sm:flex-row gap-2 bg-white/10 p-2 rounded-2xl backdrop-blur-md border border-white/20 shadow-inner">
-                    <div class="relative flex-grow">
-                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-slate-300 text-sm"></i>
-                        <input type="text" name="search" value="<?php echo htmlspecialchars($search_query); ?>" placeholder="Search consultations by ordinance title or keyword..." class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/10 text-white placeholder-slate-400 focus:bg-white/20 focus:outline-none text-sm border-none">
+                <!-- 4 Stat Boxes in ONE SINGLE HORIZONTAL LINE -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full lg:w-auto shrink-0">
+                    <div class="bg-slate-900/90 backdrop-blur-xl border border-slate-800 px-4 py-3 rounded-2xl flex items-center gap-3 shadow-md hover:border-amber-500/40 transition-all">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 font-black text-lg flex items-center justify-center border border-amber-500/20 shrink-0">
+                            <?php echo $stats['active_consultations']; ?>
+                        </div>
+                        <div class="text-left">
+                            <span class="block text-xs font-black text-white leading-none mb-0.5">Active</span>
+                            <span class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Topics</span>
+                        </div>
                     </div>
-                    <button type="submit" class="bg-gradient-to-r from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 text-white font-extrabold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all shrink-0 shadow-md">
-                        Search Topics
-                    </button>
-                </form>
+
+                    <div class="bg-slate-900/90 backdrop-blur-xl border border-slate-800 px-4 py-3 rounded-2xl flex items-center gap-3 shadow-md hover:border-emerald-500/40 transition-all">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 font-black text-lg flex items-center justify-center border border-emerald-500/20 shrink-0">
+                            <?php echo $stats['new_surveys']; ?>
+                        </div>
+                        <div class="text-left">
+                            <span class="block text-xs font-black text-white leading-none mb-0.5">Open</span>
+                            <span class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Surveys</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900/90 backdrop-blur-xl border border-slate-800 px-4 py-3 rounded-2xl flex items-center gap-3 shadow-md hover:border-blue-500/40 transition-all">
+                        <div class="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-300 font-black text-lg flex items-center justify-center border border-blue-500/20 shrink-0">
+                            <?php echo number_format($stats['total_citizens']); ?>
+                        </div>
+                        <div class="text-left">
+                            <span class="block text-xs font-black text-white leading-none mb-0.5">Citizens</span>
+                            <span class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Registered</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900/90 backdrop-blur-xl border border-slate-800 px-4 py-3 rounded-2xl flex items-center gap-3 shadow-md hover:border-rose-500/40 transition-all">
+                        <div class="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-400 font-black text-lg flex items-center justify-center border border-rose-500/20 shrink-0">
+                            <?php echo number_format($stats['feedback_submitted']); ?>
+                        </div>
+                        <div class="text-left">
+                            <span class="block text-xs font-black text-white leading-none mb-0.5">Feedback</span>
+                            <span class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Submitted</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Live Dashboard Stats Cards -->
-            <div class="z-10 grid grid-cols-2 gap-3.5 w-full lg:w-auto shrink-0">
-                <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center flex flex-col justify-center min-w-[135px] shadow-lg hover:bg-white/15 transition-all">
-                    <span class="text-3xl sm:text-4xl font-black text-amber-400"><?php echo $stats['active_consultations']; ?></span>
-                    <span class="text-[10px] text-slate-200 uppercase font-extrabold tracking-wider mt-1.5">Active<br>Topics</span>
-                </div>
-                <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center flex flex-col justify-center min-w-[135px] shadow-lg hover:bg-white/15 transition-all">
-                    <span class="text-3xl sm:text-4xl font-black text-emerald-400"><?php echo $stats['new_surveys']; ?></span>
-                    <span class="text-[10px] text-slate-200 uppercase font-extrabold tracking-wider mt-1.5">Open<br>Surveys</span>
-                </div>
-                <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center flex flex-col justify-center min-w-[135px] shadow-lg hover:bg-white/15 transition-all">
-                    <span class="text-3xl sm:text-4xl font-black text-blue-300"><?php echo number_format($stats['total_citizens']); ?></span>
-                    <span class="text-[10px] text-slate-200 uppercase font-extrabold tracking-wider mt-1.5">Registered<br>Citizens</span>
-                </div>
-                <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center flex flex-col justify-center min-w-[135px] shadow-lg hover:bg-white/15 transition-all">
-                    <span class="text-3xl sm:text-4xl font-black text-rose-400"><?php echo number_format($stats['feedback_submitted']); ?></span>
-                    <span class="text-[10px] text-slate-200 uppercase font-extrabold tracking-wider mt-1.5">Feedback<br>Submitted</span>
-                </div>
+            <!-- Bottom Row: Search Tab Underneath -->
+            <div class="z-10 pt-2 border-t border-slate-800/80">
+                <form action="#active-consultations" method="GET" class="flex items-center gap-2 bg-slate-900/90 p-2 rounded-full border border-slate-700/90 shadow-inner focus-within:border-blue-500/60 transition-all w-full">
+                    <div class="relative flex-grow">
+                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-3 text-slate-400 text-xs"></i>
+                        <input type="text" name="search" value="<?php echo htmlspecialchars($search_query); ?>" placeholder="Search consultations by ordinance title or keyword..." class="w-full pl-10 pr-3 py-1.5 rounded-full bg-transparent text-white placeholder-slate-400 focus:outline-none text-xs border-none">
+                    </div>
+                    <button type="submit" class="bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-extrabold px-6 py-2 rounded-full text-xs uppercase tracking-wider transition-all shrink-0 shadow-md flex items-center gap-1.5">
+                        <span>Search Topics</span>
+                    </button>
+                </form>
             </div>
         </header>
 
@@ -770,8 +910,27 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
         </section>
         <?php endif; ?>
 
-        <!-- Active Consultations Section -->
-        <section id="active-consultations" class="scroll-mt-24">
+        <!-- Main Portal Segmented Tab View Switcher (Active vs Past Archive) -->
+        <div class="flex justify-center my-6">
+            <div class="inline-flex p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl gap-2 backdrop-blur-md">
+                <button onclick="switchPortalMainTab('active')" id="main-tab-active-btn" class="flex items-center gap-2.5 px-6 py-3 rounded-xl text-xs sm:text-sm font-extrabold transition-all bg-gradient-to-r from-valenzuela-red to-red-700 text-white shadow-md cursor-pointer">
+                    <i class="fa-solid fa-fire text-amber-300"></i>
+                    <span>Active Consultations & Surveys</span>
+                    <span class="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-black"><?php echo count($consultations) + count($surveys); ?></span>
+                </button>
+
+                <button onclick="switchPortalMainTab('past')" id="main-tab-past-btn" class="flex items-center gap-2.5 px-6 py-3 rounded-xl text-xs sm:text-sm font-bold text-slate-400 hover:text-white transition-all cursor-pointer">
+                    <i class="fa-solid fa-box-archive text-amber-400"></i>
+                    <span>Concluded Legislative Archive</span>
+                    <span class="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded-full font-bold border border-slate-700"><?php echo count($past_items); ?></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Active Consultations & Surveys Container -->
+        <div id="active-portal-container" class="space-y-12">
+            <!-- Active Consultations Section -->
+            <section id="active-consultations" class="scroll-mt-24">
             <div class="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
                 <div>
                     <span class="text-xs font-extrabold text-red-600 uppercase tracking-widest bg-red-50 border border-red-200 px-3 py-1 rounded-full inline-block mb-1.5">
@@ -783,103 +942,117 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
                     <p class="text-slate-500 text-xs sm:text-sm mt-1">Review proposed ordinances and contribute your feedback to the City Council.</p>
                 </div>
 
-                <!-- Category Filters -->
-                <div class="flex flex-wrap gap-2">
-                    <?php 
-                    $categories = [
-                        'all' => 'All Topics',
-                        'infrastructure' => 'Infrastructure',
-                        'health' => 'Health & Sanitation',
-                        'environment' => 'Environment',
-                        'education' => 'Education',
-                        'transportation' => 'Traffic & Transport',
-                        'other' => 'General Governance'
-                    ];
-                    foreach ($categories as $key => $label):
-                        $isActive = ($category_filter === $key) || (empty($category_filter) && $key === 'all');
-                        $btnClass = $isActive 
-                            ? 'bg-red-700 text-white font-extrabold shadow-md' 
-                            : 'bg-white text-slate-700 hover:bg-slate-100 font-bold border border-slate-200/80';
-                    ?>
-                        <a href="?category=<?php echo $key; ?>#active-consultations" class="<?php echo $btnClass; ?> text-xs px-4 py-2 rounded-xl transition-all">
-                            <?php echo $label; ?>
-                        </a>
-                    <?php endforeach; ?>
+                <div class="flex flex-wrap items-center gap-3">
+                    <!-- Category Filters -->
+                    <div class="flex flex-wrap gap-2">
+                        <?php 
+                        $categories = [
+                            'all' => 'All Topics',
+                            'infrastructure' => 'Infrastructure',
+                            'health' => 'Health & Sanitation',
+                            'environment' => 'Environment',
+                            'education' => 'Education',
+                            'transportation' => 'Traffic & Transport',
+                            'other' => 'General Governance'
+                        ];
+                        foreach ($categories as $key => $label):
+                            $isActive = ($category_filter === $key) || (empty($category_filter) && $key === 'all');
+                            $btnClass = $isActive 
+                                ? 'bg-red-700 text-white font-extrabold shadow-md' 
+                                : 'bg-white text-slate-700 hover:bg-slate-100 font-bold border border-slate-200/80';
+                        ?>
+                            <a href="?category=<?php echo $key; ?>#active-consultations" class="<?php echo $btnClass; ?> text-xs px-4 py-2 rounded-xl transition-all">
+                                <?php echo $label; ?>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
             </div>
 
-            <!-- Consultation Cards Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <?php if (empty($consultations)): ?>
-                    <div class="col-span-full bg-white rounded-3xl border border-dashed border-slate-300 p-12 text-center text-slate-400">
-                        <i class="fa-solid fa-box-open text-5xl mb-3 text-slate-300"></i>
-                        <h4 class="text-lg font-bold text-slate-700">No Consultations Found</h4>
-                        <p class="text-sm text-slate-500 max-w-md mx-auto mt-1">There are currently no active public consultations matching your search filter. Try clearing your search parameters.</p>
-                        <a href="index.php#active-consultations" class="inline-block mt-4 bg-red-700 text-white text-xs font-extrabold px-5 py-2.5 rounded-xl shadow-md">View All Consultations</a>
-                    </div>
-                <?php else: foreach ($consultations as $c): ?>
-                    <?php 
-                        $cat = strtolower($c['category'] ?? 'other');
-                        $badgeColors = [
-                            'environment' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                            'infrastructure' => 'bg-red-50 text-red-700 border-red-200',
-                            'health' => 'bg-purple-50 text-purple-700 border-purple-200',
-                            'education' => 'bg-blue-50 text-blue-700 border-blue-200',
-                            'transportation' => 'bg-amber-50 text-amber-800 border-amber-200',
-                            'other' => 'bg-slate-100 text-slate-700 border-slate-200'
-                        ];
-                        $badgeStyle = $badgeColors[$cat] ?? $badgeColors['other'];
-                        $days_left = !empty($c['end_date']) ? max(1, ceil((strtotime($c['end_date']) - time()) / 86400)) : 30;
-                        $tracking_code = !empty($c['tracking_number']) ? $c['tracking_number'] : ('TRK-' . str_pad($c['id'], 6, '0', STR_PAD_LEFT));
-                    ?>
-                    <div class="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col card-hover group hover:shadow-xl transition-all duration-300">
-                        
-                        <!-- Top Banner Image if available -->
-                        <?php if (!empty($c['image_path']) && file_exists(__DIR__ . '/../' . $c['image_path'])): ?>
-                            <div class="h-44 w-full overflow-hidden bg-slate-100 relative">
-                                <img src="../<?php echo htmlspecialchars($c['image_path']); ?>" alt="Consultation Image" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                                <div class="absolute top-3 right-3 bg-white/95 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-extrabold text-slate-800 shadow-md">
-                                    <i class="fa-regular fa-clock text-red-600 mr-1"></i> <?php echo $days_left; ?>d remaining
-                                </div>
-                            </div>
-                        <?php else: ?>
-                            <div class="h-3 w-full bg-gradient-to-r from-red-700 via-slate-800 to-blue-900"></div>
-                        <?php endif; ?>
+            <!-- Single-Line Scrollable Consultation Cards Container -->
+            <div class="relative group/slider">
+                <!-- Left Floating Arrow Button -->
+                <button id="consultation-prev-btn" onclick="scrollConsultations('left')" class="absolute -left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200/90 text-slate-700 hover:text-red-700 hover:bg-red-50 shadow-xl flex items-center justify-center transition-all duration-300 z-20 cursor-pointer hover:scale-110 active:scale-95 opacity-0 pointer-events-none" title="Previous Consultations">
+                    <i class="fa-solid fa-chevron-left text-sm"></i>
+                </button>
 
-                        <div class="p-6 flex-grow flex flex-col justify-between">
-                            <div>
-                                <div class="flex items-center justify-between gap-2 mb-3">
-                                    <span class="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-lg border <?php echo $badgeStyle; ?>">
-                                        <?php echo htmlspecialchars($c['category'] ?? 'General Governance'); ?>
-                                    </span>
-                                    <?php if (empty($c['image_path'])): ?>
-                                        <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1">
-                                            <i class="fa-regular fa-clock"></i> Closes in <?php echo $days_left; ?>d
+                <div id="consultation-cards-container" onscroll="checkSliderScroll('consultation-cards-container', 'consultation-prev-btn', 'consultation-next-btn')" class="flex flex-nowrap overflow-x-auto gap-6 pb-4 pt-1 scroll-smooth snap-x snap-mandatory no-scrollbar">
+                    <?php if (empty($consultations)): ?>
+                        <div class="w-full bg-white rounded-3xl border border-dashed border-slate-300 p-12 text-center text-slate-400">
+                            <i class="fa-solid fa-box-open text-5xl mb-3 text-slate-300"></i>
+                            <h4 class="text-lg font-bold text-slate-700">No Consultations Found</h4>
+                            <p class="text-sm text-slate-500 max-w-md mx-auto mt-1">There are currently no active public consultations matching your search filter. Try clearing your search parameters.</p>
+                            <a href="index.php#active-consultations" class="inline-block mt-4 bg-red-700 text-white text-xs font-extrabold px-5 py-2.5 rounded-xl shadow-md">View All Consultations</a>
+                        </div>
+                    <?php else: foreach ($consultations as $c): ?>
+                        <?php 
+                            $cat = strtolower($c['category'] ?? 'other');
+                            $badgeColors = [
+                                'environment' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                                'infrastructure' => 'bg-red-50 text-red-700 border-red-200',
+                                'health' => 'bg-purple-50 text-purple-700 border-purple-200',
+                                'education' => 'bg-blue-50 text-blue-700 border-blue-200',
+                                'transportation' => 'bg-amber-50 text-amber-800 border-amber-200',
+                                'other' => 'bg-slate-100 text-slate-700 border-slate-200'
+                            ];
+                            $badgeStyle = $badgeColors[$cat] ?? $badgeColors['other'];
+                            $days_left = !empty($c['end_date']) ? max(1, ceil((strtotime($c['end_date']) - time()) / 86400)) : 30;
+                            $tracking_code = !empty($c['tracking_number']) ? $c['tracking_number'] : ('TRK-' . str_pad($c['id'], 6, '0', STR_PAD_LEFT));
+                        ?>
+                        <div class="w-[310px] sm:w-[360px] md:w-[380px] shrink-0 snap-start bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col card-hover group hover:shadow-xl transition-all duration-300">
+                            
+                            <!-- Top Banner Image if available -->
+                            <?php if (!empty($c['image_path']) && file_exists(__DIR__ . '/../' . $c['image_path'])): ?>
+                                <div class="h-44 w-full overflow-hidden bg-slate-100 relative">
+                                    <img src="../<?php echo htmlspecialchars($c['image_path']); ?>" alt="Consultation Image" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                                    <div class="absolute top-3 right-3 bg-white/95 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-extrabold text-slate-800 shadow-md">
+                                        <i class="fa-regular fa-clock text-red-600 mr-1"></i> <?php echo $days_left; ?>d remaining
+                                    </div>
+                                </div>
+                            <?php else: ?>
+                                <div class="h-3 w-full bg-gradient-to-r from-red-700 via-slate-800 to-blue-900"></div>
+                            <?php endif; ?>
+
+                            <div class="p-6 flex-grow flex flex-col justify-between">
+                                <div>
+                                    <div class="flex items-center justify-between gap-2 mb-3">
+                                        <span class="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-lg border <?php echo $badgeStyle; ?>">
+                                            <?php echo htmlspecialchars($c['category'] ?? 'General Governance'); ?>
                                         </span>
-                                    <?php endif; ?>
+                                        <?php if (empty($c['image_path'])): ?>
+                                            <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+                                                <i class="fa-regular fa-clock"></i> Closes in <?php echo $days_left; ?>d
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <h4 class="text-base font-extrabold text-slate-900 group-hover:text-red-700 transition-colors line-clamp-2 mb-2 leading-snug">
+                                        <?php echo htmlspecialchars($c['title'] ?? 'Untitled Consultation'); ?>
+                                    </h4>
+
+                                    <p class="text-slate-600 text-xs line-clamp-3 mb-4 leading-relaxed font-medium">
+                                        <?php echo htmlspecialchars($c['description'] ?? 'No detailed description provided.'); ?>
+                                    </p>
                                 </div>
 
-                                <h4 class="text-base font-extrabold text-slate-900 group-hover:text-red-700 transition-colors line-clamp-2 mb-2 leading-snug">
-                                    <?php echo htmlspecialchars($c['title'] ?? 'Untitled Consultation'); ?>
-                                </h4>
-
-                                <p class="text-slate-600 text-xs line-clamp-3 mb-4 leading-relaxed font-medium">
-                                    <?php echo htmlspecialchars($c['description'] ?? 'No detailed description provided.'); ?>
-                                </p>
-                            </div>
-
-                            <div class="pt-4 border-t border-slate-100 flex items-center justify-between mt-2">
-                                <div class="text-[11px] text-slate-500 font-semibold flex items-center gap-3">
-                                    <span><i class="fa-solid fa-eye text-slate-400 mr-1"></i><?php echo (int)($c['views'] ?? 0); ?></span>
-                                    <span><i class="fa-solid fa-comment-dots text-slate-400 mr-1"></i><?php echo (int)($c['posts_count'] ?? 0); ?></span>
+                                <div class="pt-4 border-t border-slate-100 flex items-center justify-between mt-2">
+                                    <div class="text-[11px] text-slate-500 font-semibold flex items-center gap-3">
+                                        <span><i class="fa-solid fa-eye text-slate-400 mr-1"></i><?php echo (int)($c['views'] ?? 0); ?></span>
+                                        <span><i class="fa-solid fa-comment-dots text-slate-400 mr-1"></i><?php echo (int)($c['posts_count'] ?? 0); ?></span>
+                                    </div>
+                                    <button onclick="openConsultationModal(<?php echo (int)$c['id']; ?>)" class="bg-gradient-to-r from-red-700 to-red-900 hover:from-red-800 hover:to-black text-white text-xs font-black px-4 py-2 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer">
+                                        Participate <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                                    </button>
                                 </div>
-                                <button onclick="openConsultationModal(<?php echo (int)$c['id']; ?>)" class="bg-gradient-to-r from-red-700 to-red-900 hover:from-red-800 hover:to-black text-white text-xs font-black px-4 py-2 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer">
-                                    Participate <i class="fa-solid fa-arrow-right text-[10px]"></i>
-                                </button>
                             </div>
                         </div>
-                    </div>
-                <?php endforeach; endif; ?>
+                    <?php endforeach; endif; ?>
+                </div>
+
+                <!-- Right Floating Arrow Overlay Button -->
+                <button id="consultation-next-btn" onclick="scrollConsultations('right')" class="absolute -right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200/90 text-slate-700 hover:text-red-700 hover:bg-red-50 shadow-xl flex items-center justify-center transition-all duration-300 z-20 cursor-pointer hover:scale-110 active:scale-95 opacity-0 pointer-events-none" title="Next Consultations">
+                    <i class="fa-solid fa-chevron-right text-sm"></i>
+                </button>
             </div>
         </section>
 
@@ -895,96 +1068,276 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <?php if (empty($surveys)): ?>
-                    <div class="col-span-full bg-white rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-400">
-                        <i class="fa-solid fa-clipboard-list text-4xl mb-2 text-slate-300"></i>
-                        <p class="text-sm font-semibold">No active community surveys available at this time.</p>
-                    </div>
-                <?php else: foreach ($surveys as $index => $s): ?>
-                    <?php 
-                        $optA = $s['survey_option_a'] ?? 'Agree';
-                        $optB = $s['survey_option_b'] ?? 'Disagree';
-                        $pctA = $s['pct_a'];
-                        $pctB = $s['pct_b'];
-                        $totVotes = $s['total_votes'];
-                    ?>
-                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between card-hover" id="survey-card-<?php echo $s['id']; ?>">
-                        <div>
-                            <div class="flex justify-between items-start mb-3">
-                                <span class="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-[11px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wider border border-emerald-200">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Active Poll
-                                </span>
-                                <span class="text-[11px] font-medium text-slate-400">
-                                    <i class="fa-solid fa-users text-slate-400"></i> <span id="survey-total-votes-<?php echo $s['id']; ?>"><?php echo number_format($totVotes); ?></span> votes cast
-                                </span>
-                            </div>
+            <!-- Single-Line Scrollable Survey Cards Container -->
+            <div class="relative group/slider">
+                <!-- Left Floating Arrow Button -->
+                <button id="survey-prev-btn" onclick="scrollSurveys('left')" class="absolute -left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200/90 text-slate-700 hover:text-red-700 hover:bg-red-50 shadow-xl flex items-center justify-center transition-all duration-300 z-20 cursor-pointer hover:scale-110 active:scale-95 opacity-0 pointer-events-none" title="Previous Surveys">
+                    <i class="fa-solid fa-chevron-left text-sm"></i>
+                </button>
 
-                            <h4 class="text-lg font-bold text-slate-900 mb-2">
-                                <?php echo htmlspecialchars($s['title']); ?>
-                            </h4>
-
-                            <?php if (!empty($s['description'])): ?>
-                                <div class="text-xs text-slate-600 mb-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 leading-relaxed max-h-36 overflow-y-auto">
-                                    <i class="fa-solid fa-circle-info text-valenzuela-blue mr-1"></i>
-                                    <?php echo nl2br(htmlspecialchars($s['description'])); ?>
+                <div id="survey-cards-container" onscroll="checkSliderScroll('survey-cards-container', 'survey-prev-btn', 'survey-next-btn')" class="flex flex-nowrap overflow-x-auto gap-6 pb-4 pt-1 scroll-smooth snap-x snap-mandatory no-scrollbar">
+                    <?php if (empty($surveys)): ?>
+                        <div class="w-full bg-white rounded-3xl border border-dashed border-slate-300 p-12 text-center text-slate-400">
+                            <i class="fa-solid fa-clipboard-list text-5xl mb-3 text-slate-300"></i>
+                            <h4 class="text-lg font-bold text-slate-700">No Active Surveys</h4>
+                            <p class="text-sm text-slate-500">There are currently no active community polls available.</p>
+                        </div>
+                    <?php else: foreach ($surveys as $index => $s): ?>
+                        <?php 
+                            $optA = $s['survey_option_a'] ?? 'Agree';
+                            $optB = $s['survey_option_b'] ?? 'Disagree';
+                            $pctA = $s['pct_a'];
+                            $pctB = $s['pct_b'];
+                            $totVotes = $s['total_votes'];
+                            $cat = strtolower($s['category'] ?? 'other');
+                            $badgeColors = [
+                                'environment' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                                'infrastructure' => 'bg-red-50 text-red-700 border-red-200',
+                                'health' => 'bg-purple-50 text-purple-700 border-purple-200',
+                                'education' => 'bg-blue-50 text-blue-700 border-blue-200',
+                                'transportation' => 'bg-amber-50 text-amber-800 border-amber-200',
+                                'other' => 'bg-rose-50 text-rose-700 border-rose-200'
+                            ];
+                            $badgeStyle = $badgeColors[$cat] ?? $badgeColors['other'];
+                        ?>
+                        <div class="w-[310px] sm:w-[360px] md:w-[380px] shrink-0 snap-start bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col card-hover group hover:shadow-xl transition-all duration-300" id="survey-card-<?php echo $s['id']; ?>">
+                            
+                            <!-- Top Banner Image or Dark Header -->
+                            <?php if (!empty($s['image_path']) && file_exists(__DIR__ . '/../' . $s['image_path'])): ?>
+                                <div class="h-44 w-full overflow-hidden bg-slate-100 relative">
+                                    <img src="../<?php echo htmlspecialchars($s['image_path']); ?>" alt="Survey Image" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                                    <div class="absolute top-3 left-3 bg-emerald-500/90 text-white backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-extrabold shadow-md flex items-center gap-1.5 uppercase">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span> Active Poll
+                                    </div>
+                                    <div class="absolute top-3 right-3 bg-white/95 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-extrabold text-slate-800 shadow-md">
+                                        <i class="fa-solid fa-users text-slate-500 mr-1"></i> <span id="survey-total-votes-<?php echo $s['id']; ?>"><?php echo number_format($totVotes); ?></span> votes
+                                    </div>
+                                </div>
+                            <?php else: ?>
+                                <div class="h-28 w-full bg-gradient-to-r from-slate-900 via-valenzuela-blue to-slate-800 relative p-4 flex items-start justify-between text-white">
+                                    <span class="bg-emerald-500/90 text-white backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-extrabold shadow-md flex items-center gap-1.5 uppercase tracking-wider">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span> Active Poll
+                                    </span>
+                                    <span class="bg-black/40 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-extrabold text-slate-200 border border-white/10 shadow-md">
+                                        <i class="fa-solid fa-users text-emerald-400 mr-1"></i> <span id="survey-total-votes-<?php echo $s['id']; ?>"><?php echo number_format($totVotes); ?></span> votes
+                                    </span>
                                 </div>
                             <?php endif; ?>
 
-                            <p class="text-sm font-bold text-slate-800 mb-3">
-                                <?php echo htmlspecialchars($s['survey_question'] ?? $s['title']); ?>
-                            </p>
+                            <div class="p-6 flex-grow flex flex-col justify-between">
+                                <div>
+                                    <div class="flex items-center justify-between gap-2 mb-3">
+                                        <span class="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-lg border <?php echo $badgeStyle; ?>">
+                                            <?php echo htmlspecialchars($s['category'] ?? 'Public Opinion Poll'); ?>
+                                        </span>
+                                    </div>
 
-                            <!-- Poll Single-Line Progress Bar -->
-                            <div class="my-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-1.5">
-                                <div class="flex justify-between items-center text-xs font-bold text-slate-700">
-                                    <span class="text-emerald-700 flex items-center gap-1">
-                                        <i class="fa-solid fa-thumbs-up text-emerald-600 text-[10px]"></i>
-                                        <?php echo htmlspecialchars($optA); ?> (<span id="survey-pct-a-<?php echo $s['id']; ?>"><?php echo $pctA; ?>%</span>)
-                                    </span>
-                                    <span class="text-rose-700 flex items-center gap-1">
-                                        <?php echo htmlspecialchars($optB); ?> (<span id="survey-pct-b-<?php echo $s['id']; ?>"><?php echo $pctB; ?>%</span>)
-                                        <i class="fa-solid fa-thumbs-down text-rose-600 text-[10px]"></i>
-                                    </span>
+                                    <h4 class="text-base font-extrabold text-slate-900 group-hover:text-valenzuela-red transition-colors line-clamp-2 mb-2 leading-snug">
+                                        <?php echo htmlspecialchars($s['title']); ?>
+                                    </h4>
+
+                                    <?php if (!empty($s['description'])): ?>
+                                        <p class="text-slate-600 text-xs line-clamp-2 mb-3 leading-relaxed font-medium">
+                                            <?php echo htmlspecialchars($s['description']); ?>
+                                        </p>
+                                    <?php endif; ?>
+
+                                    <!-- Poll Single-Line Progress Bar -->
+                                    <div class="my-3 bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5">
+                                        <div class="flex justify-between items-center text-xs font-bold text-slate-700">
+                                            <span class="text-emerald-700 flex items-center gap-1">
+                                                <i class="fa-solid fa-thumbs-up text-emerald-600 text-[10px]"></i>
+                                                <?php echo htmlspecialchars($optA); ?> (<span id="survey-pct-a-<?php echo $s['id']; ?>"><?php echo $pctA; ?>%</span>)
+                                            </span>
+                                            <span class="text-rose-700 flex items-center gap-1">
+                                                <?php echo htmlspecialchars($optB); ?> (<span id="survey-pct-b-<?php echo $s['id']; ?>"><?php echo $pctB; ?>%</span>)
+                                                <i class="fa-solid fa-thumbs-down text-rose-600 text-[10px]"></i>
+                                            </span>
+                                        </div>
+                                        <div class="w-full bg-slate-200 rounded-full h-2 flex overflow-hidden p-0.5 border border-slate-200/60">
+                                            <div id="survey-bar-a-<?php echo $s['id']; ?>" class="bg-emerald-500 h-full rounded-l-full transition-all duration-500" style="width: <?php echo $pctA; ?>%"></div>
+                                            <div id="survey-bar-b-<?php echo $s['id']; ?>" class="bg-rose-500 h-full rounded-r-full transition-all duration-500" style="width: <?php echo $pctB; ?>%"></div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="w-full bg-slate-200 rounded-full h-2.5 flex overflow-hidden p-0.5 border border-slate-200/60">
-                                    <div id="survey-bar-a-<?php echo $s['id']; ?>" class="bg-emerald-500 h-full rounded-l-full transition-all duration-500" style="width: <?php echo $pctA; ?>%"></div>
-                                    <div id="survey-bar-b-<?php echo $s['id']; ?>" class="bg-rose-500 h-full rounded-r-full transition-all duration-500" style="width: <?php echo $pctB; ?>%"></div>
+
+                                <!-- Vote Action / Voted Status Buttons -->
+                                <div id="survey-action-buttons-<?php echo $s['id']; ?>" class="mt-2 space-y-2" data-opta="<?php echo htmlspecialchars($optA); ?>" data-optb="<?php echo htmlspecialchars($optB); ?>">
+                                    <?php if ($is_logged_in && !empty($s['user_vote'])): ?>
+                                        <div class="w-full bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold py-1.5 px-3 rounded-xl text-xs flex items-center justify-between shadow-xs">
+                                            <span class="flex items-center gap-1.5">
+                                                <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                                                <span>You voted: <strong class="uppercase font-extrabold text-emerald-950"><?php echo htmlspecialchars($s['user_vote']); ?></strong></span>
+                                            </span>
+                                            <span class="text-[9px] text-emerald-700 font-semibold bg-emerald-100 px-1.5 py-0.5 rounded-full">Change</span>
+                                        </div>
+                                    <?php endif; ?>
+
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <?php 
+                                            $userV = $is_logged_in ? strtolower(trim($s['user_vote'] ?? '')) : '';
+                                            $isA = ($is_logged_in && $userV !== '' && $userV === strtolower(trim($optA)));
+                                            $isB = ($is_logged_in && $userV !== '' && $userV === strtolower(trim($optB)));
+                                        ?>
+                                        <button onclick="castSurveyVote(<?php echo $s['id']; ?>, '<?php echo addslashes($optA); ?>')" class="w-full <?php echo $isA ? 'bg-emerald-600 text-white border-emerald-700 font-extrabold shadow-sm' : 'bg-blue-50 hover:bg-valenzuela-blue hover:text-white text-valenzuela-blue border-blue-200 font-bold'; ?> border py-2.5 px-3 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5">
+                                            <i class="fa-solid <?php echo $isA ? 'fa-check-circle' : 'fa-thumbs-up'; ?>"></i> <?php echo $isA ? 'Voted ' . htmlspecialchars($optA) : 'Vote ' . htmlspecialchars($optA); ?>
+                                        </button>
+
+                                        <button onclick="castSurveyVote(<?php echo $s['id']; ?>, '<?php echo addslashes($optB); ?>')" class="w-full <?php echo $isB ? 'bg-red-600 text-white border-red-700 font-extrabold shadow-sm' : 'bg-red-50 hover:bg-valenzuela-red hover:text-white text-valenzuela-red border-red-200 font-bold'; ?> border py-2.5 px-3 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5">
+                                            <i class="fa-solid <?php echo $isB ? 'fa-check-circle' : 'fa-thumbs-down'; ?>"></i> <?php echo $isB ? 'Voted ' . htmlspecialchars($optB) : 'Vote ' . htmlspecialchars($optB); ?>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
+                    <?php endforeach; endif; ?>
+                </div>
 
-                        <!-- Vote Action / Voted Status Buttons -->
-                        <div id="survey-action-buttons-<?php echo $s['id']; ?>" class="mt-2 space-y-2.5" data-opta="<?php echo htmlspecialchars($optA); ?>" data-optb="<?php echo htmlspecialchars($optB); ?>">
-                            <?php if (!empty($s['user_vote'])): ?>
-                                <div class="w-full bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold py-2 px-3.5 rounded-xl text-xs flex items-center justify-between shadow-sm">
-                                    <span class="flex items-center gap-1.5">
-                                        <i class="fa-solid fa-circle-check text-emerald-600"></i>
-                                        <span>You voted: <strong class="uppercase font-extrabold text-emerald-950"><?php echo htmlspecialchars($s['user_vote']); ?></strong></span>
-                                    </span>
-                                    <span class="text-[10px] text-emerald-700 font-semibold bg-emerald-100 px-2 py-0.5 rounded-full">(Click other button to change)</span>
-                                </div>
-                            <?php endif; ?>
-
-                            <div class="grid grid-cols-2 gap-3">
-                                <?php 
-                                    $userV = strtolower(trim($s['user_vote'] ?? ''));
-                                    $isA = ($userV !== '' && $userV === strtolower(trim($optA)));
-                                    $isB = ($userV !== '' && $userV === strtolower(trim($optB)));
-                                ?>
-                                <button onclick="castSurveyVote(<?php echo $s['id']; ?>, '<?php echo addslashes($optA); ?>')" class="w-full <?php echo $isA ? 'bg-emerald-600 text-white border-emerald-700 font-extrabold shadow' : 'bg-blue-50 hover:bg-valenzuela-blue hover:text-white text-valenzuela-blue border-blue-200 font-bold'; ?> border py-2.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5">
-                                    <i class="fa-solid <?php echo $isA ? 'fa-check-circle' : 'fa-thumbs-up'; ?>"></i> <?php echo $isA ? 'Voted ' . htmlspecialchars($optA) : 'Vote ' . htmlspecialchars($optA); ?>
-                                </button>
-
-                                <button onclick="castSurveyVote(<?php echo $s['id']; ?>, '<?php echo addslashes($optB); ?>')" class="w-full <?php echo $isB ? 'bg-red-600 text-white border-red-700 font-extrabold shadow' : 'bg-red-50 hover:bg-valenzuela-red hover:text-white text-valenzuela-red border-red-200 font-bold'; ?> border py-2.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5">
-                                    <i class="fa-solid <?php echo $isB ? 'fa-check-circle' : 'fa-thumbs-down'; ?>"></i> <?php echo $isB ? 'Voted ' . htmlspecialchars($optB) : 'Vote ' . htmlspecialchars($optB); ?>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                <?php endforeach; endif; ?>
+                <!-- Right Floating Arrow Overlay Button -->
+                <button id="survey-next-btn" onclick="scrollSurveys('right')" class="absolute -right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200/90 text-slate-700 hover:text-red-700 hover:bg-red-50 shadow-xl flex items-center justify-center transition-all duration-300 z-20 cursor-pointer hover:scale-110 active:scale-95 opacity-0 pointer-events-none" title="Next Surveys">
+                    <i class="fa-solid fa-chevron-right text-sm"></i>
+                </button>
             </div>
         </section>
+        </div>
+        <!-- END Active Consultations & Surveys Container -->
+
+        <!-- Concluded Legislative Archive Container -->
+        <div id="past-portal-container" class="hidden">
+            <section id="past-archive" class="max-w-[1440px] mx-auto px-4 sm:px-6 py-12">
+                <div class="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
+                    <div>
+                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">
+                            <i class="fa-solid fa-box-archive text-amber-600"></i> Municipal Legislative Archive
+                        </div>
+                        <h3 class="text-2xl sm:text-3xl font-extrabold text-slate-900 flex items-center gap-2">
+                            📁 Past Consultations & Concluded Polls
+                        </h3>
+                        <p class="text-slate-500 text-xs sm:text-sm mt-1 max-w-2xl">
+                            Review concluded public consultations, historical survey voting outcomes, and city ordinances officialized through citizen participation.
+                        </p>
+                    </div>
+
+                    <!-- Archive Category Filter Tabs -->
+                    <div class="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shrink-0">
+                        <button onclick="filterPastArchive('all')" id="past-tab-all" class="past-tab-btn px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-white text-slate-900 shadow-xs border border-slate-200 transition-all">All Archive</button>
+                        <button onclick="filterPastArchive('consultation')" id="past-tab-consultation" class="past-tab-btn px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 transition-all">Consultations</button>
+                        <button onclick="filterPastArchive('survey')" id="past-tab-survey" class="past-tab-btn px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 transition-all">Concluded Polls</button>
+                    </div>
+                </div>
+
+                <!-- Single-Line Scrollable Past Items Container -->
+                <div class="relative group/slider">
+                    <!-- Left Floating Arrow Button -->
+                    <button id="past-prev-btn" onclick="scrollPastArchive('left')" class="absolute -left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200/90 text-slate-700 hover:text-amber-700 hover:bg-amber-50 shadow-xl flex items-center justify-center transition-all duration-300 z-20 cursor-pointer hover:scale-110 active:scale-95 opacity-0 pointer-events-none" title="Previous Archive">
+                        <i class="fa-solid fa-chevron-left text-sm"></i>
+                    </button>
+
+                    <div id="past-cards-container" onscroll="checkSliderScroll('past-cards-container', 'past-prev-btn', 'past-next-btn')" class="flex flex-nowrap overflow-x-auto gap-6 pb-4 pt-1 scroll-smooth snap-x snap-mandatory no-scrollbar">
+                        <?php foreach ($past_items as $p): 
+                            $mode = strtolower(trim($p['response_mode'] ?? ''));
+                            $isSurveyType = ($mode === 'survey' || !empty($p['survey_question']));
+                            $typeClass = $isSurveyType ? 'past-type-survey' : 'past-type-consultation';
+                            $statusStr = strtoupper($p['status'] ?? 'CLOSED');
+                            $optA = $p['survey_option_a'] ?? 'AGREE';
+                            $optB = $p['survey_option_b'] ?? 'DISAGREE';
+                            $pctA = (float)($p['pct_a'] ?? 50);
+                            $pctB = (float)($p['pct_b'] ?? 50);
+                            $totalVotes = (int)($p['total_votes'] ?? 0);
+                        ?>
+                            <div class="w-[310px] sm:w-[360px] md:w-[380px] shrink-0 snap-start past-archive-card <?php echo $typeClass; ?> bg-white rounded-3xl overflow-hidden border border-slate-200/90 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative group">
+                                
+                                <!-- Top Image / Header Banner -->
+                                <div class="relative h-44 bg-slate-900 overflow-hidden shrink-0">
+                                    <?php if (!empty($p['image_path'])): ?>
+                                        <img src="<?php echo htmlspecialchars($p['image_path']); ?>" alt="Archive Banner" class="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500">
+                                    <?php else: ?>
+                                        <div class="w-full h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 p-6 flex flex-col justify-between">
+                                            <div class="flex justify-between items-start">
+                                                <span class="bg-amber-500/20 text-amber-300 text-[10px] font-extrabold px-2.5 py-1 rounded-md border border-amber-500/30 uppercase tracking-wider">
+                                                    <i class="fa-solid fa-box-archive mr-1"></i> Archived Record
+                                                </span>
+                                                <span class="text-[10px] font-mono text-slate-400">
+                                                    <?php echo htmlspecialchars($p['tracking_number'] ?? ('TRK-' . $p['id'])); ?>
+                                                </span>
+                                            </div>
+                                            <h4 class="text-white font-extrabold text-lg line-clamp-2 leading-tight">
+                                                <?php echo htmlspecialchars($p['title']); ?>
+                                            </h4>
+                                        </div>
+                                    <?php endif; ?>
+
+                                    <!-- Status Ribbon Badge -->
+                                    <div class="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md text-amber-400 border border-amber-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-md">
+                                        <i class="fa-solid fa-circle-check text-emerald-400 mr-1"></i> <?php echo $statusStr === 'OFFICIALIZED' ? 'Enacted Into City Ordinance' : 'Concluded & Archived'; ?>
+                                    </div>
+
+                                    <div class="absolute bottom-3 right-3 bg-slate-900/90 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg backdrop-blur-sm border border-slate-700">
+                                        <i class="fa-regular fa-calendar-check mr-1 text-slate-400"></i> Ended: <?php echo date('M d, Y', strtotime($p['end_date'] ?: $p['created_at'])); ?>
+                                    </div>
+                                </div>
+
+                                <!-- Card Body -->
+                                <div class="p-6 flex-grow flex flex-col justify-between space-y-4">
+                                    <div>
+                                        <div class="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                            <span>Category: <strong class="text-slate-700"><?php echo htmlspecialchars($p['category'] ?? 'General Governance'); ?></strong></span>
+                                            <span>Code: <strong class="font-mono text-slate-700"><?php echo htmlspecialchars($p['tracking_number'] ?? ('TRK-' . $p['id'])); ?></strong></span>
+                                        </div>
+
+                                        <h4 class="text-base font-extrabold text-slate-900 leading-snug mb-2 line-clamp-2">
+                                            <?php echo htmlspecialchars($p['title']); ?>
+                                        </h4>
+
+                                        <p class="text-slate-600 text-xs leading-relaxed line-clamp-3 font-medium mb-3">
+                                            <?php echo htmlspecialchars($p['description']); ?>
+                                        </p>
+
+                                        <?php if ($isSurveyType): ?>
+                                            <!-- Historical Survey Results Bar -->
+                                            <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-2">
+                                                <div class="text-[11px] font-bold text-slate-700 flex justify-between">
+                                                    <span>Final Poll Result (<?php echo number_format($totalVotes); ?> Votes)</span>
+                                                    <span class="text-amber-700 font-extrabold">Closed</span>
+                                                </div>
+                                                <div class="flex justify-between items-center text-xs font-extrabold">
+                                                    <span class="text-emerald-700 flex items-center gap-1">
+                                                        <i class="fa-solid fa-thumbs-up text-emerald-600 text-[10px]"></i> <?php echo htmlspecialchars($optA); ?> (<?php echo $pctA; ?>%)
+                                                    </span>
+                                                    <span class="text-rose-700 flex items-center gap-1">
+                                                        <?php echo htmlspecialchars($optB); ?> (<?php echo $pctB; ?>%) <i class="fa-solid fa-thumbs-down text-rose-600 text-[10px]"></i>
+                                                    </span>
+                                                </div>
+                                                <div class="w-full bg-slate-200 rounded-full h-2 flex overflow-hidden p-0.5 border border-slate-200/60">
+                                                    <div class="bg-emerald-500 h-full rounded-l-full" style="width: <?php echo $pctA; ?>%"></div>
+                                                    <div class="bg-rose-500 h-full rounded-r-full" style="width: <?php echo $pctB; ?>%"></div>
+                                                </div>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <!-- Footer Actions -->
+                                    <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+                                        <span class="text-[11px] text-slate-500 font-medium">
+                                            <i class="fa-solid fa-comments text-valenzuela-blue mr-1"></i> <?php echo (int)($p['posts_count'] ?? 0); ?> Citizen Reports Logged
+                                        </span>
+                                        <button onclick="openConsultationModal(<?php echo $p['id']; ?>)" class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3.5 py-1.5 rounded-xl text-xs transition-colors flex items-center gap-1.5">
+                                            <i class="fa-solid fa-folder-open text-amber-600"></i> View Record
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <!-- Right Floating Arrow Overlay Button -->
+                    <button id="past-next-btn" onclick="scrollPastArchive('right')" class="absolute -right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200/90 text-slate-700 hover:text-amber-700 hover:bg-amber-50 shadow-xl flex items-center justify-center transition-all duration-300 z-20 cursor-pointer hover:scale-110 active:scale-95 opacity-0 pointer-events-none" title="Next Archive">
+                        <i class="fa-solid fa-chevron-right text-sm"></i>
+                    </button>
+                </div>
+            </section>
+        </div>
+        <!-- END Concluded Legislative Archive Container -->
 
     <!-- Floating Feedback & Concern Widget (Bottom Left) -->
     <div class="fixed bottom-6 left-6 z-40 flex flex-col items-start select-none">
@@ -1007,7 +1360,7 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
     </div>
 
     <!-- Submit Concern / Ordinance Proposal Floating Modal -->
-    <div id="submit-concern-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto hidden">
+    <div id="submit-concern-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-3 sm:p-5 overflow-y-auto hidden">
         <div id="submit-consultation" class="bg-white rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl border border-slate-200 relative max-h-[92vh] flex flex-col animate-fadeIn">
             
             <!-- Modal Top Header -->
@@ -1176,7 +1529,7 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
     <!-- ========================================== -->
 
     <!-- Consultation Detail & Feedback Modal -->
-    <div id="consultation-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div id="consultation-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto relative border border-slate-200">
             <button onclick="closeConsultationModal()" class="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
                 <i class="fa-solid fa-xmark text-lg"></i>
@@ -1253,7 +1606,7 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
     </div>
 
     <!-- Track Submission Status Modal -->
-    <div id="track-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div id="track-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 sm:p-8 relative border border-slate-200">
             <button onclick="closeTrackModal()" class="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
                 <i class="fa-solid fa-xmark text-lg"></i>
@@ -1283,7 +1636,7 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
     </div>
 
     <!-- Vote Success Confirmation Modal -->
-    <div id="vote-success-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div id="vote-success-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 text-center border border-slate-100 relative animate-in fade-in duration-200">
             <button onclick="closeVoteSuccessModal()" class="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
                 <i class="fa-solid fa-xmark text-sm"></i>
@@ -1305,7 +1658,7 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
     </div>
 
     <!-- Change Vote Confirmation Modal -->
-    <div id="change-vote-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div id="change-vote-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 text-center relative border border-slate-200">
             <button onclick="closeChangeVoteModal()" class="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
                 <i class="fa-solid fa-xmark text-sm"></i>
@@ -1332,7 +1685,7 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
     </div>
 
     <!-- My Submissions Activity Modal -->
-    <div id="my-activity-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div id="my-activity-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 relative border border-slate-200 max-h-[85vh] overflow-y-auto">
             <button onclick="closeMyActivityModal()" class="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
                 <i class="fa-solid fa-xmark text-lg"></i>
@@ -1447,11 +1800,19 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
             showToast('Tracking Code copied to clipboard: ' + text);
         }
 
+        function checkCloseBodyModalState() {
+            const openModals = document.querySelectorAll('#submit-concern-modal:not(.hidden), #consultation-modal:not(.hidden), #track-modal:not(.hidden), #my-activity-modal:not(.hidden), #require-login-modal:not(.hidden), #vote-success-modal:not(.hidden), #change-vote-modal:not(.hidden)');
+            if (openModals.length === 0) {
+                document.body.classList.remove('overflow-hidden', 'modal-open');
+                document.body.style.overflow = 'auto';
+            }
+        }
+
         function openConcernModal() {
             const m = document.getElementById('submit-concern-modal');
             if (m) {
                 m.classList.remove('hidden');
-                document.body.classList.add('overflow-hidden');
+                document.body.classList.add('overflow-hidden', 'modal-open');
             }
         }
 
@@ -1459,8 +1820,8 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
             const m = document.getElementById('submit-concern-modal');
             if (m) {
                 m.classList.add('hidden');
-                document.body.classList.remove('overflow-hidden');
             }
+            checkCloseBodyModalState();
         }
 
         <?php if (!empty($submission_success) || !empty($submission_error)): ?>
@@ -1471,12 +1832,18 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
 
         function showRequireLoginModal() {
             const m = document.getElementById('require-login-modal');
-            if (m) m.classList.remove('hidden');
+            if (m) {
+                m.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden', 'modal-open');
+            }
         }
 
         function closeRequireLoginModal() {
             const m = document.getElementById('require-login-modal');
-            if (m) m.classList.add('hidden');
+            if (m) {
+                m.classList.add('hidden');
+            }
+            checkCloseBodyModalState();
         }
 
         // Community Survey Voting Functionality
@@ -1611,6 +1978,13 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
         function closeVoteSuccessModal() {
             const modal = document.getElementById('vote-success-modal');
             if (modal) modal.classList.add('hidden');
+            checkCloseBodyModalState();
+        }
+
+        function closeChangeVoteModal() {
+            const modal = document.getElementById('change-vote-modal');
+            if (modal) modal.classList.add('hidden');
+            checkCloseBodyModalState();
         }
 
         // Consultation Details Modal
@@ -1669,7 +2043,7 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
                         }
 
                         document.getElementById('consultation-modal').classList.remove('hidden');
-                        document.body.style.overflow = 'hidden';
+                        document.body.classList.add('overflow-hidden', 'modal-open');
                     } else {
                         showToast(res.message, 'error');
                     }
@@ -1677,8 +2051,9 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
         }
 
         function closeConsultationModal() {
-            document.getElementById('consultation-modal').classList.add('hidden');
-            document.body.style.overflow = 'auto';
+            const m = document.getElementById('consultation-modal');
+            if (m) m.classList.add('hidden');
+            checkCloseBodyModalState();
         }
 
         function handleFeedbackSubmit(e) {
@@ -1708,12 +2083,14 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
 
         // Track Code Lookup Modal
         function showTrackModal() {
-            document.getElementById('track-modal').classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
+            const m = document.getElementById('track-modal');
+            if (m) m.classList.remove('hidden');
+            document.body.classList.add('overflow-hidden', 'modal-open');
         }
         function closeTrackModal() {
-            document.getElementById('track-modal').classList.add('hidden');
-            document.body.style.overflow = 'auto';
+            const m = document.getElementById('track-modal');
+            if (m) m.classList.add('hidden');
+            checkCloseBodyModalState();
         }
 
         function performTrackLookup() {
@@ -1904,7 +2281,7 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
             const modal = document.getElementById('my-activity-modal');
             const content = document.getElementById('my-activity-content');
             if (modal) modal.classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
+            document.body.classList.add('overflow-hidden', 'modal-open');
             if (content) {
                 content.innerHTML = '<div class="text-center py-8 text-slate-400 flex items-center justify-center gap-2"><i class="fa-solid fa-spinner fa-spin text-valenzuela-blue text-lg"></i> <span>Loading your history & tracking status...</span></div>';
             }
@@ -1998,8 +2375,9 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
         }
 
         function closeMyActivityModal() {
-            document.getElementById('my-activity-modal').classList.add('hidden');
-            document.body.style.overflow = 'auto';
+            const m = document.getElementById('my-activity-modal');
+            if (m) m.classList.add('hidden');
+            checkCloseBodyModalState();
         }
 
         // Chatbot Drawer Toggle & Send
@@ -2047,6 +2425,192 @@ $is_logged_in = !$_is_admin_portal_session && (!empty($_SESSION['user_id']) || !
                 }
             });
         }
+
+        // Past Consultations & Concluded Polls Filter Tabs
+        function filterPastArchive(tab) {
+            const cards = document.querySelectorAll('.past-archive-card');
+            const btns = document.querySelectorAll('.past-tab-btn');
+
+            btns.forEach(b => {
+                b.classList.remove('bg-white', 'text-slate-900', 'shadow-xs', 'border', 'border-slate-200', 'font-extrabold');
+                b.classList.add('text-slate-600', 'font-bold');
+            });
+
+            const activeBtn = document.getElementById('past-tab-' + tab);
+            if (activeBtn) {
+                activeBtn.classList.remove('text-slate-600', 'font-bold');
+                activeBtn.classList.add('bg-white', 'text-slate-900', 'shadow-xs', 'border', 'border-slate-200', 'font-extrabold');
+            }
+
+            cards.forEach(card => {
+                if (tab === 'all') {
+                    card.style.display = 'flex';
+                } else if (tab === 'survey' && card.classList.contains('past-type-survey')) {
+                    card.style.display = 'flex';
+                } else if (tab === 'consultation' && card.classList.contains('past-type-consultation')) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+            initAllSliders();
+        }
+
+        // Horizontal Scroll Helper Functions for Single-Line Sliders
+        function scrollConsultations(direction) {
+            const container = document.getElementById('consultation-cards-container');
+            if (!container) return;
+            const scrollAmount = 390;
+            container.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
+        }
+
+        function scrollSurveys(direction) {
+            const container = document.getElementById('survey-cards-container');
+            if (!container) return;
+            const scrollAmount = 390;
+            container.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
+        }
+
+        function scrollPastArchive(direction) {
+            const container = document.getElementById('past-cards-container');
+            if (!container) return;
+            const scrollAmount = 390;
+            container.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
+        }
+
+        // Dynamic Slider Arrow Visibility Check
+        function checkSliderScroll(containerId, prevBtnId, nextBtnId) {
+            const container = document.getElementById(containerId);
+            const prevBtn = document.getElementById(prevBtnId);
+            const nextBtn = document.getElementById(nextBtnId);
+
+            if (!container || !prevBtn || !nextBtn) return;
+
+            const isScrollable = container.scrollWidth > (container.clientWidth + 5);
+            const scrollLeft = container.scrollLeft;
+            const maxScroll = container.scrollWidth - container.clientWidth;
+
+            if (!isScrollable) {
+                prevBtn.classList.remove('opacity-100', 'pointer-events-auto');
+                prevBtn.classList.add('opacity-0', 'pointer-events-none');
+                nextBtn.classList.remove('opacity-100', 'pointer-events-auto');
+                nextBtn.classList.add('opacity-0', 'pointer-events-none');
+                return;
+            }
+
+            // Left Arrow
+            if (scrollLeft > 15) {
+                prevBtn.classList.remove('opacity-0', 'pointer-events-none');
+                prevBtn.classList.add('opacity-100', 'pointer-events-auto');
+            } else {
+                prevBtn.classList.remove('opacity-100', 'pointer-events-auto');
+                prevBtn.classList.add('opacity-0', 'pointer-events-none');
+            }
+
+            // Right Arrow
+            if (scrollLeft < maxScroll - 15) {
+                nextBtn.classList.remove('opacity-0', 'pointer-events-none');
+                nextBtn.classList.add('opacity-100', 'pointer-events-auto');
+            } else {
+                nextBtn.classList.remove('opacity-100', 'pointer-events-auto');
+                nextBtn.classList.add('opacity-0', 'pointer-events-none');
+            }
+        }
+
+        function initAllSliders() {
+            setTimeout(() => {
+                checkSliderScroll('consultation-cards-container', 'consultation-prev-btn', 'consultation-next-btn');
+                checkSliderScroll('survey-cards-container', 'survey-prev-btn', 'survey-next-btn');
+                checkSliderScroll('past-cards-container', 'past-prev-btn', 'past-next-btn');
+            }, 100);
+        }
+
+        document.addEventListener('DOMContentLoaded', initAllSliders);
+        window.addEventListener('resize', initAllSliders);
+
+        // Main Portal Segmented Tab View Switcher (Active vs Past Archive)
+        function switchPortalMainTab(tab) {
+            const activeContainer = document.getElementById('active-portal-container');
+            const pastContainer = document.getElementById('past-portal-container');
+            const activeBtn = document.getElementById('main-tab-active-btn');
+            const pastBtn = document.getElementById('main-tab-past-btn');
+
+            if (!activeContainer || !pastContainer || !activeBtn || !pastBtn) return;
+
+            if (tab === 'active') {
+                activeContainer.classList.remove('hidden');
+                pastContainer.classList.add('hidden');
+
+                activeBtn.className = 'flex items-center gap-2.5 px-6 py-3 rounded-xl text-xs sm:text-sm font-extrabold transition-all bg-gradient-to-r from-valenzuela-red to-red-700 text-white shadow-md cursor-pointer';
+                pastBtn.className = 'flex items-center gap-2.5 px-6 py-3 rounded-xl text-xs sm:text-sm font-bold text-slate-400 hover:text-white transition-all cursor-pointer';
+            } else {
+                activeContainer.classList.add('hidden');
+                pastContainer.classList.remove('hidden');
+
+                pastBtn.className = 'flex items-center gap-2.5 px-6 py-3 rounded-xl text-xs sm:text-sm font-extrabold transition-all bg-gradient-to-r from-amber-600 to-amber-700 text-white shadow-md cursor-pointer';
+                activeBtn.className = 'flex items-center gap-2.5 px-6 py-3 rounded-xl text-xs sm:text-sm font-bold text-slate-400 hover:text-white transition-all cursor-pointer';
+            }
+            initAllSliders();
+        }
+
+        // Smart Category Auto-Selector for Title Input
+        document.addEventListener('input', function(e) {
+            const target = e.target;
+            if (!target) return;
+
+            const isTitleField = target.id === 'title' || 
+                                 target.id === 'consultation-title' || 
+                                 target.id === 'concern-title' || 
+                                 target.name === 'title' ||
+                                 (target.placeholder && (target.placeholder.toLowerCase().includes('title') || target.placeholder.toLowerCase().includes('ordinance') || target.placeholder.toLowerCase().includes('solar')));
+
+            if (isTitleField) {
+                const form = target.closest('form') || target.closest('.modal') || target.closest('div') || document;
+                const categorySelect = form.querySelector('#category, #consultation-category, #concern-category, select[name="category"]');
+
+                if (categorySelect) {
+                    const text = (target.value || '').toLowerCase();
+                    if (!text) return;
+
+                    let matchedVal = '';
+
+                    if (text.includes('lamp') || text.includes('light') || text.includes('road') || text.includes('street') || text.includes('utility') || text.includes('drainage') || text.includes('facility') || text.includes('facilities') || text.includes('infrastructure')) {
+                        matchedVal = 'Public Utilities & Facilities';
+                    } else if (text.includes('park') || text.includes('parks') || text.includes('open space') || text.includes('housing') || text.includes('urban') || text.includes('building') || text.includes('playground') || text.includes('greenery')) {
+                        matchedVal = 'Urban Planning, Housing & Development';
+                    } else if (text.includes('health') || text.includes('sanitation') || text.includes('clinic') || text.includes('hospital') || text.includes('waste') || text.includes('garbage') || text.includes('clean')) {
+                        matchedVal = 'Health & Sanitation';
+                    } else if (text.includes('school') || text.includes('education') || text.includes('scholarship') || text.includes('student') || text.includes('college')) {
+                        matchedVal = 'Higher & Technical Education';
+                    } else if (text.includes('youth') || text.includes('senior') || text.includes('elderly') || text.includes('social') || text.includes('welfare') || text.includes('disabled')) {
+                        matchedVal = 'Social Services';
+                    } else if (text.includes('budget') || text.includes('fund') || text.includes('tax') || text.includes('revenue')) {
+                        matchedVal = 'Ways & Means';
+                    } else if (text.includes('market') || text.includes('vendor') || text.includes('stall') || text.includes('slaughterhouse')) {
+                        matchedVal = 'Market & Slaughterhouse';
+                    }
+
+                    if (matchedVal && (!categorySelect.value || categorySelect.dataset.autoSelected === 'true')) {
+                        for (let i = 0; i < categorySelect.options.length; i++) {
+                            const opt = categorySelect.options[i];
+                            const optVal = (opt.value || '').toLowerCase();
+                            const optText = (opt.text || '').toLowerCase();
+                            if (optVal === matchedVal.toLowerCase() || optText.includes(matchedVal.toLowerCase()) || optVal.includes(matchedVal.split(' ')[0].toLowerCase())) {
+                                categorySelect.selectedIndex = i;
+                                categorySelect.dataset.autoSelected = 'true';
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        document.addEventListener('change', function(e) {
+            if (e.target && e.target.tagName === 'SELECT') {
+                delete e.target.dataset.autoSelected;
+            }
+        });
     </script>
 </body>
 </html>

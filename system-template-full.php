@@ -3269,17 +3269,24 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                                    <span id="notif-badge" class="hidden absolute top-1 right-1 bg-red-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">0</span>
+                                    <?php 
+                                    if (file_exists(__DIR__ . '/DATABASE/notifications.php')) {
+                                        require_once __DIR__ . '/DATABASE/notifications.php';
+                                    } elseif (file_exists(__DIR__ . '/../DATABASE/notifications.php')) {
+                                        require_once __DIR__ . '/../DATABASE/notifications.php';
+                                    }
+                                    $uid = (int)($_SESSION['user_id'] ?? 0);
+                                    $serverUnreadCount = function_exists('getUnreadNotificationsCount') ? getUnreadNotificationsCount($uid) : 0;
+                                    $serverNotifsList = function_exists('getUserNotifications') ? getUserNotifications($uid, 20) : [];
+                                    ?>
 
-
+                                    <span id="notif-badge" class="<?php echo $serverUnreadCount > 0 ? '' : 'hidden'; ?> absolute top-1 right-1 bg-red-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                                        <?php echo $serverUnreadCount > 99 ? '99+' : $serverUnreadCount; ?>
+                                    </span>
 
                                 </button>
 
-
-
                                 <!-- Notifications Dropdown -->
-
-
 
                                 <div id="notifications-dropdown" class="hidden absolute right-0 mt-2 w-80 md:w-[380px] bg-white rounded-2xl shadow-xl border border-gray-100 z-50 max-h-96 flex flex-col overflow-hidden transition-all duration-200" style="z-index: 9999 !important;">
                                     <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-white">
@@ -3287,7 +3294,43 @@ $totalPages = ceil($totalLogs / $pageSize);
                                         <button type="button" onclick="pfpMarkAllNotificationsRead()" class="text-xs font-bold text-red-600 hover:text-red-700 transition cursor-pointer">Mark all read</button>
                                     </div>
                                     <div id="notifications-list" class="overflow-y-auto max-h-80 divide-y divide-gray-100">
-                                        <div class="p-6 text-center text-gray-400 text-xs font-medium">No notifications yet</div>
+                                        <?php if (!empty($serverNotifsList)): ?>
+                                            <?php foreach ($serverNotifsList as $sn): 
+                                                $isRead = !empty($sn['is_read']);
+                                                $msg = htmlspecialchars($sn['message']);
+                                                $time = date('M d, Y H:i', strtotime($sn['created_at']));
+                                                $title = 'System Notification';
+                                                $type = strtolower($sn['type'] ?? 'info');
+                                                $iconClass = 'bi-bell-fill text-blue-600 bg-blue-50 border-blue-100';
+
+                                                if (strpos($msg, 'AI') !== false || $type === 'ai_brief') {
+                                                    $title = '🤖 AI Committee Brief';
+                                                    $iconClass = 'bi-robot text-purple-600 bg-purple-50 border-purple-100';
+                                                } else if (strpos($msg, 'Feedback') !== false || strpos($msg, 'Proposal') !== false || $type === 'feedback') {
+                                                    $title = '📩 Citizen Feedback';
+                                                    $iconClass = 'bi-chat-left-text text-emerald-600 bg-emerald-50 border-emerald-100';
+                                                } else if ($type === 'consultation' || strpos($msg, 'Survey') !== false) {
+                                                    $title = '📊 Community Poll Update';
+                                                    $iconClass = 'bi-square-poll text-amber-600 bg-amber-50 border-amber-100';
+                                                }
+                                            ?>
+                                                <div data-id="<?php echo $sn['id']; ?>" onclick="pfpMarkSingleNotifRead(<?php echo $sn['id']; ?>)" class="p-4 transition hover:bg-gray-50/80 flex items-start gap-3.5 relative cursor-pointer <?php echo !$isRead ? 'bg-white font-medium' : 'bg-gray-50/40 opacity-75'; ?>">
+                                                    <div class="w-10 h-10 rounded-2xl border flex items-center justify-center shrink-0 mt-0.5 <?php echo $iconClass; ?>">
+                                                        <i class="bi bi-bell text-base"></i>
+                                                    </div>
+                                                    <div class="flex-1 min-w-0 pr-3">
+                                                        <div class="font-bold text-gray-900 text-xs leading-snug"><?php echo $title; ?></div>
+                                                        <div class="text-xs text-gray-500 mt-0.5 leading-relaxed font-normal"><?php echo $msg; ?></div>
+                                                        <div class="text-[11px] text-gray-400 mt-1 font-medium"><?php echo $time; ?></div>
+                                                    </div>
+                                                    <?php if (!$isRead): ?>
+                                                        <span class="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0 mt-1.5 ring-4 ring-red-50"></span>
+                                                    <?php endif; ?>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <div class="p-6 text-center text-gray-400 text-xs font-medium">No notifications yet</div>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
 

@@ -38,12 +38,6 @@ function seedNotificationsIfEmpty($forceReSeed = false) {
     $sampleNotifs = [
         [
             'user_id' => 0,
-            'message' => '🔗 External System Data Received (PHMS): Ingested 3 PHMS AI Feedback Summaries & citizen responses for "Consultation on Drainage Upgrades for Flood Control".',
-            'type' => 'phms_integration',
-            'is_read' => 0
-        ],
-        [
-            'user_id' => 0,
             'message' => '🤖 AI Committee Synthesis Ready: Executive Brief generated for Consultation #1 ("Proposed Waste Segregation Enforcement Program").',
             'type' => 'ai_brief',
             'is_read' => 0
@@ -56,7 +50,19 @@ function seedNotificationsIfEmpty($forceReSeed = false) {
         ],
         [
             'user_id' => 0,
-            'message' => '📊 System Integration Status: All local databases and cross-system webhooks are operational.',
+            'message' => '📊 Community Survey Vote Recorded: 45 new citizen votes cast on Valenzuela Bike Lane Expansion poll.',
+            'type' => 'consultation',
+            'is_read' => 0
+        ],
+        [
+            'user_id' => 0,
+            'message' => '💬 New Citizen Feedback Received: 8 new public comments submitted for Public Legal Assistance Program.',
+            'type' => 'feedback',
+            'is_read' => 0
+        ],
+        [
+            'user_id' => 0,
+            'message' => '⚙️ System Status Operational: PCMS Core Engine, AI Synthesis & Municipal Audit Log synchronized.',
             'type' => 'info',
             'is_read' => 0
         ]
@@ -95,8 +101,20 @@ function getUserNotifications($user_id, $limit = 20) {
     $stmt->bind_param('ii', $uid, $limit);
     $stmt->execute();
     $result = $stmt->get_result();
-    $rows = $result->fetch_all(MYSQLI_ASSOC);
+    $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
     $stmt->close();
+
+    if (empty($rows)) {
+        seedNotificationsIfEmpty(true);
+        $stmt = $conn->prepare("SELECT id, user_id, message, type, is_read, created_at FROM notifications WHERE user_id IN (0, ?) ORDER BY created_at DESC LIMIT ?");
+        if ($stmt) {
+            $stmt->bind_param('ii', $uid, $limit);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+            $stmt->close();
+        }
+    }
     return $rows;
 }
 

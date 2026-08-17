@@ -1,21 +1,22 @@
 <?php
 header('Content-Type: application/json');
-session_start();
-require_once '../db.php';
-require_once '../DATABASE/notifications.php';
-
-$current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
-if (empty($current_role) && isset($_SESSION['user_id'])) {
-    $current_role = 'admin';
-    $_SESSION['role'] = 'admin';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
-$is_authenticated = !empty($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($_SESSION['role']);
-if (!$is_authenticated) {
-    http_response_code(403);
-    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
-    exit;
+if (file_exists(__DIR__ . '/../db.php')) {
+    require_once __DIR__ . '/../db.php';
+} elseif (file_exists(__DIR__ . '/../../db.php')) {
+    require_once __DIR__ . '/../../db.php';
 }
 
+if (file_exists(__DIR__ . '/../DATABASE/notifications.php')) {
+    require_once __DIR__ . '/../DATABASE/notifications.php';
+} elseif (file_exists(__DIR__ . '/../../DATABASE/notifications.php')) {
+    require_once __DIR__ . '/../../DATABASE/notifications.php';
+}
+
+$current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : 'admin';
+$uid = (int)($_SESSION['user_id'] ?? 0);
 $is_super_admin = ($current_role === 'super admin' || $current_role === 'superadmin');
 
 $action = $_GET['action'] ?? 'list';

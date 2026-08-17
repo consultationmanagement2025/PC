@@ -8342,53 +8342,7 @@ function formatNotifTime(isoOrSqlDate) {
 
 
 
-function mapDbNotificationToUi(row) {
 
-
-    const isRead = Number(row.is_read) === 1;
-
-
-    const type = String(row.type || 'info').toLowerCase();
-
-
-    const title = type === 'consultation'
-
-
-        ? 'New consultation received'
-
-
-        : (type === 'feedback' ? 'New feedback received' : 'Notification');
-
-
-
-
-    return {
-
-
-        id: Number(row.id),
-
-
-        title,
-
-
-        message: String(row.message || ''),
-
-
-        category: type,
-
-
-        type,
-
-
-        priority: (type === 'consultation' || type === 'feedback') ? 'high' : 'normal',
-
-
-        read: isRead,
-
-
-        time: formatNotifTime(row.created_at || '')
-    };
-}
 
 function mapDbNotificationToUi(row) {
     if (!row) return null;
@@ -14007,48 +13961,24 @@ function getFilteredConsultations() {
     const selectedCategory = document.getElementById('consultation-sort')?.value || '';
 
 
-
-
     if (searchTerm) {
-
-
         filtered = filtered.filter(c => (c.title || '').toLowerCase().includes(searchTerm));
-
-
     }
 
-
-
-
-
-    if (statusFilter) {
-
-
-        filtered = filtered.filter(c => c.status === statusFilter);
-
-
+    if (statusFilter && statusFilter !== 'all') {
+        filtered = filtered.filter(c => String(c.status || '').toLowerCase() === statusFilter.toLowerCase());
     }
 
-
-
-
-    if (selectedCategory) {
-
-
+    if (selectedCategory && selectedCategory !== 'all') {
         filtered = filtered.filter(c => {
             const categoryValue = String(c.category || c.type || c.topic || '').trim().toLowerCase();
-            return categoryValue === selectedCategory.toLowerCase();
+            const targetCat = selectedCategory.toLowerCase();
+            if (!categoryValue) return false;
+            return categoryValue === targetCat || categoryValue.includes(targetCat) || targetCat.includes(categoryValue);
         });
-
-
     }
 
-
-
-
     return filtered;
-
-
 }
 
 
@@ -14499,28 +14429,36 @@ async function saveConsultation() {
         }
 
 
-        showConsultationSuccessModal(!!id, title);
+        if (typeof showConsultationSuccessModal === 'function') {
+            try { showConsultationSuccessModal(!!id, title); } catch (_) {}
+        } else if (typeof showNotification === 'function') {
+            showNotification(`Consultation "${title}" successfully saved!`, 'success');
+        }
 
         closeConsultationModal();
 
-        await loadConsultationsFromApi();
+        if (typeof loadConsultationsFromApi === 'function') {
+            try { await loadConsultationsFromApi(); } catch (_) {}
+        }
 
     } catch (err) {
-
         showNotification('Error: ' + err.message, 'error');
-
         console.error('saveConsultation error:', err);
-
     } finally {
-
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg mr-1"></i> Save Consultation'; }
-
     }
-
 }
 
-
-
+function showConsultationSuccessModal(isEdit, title) {
+    const actionText = isEdit ? 'updated' : 'posted & published';
+    const msg = `Consultation "${title || 'New Topic'}" has been successfully ${actionText}.`;
+    
+    if (typeof showNotification === 'function') {
+        showNotification(msg, 'success');
+    } else if (typeof showToast === 'function') {
+        showToast(msg, 'success');
+    }
+}
 
 function deleteConsultation(id) {
 

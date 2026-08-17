@@ -8342,53 +8342,7 @@ function formatNotifTime(isoOrSqlDate) {
 
 
 
-function mapDbNotificationToUi(row) {
 
-
-    const isRead = Number(row.is_read) === 1;
-
-
-    const type = String(row.type || 'info').toLowerCase();
-
-
-    const title = type === 'consultation'
-
-
-        ? 'New consultation received'
-
-
-        : (type === 'feedback' ? 'New feedback received' : 'Notification');
-
-
-
-
-    return {
-
-
-        id: Number(row.id),
-
-
-        title,
-
-
-        message: String(row.message || ''),
-
-
-        category: type,
-
-
-        type,
-
-
-        priority: (type === 'consultation' || type === 'feedback') ? 'high' : 'normal',
-
-
-        read: isRead,
-
-
-        time: formatNotifTime(row.created_at || '')
-    };
-}
 
 function mapDbNotificationToUi(row) {
     if (!row) return null;
@@ -14048,48 +14002,24 @@ function getFilteredConsultations() {
     const selectedCategory = document.getElementById('consultation-sort')?.value || '';
 
 
-
-
     if (searchTerm) {
-
-
         filtered = filtered.filter(c => (c.title || '').toLowerCase().includes(searchTerm));
-
-
     }
 
-
-
-
-
-    if (statusFilter) {
-
-
-        filtered = filtered.filter(c => c.status === statusFilter);
-
-
+    if (statusFilter && statusFilter !== 'all') {
+        filtered = filtered.filter(c => String(c.status || '').toLowerCase() === statusFilter.toLowerCase());
     }
 
-
-
-
-    if (selectedCategory) {
-
-
+    if (selectedCategory && selectedCategory !== 'all') {
         filtered = filtered.filter(c => {
             const categoryValue = String(c.category || c.type || c.topic || '').trim().toLowerCase();
-            return categoryValue === selectedCategory.toLowerCase();
+            const targetCat = selectedCategory.toLowerCase();
+            if (!categoryValue) return false;
+            return categoryValue === targetCat || categoryValue.includes(targetCat) || targetCat.includes(categoryValue);
         });
-
-
     }
 
-
-
-
     return filtered;
-
-
 }
 
 
@@ -14114,18 +14044,84 @@ function guessConsultationCategoryFromTitle(title) {
     if (!normalized) return '';
 
     const categoryMap = [
-        { category: 'Public Utilities & Facilities', keywords: ['misting', 'poles', 'water', 'electricity', 'power', 'utility', 'streetlight', 'drainage', 'sewer', 'pipes', 'hydrant', 'lottery'] },
-        { category: 'Urban Planning, Housing & Development', keywords: ['housing', 'urban', 'road', 'street', 'flood control', 'planning', 'zoning', 'sidewalk', 'transport', 'parking', 'relocation'] },
-        { category: 'Health & Sanitation', keywords: ['health', 'sanitation', 'clinic', 'hospital', 'mosquito', 'waste', 'garbage', 'toilet', 'clean', 'sewerage'] },
-        { category: 'Social Services', keywords: ['youth', 'elderly', 'welfare', 'social', 'assistance', 'senior', 'child', 'family'] },
-        { category: 'Food & Agriculture', keywords: ['food', 'agriculture', 'farm', 'livestock', 'market', 'produce', 'planting', 'crop'] },
-        { category: 'Higher & Technical Education', keywords: ['school', 'education', 'training', 'college', 'technical', 'scholarship', 'classroom'] },
-        { category: 'Justice & Human Rights', keywords: ['justice', 'rights', 'police', 'security', 'law', 'legal', 'human rights', 'complaint'] },
-        { category: 'Ways & Means', keywords: ['budget', 'appropriation', 'finance', 'funding', 'tax', 'revenue', 'grant', 'expense'] },
-        { category: 'Market & Slaughterhouse', keywords: ['market', 'slaughterhouse', 'vendors', 'stall', 'public market', 'butcher'] },
-        { category: 'Cooperatives', keywords: ['cooperative', 'co-op', 'cooperatives'] },
-        { category: 'Women, Family & Gender Equality', keywords: ['women', 'family', 'gender', 'equal', 'mother', 'father', 'childcare', 'parenting'] },
-        { category: 'Rules & Privileges', keywords: ['rule', 'privilege', 'ordinance', 'policy', 'regulation', 'permit'] }
+        { 
+            category: 'Public Utilities & Facilities', 
+            keywords: [
+                'lamp', 'light', 'lighting', 'road', 'street', 'facility', 'facilities', 'infrastructure', 
+                'misting', 'poles', 'water', 'electricity', 'power', 'utility', 'streetlight', 'street light', 
+                'drainage', 'sewer', 'pipes', 'hydrant', 'bridge', 'pavement', 'traffic', 'telecom', 'internet', 
+                'cable', 'post', 'pathway', 'gutter', 'alley'
+            ] 
+        },
+        { 
+            category: 'Urban Planning, Housing & Development', 
+            keywords: [
+                'park', 'parks', 'open space', 'open spaces', 'playground', 'greenery', 'housing', 'urban', 
+                'flood control', 'planning', 'zoning', 'sidewalk', 'transport', 'parking', 'relocation', 
+                'subdivision', 'building', 'land', 'plaza', 'recreation'
+            ] 
+        },
+        { 
+            category: 'Health & Sanitation', 
+            keywords: [
+                'health', 'sanitation', 'clinic', 'hospital', 'mosquito', 'waste', 'garbage', 'toilet', 
+                'clean', 'sewerage', 'dengue', 'vaccine', 'medical', 'medicine', 'outpatient', 'pharmacy', 
+                'quarantine', 'disease', 'wellness', 'hygiene'
+            ] 
+        },
+        { 
+            category: 'Social Services', 
+            keywords: [
+                'youth', 'elderly', 'welfare', 'social', 'assistance', 'senior', 'child', 'children', 
+                'family', 'pwd', 'handicapped', 'indigent', 'pension', 'relief', 'aid', 'subsidy', 'disabled'
+            ] 
+        },
+        { 
+            category: 'Food & Agriculture', 
+            keywords: [
+                'food', 'agriculture', 'farm', 'livestock', 'produce', 'planting', 'crop', 'paddy', 
+                'rice', 'vegetable', 'meat', 'poultry', 'fishery', 'fish', 'harvest'
+            ] 
+        },
+        { 
+            category: 'Higher & Technical Education', 
+            keywords: [
+                'school', 'education', 'training', 'college', 'technical', 'scholarship', 'classroom', 
+                'university', 'tesda', 'student', 'teacher', 'learning', 'tuition', 'academic'
+            ] 
+        },
+        { 
+            category: 'Justice & Human Rights', 
+            keywords: [
+                'justice', 'rights', 'police', 'security', 'law', 'legal', 'human rights', 'complaint', 
+                'court', 'barangay tanod', 'crime', 'peace', 'patrol'
+            ] 
+        },
+        { 
+            category: 'Ways & Means', 
+            keywords: [
+                'budget', 'appropriation', 'finance', 'funding', 'tax', 'revenue', 'grant', 'expense', 
+                'fiscal', 'bonds', 'audit', 'treasury'
+            ] 
+        },
+        { 
+            category: 'Market & Slaughterhouse', 
+            keywords: [
+                'market', 'slaughterhouse', 'vendors', 'stall', 'public market', 'butcher', 'tiangge', 'talipapa'
+            ] 
+        },
+        { 
+            category: 'Cooperatives', 
+            keywords: ['cooperative', 'co-op', 'cooperatives', 'credit union', 'livelihood group'] 
+        },
+        { 
+            category: 'Women, Family & Gender Equality', 
+            keywords: ['women', 'family', 'gender', 'equal', 'mother', 'father', 'childcare', 'parenting', 'maternity', 'lgbt'] 
+        },
+        { 
+            category: 'Rules & Privileges', 
+            keywords: ['rule', 'privilege', 'ordinance', 'policy', 'regulation', 'permit', 'charter', 'resolution', 'code'] 
+        }
     ];
 
     for (const entry of categoryMap) {
@@ -14136,6 +14132,52 @@ function guessConsultationCategoryFromTitle(title) {
 
     return '';
 }
+
+// Global real-time auto-category selector listener across all forms & modals
+document.addEventListener('input', function(e) {
+    const target = e.target;
+    if (!target) return;
+    
+    const isTitleField = target.id === 'consultation-title' || 
+                         target.id === 'concern-title' || 
+                         target.id === 'topic-title' ||
+                         target.name === 'title' ||
+                         target.name === 'topic_title' ||
+                         target.name === 'consultation_title' ||
+                         (target.placeholder && (target.placeholder.toLowerCase().includes('title') || target.placeholder.toLowerCase().includes('ordinance')));
+
+    if (isTitleField) {
+        const form = target.closest('form') || target.closest('.modal') || target.closest('div') || document;
+        const categorySelect = form.querySelector('#consultation-category, #concern-category, select[name="category"], select[name="topic_category"]');
+        
+        if (categorySelect) {
+            const currentVal = categorySelect.value;
+            const suggestedCategory = guessConsultationCategoryFromTitle(target.value);
+            
+            if (!currentVal || categorySelect.dataset.autoSelected === 'true') {
+                if (suggestedCategory) {
+                    for (let i = 0; i < categorySelect.options.length; i++) {
+                        const opt = categorySelect.options[i];
+                        if (opt.value.toLowerCase() === suggestedCategory.toLowerCase() || opt.text.toLowerCase() === suggestedCategory.toLowerCase()) {
+                            categorySelect.selectedIndex = i;
+                            categorySelect.dataset.autoSelected = 'true';
+                            break;
+                        }
+                    }
+                } else if (categorySelect.dataset.autoSelected === 'true') {
+                    categorySelect.value = '';
+                    delete categorySelect.dataset.autoSelected;
+                }
+            }
+        }
+    }
+});
+
+document.addEventListener('change', function(e) {
+    if (e.target && (e.target.tagName === 'SELECT')) {
+        delete e.target.dataset.autoSelected;
+    }
+});
 
 function openCreateConsultationModal(createMode) {
 
@@ -14540,28 +14582,36 @@ async function saveConsultation() {
         }
 
 
-        showConsultationSuccessModal(!!id, title);
+        if (typeof showConsultationSuccessModal === 'function') {
+            try { showConsultationSuccessModal(!!id, title); } catch (_) {}
+        } else if (typeof showNotification === 'function') {
+            showNotification(`Consultation "${title}" successfully saved!`, 'success');
+        }
 
         closeConsultationModal();
 
-        await loadConsultationsFromApi();
+        if (typeof loadConsultationsFromApi === 'function') {
+            try { await loadConsultationsFromApi(); } catch (_) {}
+        }
 
     } catch (err) {
-
         showNotification('Error: ' + err.message, 'error');
-
         console.error('saveConsultation error:', err);
-
     } finally {
-
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg mr-1"></i> Save Consultation'; }
-
     }
-
 }
 
-
-
+function showConsultationSuccessModal(isEdit, title) {
+    const actionText = isEdit ? 'updated' : 'posted & published';
+    const msg = `Consultation "${title || 'New Topic'}" has been successfully ${actionText}.`;
+    
+    if (typeof showNotification === 'function') {
+        showNotification(msg, 'success');
+    } else if (typeof showToast === 'function') {
+        showToast(msg, 'success');
+    }
+}
 
 function deleteConsultation(id) {
 
