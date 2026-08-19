@@ -18658,25 +18658,23 @@ window.pfpShowConsultationFeedbackModal = function (consultationId) {
             `;
         }).join('');
 
-        let listDisplay = responsesHtml;
-        if (!responsesList.length && isSurveyType) {
-            listDisplay = `
-                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-gray-500 text-xs">
-                    <i class="bi bi-info-circle mr-1 text-purple-600"></i> No written commentary attached. Citizen participation recorded via direct survey poll votes above.
+        if (isSurveyType) {
+            bodyEl.innerHTML = `
+                <div class="space-y-3">
+                    ${aiSurveyConclusionHtml}
+                    ${surveyBoxHtml}
+                </div>
+            `;
+        } else {
+            bodyEl.innerHTML = `
+                <div class="space-y-3">
+                    <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        Submitted Citizen Responses (${responsesList.length})
+                    </div>
+                    ${responsesHtml}
                 </div>
             `;
         }
-
-        bodyEl.innerHTML = `
-            <div class="space-y-3">
-                ${aiSurveyConclusionHtml}
-                ${surveyBoxHtml}
-                <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
-                    Submitted Citizen Responses (${responsesList.length})
-                </div>
-                ${listDisplay}
-            </div>
-        `;
     };
 
     if (fbs.length > 0) {
