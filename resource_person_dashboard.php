@@ -116,8 +116,8 @@ if ($stmt) {
     $stmt->close();
 }
 
-$expertise_areas = $userProfile['expertise_areas'] ?? 'Health, Sanitation';
-$department = $userProfile['department'] ?? 'Public Sector Advisory';
+$expertise_areas = !empty($userProfile['expertise_areas']) ? $userProfile['expertise_areas'] : 'General Consultation';
+$department = !empty($userProfile['department']) ? $userProfile['department'] : 'Independent Expert / Advisory';
 
 // Fetch raw consultations
 $raw_consultations = [];

@@ -6,8 +6,8 @@
  * 2. Only AFTER AI analysis is completed AND Admin has forwarded/assigned to Resource Person
  */
 session_start();
-require_once '../db.php';
-require_once '../UTILS/session_check.php';
+require_once 'db.php';
+require_once 'UTILS/session_check.php';
 
 // Check if user is logged in and is a resource person or admin/staff
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
@@ -116,8 +116,8 @@ if ($stmt) {
     $stmt->close();
 }
 
-$expertise_areas = $userProfile['expertise_areas'] ?? 'Health, Sanitation';
-$department = $userProfile['department'] ?? 'Public Sector Advisory';
+$expertise_areas = !empty($userProfile['expertise_areas']) ? $userProfile['expertise_areas'] : 'General Consultation';
+$department = !empty($userProfile['department']) ? $userProfile['department'] : 'Independent Expert / Advisory';
 
 // Fetch raw consultations
 $raw_consultations = [];
@@ -266,7 +266,7 @@ unset($c);
     <title>Resource Person Workspace - Valenzuela PCMS</title>
     <link rel="icon" type="image/png" href="images/logo.webp">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="../ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css">
     <!-- Google Fonts: Plus Jakarta Sans & Inter (Admin Side Font Family) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -291,7 +291,7 @@ unset($c);
             </button>
             <div class="flex items-center gap-2">
                 <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center p-0.5 shadow">
-                    <img src="../images/logo.webp" alt="Logo" class="w-full h-full object-contain" onerror="this.src='ASSETS/images/logo.png'">
+                    <img src="images/logo.webp" alt="Logo" class="w-full h-full object-contain" onerror="this.src='ASSETS/images/logo.png'">
                 </div>
                 <span class="font-bold text-sm">PCMS Expert Portal</span>
             </div>
@@ -303,7 +303,7 @@ unset($c);
                     <span class="absolute top-0 right-0 w-4 h-4 bg-amber-400 text-slate-950 font-bold text-[9px] rounded-full flex items-center justify-center"><?php echo $unread_notif_count; ?></span>
                 <?php endif; ?>
             </button>
-            <a href="../logout.php" class="text-xs bg-red-950/60 px-3 py-1 rounded-lg border border-red-700/50 flex items-center gap-1">
+            <a href="logout.php" class="text-xs bg-red-950/60 px-3 py-1 rounded-lg border border-red-700/50 flex items-center gap-1">
                 <i class="bi bi-box-arrow-right"></i> Exit
             </a>
         </div>
@@ -314,7 +314,7 @@ unset($c);
         <!-- Logo Header Section -->
         <div class="p-6 border-b border-red-700/60 flex items-center gap-3">
             <div class="w-14 h-14 bg-white rounded-full flex items-center justify-center p-1 shadow-md shrink-0">
-                <img src="../images/logo.webp" alt="Valenzuela Logo" class="w-full h-full object-contain" onerror="this.src='ASSETS/images/logo.png'">
+                <img src="images/logo.webp" alt="Valenzuela Logo" class="w-full h-full object-contain" onerror="this.src='ASSETS/images/logo.png'">
             </div>
             <div>
                 <h1 class="text-lg font-bold leading-tight">PCMS</h1>
@@ -373,7 +373,7 @@ unset($c);
 
         <!-- Sidebar Footer Sign Out -->
         <div class="p-4 border-t border-red-700/60">
-            <a href="../logout.php" class="w-full bg-red-950 hover:bg-black text-white py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 border border-red-700/50 shadow-sm no-underline">
+            <a href="logout.php" class="w-full bg-red-950 hover:bg-black text-white py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 border border-red-700/50 shadow-sm no-underline">
                 <i class="bi bi-box-arrow-right text-sm"></i> Sign Out Portal
             </a>
         </div>
@@ -391,7 +391,7 @@ unset($c);
                 <div>
                     <h2 class="text-lg font-bold text-slate-800 leading-tight">Resource Person Workspace</h2>
                     <div class="flex items-center gap-2 text-xs text-slate-500">
-                        <a href="../index.php" class="hover:text-red-600">Home</a>
+                        <a href="index.php" class="hover:text-red-600">Home</a>
                         <i class="bi bi-chevron-right text-[10px]"></i>
                         <span class="text-slate-800 font-medium">Expertise-Filtered Advisory Portal</span>
                     </div>
@@ -884,7 +884,7 @@ unset($c);
                 </div>
             </div>
 
-            <form action="../API/request_additional_info.php" method="POST" class="space-y-4">
+            <form action="API/request_additional_info.php" method="POST" class="space-y-4">
                 <input type="hidden" name="consultation_id" id="info-consultation-id">
 
                 <div class="grid grid-cols-2 gap-3">
@@ -967,7 +967,7 @@ unset($c);
     }
 
     function markAllNotificationsRead() {
-        fetch('../API/resource_person_api.php?action=mark_notif_read', { method: 'POST' })
+        fetch('API/resource_person_api.php?action=mark_notif_read', { method: 'POST' })
         .then(r => r.json())
         .then(data => {
             if (data.success) {
@@ -1011,7 +1011,7 @@ unset($c);
         document.getElementById('inline-modal-version').textContent = version || 'v1.0';
 
         // Load consultation base description & existing expert notes
-        fetch(`../API/resource_person_api.php?action=get_consultation_details&consultation_id=${id}`)
+        fetch(`API/resource_person_api.php?action=get_consultation_details&consultation_id=${id}`)
         .then(r => r.json())
         .then(data => {
             if (data.success && data.consultation) {
@@ -1054,7 +1054,7 @@ unset($c);
         btn.disabled = true;
         btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin"></i> Saving to Master Document...';
 
-        fetch('../API/save_inline_expert_input.php', {
+        fetch('API/save_inline_expert_input.php', {
             method: 'POST',
             body: formData
         })
@@ -1080,7 +1080,7 @@ unset($c);
         const tbody = document.getElementById('audit-trail-table-body');
         tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-400"><i class="bi bi-arrow-repeat animate-spin block text-lg mb-1"></i> Loading document audit log...</td></tr>';
 
-        fetch(`../API/resource_person_api.php?action=get_consultation_details&consultation_id=${id}`)
+        fetch(`API/resource_person_api.php?action=get_consultation_details&consultation_id=${id}`)
         .then(r => r.json())
         .then(data => {
             if (data.success && data.audit_trail && data.audit_trail.length > 0) {
