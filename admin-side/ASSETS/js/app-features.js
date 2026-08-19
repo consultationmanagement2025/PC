@@ -18511,12 +18511,12 @@ window.pfpShowConsultationFeedbackModal = function (consultationId) {
             (consultation.vote_stats && Number(consultation.vote_stats.total_votes || 0) > 0)
         );
 
-        if (!responsesList.length && !isSurveyType) {
+        if (!responsesList.length) {
             if (bodyEl) {
                 bodyEl.innerHTML = `
                     <div class="p-8 text-center text-gray-500 bg-slate-50 rounded-xl border border-slate-200">
                         <i class="bi bi-chat-left-text text-2xl block mb-2 text-gray-400"></i>
-                        No citizen feedback recorded for this consultation policy yet.
+                        No citizen feedback recorded for this consultation yet.
                     </div>
                 `;
             }
@@ -18533,150 +18533,36 @@ window.pfpShowConsultationFeedbackModal = function (consultationId) {
             const submittedAt = escapeHtmlHelper(resp.submitted_at || resp.date || resp.created_at || 'Recently');
             const status = escapeHtmlHelper(resp.status || resp.publication_status || 'published').toLowerCase();
 
-            const rCat = String(resp.category || resp.type || resp.subType || '').toLowerCase();
-            const isSurveyVote = rCat === 'survey vote' || rCat === 'survey' || rCat === 'vote' || resp.is_survey_vote === true || testimony.toLowerCase() === 'agree' || testimony.toLowerCase() === 'disagree';
-            const displayStatus = isSurveyVote ? 'VERIFIED VOTE' : status.toUpperCase();
-            const statusClass = (isSurveyVote || status === 'published' || status === 'reviewed' || status === 'closed')
+            const statusClass = (status === 'published' || status === 'reviewed' || status === 'closed')
                 ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
                 : 'bg-amber-100 text-amber-800 border-amber-200';
-
-            const voteBadge = isSurveyVote
-                ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase border bg-purple-100 text-purple-900 border-purple-200 flex items-center gap-1"><i class="bi bi-square-poll-fill text-purple-600"></i> Survey Vote</span>`
-                : '';
 
             return `
                 <div class="p-4 bg-slate-50/80 rounded-xl border border-slate-200/80 shadow-sm space-y-2">
                     <div class="flex items-center justify-between flex-wrap gap-2">
                         <div class="flex items-center gap-2">
                             <span class="font-bold text-gray-900 text-xs">${idx + 1}. ${name}</span>
-                            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${statusClass}">${displayStatus}</span>
-                            ${voteBadge}
-                            ${tone && !isSurveyVote ? `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">${tone}</span>` : ''}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${statusClass}">${status.toUpperCase()}</span>
+                            ${tone && tone !== 'unanalyzed' ? `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">${tone}</span>` : ''}
                         </div>
                         <div class="flex items-center gap-2 text-xs">
-                            ${!isSurveyVote ? `<span class="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-semibold text-[11px]">⭐ ${rating}</span>` : ''}
+                            <span class="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-semibold text-[11px]">⭐ ${rating}</span>
                             <span class="text-gray-400 font-normal">${submittedAt}</span>
                         </div>
                     </div>
                     <p class="text-xs text-slate-700 leading-relaxed font-medium bg-white p-3 rounded-lg border border-slate-200/60 select-text flex items-center gap-2">
-                        ${isSurveyVote ? `<i class="bi bi-chat-square-quote text-purple-500 text-sm"></i> <strong class="text-purple-950 font-bold">${testimony}</strong>` : `"${testimony}"`}
+                        "${testimony}"
                     </p>
                 </div>
             `;
         }).join('');
 
-        let surveyBoxHtml = '';
-        let aiSurveyConclusionHtml = '';
-        if (isSurveyType) {
-            const question = escapeHtmlHelper(consultation.survey_question || 'Do you support this proposed initiative?');
-            const optA = escapeHtmlHelper(consultation.survey_option_a || 'Agree');
-            const optB = escapeHtmlHelper(consultation.survey_option_b || 'Disagree');
-
-            let agreeCount = 0;
-            let disagreeCount = 0;
-            let totalVotes = 0;
-
-            if (consultation.vote_stats && (consultation.vote_stats.total_votes > 0 || consultation.vote_stats.agree_votes > 0 || consultation.vote_stats.disagree_votes > 0)) {
-                agreeCount = Number(consultation.vote_stats.agree_votes || 0);
-                disagreeCount = Number(consultation.vote_stats.disagree_votes || 0);
-                totalVotes = Number(consultation.vote_stats.total_votes || (agreeCount + disagreeCount));
-            } else if (consultation.total_votes !== undefined || consultation.agree_votes !== undefined || consultation.disagree_votes !== undefined) {
-                agreeCount = Number(consultation.agree_votes || 0);
-                disagreeCount = Number(consultation.disagree_votes || 0);
-                totalVotes = Number(consultation.total_votes || (agreeCount + disagreeCount));
-            } else {
-                responsesList.forEach(r => {
-                    const msg = String(r.message || r.testimony || r.statement || '').trim().toLowerCase();
-                    const isDis = msg === 'disagree' || msg === optB.toLowerCase();
-                    const isAgr = msg === 'agree' || msg === optA.toLowerCase();
-
-                    if (isDis) {
-                        disagreeCount++;
-                    } else if (isAgr) {
-                        agreeCount++;
-                    }
-                });
-                totalVotes = agreeCount + disagreeCount;
-            }
-
-            const agreePct = totalVotes > 0 ? Math.round((agreeCount / totalVotes) * 100) : 0;
-            const disagreePct = totalVotes > 0 ? (100 - agreePct) : 0;
-
-            const isClosed = (consultation.status || '').toLowerCase() === 'closed' || (consultation.status || '').toLowerCase() === 'completed';
-
-            let mandateBadge = '🟢 CITIZEN SUPERMAJORITY SUPPORT';
-            let conclusionText = `PUBLIC MANDATE CONCLUSION: Citizen voting data demonstrates strong public approval (${agreePct}% ${optA} vs ${disagreePct}% ${optB}). Based on finalized public sentiment, the City Council is recommended to enact the proposed initiative into law.`;
-
-            if (totalVotes === 0) {
-                mandateBadge = '⚪ NO CITIZEN VOTES CAST';
-                conclusionText = 'PUBLIC MANDATE CONCLUSION: No citizen votes have been recorded for this opinion poll yet. Analysis will be updated live as public votes are submitted.';
-            } else if (disagreePct > 50) {
-                mandateBadge = '🔴 CITIZEN MAJORITY OPPOSITION';
-                conclusionText = `PUBLIC MANDATE CONCLUSION: Citizen voting data indicates majority public opposition (${disagreePct}% ${optB} vs ${agreePct}% ${optA}). Based on public sentiment, the committee is advised to review key policy provisions or hold further public consultation before proceeding.`;
-            } else if (agreePct === 50) {
-                mandateBadge = '🟡 EVENLY BALANCED SENTIMENT';
-                conclusionText = `PUBLIC MANDATE CONCLUSION: Public voting sentiment is evenly divided (${agreePct}% ${optA} vs ${disagreePct}% ${optB}). Additional public hearing sessions are recommended to resolve community concerns.`;
-            }
-
-            aiSurveyConclusionHtml = `
-                <div class="p-4 bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 text-white rounded-xl shadow-md border border-purple-700/60 space-y-2 mb-4">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
-                            <i class="bi bi-robot text-purple-400 text-sm"></i> AI Poll Sentiment & Executive Conclusion
-                        </span>
-                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${isClosed ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-slate-950'} shadow-2xs">
-                            ${isClosed ? 'FINAL MANDATE' : 'LIVE POLL ANALYSIS'}
-                        </span>
-                    </div>
-                    <div class="text-xs font-extrabold text-purple-200 tracking-wide">
-                        ${mandateBadge}
-                    </div>
-                    <p class="text-xs text-slate-200 leading-relaxed font-normal bg-slate-800/80 p-3 rounded-lg border border-purple-500/30 select-text">
-                        ${conclusionText}
-                    </p>
-                </div>
-            `;
-
-            surveyBoxHtml = `
-                <div class="p-4 bg-gradient-to-r from-purple-50 to-indigo-50/50 rounded-xl border border-purple-200/80 shadow-sm space-y-2 mb-4">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-extrabold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
-                            <i class="bi bi-square-poll-horizontal-fill text-purple-600"></i> Citizen Survey & Opinion Poll Stance
-                        </span>
-                        <span class="text-[11px] font-bold text-slate-600 bg-white px-2.5 py-0.5 rounded-full border border-purple-200 shadow-2xs">${totalVotes} Poll Vote(s)</span>
-                    </div>
-                    <p class="text-xs font-bold text-slate-800">${question}</p>
-                    <div class="space-y-1 pt-1">
-                        <div class="flex justify-between text-[11px] font-bold">
-                            <span class="text-emerald-700"><i class="bi bi-hand-thumbs-up-fill mr-1"></i>${optA}: ${agreeCount} (${agreePct}%)</span>
-                            <span class="text-rose-700"><i class="bi bi-hand-thumbs-down-fill mr-1"></i>${optB}: ${disagreeCount} (${disagreePct}%)</span>
-                        </div>
-                        <div class="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden flex">
-                            <div class="bg-emerald-500 h-full transition-all duration-500" style="width: ${agreePct}%"></div>
-                            <div class="bg-rose-500 h-full transition-all duration-500" style="width: ${disagreePct}%"></div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        let listDisplay = responsesHtml;
-        if (!responsesList.length) {
-            listDisplay = `
-                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-gray-500 text-xs">
-                    <i class="bi bi-info-circle mr-1 text-purple-600"></i> No written commentary attached. Citizen participation recorded via direct survey poll votes above.
-                </div>
-            `;
-        }
-
         bodyEl.innerHTML = `
             <div class="space-y-3">
-                ${aiSurveyConclusionHtml}
-                ${surveyBoxHtml}
                 <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
                     Submitted Citizen Responses (${responsesList.length})
                 </div>
-                ${listDisplay}
+                ${responsesHtml}
             </div>
         `;
     };
