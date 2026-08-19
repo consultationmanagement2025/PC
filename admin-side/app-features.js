@@ -11333,48 +11333,48 @@ function renderConsultationsGrid() {
         }
 
         return `
-            <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col group hover:shadow-xl hover:border-red-300 transition-all duration-300">
-                <!-- Top Banner Image -->
-                <div class="h-32 w-full overflow-hidden bg-slate-100 relative shrink-0">
+            <div class="bg-white rounded-xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col group hover:shadow-lg hover:border-red-300 transition-all duration-300">
+                <!-- Top Banner Image (Compact Height) -->
+                <div class="h-24 w-full overflow-hidden bg-slate-100 relative shrink-0">
                     <img src="${imgUrl}" alt="${escapeHtml(c.title)}" onerror="this.onerror=null; this.src='../ASSETS/images/consultations/consultation_1771982924_699e504c1ad01.jpeg';" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                    <div class="absolute top-2.5 right-2.5 bg-white/95 backdrop-blur-md px-2.5 py-0.5 rounded-full text-[10px] font-extrabold text-slate-800 shadow-sm flex items-center gap-1">
-                        <i class="bi bi-clock text-red-600 text-[10px]"></i> ${daysLeftText}
+                    <div class="absolute top-2 right-2 bg-white/95 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] font-extrabold text-slate-800 shadow-2xs flex items-center gap-1">
+                        <i class="bi bi-clock text-red-600 text-[9px]"></i> ${daysLeftText}
                     </div>
-                    <div class="absolute top-2.5 left-2.5 flex items-center gap-1.5">
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${statusBg} backdrop-blur-md shadow-xs">
+                    <div class="absolute top-2 left-2 flex items-center gap-1">
+                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${statusBg} backdrop-blur-md shadow-2xs">
                             <span class="w-1.5 h-1.5 rounded-full ${statusDot}"></span>${statusLabel}
                         </span>
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${typeBg} backdrop-blur-md shadow-xs">${typeLabel}</span>
+                        <span class="px-1.5 py-0.5 rounded-full text-[9px] font-bold ${typeBg} backdrop-blur-md shadow-2xs">${typeLabel}</span>
                     </div>
                 </div>
 
                 <!-- Card Content -->
-                <div class="p-4 flex-grow flex flex-col justify-between space-y-2">
+                <div class="p-3 flex-grow flex flex-col justify-between space-y-1.5">
                     <div>
-                        <div class="flex items-center justify-between gap-2 mb-2">
-                            <span class="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-md border ${badgeStyle}">
-                                ${escapeHtml(c.category || 'General Governance')}
+                        <div class="flex items-center justify-between gap-2 mb-1">
+                            <span class="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${badgeStyle}">
+                                ${escapeHtml(c.category || 'General')}
                             </span>
                         </div>
 
-                        <h4 class="font-extrabold text-slate-900 text-sm group-hover:text-red-700 transition-colors line-clamp-2 mb-1.5 leading-snug">
+                        <h4 class="font-extrabold text-slate-900 text-xs group-hover:text-red-700 transition-colors line-clamp-1 mb-1 leading-snug">
                             ${escapeHtml(c.title)}
                         </h4>
 
-                        <p class="text-slate-600 text-xs line-clamp-2 mb-2 leading-relaxed font-normal">
-                            ${escapeHtml(desc)}${desc.length >= 110 ? '...' : ''}
+                        <p class="text-slate-500 text-[11px] line-clamp-1 mb-1 leading-normal font-normal">
+                            ${escapeHtml(desc)}
                         </p>
                     </div>
 
                     <!-- Footer -->
-                    <div class="pt-3 border-t border-slate-100 flex items-center justify-between mt-auto">
-                        <div class="text-[11px] text-slate-500 font-semibold flex items-center gap-3">
-                            <span title="Views"><i class="bi bi-eye text-slate-400 mr-1"></i>${c.views || 0}</span>
-                            <span title="Feedback Count"><i class="bi bi-chat-dots text-slate-400 mr-1"></i>${c.feedbackCount || c.feedback_count || 0}</span>
-                            <span title="Attached Documents"><i class="bi bi-paperclip text-slate-400 mr-1"></i>${c.documentsAttached || 0}</span>
+                    <div class="pt-2 border-t border-slate-100 flex items-center justify-between mt-auto">
+                        <div class="text-[10px] text-slate-400 font-semibold flex items-center gap-2.5">
+                            <span title="Views"><i class="bi bi-eye text-slate-400 mr-0.5"></i>${c.views || 0}</span>
+                            <span title="Feedback Count"><i class="bi bi-chat-dots text-slate-400 mr-0.5"></i>${c.feedbackCount || c.feedback_count || 0}</span>
+                            <span title="Attached Documents"><i class="bi bi-paperclip text-slate-400 mr-0.5"></i>${c.documentsAttached || 0}</span>
                         </div>
-                        <button onclick="openConsultationDetailsFromDashboard(${c.id})" class="bg-gradient-to-r from-red-700 to-red-900 hover:from-red-800 hover:to-black text-white text-xs font-black px-3.5 py-1.5 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer">
-                            Details <i class="bi bi-arrow-right text-[10px]"></i>
+                        <button onclick="openConsultationDetailsFromDashboard(${c.id})" class="bg-gradient-to-r from-red-700 to-red-900 hover:from-red-800 hover:to-black text-white text-[11px] font-bold px-2.5 py-1 rounded-lg shadow-2xs transition-all flex items-center gap-1 cursor-pointer">
+                            Details <i class="bi bi-arrow-right text-[9px]"></i>
                         </button>
                     </div>
                 </div>
