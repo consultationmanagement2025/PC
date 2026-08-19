@@ -22622,7 +22622,7 @@ function renderAiCommitteeBriefModalHtml(brief) {
                     <h2 class="text-xl sm:text-2xl font-black text-white leading-tight">
                         ${escapeHtml(brief.title || 'Consultation Feedback Brief')}
                     </h2>
-                    <p class="text-xs text-red-100/90 font-medium">Assigned LGU Committee: <strong class="text-white font-bold">${escapeHtml(brief.committee_assigned)}</strong></p>
+                    <p class="text-xs text-red-100/90 font-medium">Assigned LGU Committee: <strong class="text-white font-bold">${escapeHtml(brief.committee_assigned || brief.assigned_committee || 'Rules & Governance Committee')}</strong></p>
                 </div>
                 <button onclick="document.getElementById('pfq-ai-brief-modal').remove()" class="text-slate-300 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-full transition text-lg leading-none" title="Close Modal">&times;</button>
             </div>
@@ -22643,7 +22643,7 @@ function renderAiCommitteeBriefModalHtml(brief) {
                     </div>
                     <div class="p-2">
                         <span class="text-slate-500 font-bold uppercase text-[10px] tracking-wider block mb-1">Transmittal Target</span>
-                        <span class="text-xs font-extrabold text-purple-900 block truncate px-2 py-1 bg-purple-50 rounded-lg border border-purple-100" title="${escapeHtml(brief.committee_assigned)}">${escapeHtml(brief.committee_assigned)}</span>
+                        <span class="text-xs font-extrabold text-purple-900 block truncate px-2 py-1 bg-purple-50 rounded-lg border border-purple-100" title="${escapeHtml(brief.committee_assigned || brief.assigned_committee || 'Rules & Governance Committee')}">${escapeHtml(brief.committee_assigned || brief.assigned_committee || 'Rules & Governance Committee')}</span>
                     </div>
                 </div>
 
