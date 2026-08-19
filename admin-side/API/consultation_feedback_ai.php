@@ -642,12 +642,22 @@ try {
 
             $conclusionText = "Following formal closure of Public Consultation #{$consultationId} (\"{$consultation['title']}\"), {$totalCount} citizen submission(s) from PCMS Online Portal and PHMS Public Hearing System were compiled and analyzed. The general public sentiment is classified as '{$dominantSentiment}'. It is formally recommended that the {$assignedCommittee} adopt the policy resolutions prior to final ordinance enactment.";
 
+            // Check if consultation is checked by Resource Person
+            $isExpertChecked = false;
+            if (file_exists(__DIR__ . '/../UTILS/orts_integration_utils.php')) {
+                require_once __DIR__ . '/../UTILS/orts_integration_utils.php';
+                if (function_exists('isConsultationCheckedByExpert')) {
+                    $isExpertChecked = isConsultationCheckedByExpert($consultationId, $conn);
+                }
+            }
+
             $brief = [
                 'consultation_id' => $consultationId,
-                'title' => $consultation['title'],
+                'title' => $consultation['title'] ?? 'Consultation #' . $consultationId,
                 'category' => $consultation['category'] ?? 'General Policy',
-                'committee_assigned' => $assignedCommittee,
+                'assigned_committee' => $assignedCommittee,
                 'status' => $consultation['status'],
+                'is_expert_checked' => $isExpertChecked,
                 'compiled_at' => date('Y-m-d H:i:s'),
                 'merged_sources' => [
                     'total_submissions' => $totalCount,
@@ -736,7 +746,7 @@ try {
 
             // Verify consultation exists
             $cRow = null;
-            $chkStmt = $conn->prepare("SELECT status, committee_assigned, title, reference_number, ai_committee_brief FROM consultations WHERE id = ? LIMIT 1");
+            $chkStmt = $conn->prepare("SELECT status, committee_assigned, title, reference_number, ai_committee_brief, document_status, expert_notes FROM consultations WHERE id = ? LIMIT 1");
             if ($chkStmt) {
                 $chkStmt->bind_param('i', $consultationId);
                 $chkStmt->execute();
@@ -748,6 +758,20 @@ try {
             if (!$cRow) {
                 http_response_code(404);
                 echo json_encode(['success' => false, 'message' => 'Consultation not found']);
+                exit;
+            }
+
+            // STRICT GATEKEEPING: Ensure the file has been checked by a Resource Person before forwarding to ORTS
+            if (file_exists(__DIR__ . '/../UTILS/orts_integration_utils.php')) {
+                require_once __DIR__ . '/../UTILS/orts_integration_utils.php';
+            }
+            if (function_exists('isConsultationCheckedByExpert') && !isConsultationCheckedByExpert($consultationId, $conn)) {
+                http_response_code(422);
+                echo json_encode([
+                    'success' => false,
+                    'awaiting_expert' => true,
+                    'message' => 'Action Blocked: This consultation file cannot be forwarded to ORTS yet. It must first be reviewed and checked by an assigned Resource Person (Technical Expert).'
+                ]);
                 exit;
             }
 

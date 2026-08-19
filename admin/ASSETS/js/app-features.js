@@ -17398,7 +17398,12 @@ async function submitForwardToCommittee(id) {
 
         const data = await res.json().catch(() => null);
         if (!res.ok || !data || !data.success) {
-            throw new Error((data && data.message) ? data.message : `HTTP ${res.status}`);
+            const errDetail = (data && data.message) ? data.message : `HTTP ${res.status}`;
+            if (data && data.awaiting_expert) {
+                showNotification(`🔒 ${errDetail}`, 'warning', 7000);
+                return;
+            }
+            throw new Error(errDetail);
         }
 
         const row = AppData.feedback.find(f => Number(f.id) === Number(id));
@@ -22699,14 +22704,41 @@ function renderAiCommitteeBriefModalHtml(brief) {
                     <button onclick="document.getElementById('pfq-ai-brief-modal').remove()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition">
                         Cancel
                     </button>
-                    <button onclick="pfpForwardBriefToOrts(${brief.consultation_id})" class="px-5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-2 cursor-pointer" title="Transmit to ORTS (Ordinance Routing & Tracking System)">
-                        <i class="bi bi-send-check-fill"></i> Forward to ORTS
-                    </button>
+                    ${Boolean(brief.is_expert_checked || brief.document_status === 'expert_annotated' || brief.document_status === 'approved' || brief.document_status === 'endorsed') ? `
+                        <div class="flex items-center gap-2">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-[11px] font-bold shadow-2xs">
+                                <i class="bi bi-patch-check-fill text-emerald-600"></i> Validated by Resource Person
+                            </span>
+                            <button onclick="pfpForwardBriefToOrts(${brief.consultation_id})" class="px-5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-2 cursor-pointer" title="Transmit to ORTS (Ordinance Routing & Tracking System)">
+                                <i class="bi bi-send-check-fill"></i> Forward to ORTS
+                            </button>
+                        </div>
+                    ` : `
+                        <div class="flex items-center gap-2">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-[11px] font-bold shadow-2xs">
+                                <i class="bi bi-shield-lock-fill text-amber-600"></i> Awaiting Resource Person Review
+                            </span>
+                            <button type="button" onclick="showAwaitingExpertReviewNotice(${brief.consultation_id})" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold rounded-xl text-xs transition flex items-center gap-2 border border-slate-300 cursor-pointer" title="Forwarding to ORTS requires Resource Person review first">
+                                <i class="bi bi-lock-fill text-amber-500"></i> Forward to ORTS (Locked)
+                            </button>
+                        </div>
+                    `}
                 </div>
             </div>
         </div>
     `;
 }
+
+window.showAwaitingExpertReviewNotice = function(consultationId) {
+    const msg = '🔒 Action Blocked: This consultation file cannot be forwarded to ORTS yet. It must first be checked, reviewed, and annotated by an assigned Resource Person (Technical Expert).';
+    if (typeof alertToast === 'function') {
+        alertToast(msg, 'warning', 7000);
+    } else if (typeof showNotification === 'function') {
+        showNotification(msg, 'warning', 7000);
+    } else {
+        alert(msg);
+    }
+};
 
 async function pfpForwardBriefToOrts(consultationId) {
     if (!consultationId) return;
@@ -22727,7 +22759,12 @@ async function pfpForwardBriefToOrts(consultationId) {
             if (typeof renderDocumentsList === 'function') renderDocumentsList();
             if (typeof fetchDocuments === 'function') fetchDocuments();
         } else {
-            showNotification(data.message || 'Failed to forward to ORTS.', 'error');
+            const errDetail = data.message || 'Failed to forward to ORTS.';
+            if (data && data.awaiting_expert) {
+                showNotification(`🔒 ${errDetail}`, 'warning', 7000);
+            } else {
+                showNotification(errDetail, 'error');
+            }
         }
     } catch (e) {
         showNotification(`Error: ${e.message}`, 'error');

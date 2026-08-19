@@ -4,6 +4,79 @@
  * Handles automated cURL dispatch of AI-summarized & validated consultations to ORTS.
  */
 
+if (!function_exists('isConsultationCheckedByExpert')) {
+    /**
+     * Checks whether a consultation file/report has been formally reviewed, annotated,
+     * or checked by a Resource Person (Technical Expert).
+     */
+    function isConsultationCheckedByExpert($consultationId, $conn) {
+        if (!$conn || (int)$consultationId <= 0) return false;
+        $cid = (int)$consultationId;
+
+        // 1. Check consultations table for expert annotations or endorsed status
+        $stmt = $conn->prepare("SELECT document_status, expert_notes, expert_last_updated_at, status FROM consultations WHERE id = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param("i", $cid);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            if ($row) {
+                $docStatus = strtolower(trim((string)($row['document_status'] ?? '')));
+                $expertNotes = trim((string)($row['expert_notes'] ?? ''));
+                $lastUpdated = $row['expert_last_updated_at'] ?? null;
+                $status = strtolower(trim((string)($row['status'] ?? '')));
+
+                // If document status is explicitly verified/annotated/endorsed
+                if (in_array($docStatus, ['expert_annotated', 'approved', 'endorsed', 'reviewed', 'checked'], true)) {
+                    return true;
+                }
+
+                // If consultation status is endorsed
+                if ($status === 'endorsed') {
+                    return true;
+                }
+
+                // If valid expert notes exist and are non-empty
+                if (!empty($expertNotes) && $expertNotes !== '{}' && $expertNotes !== '[]' && $expertNotes !== 'null') {
+                    return true;
+                }
+
+                // If expert update timestamp is recorded
+                if (!empty($lastUpdated) && $lastUpdated !== '0000-00-00 00:00:00') {
+                    return true;
+                }
+            }
+        }
+
+        // 2. Check resolution_reports table for uploaded expert reports
+        $rStmt = $conn->prepare("SELECT COUNT(*) as cnt FROM resolution_reports WHERE consultation_id = ?");
+        if ($rStmt) {
+            $rStmt->bind_param("i", $cid);
+            $rStmt->execute();
+            $rRow = $rStmt->get_result()->fetch_assoc();
+            $rStmt->close();
+            if ($rRow && (int)$rRow['cnt'] > 0) {
+                return true;
+            }
+        }
+
+        // 3. Check consultation_document_audit_trail for expert annotation actions
+        $aStmt = $conn->prepare("SELECT COUNT(*) as cnt FROM consultation_document_audit_trail WHERE consultation_id = ? AND action_type IN ('inline_annotation_added', 'report_uploaded', 'expert_review_completed', 'endorsed')");
+        if ($aStmt) {
+            $aStmt->bind_param("i", $cid);
+            $aStmt->execute();
+            $aRow = $aStmt->get_result()->fetch_assoc();
+            $aStmt->close();
+            if ($aRow && (int)$aRow['cnt'] > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
 if (!function_exists('sendToOrtsApi')) {
     function sendToOrtsApi($consultationId, $conn) {
         if (!$conn) {
@@ -13,6 +86,15 @@ if (!function_exists('sendToOrtsApi')) {
         $consultationId = (int)$consultationId;
         if ($consultationId <= 0) {
             return ['success' => false, 'message' => 'Invalid consultation ID'];
+        }
+
+        // 0. Strict Gatekeeping: Ensure file is checked by a Resource Person first
+        if (!isConsultationCheckedByExpert($consultationId, $conn)) {
+            return [
+                'success' => false,
+                'message' => 'Action Blocked: This consultation must first be checked and reviewed by a Resource Person before being transmitted to ORTS.',
+                'awaiting_expert' => true
+            ];
         }
 
         // 1. Fetch consultation details
