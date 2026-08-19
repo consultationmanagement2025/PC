@@ -396,7 +396,7 @@ try {
             }
 
             // 3. Query consultation_guest_votes table
-            $gvStmt = $conn->prepare("SELECT guest_email as author, reason_text as content, vote_option, created_at FROM consultation_guest_votes WHERE consultation_id = ? OR consultation_id = 1 ORDER BY created_at DESC");
+            $gvStmt = $conn->prepare("SELECT guest_email as author, reason_text as content, vote_option, created_at FROM consultation_guest_votes WHERE consultation_id = ? ORDER BY created_at DESC");
             if ($gvStmt) {
                 $gvStmt->bind_param('i', $consultationId);
                 $gvStmt->execute();
@@ -421,6 +421,59 @@ try {
                     ];
                 }
                 $gvStmt->close();
+            }
+
+            // 3b. Query registered consultation_votes table
+            $cvStmt = $conn->prepare("SELECT v.vote_option, v.reason_text as content, v.created_at, u.fullname as author, u.email as email FROM consultation_votes v LEFT JOIN users u ON v.user_id = u.id WHERE v.consultation_id = ? ORDER BY v.created_at DESC");
+            if ($cvStmt) {
+                $cvStmt->bind_param('i', $consultationId);
+                $cvStmt->execute();
+                $cvRes = $cvStmt->get_result();
+                while ($r = $cvRes->fetch_assoc()) {
+                    $voteContent = trim((string)$r['content']);
+                    if ($voteContent === '') {
+                        $voteContent = "Registered Citizen Vote: " . strtoupper($r['vote_option']) . " on public policy proposal.";
+                    } else {
+                        $voteContent = "Vote: " . strtoupper($r['vote_option']) . " - " . $voteContent;
+                    }
+                    $pcmsCount++;
+                    $allFeedback[] = [
+                        'author' => $r['author'] ?: 'Registered Citizen Voter',
+                        'email' => $r['email'] ?: '',
+                        'category' => 'Public Policy & Citizen Sentiment',
+                        'content' => $voteContent,
+                        'rating' => $r['vote_option'] === 'agree' ? 5 : 2,
+                        'sentiment_tag' => $r['vote_option'] === 'agree' ? 'positive' : 'negative',
+                        'created_at' => $r['created_at'],
+                        'source' => 'PCMS'
+                    ];
+                }
+                $cvStmt->close();
+            }
+
+            // 3c. Query consultation_comments table
+            $ccStmt = $conn->prepare("SELECT user_name as author, user_email as email, comment_text as content, created_at FROM consultation_comments WHERE consultation_id = ? ORDER BY created_at DESC");
+            if ($ccStmt) {
+                $ccStmt->bind_param('i', $consultationId);
+                $ccStmt->execute();
+                $ccRes = $ccStmt->get_result();
+                while ($r = $ccRes->fetch_assoc()) {
+                    $contentStr = trim((string)$r['content']);
+                    if ($contentStr !== '') {
+                        $pcmsCount++;
+                        $allFeedback[] = [
+                            'author' => $r['author'] ?: 'Citizen Commenter',
+                            'email' => $r['email'] ?: '',
+                            'category' => 'Public Consultation Comment',
+                            'content' => $contentStr,
+                            'rating' => 4,
+                            'sentiment_tag' => 'neutral',
+                            'created_at' => $r['created_at'],
+                            'source' => 'PCMS'
+                        ];
+                    }
+                }
+                $ccStmt->close();
             }
 
             // 4. Query hearing_queue table for cross-referenced PHMS Live Public Hearing feedback
