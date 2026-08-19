@@ -10007,29 +10007,15 @@ async function renderPublicConsultation() {
 
 
                     <div>
-
-
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Sort By</label>
-
-
                         <select id="pc-sort" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
-
-
                             onchange="filterPublicConsultations()">
-
-
+                            <option value="category-asc">Sort by Category (A-Z)</option>
+                            <option value="category-desc">Sort by Category (Z-A)</option>
                             <option value="date-desc">Latest First</option>
-
-
                             <option value="date-asc">Oldest First</option>
-
-
                             <option value="feedback">Most Feedback</option>
-
-
                         </select>
-
-
                     </div>
 
 
@@ -10183,11 +10169,7 @@ function getPCGridState() {
 
 
             page: 1,
-
-
-            pageSize: 6,
-
-
+            pageSize: 8,
             showAll: false
 
 
@@ -11705,25 +11687,21 @@ function getFilteredPublicConsultations() {
         switch (sortBy) {
 
 
+            case 'category-asc':
+                return String(a.category || 'General').localeCompare(String(b.category || 'General'));
+
+            case 'category-desc':
+                return String(b.category || 'General').localeCompare(String(a.category || 'General'));
+
             case 'date-asc':
-
-
-                return new Date(a.date) - new Date(b.date);
-
+                return new Date(a.date || a.created_at || 0) - new Date(b.date || b.created_at || 0);
 
             case 'feedback':
-
-
-                return (b.feedbackCount || 0) - (a.feedbackCount || 0);
-
+                return (Number(b.feedbackCount || b.feedback_count || 0)) - (Number(a.feedbackCount || a.feedback_count || 0));
 
             case 'date-desc':
-
-
             default:
-
-
-                return new Date(b.date) - new Date(a.date);
+                return new Date(b.date || b.created_at || 0) - new Date(a.date || a.created_at || 0);
 
 
         }
