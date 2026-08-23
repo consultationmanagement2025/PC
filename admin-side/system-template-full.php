@@ -5612,7 +5612,10 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                             <?php endif; ?>
                                                             <?php if ($status !== 'archived'): ?>
                                                                 <?php if (!$is_read_only_super_admin): ?>
-                                                                    <select onchange="updateConsultationStatus(<?= (int)$c['id'] ?>, this.value, event)" class="text-xs border rounded px-1 py-0.5">
+                                                                     <?php if ($status === 'declined' || $status === 'rejected'): ?>
+                                                                         <span class="text-xs font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Declined</span>
+                                                                     <?php else: ?>
+                                                                         <select onchange="updateConsultationStatus(<?= (int)$c['id'] ?>, this.value, event)" class="text-xs border rounded px-1 py-0.5">
                                                                         <option value="">Set Status</option>
                                                                         <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>Pending Review</option>
                                                                         <option value="active" <?= $status === 'active' ? 'selected' : '' ?>>Active</option>
@@ -5623,7 +5626,8 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                                         <option value="declined" <?= ($status === 'declined' || $status === 'rejected') ? 'selected' : '' ?>>Declined</option>
                                                                         <option value="archived" <?= $status === 'archived' ? 'selected' : '' ?>>Archived</option>
                                                                     </select>
-                                                                    <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openDeclineCitizenSubmissionModal(<?= (int)$c['id'] ?>)" class="text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Decline</button>
+                                                                         <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openDeclineCitizenSubmissionModal(<?= (int)$c['id'] ?>)" class="text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Decline</button>
+                                                                     <?php endif; ?>
                                                                 <?php else: ?>
                                                                     <select disabled class="text-xs border rounded px-1 py-0.5 opacity-60 cursor-not-allowed">
                                                                         <option>Set Status</option>
@@ -5708,7 +5712,10 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                             <?php endif; ?>
                                                             <?php if ($status !== 'archived'): ?>
                                                                 <?php if (!$is_read_only_super_admin): ?>
-                                                                    <select onchange="updateConsultationStatus(<?= (int)$c['id'] ?>, this.value, event)" class="text-xs border rounded px-1 py-0.5">
+                                                                     <?php if ($status === 'declined' || $status === 'rejected'): ?>
+                                                                         <span class="text-xs font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Declined</span>
+                                                                     <?php else: ?>
+                                                                         <select onchange="updateConsultationStatus(<?= (int)$c['id'] ?>, this.value, event)" class="text-xs border rounded px-1 py-0.5">
                                                                         <option value="">Set Status</option>
                                                                         <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>Pending Review</option>
                                                                         <option value="active" <?= $status === 'active' ? 'selected' : '' ?>>Active</option>
@@ -5719,7 +5726,8 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                                         <option value="declined" <?= ($status === 'declined' || $status === 'rejected') ? 'selected' : '' ?>>Declined</option>
                                                                         <option value="archived" <?= $status === 'archived' ? 'selected' : '' ?>>Archived</option>
                                                                     </select>
-                                                                    <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openDeclineCitizenSubmissionModal(<?= (int)$c['id'] ?>)" class="text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Decline</button>
+                                                                         <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openDeclineCitizenSubmissionModal(<?= (int)$c['id'] ?>)" class="text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Decline</button>
+                                                                     <?php endif; ?>
                                                                 <?php else: ?>
                                                                     <select disabled class="text-xs border rounded px-1 py-0.5 opacity-60 cursor-not-allowed">
                                                                         <option>Set Status</option>

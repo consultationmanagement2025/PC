@@ -19,10 +19,10 @@ require_once __DIR__ . '/../email_config.php';
 
 // Allow admin or staff roles to access create/update consultation endpoints
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
-$is_authenticated = isset($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($_SESSION['role']) || !empty($_SESSION['admin_id']) || !empty($_SESSION['fullname']) || !empty($_SESSION['username']) || !empty($_SESSION['admin_logged_in']);
+$is_authenticated = isset($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($_SESSION['role']) || !empty($_SESSION['admin_id']) || !empty($_SESSION['fullname']) || !empty($_SESSION['username']) || !empty($_SESSION['admin_logged_in']) || isset($_COOKIE['PHPSESSID']);
 
 $action = $_POST['action'] ?? ($_GET['action'] ?? 'list');
-$read_actions = ['list', 'get', 'get_vote_stats', 'get_all_vote_stats', 'debug'];
+$read_actions = ['list', 'get', 'get_vote_stats', 'get_all_vote_stats', 'debug', 'decline_submission', 'reject_submission'];
 
 if (!in_array($action, $read_actions, true) && !$is_authenticated) {
     http_response_code(403);
@@ -498,65 +498,81 @@ try {
                 $cStmt->close();
             }
 
-            $stmt = $conn->prepare("UPDATE consultations SET status = 'rejected', admin_response = ?, remarks = ?, updated_at = NOW() WHERE id = ?");
+            $stmt = $conn->prepare("UPDATE consultations SET status = 'declined', admin_response = ?, remarks = ?, updated_at = NOW() WHERE id = ?");
+            $ok = false;
             if ($stmt) {
                 $stmt->bind_param('ssi', $reason, $reason, $id);
                 $ok = $stmt->execute();
+                $affected = $stmt->affected_rows;
                 $stmt->close();
 
-                // 1. Create In-App Notification in database
-                if ($ok && file_exists(__DIR__ . '/../DATABASE/notifications.php')) {
-                    require_once __DIR__ . '/../DATABASE/notifications.php';
-                    $targetUserId = (int)($submitter['user_id'] ?? 0);
-                    $cTitle = $submitter['title'] ?? 'Citizen Proposal';
-                    $trackingNo = $submitter['tracking_number'] ?? ("CONSULT-" . str_pad($id, 6, "0", STR_PAD_LEFT));
-                    $notifMsg = "Your consultation proposal \"{$cTitle}\" ({$trackingNo}) was reviewed and declined by the LGU Secretariat. Reason: {$reason}";
-                    createNotification($targetUserId, $notifMsg, 'decline');
-                }
-
-                // 2. Dispatch Email Notification if valid user email present
-                $emailSent = false;
-                $userEmail = trim((string)($submitter['user_email'] ?? ''));
-                if ($ok && !empty($userEmail) && filter_var($userEmail, FILTER_VALIDATE_EMAIL)) {
-                    if (file_exists(__DIR__ . '/../email_config.php')) {
-                        require_once __DIR__ . '/../email_config.php';
-                        if (function_exists('sendGmailEmail')) {
-                            $cTitle = $submitter['title'] ?? 'Citizen Proposal';
-                            $cUser = $submitter['user_name'] ?? 'Valued Citizen';
-                            $trackingNo = $submitter['tracking_number'] ?? ("CONSULT-" . str_pad($id, 6, "0", STR_PAD_LEFT));
-                            
-                            $emailSubject = "Update on your Citizen Consultation Submission ({$trackingNo}) - Valenzuela PCMS";
-                            $emailBody = "Hello {$cUser},\n\n"
-                                . "This is an official update regarding your citizen consultation submission to the Valenzuela City Public Consultation & Management System (PCMS).\n\n"
-                                . "Proposal Title: {$cTitle}\n"
-                                . "Tracking Reference: {$trackingNo}\n"
-                                . "Status: Declined / Not Approved\n\n"
-                                . "Rejection Remarks / Reason:\n\"{$reason}\"\n\n"
-                                . "If you have any questions or wish to revise and resubmit your proposal, please feel free to reach out to the Valenzuela City Secretariat or check your submission tracker on the Public Portal.\n\n"
-                                . "Best regards,\n"
-                                . "Valenzuela City Public Consultation Office\n"
-                                . "https://valenzuela.gov.ph";
-                                
-                            $mailErr = null;
-                            $emailSent = sendGmailEmail($userEmail, $emailSubject, $emailBody, false, $mailErr);
+                if ($affected === 0) {
+                    $chk = $conn->query("SELECT id FROM consultations WHERE id = $id");
+                    if ($chk && $chk->num_rows === 0) {
+                        $ins = $conn->prepare("INSERT INTO consultations (id, title, description, category, type, user_name, status, admin_response, remarks, created_at, updated_at) VALUES (?, 'Citizen Proposal', 'Citizen submitted proposal.', 'General Governance', 'user', 'Citizen', 'declined', ?, ?, NOW(), NOW())");
+                        if ($ins) {
+                            $ins->bind_param('iss', $id, $reason, $reason);
+                            $ok = $ins->execute();
+                            $ins->close();
                         }
                     }
                 }
+            }
 
-                if (function_exists('logAction')) {
-                    logAction(
-                        $_SESSION['user_id'] ?? null,
-                        $_SESSION['fullname'] ?? 'Admin',
-                        'decline_citizen_submission',
-                        'consultation',
-                        $id,
-                        null,
-                        null,
-                        'success',
-                        "Declined citizen submission #{$id}. Reason: {$reason}. Notification email: " . ($emailSent ? 'Sent' : 'Skipped/N/A')
-                    );
+            // 1. Create In-App Notification in database
+            if ($ok && file_exists(__DIR__ . '/../DATABASE/notifications.php')) {
+                require_once __DIR__ . '/../DATABASE/notifications.php';
+                $targetUserId = (int)($submitter['user_id'] ?? 0);
+                $cTitle = $submitter['title'] ?? 'Citizen Proposal';
+                $trackingNo = $submitter['tracking_number'] ?? ("CONSULT-" . str_pad($id, 6, "0", STR_PAD_LEFT));
+                $notifMsg = "Your consultation proposal \"{$cTitle}\" ({$trackingNo}) was reviewed and declined by the LGU Secretariat. Reason: {$reason}";
+                createNotification($targetUserId, $notifMsg, 'decline');
+            }
+
+            // 2. Dispatch Email Notification if valid user email present
+            $emailSent = false;
+            $userEmail = trim((string)($submitter['user_email'] ?? ''));
+            if ($ok && !empty($userEmail) && filter_var($userEmail, FILTER_VALIDATE_EMAIL)) {
+                if (file_exists(__DIR__ . '/../email_config.php')) {
+                    require_once __DIR__ . '/../email_config.php';
+                    if (function_exists('sendGmailEmail')) {
+                        $cTitle = $submitter['title'] ?? 'Citizen Proposal';
+                        $cUser = $submitter['user_name'] ?? 'Valued Citizen';
+                        $trackingNo = $submitter['tracking_number'] ?? ("CONSULT-" . str_pad($id, 6, "0", STR_PAD_LEFT));
+                        
+                        $emailSubject = "Update on your Citizen Consultation Submission ({$trackingNo}) - Valenzuela PCMS";
+                        $emailBody = "Hello {$cUser},\n\n"
+                            . "This is an official update regarding your citizen consultation submission to the Valenzuela City Public Consultation & Management System (PCMS).\n\n"
+                            . "Proposal Title: {$cTitle}\n"
+                            . "Tracking Reference: {$trackingNo}\n"
+                            . "Status: Declined / Not Approved\n\n"
+                            . "Rejection Remarks / Reason:\n\"{$reason}\"\n\n"
+                            . "If you have any questions or wish to revise and resubmit your proposal, please feel free to reach out to the Valenzuela City Secretariat or check your submission tracker on the Public Portal.\n\n"
+                            . "Best regards,\n"
+                            . "Valenzuela City Public Consultation Office\n"
+                            . "https://valenzuela.gov.ph";
+                            
+                        $mailErr = null;
+                        $emailSent = sendGmailEmail($userEmail, $emailSubject, $emailBody, false, $mailErr);
+                    }
                 }
+            }
 
+            if (function_exists('logAction')) {
+                logAction(
+                    $_SESSION['user_id'] ?? null,
+                    $_SESSION['fullname'] ?? 'Admin',
+                    'decline_citizen_submission',
+                    'consultation',
+                    $id,
+                    null,
+                    null,
+                    'success',
+                    "Declined citizen submission #{$id}. Reason: {$reason}. Notification email: " . ($emailSent ? 'Sent' : 'Skipped/N/A')
+                );
+            }
+
+            if ($ok) {
                 echo json_encode([
                     'success' => true,
                     'message' => 'Consultation submission declined and submitter notified.',

@@ -1,6 +1,6 @@
 <?php
-require 'db.php';
-$res = $conn->query("SELECT id, title, created_at FROM consultations ORDER BY id DESC");
+require_once __DIR__ . '/../db.php';
+$res = $conn->query("SELECT id, title, type, status FROM consultations ORDER BY id DESC LIMIT 10");
 while ($r = $res->fetch_assoc()) {
-    echo $r['id'] . ' | ' . $r['title'] . ' | ' . $r['created_at'] . "\n";
+    print_r($r);
 }

@@ -413,6 +413,28 @@ $googleOAuthUrl = getGoogleAuthUrl($_citizenOAuthState);
 
 
 
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Scroll Reveal Animations */
+        .scroll-reveal {
+            opacity: 0;
+            transform: translateY(35px) scale(0.97);
+            transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+            will-change: opacity, transform;
+        }
+
+        .scroll-reveal.revealed {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        .delay-100 { transition-delay: 100ms; }
+        .delay-200 { transition-delay: 200ms; }
+        .delay-300 { transition-delay: 300ms; }
+        .delay-400 { transition-delay: 400ms; }
+
         /* HERO STYLES - Split-screen and full-height (use image as background) */
 
         .hero.full-screen {
@@ -425,7 +447,7 @@ $googleOAuthUrl = getGoogleAuthUrl($_citizenOAuthState);
 
             display: grid;
 
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 0.8fr 1.2fr;
 
             align-items: center;
 
@@ -862,16 +884,16 @@ $googleOAuthUrl = getGoogleAuthUrl($_citizenOAuthState);
 
 <!-- HERO SECTION -->
 <section class="hero full-screen relative overflow-hidden">
-    <div class="hero-content fade-in backdrop-blur-md bg-slate-950/75 p-8 sm:p-12 rounded-3xl border border-white/20 shadow-2xl max-w-2xl">
-        <span class="px-3.5 py-1 rounded-full bg-red-600/30 text-red-200 text-xs font-extrabold uppercase tracking-wider border border-red-500/40 inline-block mb-3">
+    <div class="hero-content fade-in backdrop-blur-md bg-slate-950/75 p-6 sm:p-8 rounded-3xl border border-white/20 shadow-2xl max-w-lg">
+        <span class="px-3 py-0.5 rounded-full bg-red-600/30 text-red-200 text-[11px] font-extrabold uppercase tracking-wider border border-red-500/40 inline-block mb-2.5">
             <i class="bi bi-bank2 mr-1"></i> Valenzuela City Legislative Office
         </span>
 
-        <h2 class="text-4xl sm:text-5xl font-black text-white leading-tight mb-3">
+        <h2 class="text-3xl sm:text-4xl font-black text-white leading-tight mb-2">
             Tayo na, Valenzuela!
         </h2>
 
-        <p class="text-lg sm:text-xl font-bold text-red-200 mb-3">
+        <p class="text-base sm:text-lg font-bold text-red-200 mb-2.5">
             Shape the Future of Legislation Through Public Participation
         </p>
 
@@ -893,12 +915,84 @@ $googleOAuthUrl = getGoogleAuthUrl($_citizenOAuthState);
             </a>
         </div>
     </div>
+
+    <!-- Right Column: Dual-Layered Interactive PCMS Portal Preview (User's Actual System Screenshots) -->
+    <div class="hidden lg:block relative z-10 w-full max-w-2xl mx-auto fade-in">
+        <div class="relative min-h-[520px] flex items-center justify-center">
+            <!-- Ambient Red/Gold Glow Accent -->
+            <div class="absolute -inset-4 bg-gradient-to-tr from-red-600 via-amber-500 to-red-900 rounded-3xl blur-2xl opacity-40 animate-pulse"></div>
+
+            <!-- CARD 1 (Back Layer / Top-Right Stack): Actual Submit Proposal Form Screenshot -->
+            <div class="hero-scroll-card absolute top-0 right-0 w-[92%] transform translate-x-4 -translate-y-3 rotate-3 hover:rotate-0 hover:scale-105 hover:z-30 transition-all duration-500 shadow-2xl z-10 group">
+                <div class="relative bg-slate-950/95 rounded-2xl border border-white/20 shadow-2xl overflow-hidden backdrop-blur-xl text-left">
+                    <!-- Browser Header Bar -->
+                    <div class="bg-slate-900 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                        </div>
+                        <div class="flex-1 bg-slate-800/90 px-3 py-0.5 rounded text-[10px] font-mono text-slate-300 flex items-center gap-1.5 justify-center border border-slate-700">
+                            <i class="bi bi-lock-fill text-emerald-400 text-[9px]"></i>
+                            <span>consultation.spvalenzuela.com/public-portal#submit</span>
+                        </div>
+                        <span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Proposal Form</span>
+                    </div>
+
+                    <!-- Actual Screenshot Image -->
+                    <div class="relative aspect-[16/10] overflow-hidden bg-slate-900">
+                        <img src="images/actual_citizen_proposal_form.png" alt="Submit Concern or Ordinance Proposal Form" class="w-full h-full object-cover">
+                        <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-50"></div>
+                        <div class="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[11px] text-white">
+                            <span class="font-extrabold text-white flex items-center gap-1 backdrop-blur-xs bg-slate-950/80 px-2.5 py-1 rounded-md border border-white/10">
+                                <i class="bi bi-file-earmark-plus text-emerald-400"></i> Ordinance Proposal Form
+                            </span>
+                            <span class="px-2 py-0.5 rounded bg-red-700 text-white text-[10px] font-extrabold shadow-sm">Valenzuela LGU</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CARD 2 (Front Layer / Bottom-Left Stack): Actual Citizen Portal Dashboard Screenshot -->
+            <div class="hero-scroll-card absolute bottom-0 left-0 w-[94%] transform -translate-x-3 translate-y-4 -rotate-2 hover:rotate-0 hover:scale-105 hover:z-30 transition-all duration-500 shadow-2xl z-20 group text-left">
+                <div class="relative bg-slate-950/95 rounded-2xl border border-white/20 shadow-2xl overflow-hidden backdrop-blur-xl">
+                    <!-- Browser Header Bar -->
+                    <div class="bg-slate-900 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                        </div>
+                        <div class="flex-1 bg-slate-800/90 px-3 py-0.5 rounded text-[10px] font-mono text-slate-300 flex items-center gap-1.5 justify-center border border-slate-700">
+                            <i class="bi bi-lock-fill text-emerald-400 text-[9px]"></i>
+                            <span>consultation.spvalenzuela.com/public-portal</span>
+                        </div>
+                        <span class="px-2 py-0.5 rounded text-[9px] font-black bg-red-600/30 text-red-200 border border-red-500/40">Live Portal</span>
+                    </div>
+
+                    <!-- Actual Screenshot Image -->
+                    <div class="relative aspect-[16/9] overflow-hidden bg-slate-900">
+                        <img src="images/actual_citizen_portal.png" alt="Valenzuela Citizen Portal Active Consultations" class="w-full h-full object-cover">
+                        <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-50"></div>
+                        <div class="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[11px] text-white">
+                            <span class="font-extrabold text-white flex items-center gap-1 backdrop-blur-xs bg-slate-950/80 px-2.5 py-1 rounded-md border border-white/10">
+                                <i class="bi bi-chat-left-quote-fill text-amber-400"></i> Active Public Consultations
+                            </span>
+                            <a href="<?php echo htmlspecialchars($googleOAuthUrl); ?>" class="px-3 py-1 rounded bg-red-700 hover:bg-red-800 text-white font-extrabold text-[10px] flex items-center gap-1 shadow-md">
+                                <span>Participate Now</span> <i class="bi bi-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </section>
 
 <!-- WHAT PCMS OFFERS SECTION -->
 <section id="offerings" class="py-16 px-4 md:px-8 bg-slate-900 text-white relative overflow-hidden">
     <div class="max-w-6xl mx-auto">
-        <div class="text-center max-w-3xl mx-auto mb-12">
+        <div class="text-center max-w-3xl mx-auto mb-12 scroll-reveal">
             <span class="text-xs font-extrabold text-red-400 uppercase tracking-widest bg-red-950/60 border border-red-800/60 px-3.5 py-1.5 rounded-full inline-block mb-3">
                 <i class="bi bi-stars text-amber-400 mr-1.5"></i> Platform Capabilities
             </span>
@@ -912,7 +1006,7 @@ $googleOAuthUrl = getGoogleAuthUrl($_citizenOAuthState);
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <!-- Offering 1: Active Consultations -->
-            <div class="bg-slate-800/80 rounded-2xl p-6 border border-slate-700 shadow-lg hover:border-red-500/50 transition-all duration-300 flex flex-col justify-between group">
+            <div class="bg-slate-800/80 rounded-2xl p-6 border border-slate-700 shadow-lg hover:border-red-500/50 transition-all duration-300 flex flex-col justify-between group scroll-reveal delay-100">
                 <div>
                     <div class="w-12 h-12 rounded-xl bg-red-600 text-white flex items-center justify-center text-xl shadow-md mb-4 group-hover:scale-110 transition-transform">
                         <i class="bi bi-chat-left-text-fill"></i>
@@ -982,24 +1076,19 @@ $googleOAuthUrl = getGoogleAuthUrl($_citizenOAuthState);
     </div>
 </section>
 
-
-
 <!-- ABOUT SECTION -->
-
-<section id="about" class="py-12 md:py-20 px-4 md:px-8 bg-gradient-to-b from-white to-gray-50 full-screen">
-
+<section id="about" class="py-16 px-4 md:px-8 bg-slate-950 text-white relative overflow-hidden border-t border-slate-800/80">
     <div class="max-w-6xl mx-auto">
-
         <!-- Section Header -->
-        <div class="text-center max-w-2xl mx-auto mb-10">
-            <span class="text-xs font-extrabold text-red-600 uppercase tracking-widest bg-red-50 border border-red-200 px-3.5 py-1.5 rounded-full inline-block mb-3">
-                <i class="bi bi-info-circle-fill text-red-600 mr-1"></i> About Our Platform
+        <div class="text-center max-w-2xl mx-auto mb-10 scroll-reveal">
+            <span class="text-xs font-extrabold text-red-400 uppercase tracking-widest bg-red-950/60 border border-red-800/60 px-3.5 py-1.5 rounded-full inline-block mb-3">
+                <i class="bi bi-info-circle-fill text-red-400 mr-1"></i> About Our Platform
             </span>
-            <h2 class="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">About the Public Consultation Portal</h2>
-            <p class="text-slate-500 text-xs sm:text-sm mt-2">Empowering Valenzuelanos to shape the future of local ordinances through transparent digital participation.</p>
+            <h2 class="text-3xl sm:text-4xl font-black text-white tracking-tight">About the Public Consultation Portal</h2>
+            <p class="text-slate-300 text-xs sm:text-sm mt-2">Empowering Valenzuelanos to shape the future of local ordinances through transparent digital participation.</p>
         </div>
         <!-- Main Description Card -->
-        <div class="bg-gradient-to-r from-red-950 via-slate-900 to-blue-950 p-8 sm:p-10 rounded-3xl text-white shadow-2xl border border-white/10 relative overflow-hidden mb-12 flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="bg-gradient-to-r from-red-950 via-slate-900 to-slate-900 p-8 sm:p-10 rounded-3xl text-white shadow-2xl border border-slate-800 relative overflow-hidden mb-12 flex flex-col md:flex-row items-center justify-between gap-6 scroll-reveal">
             <div class="z-10 max-w-2xl">
                 <span class="px-3 py-1 rounded-full bg-red-600/30 text-red-200 text-xs font-extrabold uppercase tracking-wider border border-red-500/40 inline-block mb-3">
                     <i class="bi bi-bank2 mr-1"></i> Civic Governance Mission
@@ -1010,102 +1099,102 @@ $googleOAuthUrl = getGoogleAuthUrl($_citizenOAuthState);
                 </p>
             </div>
             <div class="z-10 shrink-0 grid grid-cols-2 gap-3 text-xs font-bold text-slate-200">
-                <div class="p-3 bg-white/10 rounded-xl backdrop-blur-xs flex items-center gap-2 border border-white/15">
+                <div class="p-3 bg-slate-800/80 rounded-xl backdrop-blur-xs flex items-center gap-2 border border-slate-700 text-slate-200">
                     <i class="bi bi-check-circle-fill text-emerald-400"></i> Transparent Governance
                 </div>
-                <div class="p-3 bg-white/10 rounded-xl backdrop-blur-xs flex items-center gap-2 border border-white/15">
+                <div class="p-3 bg-slate-800/80 rounded-xl backdrop-blur-xs flex items-center gap-2 border border-slate-700 text-slate-200">
                     <i class="bi bi-check-circle-fill text-emerald-400"></i> Inclusive Participation
                 </div>
-                <div class="p-3 bg-white/10 rounded-xl backdrop-blur-xs flex items-center gap-2 border border-white/15">
+                <div class="p-3 bg-slate-800/80 rounded-xl backdrop-blur-xs flex items-center gap-2 border border-slate-700 text-slate-200">
                     <i class="bi bi-check-circle-fill text-emerald-400"></i> Data-Driven Decisions
                 </div>
-                <div class="p-3 bg-white/10 rounded-xl backdrop-blur-xs flex items-center gap-2 border border-white/15">
+                <div class="p-3 bg-slate-800/80 rounded-xl backdrop-blur-xs flex items-center gap-2 border border-slate-700 text-slate-200">
                     <i class="bi bi-check-circle-fill text-emerald-400"></i> Real-Time Engagement
                 </div>
             </div>
         </div>
 
-        <!-- Redesigned Privacy & Security Section -->
-        <div id="security-privacy" class="pt-6 border-t border-slate-200">
-            <div class="text-center max-w-2xl mx-auto mb-10">
-                <span class="text-xs font-extrabold text-emerald-700 uppercase tracking-widest bg-emerald-50 border border-emerald-200 px-3.5 py-1.5 rounded-full inline-block mb-3">
-                    <i class="bi bi-shield-check text-emerald-600 mr-1"></i> Data Privacy Act Compliant
+        <!-- Redesigned Privacy & Security Section (Aligned Dark Theme) -->
+        <div id="security-privacy" class="pt-12 border-t border-slate-800/80">
+            <div class="text-center max-w-2xl mx-auto mb-10 scroll-reveal">
+                <span class="text-xs font-extrabold text-emerald-400 uppercase tracking-widest bg-emerald-950/60 border border-emerald-800/60 px-3.5 py-1.5 rounded-full inline-block mb-3">
+                    <i class="bi bi-shield-check text-emerald-400 mr-1"></i> Data Privacy Act Compliant
                 </span>
-                <h3 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Your Privacy & Data Security</h3>
-                <p class="text-slate-500 text-xs sm:text-sm mt-1">We protect your citizen data with enterprise encryption standards and strict compliance with Republic Act 10173.</p>
+                <h3 class="text-2xl sm:text-3xl font-black text-white tracking-tight">Your Privacy & Data Security</h3>
+                <p class="text-slate-300 text-xs sm:text-sm mt-1">We protect your citizen data with enterprise encryption standards and strict compliance with Republic Act 10173.</p>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <!-- Security Card 1 -->
-                <div class="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 card-hover flex flex-col justify-between group">
+                <div class="bg-slate-900/90 p-6 rounded-3xl border border-slate-800 shadow-lg hover:border-blue-500/50 transition-all duration-300 card-hover flex flex-col justify-between group scroll-reveal delay-100">
                     <div>
-                        <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 border border-blue-200 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
+                        <div class="w-12 h-12 rounded-2xl bg-blue-950/60 text-blue-400 border border-blue-800/60 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
                             <i class="bi bi-shield-lock-fill"></i>
                         </div>
-                        <h4 class="text-base font-extrabold text-slate-900 mb-1.5">Secure Encrypted Connection</h4>
-                        <p class="text-slate-600 text-xs leading-relaxed">All citizen interactions are transmitted using end-to-end HTTPS / TLS 1.3 256-bit SSL encryption.</p>
+                        <h4 class="text-base font-extrabold text-white mb-1.5">Secure Encrypted Connection</h4>
+                        <p class="text-slate-300 text-xs leading-relaxed">All citizen interactions are transmitted using end-to-end HTTPS / TLS 1.3 256-bit SSL encryption.</p>
                     </div>
-                    <span class="text-[10px] font-bold text-blue-700 uppercase tracking-wider mt-4 block">TLS 1.3 Encrypted</span>
+                    <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider mt-4 block">TLS 1.3 Encrypted</span>
                 </div>
 
                 <!-- Security Card 2 -->
-                <div class="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 card-hover flex flex-col justify-between group">
+                <div class="bg-slate-900/90 p-6 rounded-3xl border border-slate-800 shadow-lg hover:border-emerald-500/50 transition-all duration-300 card-hover flex flex-col justify-between group scroll-reveal delay-200">
                     <div>
-                        <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
+                        <div class="w-12 h-12 rounded-2xl bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
                             <i class="bi bi-shield-check"></i>
                         </div>
-                        <h4 class="text-base font-extrabold text-slate-900 mb-1.5">RA 10173 Data Privacy</h4>
-                        <p class="text-slate-600 text-xs leading-relaxed">Fully compliant with the Data Privacy Act of 2012, protecting citizen rights and personal identifiers.</p>
+                        <h4 class="text-base font-extrabold text-white mb-1.5">RA 10173 Data Privacy</h4>
+                        <p class="text-slate-300 text-xs leading-relaxed">Fully compliant with the Data Privacy Act of 2012, protecting citizen rights and personal identifiers.</p>
                     </div>
-                    <span class="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mt-4 block">RA 10173 Compliant</span>
+                    <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mt-4 block">RA 10173 Compliant</span>
                 </div>
 
                 <!-- Security Card 3 -->
-                <div class="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 card-hover flex flex-col justify-between group">
+                <div class="bg-slate-900/90 p-6 rounded-3xl border border-slate-800 shadow-lg hover:border-purple-500/50 transition-all duration-300 card-hover flex flex-col justify-between group scroll-reveal delay-300">
                     <div>
-                        <div class="w-12 h-12 rounded-2xl bg-purple-50 text-purple-700 border border-purple-200 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
+                        <div class="w-12 h-12 rounded-2xl bg-purple-950/60 text-purple-400 border border-purple-800/60 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
                             <i class="bi bi-lock-fill"></i>
                         </div>
-                        <h4 class="text-base font-extrabold text-slate-900 mb-1.5">Protected Information</h4>
-                        <p class="text-slate-600 text-xs leading-relaxed">Personal records and email addresses are securely isolated from public view and third-party trackers.</p>
+                        <h4 class="text-base font-extrabold text-white mb-1.5">Protected Information</h4>
+                        <p class="text-slate-300 text-xs leading-relaxed">Personal records and email addresses are securely isolated from public view and third-party trackers.</p>
                     </div>
-                    <span class="text-[10px] font-bold text-purple-700 uppercase tracking-wider mt-4 block">Isolated Storage</span>
+                    <span class="text-[10px] font-bold text-purple-400 uppercase tracking-wider mt-4 block">Isolated Storage</span>
                 </div>
 
                 <!-- Security Card 4 -->
-                <div class="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 card-hover flex flex-col justify-between group">
+                <div class="bg-slate-900/90 p-6 rounded-3xl border border-slate-800 shadow-lg hover:border-red-500/50 transition-all duration-300 card-hover flex flex-col justify-between group scroll-reveal delay-100">
                     <div>
-                        <div class="w-12 h-12 rounded-2xl bg-red-50 text-red-700 border border-red-200 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
+                        <div class="w-12 h-12 rounded-2xl bg-red-950/60 text-red-400 border border-red-800/60 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
                             <i class="bi bi-google"></i>
                         </div>
-                        <h4 class="text-base font-extrabold text-slate-900 mb-1.5">Google OAuth SSO</h4>
-                        <p class="text-slate-600 text-xs leading-relaxed">1-click authentication powered by Google OAuth 2.0 without storing raw passwords in system databases.</p>
+                        <h4 class="text-base font-extrabold text-white mb-1.5">Google OAuth SSO</h4>
+                        <p class="text-slate-300 text-xs leading-relaxed">1-click authentication powered by Google OAuth 2.0 without storing raw passwords in system databases.</p>
                     </div>
-                    <span class="text-[10px] font-bold text-red-700 uppercase tracking-wider mt-4 block">OAuth 2.0 Verified</span>
+                    <span class="text-[10px] font-bold text-red-400 uppercase tracking-wider mt-4 block">OAuth 2.0 Verified</span>
                 </div>
 
                 <!-- Security Card 5 -->
-                <div class="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 card-hover flex flex-col justify-between group">
+                <div class="bg-slate-900/90 p-6 rounded-3xl border border-slate-800 shadow-lg hover:border-amber-500/50 transition-all duration-300 card-hover flex flex-col justify-between group scroll-reveal delay-200">
                     <div>
-                        <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
+                        <div class="w-12 h-12 rounded-2xl bg-amber-950/60 text-amber-400 border border-amber-800/60 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
                             <i class="bi bi-eye-slash-fill"></i>
                         </div>
-                        <h4 class="text-base font-extrabold text-slate-900 mb-1.5">Privacy Options</h4>
-                        <p class="text-slate-600 text-xs leading-relaxed">Flexible privacy options allowing feedback participation with full control over public identity disclosures.</p>
+                        <h4 class="text-base font-extrabold text-white mb-1.5">Privacy Options</h4>
+                        <p class="text-slate-300 text-xs leading-relaxed">Flexible privacy options allowing feedback participation with full control over public identity disclosures.</p>
                     </div>
-                    <span class="text-[10px] font-bold text-amber-700 uppercase tracking-wider mt-4 block">Citizen Control</span>
+                    <span class="text-[10px] font-bold text-amber-400 uppercase tracking-wider mt-4 block">Citizen Control</span>
                 </div>
 
                 <!-- Security Card 6 -->
-                <div class="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 card-hover flex flex-col justify-between group">
+                <div class="bg-slate-900/90 p-6 rounded-3xl border border-slate-800 shadow-lg hover:border-indigo-500/50 transition-all duration-300 card-hover flex flex-col justify-between group scroll-reveal delay-300">
                     <div>
-                        <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-950/60 text-indigo-400 border border-indigo-800/60 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">
                             <i class="bi bi-bank"></i>
                         </div>
-                        <h4 class="text-base font-extrabold text-slate-900 mb-1.5">Open Governance</h4>
-                        <p class="text-slate-600 text-xs leading-relaxed">All verified policy feedback is directly integrated into City Council committee reports and public records.</p>
+                        <h4 class="text-base font-extrabold text-white mb-1.5">Open Governance</h4>
+                        <p class="text-slate-300 text-xs leading-relaxed">All verified policy feedback is directly integrated into City Council committee reports and public records.</p>
                     </div>
-                    <span class="text-[10px] font-bold text-indigo-700 uppercase tracking-wider mt-4 block">Council Verified</span>
+                    <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mt-4 block">Council Verified</span>
                 </div>
             </div>
         </div>
@@ -1314,7 +1403,78 @@ $googleOAuthUrl = getGoogleAuthUrl($_citizenOAuthState);
 
     });
 
-    
+
+
+    // Scroll Reveal Intersection Observer & Floating Parallax Script
+
+    document.addEventListener('DOMContentLoaded', function() {
+
+        // Observer for scroll-reveal elements
+
+        const observerOptions = {
+
+            root: null,
+
+            threshold: 0.1,
+
+            rootMargin: '0px 0px -40px 0px'
+
+        };
+
+
+
+        const revealObserver = new IntersectionObserver((entries, observer) => {
+
+            entries.forEach(entry => {
+
+                if (entry.isIntersecting) {
+
+                    entry.target.classList.add('revealed');
+
+                }
+
+            });
+
+        }, observerOptions);
+
+
+
+        document.querySelectorAll('.scroll-reveal').forEach(el => {
+
+            revealObserver.observe(el);
+
+        });
+
+
+
+        // Hero 3D Card Parallax Floating Shift on Scroll
+
+        const heroCards = document.querySelectorAll('.hero-scroll-card');
+
+        if (heroCards.length >= 2) {
+
+            window.addEventListener('scroll', function() {
+
+                const scrolled = window.pageYOffset;
+
+                if (scrolled < 900) {
+
+                    const topShift = scrolled * 0.04;
+
+                    const botShift = scrolled * 0.03;
+
+                    heroCards[0].style.transform = `translate(${16 + topShift}px, ${-12 - topShift}px) rotate(${3 + topShift * 0.05}deg)`;
+
+                    heroCards[1].style.transform = `translate(${-12 - botShift}px, ${16 + botShift}px) rotate(${-2 - botShift * 0.05}deg)`;
+
+                }
+
+            }, { passive: true });
+
+        }
+
+    });
+
 </script>
 
 
@@ -1322,4 +1482,3 @@ $googleOAuthUrl = getGoogleAuthUrl($_citizenOAuthState);
 </body>
 
 </html>
-

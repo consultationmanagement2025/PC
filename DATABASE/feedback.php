@@ -595,15 +595,15 @@ function syncPhmsCollectionToDatabase(array $hearings) {
     $conn->begin_transaction();
     try {
         $stmt = $conn->prepare("INSERT INTO hearing_queue 
-            (phms_hearing_id, phms_registration_id, full_name, email, status, external_ref, source_system, consultation_id, payload_json) 
-            VALUES (?, ?, ?, ?, ?, ?, 'PHMS', ?, ?) 
+            (phms_hearing_id, phms_registration_id, full_name, email, status, external_ref, source_system, consultation_id, payload_json, approval_status) 
+            VALUES (?, ?, ?, ?, ?, ?, 'PHMS', ?, ?, 'approved') 
             ON DUPLICATE KEY UPDATE 
                 full_name = VALUES(full_name), 
                 email = VALUES(email), 
                 status = VALUES(status), 
                 external_ref = VALUES(external_ref), 
-                payload_json = VALUES(payload_json), 
-                created_at = CURRENT_TIMESTAMP");
+                payload_json = VALUES(payload_json),
+                approval_status = IF(hearing_queue.approval_status = 'pending', 'approved', hearing_queue.approval_status)");
 
         foreach ($hearings as $h) {
             $hearingId = (int)($h['hearing_id'] ?? $h['id'] ?? 0);
@@ -727,7 +727,7 @@ function getPendingPhmsApprovals() {
     $sql = "SELECT hq.*, c.title as consultation_title
             FROM hearing_queue hq
             LEFT JOIN consultations c ON hq.consultation_id = c.id
-            WHERE hq.approval_status = 'pending' OR hq.approval_status IS NULL
+            WHERE hq.approval_status = 'pending'
             ORDER BY hq.created_at DESC";
     $res = $conn->query($sql);
     $items = [];
@@ -751,6 +751,7 @@ function approvePhmsIngestion($queue_id) {
     global $conn;
     initializeHearingQueueTable();
     $queue_id = (int)$queue_id;
+    if ($queue_id <= 0) return false;
     $stmt = $conn->prepare("UPDATE hearing_queue SET approval_status = 'approved', status = 'completed' WHERE queue_id = ? OR phms_hearing_id = ?");
     if (!$stmt) {
         error_log("approvePhmsIngestion prepare failed: " . $conn->error);
@@ -759,8 +760,15 @@ function approvePhmsIngestion($queue_id) {
     $stmt->bind_param("ii", $queue_id, $queue_id);
     $ok = $stmt->execute();
     $stmt->close();
-    // PHMS Ingestion package approved and merged into PCMS
     return (bool)$ok;
+}
+
+// Approve all pending PHMS queue items
+function approveAllPhmsIngestions() {
+    global $conn;
+    initializeHearingQueueTable();
+    $res = $conn->query("UPDATE hearing_queue SET approval_status = 'approved', status = 'completed' WHERE approval_status = 'pending' OR approval_status IS NULL");
+    return (bool)$res;
 }
 
 // Reject an incoming PHMS queue item

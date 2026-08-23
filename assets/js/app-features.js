@@ -139,7 +139,7 @@ window.pfpShowPhmsDetailModal = function (hearingId) {
         if (!bodyEl) return;
 
         const responsesHtml = responses.map((resp, idx) => {
-            const name = escapeHtmlHelper(resp.citizen_name || resp.name || 'Anonymous Citizen');
+            const name = escapeHtmlHelper(resp.author || resp.guest_name || resp.user_name || resp.fullName || resp.citizen_name || resp.name || 'Valenzuela Citizen');
             const rating = resp.rating !== undefined && resp.rating !== null ? Number(resp.rating).toFixed(1) : 'N/A';
             const tone = resp.tone || resp.sentiment ? escapeHtmlHelper(resp.tone || resp.sentiment) : '';
             const testimony = escapeHtmlHelper(resp.testimony || resp.statement || 'No testimony provided.');
@@ -153,7 +153,6 @@ window.pfpShowPhmsDetailModal = function (hearingId) {
                     <div class="flex items-center justify-between flex-wrap gap-2">
                         <div class="flex items-center gap-2">
                             <span class="font-bold text-gray-900 text-xs">${idx + 1}. ${name}</span>
-                            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${statusClass}">${status}</span>
                             ${tone ? `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">${tone}</span>` : ''}
                         </div>
                         <div class="flex items-center gap-2 text-xs">
@@ -8356,9 +8355,17 @@ function mapDbNotificationToUi(row) {
 
     let title = 'System Notification';
     let category = type;
-    let priority = (type === 'consultation' || type === 'feedback' || type === 'phms_integration' || type === 'ai_brief') ? 'high' : 'normal';
+    let priority = (type === 'consultation' || type === 'feedback' || type === 'phms_integration' || type === 'ai_brief' || type === 'decline' || type === 'unified_feedback') ? 'high' : 'normal';
 
-    if (msg.includes('PHMS') || type === 'phms_integration') {
+    if (type === 'decline' || msg.includes('declined') || msg.includes('decline')) {
+        title = '❌ Proposal Declined';
+        category = 'Review';
+        priority = 'high';
+    } else if (type === 'unified_feedback' || msg.includes('Unified') || msg.includes('locked')) {
+        title = '🔒 Unified Feedback Lock';
+        category = 'System';
+        priority = 'high';
+    } else if (msg.includes('PHMS') || type === 'phms_integration') {
         title = '🔗 PHMS Integration';
         category = 'PHMS System';
         priority = 'high';
@@ -8369,7 +8376,7 @@ function mapDbNotificationToUi(row) {
     } else if (type === 'feedback' || msg.includes('Feedback')) {
         title = '📩 Citizen Feedback';
         category = 'Public Portal';
-    } else if (type === 'consultation') {
+    } else if (type === 'consultation' || msg.includes('Survey') || msg.includes('poll')) {
         title = '📋 Consultation Update';
         category = 'Policy';
     }
@@ -8387,102 +8394,36 @@ function mapDbNotificationToUi(row) {
 }
 
 async function loadNotifications() {
-
-
     const notifsList = document.getElementById('notifications-list');
 
-
-    if (!notifsList) {
-
-
-        console.warn('notifications-list element not found');
-
-
-        return;
-
-
-    }
-
-
-
-
     try {
-
-
         const res = await fetch('API/notifications_api.php?action=list&limit=50', {
-
-
             headers: { 'Accept': 'application/json' }
-
-
         });
-
 
         const data = await res.json().catch(() => null);
 
-
         if (!res.ok || !data || !data.success) {
-
-
             const msg = (data && data.message) ? data.message : (res.ok ? 'Failed to load notifications' : `HTTP ${res.status}`);
-
-
             throw new Error(msg);
-
-
         }
-
-
-
 
         const items = Array.isArray(data.data && data.data.items) ? data.data.items : [];
-        AppData.notifications = items.map(mapDbNotificationToUi).filter(n => {
-            const t = (n.title || '').toLowerCase();
-            const m = (n.message || '').toLowerCase();
-            const c = (n.category || n.type || '').toLowerCase();
-            return !(c.includes('phms') || t.includes('phms') || m.includes('phms feedback received') || m.includes('ingestion package approved'));
-        });
-
-
-
+        AppData.notifications = items.map(mapDbNotificationToUi).filter(Boolean);
 
         const unreadCount = typeof data.data.unread === 'number'
-
-
             ? data.data.unread
-
-
             : AppData.notifications.filter(n => !n.read).length;
 
-
-
-
         const badge = document.getElementById('notif-badge') || document.getElementById('notification-badge');
-
-
         if (badge) {
-
-
             if (unreadCount > 0) {
-
-
                 badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
-
-
                 badge.classList.remove('hidden');
-
-
             } else {
-
-
                 badge.classList.add('hidden');
-
-
             }
-
-
         }
-
 
         document.querySelectorAll('[data-section="consultation-management"]').forEach(link => {
             const icon = link.querySelector('.consultation-management-unread-icon');
@@ -8495,55 +8436,16 @@ async function loadNotifications() {
             }
         });
 
-
-        // Priority icons for dropdown
-
-
-        const priorityIcons = {
-
-
-            critical: '🔴',
-
-
-            high: '🟠',
-
-
-            normal: '🔵',
-
-
-            low: '⚪'
-
-
-        };
-
-
-
+        if (!notifsList) return;
 
         // Render notifications sorted by priority and unread status
-
-
         const sortedNotifs = [...AppData.notifications].sort((a, b) => {
-
-
             const priorityOrder = { critical: 0, high: 1, normal: 2, low: 3 };
-
-
             const aPriority = priorityOrder[a.priority] || 2;
-
-
             const bPriority = priorityOrder[b.priority] || 2;
-
-
             if (aPriority !== bPriority) return aPriority - bPriority;
-
-
             return a.read === b.read ? 0 : a.read ? 1 : -1;
-
-
         });
-
-
-
 
         notifsList.innerHTML = sortedNotifs.length === 0 ?
             '<div class="p-8 text-center text-gray-400 text-xs font-medium">No notifications yet</div>' :
@@ -8553,10 +8455,12 @@ async function loadNotifications() {
                 const time = escapeHtml(notif.time || 'Just updated');
                 const isRead = !!notif.read;
 
-                let iconInfo = { bg: 'bg-amber-50 border-amber-100', text: 'text-amber-600', icon: 'bi-calendar-check' };
+                let iconInfo = { bg: 'bg-blue-50 border-blue-100', text: 'text-blue-600', icon: 'bi-bell-fill' };
                 const textLower = (title + ' ' + message + ' ' + (notif.category || '')).toLowerCase();
 
-                if (textLower.includes('orts') || textLower.includes('status') || textLower.includes('changed') || textLower.includes('ordinance')) {
+                if (textLower.includes('decline') || textLower.includes('declined')) {
+                    iconInfo = { bg: 'bg-red-50 border-red-100', text: 'text-red-600', icon: 'bi-x-circle-fill' };
+                } else if (textLower.includes('orts') || textLower.includes('status') || textLower.includes('changed') || textLower.includes('ordinance')) {
                     iconInfo = { bg: 'bg-blue-50 border-blue-100', text: 'text-blue-600', icon: 'bi-arrow-repeat' };
                 } else if (textLower.includes('lacs') || textLower.includes('hearing') || textLower.includes('approval') || textLower.includes('public hearing')) {
                     iconInfo = { bg: 'bg-amber-50 border-amber-100', text: 'text-amber-600', icon: 'bi-calendar-check' };
@@ -8588,25 +8492,16 @@ async function loadNotifications() {
             });
         });
 
-
     } catch (e) {
-
-
-        const details = e && e.message ? String(e.message) : 'Unknown error';
-
-
-        notifsList.innerHTML = `<div class="p-6 text-center text-red-600 text-sm">Failed to load notifications.<div class="text-xs text-gray-500 mt-2">${escapeHtml(details)}</div></div>`;
-
-
+        console.error('Failed to load notifications:', e);
+        if (notifsList) {
+            notifsList.innerHTML = `<div class="p-6 text-center text-red-600 text-sm">Failed to load notifications.<div class="text-xs text-gray-500 mt-2">${escapeHtml(e.message || 'Unknown error')}</div></div>`;
+        }
         const badge = document.getElementById('notif-badge') || document.getElementById('notification-badge');
-
-
-        if (badge) badge.classList.add('hidden');
-
-
+        if (badge && (!AppData.notifications || AppData.notifications.length === 0)) {
+            badge.classList.add('hidden');
+        }
     }
-
-
 }
 
 
@@ -11759,12 +11654,11 @@ function resetPublicConsultationFilters() {
 
 function getFilteredValidFeedback() {
     const feedbackRows = Array.isArray(AppData.feedback) ? AppData.feedback : [];
-    const adminConsultations = Array.isArray(AppData.consultations) ? AppData.consultations.filter(c => String(c.type || '').toLowerCase() !== 'user') : [];
-    const adminConsultationIds = new Set(adminConsultations.map(c => Number(c.id)));
+    const validConsultationIds = Array.isArray(AppData.consultations) ? new Set(AppData.consultations.map(c => Number(c.id))) : null;
 
     return feedbackRows.filter(f => {
         if (!f) return false;
-        if (f.consultationId && adminConsultationIds.size > 0 && !adminConsultationIds.has(Number(f.consultationId))) {
+        if (f.consultationId && validConsultationIds && validConsultationIds.size > 0 && !validConsultationIds.has(Number(f.consultationId))) {
             return false;
         }
         const subType = String(f.submission_type || f.type || '').toLowerCase();
@@ -11781,12 +11675,25 @@ function getFeedbackSentimentStats() {
     const feedbackRows = getFilteredValidFeedback();
 
     for (const row of feedbackRows) {
-        const rating = Number(row && row.rating);
-        if (!Number.isFinite(rating) || rating <= 0) continue;
-        stats.rated += 1;
-        if (rating >= 4) stats.positive += 1;
-        else if (rating >= 3) stats.neutral += 1;
-        else stats.negative += 1;
+        if (!row) continue;
+        const tag = String(row.sentimentTag || row.sentiment_tag || row.sentiment || '').toLowerCase().trim();
+        const rating = Number(row.rating);
+
+        if (tag === 'positive') {
+            stats.positive += 1;
+            stats.rated += 1;
+        } else if (tag === 'negative') {
+            stats.negative += 1;
+            stats.rated += 1;
+        } else if (tag === 'neutral') {
+            stats.neutral += 1;
+            stats.rated += 1;
+        } else if (Number.isFinite(rating) && rating > 0) {
+            stats.rated += 1;
+            if (rating >= 4) stats.positive += 1;
+            else if (rating >= 3) stats.neutral += 1;
+            else stats.negative += 1;
+        }
     }
 
     return stats;
@@ -14053,7 +13960,14 @@ function getFilteredConsultations() {
 
 
     if (statusFilter && statusFilter !== 'all') {
-        filtered = filtered.filter(c => String(c.status || '').toLowerCase() === statusFilter.toLowerCase());
+        filtered = filtered.filter(c => {
+            const st = String(c.status || '').toLowerCase();
+            const sf = statusFilter.toLowerCase();
+            if (sf === 'declined' || sf === 'rejected') {
+                return st === 'declined' || st === 'rejected';
+            }
+            return st === sf;
+        });
     }
 
 
@@ -15064,50 +14978,44 @@ function renderFeedbackCollection() {
 
 
                 <!-- Stats Cards -->
-
-
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
-
-
                         <div class="text-red-100 text-sm font-semibold mb-1">Total Feedback</div>
-
-
                         <div class="text-3xl font-bold" id="fb-stat-total">${totalFeedback}</div>
-
-
                     </div>
-
-
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
-
-
                         <div class="text-red-100 text-sm font-semibold mb-1">This Week</div>
-
-
                         <div class="text-3xl font-bold" id="fb-stat-week">${recentFeedback}</div>
-
-
                     </div>
-
-
                     <div class="bg-white bg-opacity-20 rounded-lg p-4">
-
-
                         <div class="text-red-100 text-sm font-semibold mb-1">Avg. per Consultation</div>
-
-
                         <div class="text-3xl font-bold" id="fb-stat-avg">${AppData.consultations.length > 0 ? Math.round(totalFeedback / AppData.consultations.length) : 0}</div>
-
-
                     </div>
-
-
                 </div>
+            </div>
 
-
+            <!-- Unified Feedback Compilation & Data Lock Banner -->
+            <div class="p-5 bg-slate-900 text-white rounded-xl shadow-md border border-slate-800 space-y-3">
+                <div class="flex items-center justify-between flex-wrap gap-2">
+                    <div class="flex items-center gap-2">
+                        <i class="bi bi-file-earmark-lock-fill text-amber-400 text-lg"></i>
+                        <span class="font-extrabold text-xs uppercase tracking-wider text-slate-200">Unified Feedback Compilation & Data Lock</span>
+                    </div>
+                    <span id="ufc-badge-status" class="px-3 py-1 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                        Checking status...
+                    </span>
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed font-medium">
+                    Collects and merges feedback entries from PCMS & PHMS modules, auto-categorizes them by topic, normalizes text, and locks merged sets from future re-analysis to preserve data integrity.
+                </p>
+                <div class="flex items-center gap-3 pt-1">
+                    <button type="button" onclick="triggerUnifiedFeedbackCompileUI()" class="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black rounded-lg text-xs transition shadow-sm flex items-center gap-2 cursor-pointer">
+                        <i class="bi bi-lock-fill"></i> Compile & Lock Unified Feedback PDF
+                    </button>
+                    <button type="button" onclick="showUnifiedFeedbackHistoryModal()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-lg text-xs transition border border-slate-700 flex items-center gap-1.5 cursor-pointer">
+                        <i class="bi bi-clock-history"></i> Compilation History
+                    </button>
+                </div>
             </div>
 
 
@@ -15328,55 +15236,36 @@ function renderFeedbackCollection() {
 
 
 function mapDbFeedbackToUi(row) {
-
-
     const createdAt = row.created_at || null;
-
-
     const consultationId = row.consultation_id !== null && row.consultation_id !== undefined ? Number(row.consultation_id) : null;
-
-
-
+    let tag = String(row.sentiment_tag || '').toLowerCase().trim();
+    if (tag === '0' || !['positive', 'negative', 'neutral'].includes(tag)) {
+        const score = row.sentiment_score !== null && row.sentiment_score !== undefined ? Number(row.sentiment_score) : null;
+        const rating = row.rating !== null && row.rating !== undefined ? Number(row.rating) : null;
+        if (score !== null && score !== 0) {
+            tag = score > 0 ? 'positive' : 'negative';
+        } else if (rating !== null) {
+            tag = rating >= 4 ? 'positive' : (rating <= 2 ? 'negative' : 'neutral');
+        } else {
+            tag = 'neutral';
+        }
+    }
 
     return {
-
-
         id: Number(row.id),
-
-
         author: row.guest_name || 'Guest',
-
-
         authorEmail: row.guest_email || '',
-
-
         consultationId,
-
-
         message: row.message || '',
-
-
         date: createdAt,
-
-
         status: String(row.status || 'new').toLowerCase(),
-
-
         rating: row.rating !== null && row.rating !== undefined ? Number(row.rating) : null,
-
-
         category: row.category || '',
-
-
-        sentimentTag: row.sentiment_tag || '',
-
-
+        sentimentTag: tag,
+        sentiment_tag: tag,
+        sentiment: tag,
         sentimentScore: row.sentiment_score !== null && row.sentiment_score !== undefined ? Number(row.sentiment_score) : null
-
-
     };
-
-
 }
 
 
@@ -15699,7 +15588,7 @@ function renderFeedbackTable() {
     tbody.innerHTML = feedbackList.map(feedback => {
 
 
-        const consultation = AppData.consultations.find(c => c.id === feedback.consultationId);
+        const consultation = AppData.consultations.find(c => String(c.id) === String(feedback.consultationId));
 
 
         const consultationTitle = consultation ? consultation.title : 'Unknown Consultation';
@@ -16199,7 +16088,7 @@ function getFilteredFeedback() {
     if (consultationFilter) {
 
 
-        filtered = filtered.filter(f => f.consultationId === parseInt(consultationFilter));
+        filtered = filtered.filter(f => String(f.consultationId) === String(consultationFilter));
 
 
     }
@@ -18643,7 +18532,7 @@ window.pfpShowConsultationFeedbackModal = function (consultationId) {
         }
 
         const responsesHtml = responsesList.map((resp, idx) => {
-            const name = escapeHtmlHelper(resp.fullName || resp.name || resp.citizen_name || resp.citizen || 'Valenzuela Citizen');
+            const name = escapeHtmlHelper(resp.author || resp.guest_name || resp.user_name || resp.fullName || resp.name || resp.citizen_name || resp.citizen || 'Valenzuela Citizen');
             const rating = resp.rating !== undefined && resp.rating !== null ? Number(resp.rating || resp.star_rating || 5.0).toFixed(1) : (resp.star_rating ? Number(resp.star_rating).toFixed(1) : '5.0');
             const tone = escapeHtmlHelper(resp.sentiment || resp.tone || 'unanalyzed');
             const testimony = escapeHtmlHelper(resp.message || resp.testimony || resp.statement || resp.proposal || 'No statement provided.');
@@ -18659,7 +18548,6 @@ window.pfpShowConsultationFeedbackModal = function (consultationId) {
                     <div class="flex items-center justify-between flex-wrap gap-2">
                         <div class="flex items-center gap-2">
                             <span class="font-bold text-gray-900 text-xs">${idx + 1}. ${name}</span>
-                            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${statusClass}">${status.toUpperCase()}</span>
                             ${tone && tone !== 'unanalyzed' ? `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">${tone}</span>` : ''}
                         </div>
                         <div class="flex items-center gap-2 text-xs">
@@ -22597,13 +22485,15 @@ function renderAiCommitteeBriefModalHtml(brief) {
     `).join('');
 
     const solutionsHtml = (brief.solutions || []).map((s, idx) => `
-        <div class="p-3.5 bg-emerald-50/70 rounded-xl border border-emerald-200/80 shadow-2xs space-y-1">
-            <div class="font-extrabold text-emerald-950 text-xs flex items-center gap-2">
-                <i class="bi bi-check-circle-fill text-emerald-600 text-sm"></i>
-                <span>${idx + 1}. Policy Recommendation (${escapeHtml(s.category)})</span>
-            </div>
-            <p class="text-xs text-slate-700 leading-relaxed pl-5 font-medium">${escapeHtml(s.recommendation)}</p>
-        </div>
+        <tr class="border-b border-slate-100 hover:bg-slate-50/80 transition">
+            <td class="px-4 py-3 font-bold text-slate-800 text-xs w-1/4">${idx + 1}. Policy Recommendation (${escapeHtml(s.category)})</td>
+            <td class="px-4 py-3 text-slate-700 text-xs leading-relaxed font-medium">${escapeHtml(s.recommendation)}</td>
+            <td class="px-4 py-3 text-center w-28">
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    RECOMMENDED
+                </span>
+            </td>
+        </tr>
     `).join('');
 
     modal.innerHTML = `
@@ -22694,16 +22584,56 @@ function renderAiCommitteeBriefModalHtml(brief) {
                     <h3 class="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-2">
                         <i class="bi bi-lightbulb-fill text-emerald-600"></i> Section 2: Recommended Committee Solutions & Policy Action Plan
                     </h3>
-                    <div class="space-y-2.5">${solutionsHtml}</div>
+                    <div class="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase font-extrabold text-slate-600">
+                                <tr>
+                                    <th class="px-4 py-2.5">Category</th>
+                                    <th class="px-4 py-2.5">Policy Recommendation & Action Plan</th>
+                                    <th class="px-4 py-2.5 text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">${solutionsHtml}</tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- Section 3: Executive Conclusion -->
-                <div class="bg-gradient-to-r from-slate-900 to-blue-950 text-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-800 space-y-2.5">
-                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-blue-300 flex items-center gap-2">
-                        <i class="bi bi-file-earmark-check-fill text-blue-400 text-sm"></i> Section 3: Executive Conclusion & Transmittal Note
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-blue-700 flex items-center gap-2">
+                        <i class="bi bi-file-earmark-check-fill text-blue-600"></i> Section 3: Executive Conclusion & Transmittal Note
                     </h3>
-                    <p class="text-xs text-slate-200 font-medium leading-relaxed">${escapeHtml(brief.conclusion)}</p>
-                    <p class="text-[11px] text-blue-300 font-semibold border-t border-slate-700/80 pt-2.5">${escapeHtml(brief.transmittal_note)}</p>
+                    <div class="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase font-extrabold text-slate-600">
+                                <tr>
+                                    <th class="px-4 py-2.5">Executive Item</th>
+                                    <th class="px-4 py-2.5">Final Mandate & Transmittal Summary</th>
+                                    <th class="px-4 py-2.5 text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr class="border-b border-slate-100 hover:bg-slate-50/80 transition">
+                                    <td class="px-4 py-3 font-bold text-slate-800 text-xs w-1/4">1. Executive Conclusion</td>
+                                    <td class="px-4 py-3 text-slate-700 text-xs leading-relaxed font-medium">${escapeHtml(brief.conclusion)}</td>
+                                    <td class="px-4 py-3 text-center w-28">
+                                        <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200">
+                                            CONCLUDED
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-slate-50/80 transition">
+                                    <td class="px-4 py-3 font-bold text-slate-800 text-xs w-1/4">2. Transmittal Note</td>
+                                    <td class="px-4 py-3 text-slate-700 text-xs leading-relaxed font-medium">${escapeHtml(brief.transmittal_note)}</td>
+                                    <td class="px-4 py-3 text-center w-28">
+                                        <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
+                                            TRANSMITTED
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -23489,7 +23419,7 @@ window.confirmDeclineCitizenSubmission = async function (consultationId, event) 
     if (Array.isArray(AppData.consultations)) {
         const item = AppData.consultations.find(c => Number(c.id) === cid);
         if (item) {
-            item.status = 'rejected';
+            item.status = 'declined';
             item.admin_response = reason;
             item.remarks = reason;
         }
@@ -23515,7 +23445,7 @@ window.confirmDeclineCitizenSubmission = async function (consultationId, event) 
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 id: cid,
-                status: 'rejected',
+                status: 'declined',
                 reason: reason
             })
         });
@@ -23533,7 +23463,7 @@ window.confirmDeclineCitizenSubmission = async function (consultationId, event) 
             const fbRes = await fetch('system-template-full.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `action=update_consultation_status&consultation_id=${cid}&status=rejected&reason=${encodeURIComponent(reason)}`
+                body: `action=update_consultation_status&consultation_id=${cid}&status=declined&reason=${encodeURIComponent(reason)}`
             });
             const fbData = await fbRes.json();
             if (fbData && (fbData.success === true || fbData.success === 'true' || fbData.success == 1)) {
@@ -23546,11 +23476,21 @@ window.confirmDeclineCitizenSubmission = async function (consultationId, event) 
 
     // 4. Fresh re-sync from server with cache-busting
     if (typeof loadConsultationsFromApi === 'function') {
-        await loadConsultationsFromApi().catch(() => {});
+        await loadConsultationsFromApi(true).catch(() => {});
     }
     if (typeof renderConsultationsTable === 'function') {
         renderConsultationsTable();
     }
+    if (typeof renderConsultationManagementSection === 'function') {
+        renderConsultationManagementSection();
+    }
+
+    // Handle server-rendered PHP page view smoothly
+    setTimeout(() => {
+        if (!document.getElementById('consultations-user-table-body')) {
+            window.location.reload();
+        }
+    }, 350);
 };
 
 window.loadPendingUserApplications = async function() {
@@ -23761,9 +23701,186 @@ function initSessionTimeoutManager() {
 }
 
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initSessionTimeoutManager);
+    document.addEventListener('DOMContentLoaded', () => {
+        initSessionTimeoutManager();
+        if (typeof window.checkUnifiedFeedbackStatusUI === 'function') {
+            window.checkUnifiedFeedbackStatusUI();
+        }
+    });
 } else {
     initSessionTimeoutManager();
+    if (typeof window.checkUnifiedFeedbackStatusUI === 'function') {
+        window.checkUnifiedFeedbackStatusUI();
+    }
+}
+
+window.checkUnifiedFeedbackStatusUI = async function() {
+    const badge = document.getElementById('ufc-badge-status');
+    if (!badge) return;
+    try {
+        const res = await fetchWithTimeout('API/unified_feedback_compilation_api.php?action=status_check');
+        const data = await res.json();
+        if (data.success) {
+            if (data.unprocessed_total > 0) {
+                badge.className = 'px-3 py-1 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-400/30';
+                badge.innerHTML = `🟡 ${data.unprocessed_total} Pending Unprocessed (${data.pcms_unprocessed} PCMS / ${data.phms_unprocessed} PHMS)`;
+            } else {
+                badge.className = 'px-3 py-1 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30';
+                badge.innerHTML = `🟢 All Entries Locked (${data.processed_total} Processed)`;
+            }
+        }
+    } catch(e) {
+        console.error('Failed to check unified feedback status:', e);
+    }
+};
+
+window.triggerUnifiedFeedbackCompileUI = async function() {
+    if (!confirm('Execute Unified Feedback Compilation & Data Lock?\n\nThis will merge unprocessed PCMS & PHMS feedback by category, generate an official PDF summary, and lock compiled entries from future re-analysis.')) {
+        return;
+    }
+
+    try {
+        if (typeof showNotification === 'function') {
+            showNotification('Compiling unified feedback from PCMS & PHMS...', 'info');
+        }
+        const res = await fetchWithTimeout('API/unified_feedback_compilation_api.php?action=compile_and_lock');
+        const data = await res.json();
+
+        if (data.success) {
+            if (typeof showNotification === 'function') {
+                showNotification(`Unified compilation complete! Locked ${data.total_processed_count} entries (${data.merge_id}).`, 'success', 8000);
+            }
+            if (typeof window.checkUnifiedFeedbackStatusUI === 'function') {
+                window.checkUnifiedFeedbackStatusUI();
+            }
+            
+            let existingModal = document.getElementById('ufc-success-modal');
+            if (existingModal) existingModal.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'ufc-success-modal';
+            modal.className = 'fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 space-y-4 p-6">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div class="flex items-center gap-2">
+                            <i class="bi bi-file-earmark-check-fill text-emerald-600 text-xl"></i>
+                            <h3 class="font-black text-slate-900 text-base">Unified Citizen Feedback Summary Generated</h3>
+                        </div>
+                        <button onclick="document.getElementById('ufc-success-modal').remove()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+                    </div>
+                    <div class="space-y-2 text-xs text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <p><strong>Merge ID:</strong> <span class="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-800">${data.merge_id}</span></p>
+                        <p><strong>Total Feedback Compiled & Locked:</strong> ${data.total_processed_count} responses across ${data.categories_count} categories</p>
+                        <p><strong>PDF Document:</strong> ${escapeHtmlHelper(data.pdf_filename)}</p>
+                        <p class="text-[11px] text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200 mt-2 font-medium">
+                            🔒 <em>Merged feedback sets have been tagged as Processed and locked from future re-analysis to preserve data integrity.</em>
+                        </p>
+                    </div>
+                    <div class="flex items-center justify-end gap-3 pt-2">
+                        <button onclick="document.getElementById('ufc-success-modal').remove()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition">Close</button>
+                        <a href="${data.pdf_url}" target="_blank" class="px-5 py-2 bg-red-700 hover:bg-red-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-2">
+                            <i class="bi bi-file-earmark-pdf-fill"></i> Download PDF Summary
+                        </a>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        } else {
+            if (typeof showNotification === 'function') {
+                showNotification(data.message || 'Compilation failed.', 'warning', 7000);
+            } else {
+                alert(data.message);
+            }
+        }
+    } catch(e) {
+        if (typeof showNotification === 'function') {
+            showNotification('Error during compilation: ' + e.message, 'error');
+        } else {
+            alert('Error during compilation: ' + e.message);
+        }
+    }
+};
+
+window.showUnifiedFeedbackHistoryModal = async function() {
+    try {
+        const res = await fetchWithTimeout('API/unified_feedback_compilation_api.php?action=list_compilations');
+        const data = await res.json();
+        
+        let existingModal = document.getElementById('ufc-history-modal');
+        if (existingModal) existingModal.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'ufc-history-modal';
+        modal.className = 'fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150';
+        
+        let rowsHtml = '';
+        if (data.data && data.data.length > 0) {
+            rowsHtml = data.data.map((r, idx) => `
+                <tr class="border-b border-slate-100 hover:bg-slate-50/80 transition text-xs">
+                    <td class="px-3 py-2.5 font-mono text-[11px] font-bold text-slate-800">${r.merge_id}</td>
+                    <td class="px-3 py-2.5 text-center font-bold text-slate-900">${r.total_feedback_count}</td>
+                    <td class="px-3 py-2.5 text-slate-600">${r.compiled_by_name || 'System Admin'}</td>
+                    <td class="px-3 py-2.5 text-slate-500">${r.created_at}</td>
+                    <td class="px-3 py-2.5 text-center">
+                        <a href="${r.pdf_url}" target="_blank" class="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-700 font-bold border border-red-200 rounded-lg text-[10px] inline-flex items-center gap-1 transition">
+                            <i class="bi bi-file-earmark-pdf"></i> Download PDF
+                        </a>
+                    </td>
+                </tr>
+            `).join('');
+        } else {
+            rowsHtml = `<tr><td colspan="5" class="p-6 text-center text-slate-400 text-xs">No previous unified compilation records found.</td></tr>`;
+        }
+
+        modal.innerHTML = `
+            <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden border border-slate-200 space-y-4 p-6">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="bi bi-clock-history text-slate-700 text-xl"></i>
+                        <h3 class="font-black text-slate-900 text-base">Unified Feedback Compilation History</h3>
+                    </div>
+                    <button onclick="document.getElementById('ufc-history-modal').remove()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+                </div>
+                <div class="border border-slate-200 rounded-xl overflow-hidden max-h-[60vh] overflow-y-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase font-extrabold text-slate-600">
+                            <tr>
+                                <th class="px-3 py-2">Merge ID</th>
+                                <th class="px-3 py-2 text-center">Total Entries</th>
+                                <th class="px-3 py-2">Compiled By</th>
+                                <th class="px-3 py-2">Timestamp</th>
+                                <th class="px-3 py-2 text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">${rowsHtml}</tbody>
+                    </table>
+                </div>
+                <div class="flex justify-end pt-2">
+                    <button onclick="document.getElementById('ufc-history-modal').remove()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition">Close</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } catch(e) {
+        if (typeof showNotification === 'function') {
+            showNotification('Error fetching compilation history: ' + e.message, 'error');
+        } else {
+            alert('Error fetching compilation history: ' + e.message);
+        }
+    }
+};
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        initSessionTimeoutManager();
+        if (typeof loadNotifications === 'function') loadNotifications();
+        if (typeof window.checkUnifiedFeedbackStatusUI === 'function') window.checkUnifiedFeedbackStatusUI();
+    });
+} else {
+    initSessionTimeoutManager();
+    if (typeof loadNotifications === 'function') loadNotifications();
+    if (typeof window.checkUnifiedFeedbackStatusUI === 'function') window.checkUnifiedFeedbackStatusUI();
 }
 
 

@@ -180,12 +180,8 @@ try {
             $queue_id = (int)($data['queue_id'] ?? $data['id'] ?? $_GET['queue_id'] ?? 0);
             $approveAll = !empty($data['all']);
             if ($approveAll) {
-                $pending = getPendingPhmsApprovals();
-                $count = 0;
-                foreach ($pending as $p) {
-                    if (approvePhmsIngestion($p['queue_id'])) $count++;
-                }
-                echo json_encode(['success' => true, 'message' => "Successfully approved {$count} pending ingestion package(s)."]);
+                $ok = approveAllPhmsIngestions();
+                echo json_encode(['success' => (bool)$ok, 'message' => "Successfully approved all pending PHMS ingestion packages."]);
             } else {
                 if (!$queue_id) {
                     http_response_code(400);

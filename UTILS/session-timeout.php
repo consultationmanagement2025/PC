@@ -42,8 +42,8 @@ function checkSessionTimeout($timeout_duration = 1800) {
             session_unset();
             session_destroy();
             
-            // Redirect to login with timeout message
-            header("Location: login.php?timeout=1");
+            // Redirect to landing page with timeout message
+            header("Location: index.php?timeout=1");
             exit();
         }
         

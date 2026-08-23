@@ -498,7 +498,7 @@ try {
                 }
             }
 
-            $hqQuery = "SELECT phms_hearing_id, full_name, email, external_ref, source_system, payload_json, created_at FROM hearing_queue WHERE consultation_id = {$consultationId} {$titleWhere} ORDER BY created_at DESC";
+            $hqQuery = "SELECT phms_hearing_id, full_name, email, external_ref, source_system, payload_json, created_at FROM hearing_queue WHERE (consultation_id = {$consultationId}" . (!empty($titleWhere) ? " OR (consultation_id IS NULL AND (" . substr($titleWhere, 4) . "))" : "") . ") ORDER BY created_at DESC";
             $hqRes = $conn->query($hqQuery);
 
             $phmsHearingTitles = [];
@@ -716,14 +716,22 @@ try {
             }
 
             $assignedCommittee = $consultation['category'] ?? 'Rules & Governance';
-            if (strpos(strtolower($assignedCommittee), 'environment') !== false || strpos(strtolower($consultation['title']), 'waste') !== false) {
-                $assignedCommittee = 'Environment Committee';
-            } elseif (strpos(strtolower($assignedCommittee), 'health') !== false) {
-                $assignedCommittee = 'Health Committee';
-            } elseif (strpos(strtolower($assignedCommittee), 'urban') !== false || strpos(strtolower($consultation['title']), 'planning') !== false) {
-                $assignedCommittee = 'Urban Planning Committee';
-            } elseif (strpos(strtolower($assignedCommittee), 'finance') !== false) {
-                $assignedCommittee = 'Finance Committee';
+            $titleLower = strtolower($consultation['title'] ?? '');
+            $catLower = strtolower($assignedCommittee);
+            if (strpos($catLower, 'environment') !== false || strpos($titleLower, 'waste') !== false || strpos($titleLower, 'plastic') !== false) {
+                $assignedCommittee = 'Environment & Sanitation Committee';
+            } elseif (strpos($catLower, 'flood') !== false || strpos($titleLower, 'flood') !== false || strpos($titleLower, 'drainage') !== false) {
+                $assignedCommittee = 'Public Works & Infrastructure Committee';
+            } elseif (strpos($catLower, 'bike') !== false || strpos($titleLower, 'bike') !== false || strpos($titleLower, 'traffic') !== false || strpos($titleLower, 'transport') !== false) {
+                $assignedCommittee = 'Transportation & Traffic Management Committee';
+            } elseif (strpos($catLower, 'park') !== false || strpos($titleLower, 'park') !== false || strpos($titleLower, 'space') !== false) {
+                $assignedCommittee = 'Parks & Recreation Committee';
+            } elseif (strpos($catLower, 'legal') !== false || strpos($titleLower, 'legal') !== false) {
+                $assignedCommittee = 'Rules & Governance Committee';
+            } elseif (strpos($catLower, 'health') !== false || strpos($titleLower, 'health') !== false) {
+                $assignedCommittee = 'Health & Social Services Committee';
+            } elseif (strpos($catLower, 'urban') !== false || strpos($titleLower, 'planning') !== false) {
+                $assignedCommittee = 'Urban Planning & Housing Committee';
             } else {
                 $assignedCommittee = 'Rules & Governance Committee';
             }

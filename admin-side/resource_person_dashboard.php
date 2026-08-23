@@ -6,8 +6,8 @@
  * 2. Only AFTER AI analysis is completed AND Admin has forwarded/assigned to Resource Person
  */
 session_start();
-require_once 'db.php';
-require_once 'UTILS/session_check.php';
+require_once '../db.php';
+require_once '../UTILS/session_check.php';
 
 // Check if user is logged in and is a resource person or admin/staff
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
@@ -134,35 +134,39 @@ if ($cRes) {
     }
 }
 
-// STRICT VISIBILITY FILTERING ENGINE
+// STRICT VISIBILITY FILTERING ENGINE FOR RESOURCE PERSON WORKSPACE
 function isConsultationVisibleToExpert($cRow, $user_id, $user_role, $expertise_areas_str) {
-    // Admins see all
-    if (in_array(strtolower($user_role), ['admin', 'administrator', 'super admin', 'superadmin'])) {
-        return true;
-    }
-
-    // 1. MUST BE AI ANALYZED & FORWARDED BY ADMIN
+    // 1. MUST BE AN APPROVED, PUBLICIZED CONSULTATION
+    // Status must be an active or finalized public consultation status (active, closed, completed, endorsed, viewed, replied, scheduled)
+    // NEVER show draft, pending (unapproved citizen proposal), declined, rejected, or archived proposals
     $status = strtolower(trim($cRow['status'] ?? ''));
-    if ($status === 'draft') {
-        return false; // AI analysis or intake not complete
+    $disallowedStatuses = ['draft', 'pending', 'declined', 'rejected', 'archived', 'cancelled'];
+    if (in_array($status, $disallowedStatuses, true)) {
+        return false; // Unapproved citizen submission, or draft/declined consultation
     }
 
+    $allowedStatuses = ['active', 'closed', 'completed', 'endorsed', 'viewed', 'replied', 'scheduled'];
+    if (!in_array($status, $allowedStatuses, true)) {
+        return false;
+    }
+
+    // 2. MUST BE AI ANALYZED (Feedback analysis completed by AI)
     $aiAnalyzed = isset($cRow['ai_analyzed']) ? (int)$cRow['ai_analyzed'] : 0;
-    if ($aiAnalyzed === 0) {
-        return false; // Waiting for AI analysis
+    if ($aiAnalyzed !== 1) {
+        return false; // AI analysis on consultation feedback is not completed yet
     }
 
+    // 3. MUST BE EXPLICITLY FORWARDED / DISPATCHED BY ADMIN
     $assignedTo = (int)($cRow['assigned_to'] ?? 0);
     $forwarded = isset($cRow['forwarded_to_expert']) ? (int)$cRow['forwarded_to_expert'] : 0;
     $docStatus = strtolower(trim($cRow['document_status'] ?? ''));
 
-    // Check if admin has explicitly assigned or forwarded it
-    $isForwardedByAdmin = ($assignedTo === $user_id || $forwarded === 1 || in_array($docStatus, ['sent_to_expert', 'expert_annotated', 'admin_validated', 'forwarded_to_committee']));
+    $isForwardedByAdmin = ($assignedTo === $user_id || $forwarded === 1 || in_array($docStatus, ['sent_to_expert', 'expert_annotated', 'admin_validated', 'forwarded_to_committee'], true));
     if (!$isForwardedByAdmin) {
-        return false; // Admin has not forwarded this consultation to experts yet
+        return false; // Admin has not dispatched/forwarded this consultation to resource persons
     }
 
-    // 2. MUST MATCH REGISTERED EXPERTISE AREA OR BE EXPLICITLY ASSIGNED
+    // 4. CATEGORY MUST MATCH REGISTERED EXPERTISE AREA OR BE EXPLICITLY ASSIGNED TO THIS EXPERT
     if ($assignedTo === $user_id) {
         return true; // Explicitly assigned to this specific expert
     }
@@ -266,7 +270,7 @@ unset($c);
     <title>Resource Person Workspace - Valenzuela PCMS</title>
     <link rel="icon" type="image/png" href="images/logo.webp">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="../ASSETS/vendor/bootstrap-icons/font/bootstrap-icons.css">
     <!-- Google Fonts: Plus Jakarta Sans & Inter (Admin Side Font Family) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -291,7 +295,7 @@ unset($c);
             </button>
             <div class="flex items-center gap-2">
                 <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center p-0.5 shadow">
-                    <img src="images/logo.webp" alt="Logo" class="w-full h-full object-contain" onerror="this.src='ASSETS/images/logo.png'">
+                    <img src="../images/logo.webp" alt="Logo" class="w-full h-full object-contain" onerror="this.src='ASSETS/images/logo.png'">
                 </div>
                 <span class="font-bold text-sm">PCMS Expert Portal</span>
             </div>
@@ -303,7 +307,7 @@ unset($c);
                     <span class="absolute top-0 right-0 w-4 h-4 bg-amber-400 text-slate-950 font-bold text-[9px] rounded-full flex items-center justify-center"><?php echo $unread_notif_count; ?></span>
                 <?php endif; ?>
             </button>
-            <a href="logout.php" class="text-xs bg-red-950/60 px-3 py-1 rounded-lg border border-red-700/50 flex items-center gap-1">
+            <a href="../logout.php" class="text-xs bg-red-950/60 px-3 py-1 rounded-lg border border-red-700/50 flex items-center gap-1">
                 <i class="bi bi-box-arrow-right"></i> Exit
             </a>
         </div>
@@ -314,7 +318,7 @@ unset($c);
         <!-- Logo Header Section -->
         <div class="p-6 border-b border-red-700/60 flex items-center gap-3">
             <div class="w-14 h-14 bg-white rounded-full flex items-center justify-center p-1 shadow-md shrink-0">
-                <img src="images/logo.webp" alt="Valenzuela Logo" class="w-full h-full object-contain" onerror="this.src='ASSETS/images/logo.png'">
+                <img src="../images/logo.webp" alt="Valenzuela Logo" class="w-full h-full object-contain" onerror="this.src='ASSETS/images/logo.png'">
             </div>
             <div>
                 <h1 class="text-lg font-bold leading-tight">PCMS</h1>
@@ -327,18 +331,14 @@ unset($c);
             <div>
                 <p class="text-[11px] font-bold text-red-200/70 uppercase tracking-wider px-3 mb-2">Expert Workspace</p>
                 <div class="space-y-1">
-                    <a href="#overview" onclick="filterTaskCategory('all')" class="flex items-center px-4 py-3 text-white bg-red-700/90 rounded-xl font-semibold text-sm transition shadow-sm hover:bg-red-700 gap-3">
-                        <i class="bi bi-file-earmark-diff text-lg"></i>
-                        <span>Master Document Board</span>
-                    </a>
-                    <a href="#assigned" onclick="filterTaskCategory('assigned')" class="flex items-center px-4 py-3 text-red-100 hover:bg-red-700/60 hover:text-white rounded-xl text-sm transition gap-3">
+                    <a href="#assigned" onclick="filterTaskCategory('assigned', this)" class="sidebar-nav-item flex items-center px-4 py-3 text-red-100 hover:bg-red-700/60 hover:text-white rounded-xl text-sm transition gap-3">
                         <i class="bi bi-journal-check text-lg"></i>
                         <span>Assigned Tasks</span>
                         <?php if ($total_assigned > 0): ?>
                             <span class="ml-auto px-2 py-0.5 rounded-full text-xs bg-white text-red-900 font-bold"><?php echo $total_assigned; ?></span>
                         <?php endif; ?>
                     </a>
-                    <a href="#annotated" onclick="filterTaskCategory('annotated')" class="flex items-center px-4 py-3 text-red-100 hover:bg-red-700/60 hover:text-white rounded-xl text-sm transition gap-3">
+                    <a href="#annotated" onclick="filterTaskCategory('annotated', this)" class="sidebar-nav-item flex items-center px-4 py-3 text-red-100 hover:bg-red-700/60 hover:text-white rounded-xl text-sm transition gap-3">
                         <i class="bi bi-pencil-square text-lg"></i>
                         <span>Annotated Documents</span>
                         <?php if ($annotated_master_docs_count > 0): ?>
@@ -373,7 +373,7 @@ unset($c);
 
         <!-- Sidebar Footer Sign Out -->
         <div class="p-4 border-t border-red-700/60">
-            <a href="logout.php" class="w-full bg-red-950 hover:bg-black text-white py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 border border-red-700/50 shadow-sm no-underline">
+            <a href="../logout.php" class="w-full bg-red-950 hover:bg-black text-white py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 border border-red-700/50 shadow-sm no-underline">
                 <i class="bi bi-box-arrow-right text-sm"></i> Sign Out Portal
             </a>
         </div>
@@ -391,7 +391,7 @@ unset($c);
                 <div>
                     <h2 class="text-lg font-bold text-slate-800 leading-tight">Resource Person Workspace</h2>
                     <div class="flex items-center gap-2 text-xs text-slate-500">
-                        <a href="index.php" class="hover:text-red-600">Home</a>
+                        <a href="../index.php" class="hover:text-red-600">Home</a>
                         <i class="bi bi-chevron-right text-[10px]"></i>
                         <span class="text-slate-800 font-medium">Expertise-Filtered Advisory Portal</span>
                     </div>
@@ -463,7 +463,7 @@ unset($c);
 
                 <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                     <div>
-                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Awaiting Expert Input</p>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Awaiting Notes</p>
                         <p class="text-3xl font-bold text-amber-600 mt-1"><?php echo $pending_expert_input_count; ?></p>
                         <p class="text-[11px] text-slate-400 mt-0.5">Needs inline notes</p>
                     </div>
@@ -487,7 +487,7 @@ unset($c);
                     <div>
                         <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Completed Tasks</p>
                         <p class="text-3xl font-bold text-blue-600 mt-1"><?php echo $completed_count; ?></p>
-                        <p class="text-[11px] text-slate-400 mt-0.5">Forwarded to Committee</p>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Transmitted to ORTS</p>
                     </div>
                     <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-2xl">
                         <i class="bi bi-check-circle"></i>
@@ -516,7 +516,7 @@ unset($c);
                         <select id="filter-assignment" onchange="filterTasks()" class="px-3 py-2 text-xs border border-slate-300 rounded-xl outline-none bg-white font-medium">
                             <option value="all">All Dispatched (<?php echo count($consultations); ?>)</option>
                             <option value="annotated">Annotated Master Docs</option>
-                            <option value="pending">Awaiting Expert Input</option>
+                            <option value="pending">Awaiting Notes</option>
                         </select>
 
                         <button onclick="openKnowledgeBaseModal()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition border border-slate-200 flex items-center gap-1.5 shrink-0">
@@ -602,7 +602,7 @@ unset($c);
                                     <div class="grid grid-cols-1 gap-2 pt-1">
                                         <button onclick="openInlineInputModal(<?php echo $c['id']; ?>, '<?php echo htmlspecialchars(addslashes($c['title'])); ?>', '<?php echo $docVersion; ?>')" 
                                                 class="w-full bg-gradient-to-r from-red-800 to-red-900 hover:from-red-900 hover:to-black text-white font-extrabold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-sm cursor-pointer">
-                                            <i class="bi bi-pencil-square text-amber-300"></i> Annotate & Append Expert Input
+                                            <i class="bi bi-pencil-square text-amber-300"></i> Annotate Master Document
                                         </button>
 
                                         <div class="grid grid-cols-2 gap-2">
@@ -743,13 +743,8 @@ unset($c);
                     </div>
                     <div class="h-0.5 flex-1 bg-slate-700 mx-2"></div>
                     <div class="flex items-center gap-1.5 text-slate-400">
-                        <span class="w-5 h-5 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center text-[10px]">3</span>
-                        <span>3. Secretariat Validated (v2.0)</span>
-                    </div>
-                    <div class="h-0.5 flex-1 bg-slate-700 mx-2"></div>
-                    <div class="flex items-center gap-1.5 text-slate-400">
                         <span class="w-5 h-5 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center text-[10px]"><i class="bi bi-archive"></i></span>
-                        <span>4. LRMS Transmitted & Archived</span>
+                        <span>3. Transmitted to ORTS (v2.0)</span>
                     </div>
                 </div>
             </div>
@@ -806,9 +801,9 @@ unset($c);
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-800 mb-1">5. Sign-off Readiness for LGU Committees</label>
+                            <label class="block text-xs font-bold text-slate-800 mb-1">5. Sign-off Readiness for ORTS Transmittal</label>
                             <select name="signoff_status" id="inline-signoff-status" class="w-full p-2.5 border border-slate-300 rounded-xl text-xs bg-white font-bold text-slate-800 outline-none">
-                                <option value="ready_for_committee">Ready for LGU Committee Validation & Ordinance Drafting</option>
+                                <option value="ready_for_orts">Ready for Direct ORTS Transmittal & Ordinance Drafting</option>
                                 <option value="requires_info">Pending Additional Information / Clarification</option>
                             </select>
                         </div>
@@ -884,7 +879,7 @@ unset($c);
                 </div>
             </div>
 
-            <form action="API/request_additional_info.php" method="POST" class="space-y-4">
+            <form action="../API/request_additional_info.php" method="POST" class="space-y-4">
                 <input type="hidden" name="consultation_id" id="info-consultation-id">
 
                 <div class="grid grid-cols-2 gap-3">
@@ -967,7 +962,7 @@ unset($c);
     }
 
     function markAllNotificationsRead() {
-        fetch('API/resource_person_api.php?action=mark_notif_read', { method: 'POST' })
+        fetch('../API/resource_person_api.php?action=mark_notif_read', { method: 'POST' })
         .then(r => r.json())
         .then(data => {
             if (data.success) {
@@ -997,11 +992,19 @@ unset($c);
         });
     }
 
-    function filterTaskCategory(cat) {
+    function filterTaskCategory(cat, el) {
         var sel = document.getElementById('filter-assignment');
         if (sel) {
             sel.value = cat;
             filterTasks();
+        }
+        if (el) {
+            document.querySelectorAll('.sidebar-nav-item').forEach(function(item) {
+                item.classList.remove('bg-red-700/90', 'text-white', 'font-semibold');
+                item.classList.add('text-red-100');
+            });
+            el.classList.add('bg-red-700/90', 'text-white', 'font-semibold');
+            el.classList.remove('text-red-100');
         }
     }
 
@@ -1011,7 +1014,7 @@ unset($c);
         document.getElementById('inline-modal-version').textContent = version || 'v1.0';
 
         // Load consultation base description & existing expert notes
-        fetch(`API/resource_person_api.php?action=get_consultation_details&consultation_id=${id}`)
+        fetch(`../API/resource_person_api.php?action=get_consultation_details&consultation_id=${id}`)
         .then(r => r.json())
         .then(data => {
             if (data.success && data.consultation) {
@@ -1027,13 +1030,13 @@ unset($c);
                     document.getElementById('inline-tech-rationale').value = notes.technical_rationale || '';
                     document.getElementById('inline-legal-alignment').value = notes.legal_alignment || '';
                     document.getElementById('inline-revisions').value = notes.proposed_revisions || '';
-                    document.getElementById('inline-signoff-status').value = notes.signoff_status || 'ready_for_committee';
+                    document.getElementById('inline-signoff-status').value = notes.signoff_status || 'ready_for_orts';
                 } else {
                     document.getElementById('inline-exec-summary').value = '';
                     document.getElementById('inline-tech-rationale').value = '';
                     document.getElementById('inline-legal-alignment').value = '';
                     document.getElementById('inline-revisions').value = '';
-                    document.getElementById('inline-signoff-status').value = 'ready_for_committee';
+                    document.getElementById('inline-signoff-status').value = 'ready_for_orts';
                 }
             }
         });
@@ -1054,7 +1057,7 @@ unset($c);
         btn.disabled = true;
         btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin"></i> Saving to Master Document...';
 
-        fetch('API/save_inline_expert_input.php', {
+        fetch('../API/save_inline_expert_input.php', {
             method: 'POST',
             body: formData
         })
@@ -1080,7 +1083,7 @@ unset($c);
         const tbody = document.getElementById('audit-trail-table-body');
         tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-400"><i class="bi bi-arrow-repeat animate-spin block text-lg mb-1"></i> Loading document audit log...</td></tr>';
 
-        fetch(`API/resource_person_api.php?action=get_consultation_details&consultation_id=${id}`)
+        fetch(`../API/resource_person_api.php?action=get_consultation_details&consultation_id=${id}`)
         .then(r => r.json())
         .then(data => {
             if (data.success && data.audit_trail && data.audit_trail.length > 0) {
@@ -1154,9 +1157,9 @@ unset($c);
                         <p class="text-xs text-slate-500 mt-1">Your session has timed out due to inactivity.</p>
                     </div>
                     <div class="pt-2">
-                        <button onclick="window.location.href='login.php'" class="w-full px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2">
-                            <i class="bi bi-box-arrow-in-right text-sm"></i>
-                            <span>Back to Login Page</span>
+                        <button onclick="window.location.href='index.php?timeout=1'" class="w-full px-4 py-3 bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+                            <i class="bi bi-house-door text-sm"></i>
+                            <span>Return to Landing Page</span>
                         </button>
                     </div>
                 </div>
