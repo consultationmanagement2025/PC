@@ -107,6 +107,7 @@ function initializeConsultationsTable() {
         'tracking_number' => "VARCHAR(32) DEFAULT NULL",
         'outcome' => "ENUM('solved','needs-follow-up','escalated') DEFAULT NULL",
         'remarks' => "LONGTEXT DEFAULT NULL",
+        'admin_response' => "TEXT DEFAULT NULL",
         'ai_committee_brief' => "LONGTEXT DEFAULT NULL",
         'committee_forwarded_at' => "DATETIME DEFAULT NULL",
         'committee_assigned' => "VARCHAR(150) DEFAULT NULL",
@@ -127,23 +128,13 @@ function initializeConsultationsTable() {
         }
     }
 
-    // Convert strict ENUM columns to VARCHAR(50) to prevent truncation errors across MySQL strict modes
+    // Convert strict ENUM columns to VARCHAR(100) to prevent truncation errors across MySQL strict modes
     @$conn->query("ALTER TABLE consultations MODIFY COLUMN `type` VARCHAR(50) NOT NULL DEFAULT 'admin'");
-    @$conn->query("ALTER TABLE consultations MODIFY COLUMN `status` VARCHAR(50) NOT NULL DEFAULT 'active'");
+    @$conn->query("ALTER TABLE consultations MODIFY COLUMN `status` VARCHAR(100) NOT NULL DEFAULT 'pending'");
     @$conn->query("ALTER TABLE consultations MODIFY COLUMN `response_mode` VARCHAR(50) NOT NULL DEFAULT 'hybrid'");
     $trackingIndex = $conn->query("SHOW INDEX FROM consultations WHERE Key_name = 'idx_tracking_number'");
     if ($trackingIndex && $trackingIndex->num_rows === 0) {
         $conn->query("ALTER TABLE consultations ADD UNIQUE INDEX idx_tracking_number (tracking_number)");
-    }
-
-    // Ensure status enum includes "scheduled" for date-driven lifecycle.
-    $statusCol = $conn->query("SHOW COLUMNS FROM consultations LIKE 'status'");
-    if ($statusCol && $statusCol->num_rows > 0) {
-        $statusInfo = $statusCol->fetch_assoc();
-        $statusType = strtolower((string)($statusInfo['Type'] ?? ''));
-        if (strpos($statusType, "'scheduled'") === false) {
-            $conn->query("ALTER TABLE consultations MODIFY COLUMN status ENUM('draft','pending','scheduled','active','viewed','replied','completed','closed','archived') DEFAULT 'active'");
-        }
     }
 
     initializeConsultationVotesTable();

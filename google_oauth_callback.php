@@ -49,7 +49,16 @@ $result = $stmt->get_result();
 $existingUser = $result->fetch_assoc();
 $stmt->close();
 
+$isCitizenFlow = isset($_SESSION['citizen_google_oauth_state']) || (!isset($_SESSION['google_oauth_state']) && isset($_SESSION['portal']) && $_SESSION['portal'] === 'citizen');
+
 if ($existingUser) {
+    // If a citizen user attempts to log in via Admin login page, deny access
+    $existingRole = str_replace('_', ' ', strtolower(trim($existingUser['role'] ?? 'citizen')));
+    if ($existingRole === 'citizen' && !$isCitizenFlow) {
+        header('Location: ' . LOGIN_PAGE . '?error=unauthorized_role');
+        exit;
+    }
+
     // User exists - update Google ID if not set
     if (!$existingUser['google_id']) {
         $updateStmt = $conn->prepare("UPDATE users SET google_id = ?, google_token = ? WHERE id = ?");
@@ -62,14 +71,14 @@ if ($existingUser) {
     }
     
     // Check if user is pending approval (resource person)
-    if ($existingUser['role'] === 'resource person' && $existingUser['verification_status'] === 'pending') {
+    if ($existingRole === 'resource person' && ($existingUser['verification_status'] ?? '') === 'pending') {
         $_SESSION['temp_user_id'] = $existingUser['id'];
         header('Location: ' . PENDING_APPROVAL);
         exit;
     }
 
     // Check if user was rejected
-    if ($existingUser['role'] === 'resource person' && $existingUser['verification_status'] === 'rejected') {
+    if ($existingRole === 'resource person' && ($existingUser['verification_status'] ?? '') === 'rejected') {
         header('Location: ' . LOGIN_PAGE . '?error=account_rejected');
         exit;
     }
@@ -90,7 +99,13 @@ if ($existingUser) {
     header('Location: ' . $redirectUrl);
     exit;
 } else {
-    // New user signing in via Google OAuth - auto-provision citizen account
+    // If un-registered user logs in via Admin login page (login.php), cancel and display error
+    if (!$isCitizenFlow) {
+        header('Location: ' . LOGIN_PAGE . '?error=account_not_found');
+        exit;
+    }
+
+    // New citizen user signing in via Public Citizen Portal Google OAuth - auto-provision citizen account
     $fullname = !empty($name) ? $name : (!empty($givenName) ? trim($givenName . ' ' . $familyName) : explode('@', $email)[0]);
     $username = strtolower(explode('@', $email)[0]);
     $hashed_password = password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT);

@@ -96,7 +96,7 @@ function getUserNotifications($user_id, $limit = 20) {
     global $conn;
     initializeNotificationsTable();
     $uid = (int)$user_id;
-    $stmt = $conn->prepare("SELECT id, user_id, message, type, is_read, created_at FROM notifications WHERE user_id IN (0, ?) ORDER BY created_at DESC LIMIT ?");
+    $stmt = $conn->prepare("SELECT id, user_id, message, type, is_read, created_at FROM notifications WHERE (user_id = ? OR (user_id = 0 AND type NOT IN ('decline', 'reject'))) ORDER BY created_at DESC LIMIT ?");
     if (!$stmt) return [];
     $stmt->bind_param('ii', $uid, $limit);
     $stmt->execute();
@@ -106,7 +106,7 @@ function getUserNotifications($user_id, $limit = 20) {
 
     if (empty($rows)) {
         seedNotificationsIfEmpty(true);
-        $stmt = $conn->prepare("SELECT id, user_id, message, type, is_read, created_at FROM notifications WHERE user_id IN (0, ?) ORDER BY created_at DESC LIMIT ?");
+        $stmt = $conn->prepare("SELECT id, user_id, message, type, is_read, created_at FROM notifications WHERE (user_id = ? OR (user_id = 0 AND type NOT IN ('decline', 'reject'))) ORDER BY created_at DESC LIMIT ?");
         if ($stmt) {
             $stmt->bind_param('ii', $uid, $limit);
             $stmt->execute();

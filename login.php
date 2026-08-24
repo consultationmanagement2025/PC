@@ -48,9 +48,21 @@ function normalizeUserRole($role) {
     return $normalized;
 }
 
-// Handle session timeout message
+// Handle error and timeout messages
 if (isset($_GET['timeout']) && $_GET['timeout'] == '1') {
     $error = "Your session has expired due to inactivity. Please log in again.";
+}
+if (isset($_GET['error'])) {
+    $errCode = trim($_GET['error']);
+    if ($errCode === 'account_not_found') {
+        $error = "Account not found. No registered Admin or Resource Person account is associated with this Google email.";
+    } elseif ($errCode === 'unauthorized_role') {
+        $error = "Access denied. Citizen accounts cannot log in to the Administrative Portal.";
+    } elseif ($errCode === 'account_rejected') {
+        $error = "Your Resource Person application has been rejected. Please contact the administrator.";
+    } elseif ($errCode === 'token_failed' || $errCode === 'user_info_failed') {
+        $error = "Google authentication failed. Please try logging in again.";
+    }
 }
 
 // Check if user confirmed password change

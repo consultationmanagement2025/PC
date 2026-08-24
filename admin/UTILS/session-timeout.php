@@ -14,17 +14,20 @@ function checkSessionTimeout($timeout_duration = 1800) {
     }
 
     // Check if user is logged in
-    if (isset($_SESSION['user_id']) && isset($_SESSION['login_time'])) {
-        
-        $timeout_duration = (int)$timeout_duration;
+    if (isset($_SESSION['user_id']) || isset($_SESSION['user_email']) || isset($_SESSION['login_time'])) {
+        $userRole = strtolower(trim((string)($_SESSION['role'] ?? 'user')));
+        $isAdminRole = in_array($userRole, ['admin', 'super admin', 'superadmin', 'staff', 'barangay staff', 'resource person', 'resource_person', 'expert'], true);
+        $isAdminPath = strpos($_SERVER['REQUEST_URI'] ?? '', '/admin/') !== false || strpos($_SERVER['REQUEST_URI'] ?? '', '/admin-side/') !== false;
+
+        // 5 minutes (300s) for Admin/Resource Person/Staff, 10 minutes (600s) for Citizen
+        $timeout_duration = ($isAdminRole || $isAdminPath) ? 300 : 600;
         $current_time = time();
-        $last_activity = $_SESSION['last_activity'] ?? $_SESSION['login_time'];
+        $last_activity = $_SESSION['last_activity'] ?? $_SESSION['login_time'] ?? $current_time;
         
         // Check if session has timed out
         if (($current_time - $last_activity) >= $timeout_duration) {
-            
             // Log the timeout
-            if (function_exists('logAction')) {
+            if (function_exists('logAction') && isset($_SESSION['user_id'])) {
                 logAction(
                     $_SESSION['user_id'], 
                     $_SESSION['fullname'] ?? 'User', 
@@ -42,8 +45,13 @@ function checkSessionTimeout($timeout_duration = 1800) {
             session_unset();
             session_destroy();
             
-            // Redirect to login with timeout message
-            header("Location: login.php?timeout=1");
+            // Redirect admin to login page, citizen to landing page
+            if ($isAdminRole || $isAdminPath) {
+                $redirectTarget = ($isAdminPath && strpos($_SERVER['REQUEST_URI'] ?? '', '/admin') !== false) ? '../login.php?timeout=1' : 'login.php?timeout=1';
+                header("Location: " . $redirectTarget);
+            } else {
+                header("Location: index.php?timeout=1");
+            }
             exit();
         }
         

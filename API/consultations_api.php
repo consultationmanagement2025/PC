@@ -568,6 +568,25 @@ try {
                 } catch (Throwable $eUser) {}
             }
 
+            // Ensure we NEVER notify admins or staff in-app when declining
+            if ($targetUserId > 0) {
+                try {
+                    $rStmt = $conn->prepare("SELECT role FROM users WHERE id = ? LIMIT 1");
+                    if ($rStmt) {
+                        $rStmt->bind_param('i', $targetUserId);
+                        $rStmt->execute();
+                        $rRes = $rStmt->get_result();
+                        if ($rRow = $rRes ? $rRes->fetch_assoc() : null) {
+                            $userRole = strtolower(trim((string)($rRow['role'] ?? '')));
+                            if (in_array($userRole, ['admin', 'super admin', 'superadmin', 'staff', 'barangay staff', 'resource_person'], true)) {
+                                $targetUserId = 0; // Do not create in-app notification for admin/staff!
+                            }
+                        }
+                        $rStmt->close();
+                    }
+                } catch (Throwable $eRole) {}
+            }
+
             // 1. Create In-App Notification in database safely ONLY for target citizen (targetUserId > 0)
             try {
                 if ($targetUserId > 0 && file_exists(__DIR__ . '/../DATABASE/notifications.php')) {
@@ -748,7 +767,18 @@ try {
             }
             break;
 
-
+        case 'restore_submission':
+            $rawInput = file_get_contents('php://input');
+            $data = json_decode($rawInput, true) ?? [];
+            $id = (int)($data['id'] ?? ($data['consultation_id'] ?? ($_POST['id'] ?? ($_GET['id'] ?? 0))));
+            if (!$id) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Consultation ID required']);
+                exit;
+            }
+            $ok = (bool)$conn->query("UPDATE consultations SET status = 'pending', updated_at = NOW() WHERE id = {$id}");
+            echo json_encode(['success' => $ok, 'message' => $ok ? 'Consultation restored to pending review' : 'Failed to restore consultation']);
+            break;
 
         case 'delete':
             $rawInput = file_get_contents('php://input');

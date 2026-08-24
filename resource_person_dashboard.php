@@ -1170,9 +1170,9 @@ unset($c);
                         <p class="text-xs text-slate-500 mt-1">Your session has timed out due to inactivity.</p>
                     </div>
                     <div class="pt-2">
-                        <button onclick="window.location.href='index.php?timeout=1'" class="w-full px-4 py-3 bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
-                            <i class="bi bi-house-door text-sm"></i>
-                            <span>Return to Landing Page</span>
+                        <button onclick="window.location.href='login.php?timeout=1'" class="w-full px-4 py-3 bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+                            <i class="bi bi-box-arrow-in-right text-sm"></i>
+                            <span>Back to Login Page</span>
                         </button>
                     </div>
                 </div>
@@ -1185,9 +1185,10 @@ unset($c);
         ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(function(evt) {
             window.addEventListener(evt, resetAct, { passive: true });
         });
+        // 5 minutes (300,000 ms) idle timeout for Resource Person
         setInterval(function() {
-            if (Date.now() - lastAct >= 1800000) { showSessionExpiredModal(); }
-        }, 15000);
+            if (Date.now() - lastAct >= 300000) { showSessionExpiredModal(); }
+        }, 10000);
 
         var urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('timeout') === '1') { showSessionExpiredModal(); }

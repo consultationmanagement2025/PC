@@ -12751,15 +12751,15 @@ function renderConsultationManagement() {
 
 
 
-                <div class="flex flex-wrap gap-2 mt-4">
-
-
-                    <button id="consultation-type-admin-btn" onclick="cmQuickType('admin')" class="btn-outline px-3 py-2 text-sm">Admin Created</button>
-
-
-                    <button id="consultation-type-user-btn" onclick="cmQuickType('user')" class="btn-outline px-3 py-2 text-sm">User Submissions</button>
-
-
+                <div class="flex flex-wrap items-center justify-between gap-2 mt-4 pb-2 border-b border-gray-200">
+                    <div class="flex flex-wrap gap-2">
+                        <button id="consultation-type-admin-btn" onclick="cmQuickType('admin')" class="btn-outline px-3 py-2 text-sm font-semibold">Admin Created</button>
+                        <button id="consultation-type-user-btn" onclick="cmQuickType('user')" class="btn-outline px-3 py-2 text-sm font-semibold">User Submissions</button>
+                    </div>
+                    <button onclick="openDeclinedSubmissionsModal()" type="button" class="relative inline-flex items-center justify-center w-10 h-10 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl border border-rose-200 transition shadow-2xs cursor-pointer" title="View Declined Consultations Archive">
+                        <i class="bi bi-archive-fill text-rose-600 text-base"></i>
+                        <span id="declined-bin-count" class="absolute -top-1.5 -right-1.5 min-w-[20px] h-[20px] px-1 bg-rose-600 text-white rounded-full text-[10px] font-extrabold flex items-center justify-center border-2 border-white shadow-xs">0</span>
+                    </button>
                 </div>
 
 
@@ -13094,7 +13094,7 @@ function renderConsultationManagement() {
 
 
         <!-- Consultation Details Modal -->
-        <div id="consultation-details-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 transition-all duration-300">
+        <div id="consultation-details-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[9999] p-4 transition-all duration-300">
             <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-gray-100 flex flex-col">
                 <!-- Modal Top Header Bar -->
                 <div class="bg-gradient-to-r from-red-800 via-red-700 to-red-900 text-white px-6 py-5 flex justify-between items-center relative overflow-hidden shadow-md">
@@ -13457,6 +13457,9 @@ async function loadConsultationsFromApi() {
 
 
         renderConsultationsTable();
+        if (typeof renderAdminConsultationTables === 'function') {
+            renderAdminConsultationTables();
+        }
         // NOTE: Do NOT call refreshPCSurveySelector or renderPCSurveyAnswersChart here.
         // The <canvas id="pcSurveyAnswersChart"> does NOT exist in the DOM yet at this point.
         // It gets injected later by renderPublicConsultation() at line ~10045.
@@ -13823,6 +13826,9 @@ function renderConsultationsTable() {
         const consultStatusTrackerHtml = renderConnectingDotsTracker(consultation.status, consultation.id, 'consultation');
 
         if (srcType === 'user') {
+            if (st === 'declined' || st === 'rejected') {
+                continue;
+            }
             let citizenName = String(consultation.userName || consultation.user_name || 'Citizen');
             if (citizenName.toLowerCase().includes('system administrator') || citizenName.toLowerCase().includes('admin')) {
                 citizenName = 'Citizen Submission';
@@ -13899,6 +13905,13 @@ function renderConsultationsTable() {
 
     if (adminTbody) adminTbody.innerHTML = adminRows.length ? adminRows.join('') : '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No admin-created consultations found</td></tr>';
     if (userTbody) userTbody.innerHTML = userRows.length ? userRows.join('') : '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No user submissions found</td></tr>';
+
+    const declinedCount = consultations.filter(c => {
+        const st = String(c.status || '').toLowerCase();
+        return st === 'declined' || st === 'rejected';
+    }).length;
+    const binCountEl = document.getElementById('declined-bin-count');
+    if (binCountEl) binCountEl.innerText = declinedCount;
 }
 
 async function updateConsultationStatusFromTracker(consultationId, newStatus) {
@@ -14738,6 +14751,7 @@ function viewConsultationDetails(id) {
            </div>`;
 
     const st = String(consultation.status || '').toLowerCase();
+    const isDeclined = (st === 'rejected' || st === 'declined');
     const statusBadgeClass = st === 'active'
         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
         : (st === 'draft' || st === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-gray-100 text-gray-700 border-gray-200');
@@ -14892,28 +14906,30 @@ function viewConsultationDetails(id) {
 
         ${aiRoutingHtml}
 
-
-
-        <!-- Feedback Responses Section -->
-        <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
-            <div class="flex items-center justify-between mb-3">
-                <span class="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
-                    <i class="bi bi-chat-square-quote-fill text-red-600 text-sm"></i> Public Feedback & Comments
-                </span>
-                <span class="text-[11px] font-semibold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">${relatedFeedback.length} Item(s)</span>
+        <!-- Feedback Responses Section (Hidden for declined proposals since not posted publicly) -->
+        ${!isDeclined ? `
+            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
+                        <i class="bi bi-chat-square-quote-fill text-red-600 text-sm"></i> Public Feedback & Comments
+                    </span>
+                    <span class="text-[11px] font-semibold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">${relatedFeedback.length} Item(s)</span>
+                </div>
+                <div class="space-y-2.5">${feedbackHTML}</div>
             </div>
-            <div class="space-y-2.5">${feedbackHTML}</div>
-        </div>
+        ` : ''}
 
         <!-- Action Footer -->
         <div class="flex flex-wrap items-center justify-between gap-2.5 pt-4 border-t border-gray-200/80">
             <div class="flex items-center gap-2">
-                <button onclick="triggerSystemIntegration(${consultation.id}, 'PHS')" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
-                    <i class="bi bi-broadcast text-blue-600"></i> PHS Sync
-                </button>
-                <button onclick="triggerSystemIntegration(${consultation.id}, 'LRS')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
-                    <i class="bi bi-archive-fill text-emerald-600"></i> LRS Export
-                </button>
+                ${!isDeclined ? `
+                    <button onclick="triggerSystemIntegration(${consultation.id}, 'PHS')" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
+                        <i class="bi bi-broadcast text-blue-600"></i> PHS Sync
+                    </button>
+                    <button onclick="triggerSystemIntegration(${consultation.id}, 'LRS')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
+                        <i class="bi bi-archive-fill text-emerald-600"></i> LRS Export
+                    </button>
+                ` : ''}
             </div>
             <div class="flex items-center gap-2">
                 ${canEdit ? `<button onclick="editConsultation(${consultation.id}); closeDetailsModal()" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-semibold shadow-xs transition flex items-center gap-1.5"><i class="bi bi-pencil"></i> Edit Consultation</button>` : ''}
@@ -14922,6 +14938,7 @@ function viewConsultationDetails(id) {
         </div>
     `;
 
+    modalEl.style.zIndex = '9999';
     modalEl.classList.remove('hidden');
 }
 
@@ -23521,6 +23538,58 @@ window.confirmApproveCitizenSubmission = function (consultationId) {
     renderConsultationManagementSection();
 };
 
+window.showDeclineSuccessModal = function (cid) {
+    let oldModal = document.getElementById('decline-success-modal');
+    if (oldModal) oldModal.remove();
+
+    const trackingNo = 'CONSULT-' + String(cid || '').padStart(6, '0');
+
+    const modal = document.createElement('div');
+    modal.id = 'decline-success-modal';
+    modal.className = 'fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn';
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+            <!-- Modal Top Header Bar with Red Gradient Theme -->
+            <div class="px-6 py-4 bg-gradient-to-r from-red-800 via-red-700 to-red-900 text-white flex items-center justify-between shadow-xs">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-white border border-white/20">
+                        <i class="bi bi-check-circle-fill text-lg text-emerald-300"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-extrabold tracking-tight">Submission Declined</h3>
+                        <p class="text-xs text-rose-100 font-medium">Status record successfully updated</p>
+                    </div>
+                </div>
+                <button type="button" onclick="document.getElementById('decline-success-modal').remove()" class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg font-bold transition cursor-pointer">
+                    ✕
+                </button>
+            </div>
+
+            <!-- Modal Content Body -->
+            <div class="p-6 text-center space-y-4 bg-slate-50/50">
+                <div class="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 mx-auto flex items-center justify-center text-2xl shadow-xs">
+                    <i class="bi bi-shield-check"></i>
+                </div>
+                <div>
+                    <h4 class="font-extrabold text-slate-800 text-sm">Action Successfully Processed</h4>
+                    <p class="text-xs text-slate-600 mt-1.5 leading-relaxed">
+                        Citizen proposal <strong class="text-slate-900 font-mono">${trackingNo}</strong> has been officially marked as <span class="font-bold text-rose-700">Declined</span> and moved to the <strong class="text-rose-800">Declined Consultations Archive</strong>.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Modal Action Footer -->
+            <div class="px-6 py-3.5 bg-gray-50 border-t border-gray-200 flex justify-end">
+                <button type="button" onclick="document.getElementById('decline-success-modal').remove()" class="px-5 py-2 bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5">
+                    <i class="bi bi-check2 text-sm"></i>
+                    <span>OK</span>
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+};
+
 window.openDeclineCitizenSubmissionModal = function (consultationId) {
     const cid = Number(consultationId);
     const consultation = (AppData.consultations || []).find(c => Number(c.id) === cid);
@@ -23719,16 +23788,15 @@ window.confirmDeclineCitizenSubmission = async function (consultationId, event) 
             }
         }
 
-        // Display success toast
-        if (typeof alertToast === 'function') {
-            alertToast('Decline actions are now persistent and reflected in real time.', 'success');
-        } else if (typeof showNotification === 'function') {
-            showNotification('Decline actions are now persistent and reflected in real time.', 'success');
-        }
+        // Display success modal matching system modal design
+        showDeclineSuccessModal(cid);
 
         // Refresh UI state after database update is verified successful
         if (typeof loadConsultationsFromApi === 'function') {
             await loadConsultationsFromApi(true).catch(() => {});
+        }
+        if (typeof renderAdminConsultationTables === 'function') {
+            renderAdminConsultationTables();
         }
         if (typeof renderConsultationsTable === 'function') {
             renderConsultationsTable();
@@ -23916,9 +23984,24 @@ window.rejectResourcePersonApp = function(id, fullname) {
 // ==========================================
 function showSessionExpiredModal() {
     if (document.getElementById('pcms-session-timeout-modal')) return;
+
+    const isAdminSide = window.location.pathname.includes('/admin/') || 
+                        window.location.pathname.includes('/admin-side/') || 
+                        (window.AppData && window.AppData.currentUser && ['admin', 'super admin', 'superadmin', 'staff', 'barangay staff', 'resource_person'].includes(String(window.AppData.currentUser.role || '').toLowerCase()));
+
+    let redirectUrl = isAdminSide ? 'login.php?timeout=1' : 'index.php?timeout=1';
+    let btnText = isAdminSide ? 'Back to Login Page' : 'Return to Landing Page';
+    let btnIcon = isAdminSide ? 'bi-box-arrow-in-right' : 'bi-house-door-fill';
+
+    if (isAdminSide && (window.location.pathname.includes('/admin/') || window.location.pathname.includes('/admin-side/'))) {
+        redirectUrl = '../login.php?timeout=1';
+    } else if (!isAdminSide && (window.location.pathname.includes('/admin/') || window.location.pathname.includes('/admin-side/'))) {
+        redirectUrl = '../index.php?timeout=1';
+    }
+
     const modal = document.createElement('div');
     modal.id = 'pcms-session-timeout-modal';
-    modal.className = 'fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-50 p-4';
+    modal.className = 'fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-[10000] p-4';
     modal.innerHTML = `
         <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center space-y-4 border border-amber-200 animate-in fade-in zoom-in duration-200">
             <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-600 mx-auto flex items-center justify-center text-2xl shadow-inner">
@@ -23929,9 +24012,9 @@ function showSessionExpiredModal() {
                 <p class="text-xs text-slate-500 mt-1">Your session has timed out due to inactivity.</p>
             </div>
             <div class="pt-2">
-                <button onclick="window.location.href='login.php'" class="w-full px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2">
-                    <i class="bi bi-box-arrow-in-right text-sm"></i>
-                    <span>Back to Login Page</span>
+                <button onclick="window.location.href='${redirectUrl}'" class="w-full px-4 py-3 bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+                    <i class="bi ${btnIcon} text-sm"></i>
+                    <span>${btnText}</span>
                 </button>
             </div>
         </div>
@@ -23947,14 +24030,19 @@ function initSessionTimeoutManager() {
         window.addEventListener(evt, resetTimer, { passive: true });
     });
 
-    // Check idle every 15 seconds (1800000ms = 30 min threshold)
+    const isAdminSide = window.location.pathname.includes('/admin/') || 
+                        window.location.pathname.includes('/admin-side/') || 
+                        (window.AppData && window.AppData.currentUser && ['admin', 'super admin', 'superadmin', 'staff', 'barangay staff', 'resource_person'].includes(String(window.AppData.currentUser.role || '').toLowerCase()));
+
+    // 5 minutes (300,000 ms) for Admin / Superadmin / Resource Person, 10 minutes (600,000 ms) for Citizen
+    const idleTimeoutMs = isAdminSide ? 300000 : 600000;
+
     setInterval(() => {
-        if (Date.now() - window._pcmsLastActivityTime >= 1800000) {
+        if (Date.now() - window._pcmsLastActivityTime >= idleTimeoutMs) {
             showSessionExpiredModal();
         }
-    }, 15000);
+    }, 10000);
 
-    // Also show if URL contains ?timeout=1
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('timeout') === '1') {
         showSessionExpiredModal();
@@ -24142,6 +24230,208 @@ if (document.readyState === 'loading') {
     initSessionTimeoutManager();
     if (typeof loadNotifications === 'function') loadNotifications();
     if (typeof window.checkUnifiedFeedbackStatusUI === 'function') window.checkUnifiedFeedbackStatusUI();
+}
+
+window.openDeclinedSubmissionsModal = async function() {
+    let oldModal = document.getElementById('declined-submissions-modal');
+    if (oldModal) oldModal.remove();
+
+    let consultations = window.AppData?.consultations || [];
+    try {
+        let apiUrl = `API/consultations_api.php?action=list&limit=200&_t=${Date.now()}`;
+        if (typeof getApiUrl === 'function') {
+            apiUrl = getApiUrl(apiUrl);
+        }
+        const res = await fetch(apiUrl, { cache: 'no-store', headers: { 'Accept': 'application/json', 'Cache-Control': 'no-cache' } });
+        const resData = await res.json().catch(() => null);
+        if (res.ok && resData && Array.isArray(resData.data)) {
+            if (typeof mapDbConsultationToUi === 'function') {
+                consultations = resData.data.map(mapDbConsultationToUi);
+                if (window.AppData) window.AppData.consultations = consultations;
+            } else {
+                consultations = resData.data;
+            }
+        }
+    } catch (e) {
+        console.warn('Error fetching fresh consultations for bin modal:', e);
+    }
+
+    const declinedList = consultations.filter(c => {
+        const st = String(c.status || '').toLowerCase();
+        return st === 'declined' || st === 'rejected';
+    });
+
+    const badgeEl = document.getElementById('declined-bin-count');
+    if (badgeEl) badgeEl.innerText = declinedList.length;
+
+    let rowsHtml = '';
+    if (declinedList.length === 0) {
+        rowsHtml = `
+            <tr>
+                <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                    <div class="flex flex-col items-center justify-center gap-2">
+                        <div class="w-12 h-12 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-500 mb-1">
+                            <i class="bi bi-archive text-2xl"></i>
+                        </div>
+                        <h4 class="font-bold text-gray-700 text-sm">Archive Empty</h4>
+                        <p class="text-xs text-gray-500 max-w-xs">There are no declined consultation proposals in the archive.</p>
+                    </div>
+                </td>
+            </tr>
+        `;
+    } else {
+        rowsHtml = declinedList.map(c => {
+            const trackingNo = 'CONSULT-' + String(c.id || '').padStart(6, '0');
+            let submitterName = String(c.userName || c.user_name || 'Citizen Submitter');
+            let submitterEmail = String(c.userEmail || c.user_email || '');
+            const title = String(c.title || c.description || 'Proposal').slice(0, 70);
+            const category = String(c.category || 'General');
+            const reason = String(c.admin_response || c.remarks || 'Submission declined by LGU Secretariat');
+            const dateStr = c.date || c.created_at ? new Date(c.date || c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '-';
+
+            return `
+                <tr class="border-b border-gray-100 hover:bg-rose-50/40 transition" data-declined-id="${c.id}">
+                    <td class="px-5 py-3.5 font-bold text-gray-900 text-xs">${trackingNo}</td>
+                    <td class="px-5 py-3.5 text-xs text-gray-700">
+                        <div class="font-semibold text-gray-900">${submitterName}</div>
+                        <div class="text-[11px] text-gray-500">${submitterEmail}</div>
+                    </td>
+                    <td class="px-5 py-3.5 text-xs text-gray-800">
+                        <div class="font-semibold line-clamp-1">${title}</div>
+                        <span class="inline-block mt-0.5 px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium">${category}</span>
+                    </td>
+                    <td class="px-5 py-3.5 text-xs">
+                        <div class="px-2.5 py-1.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-[11px] font-medium leading-relaxed max-w-xs">
+                            <span class="font-bold text-rose-700">Reason:</span> ${reason}
+                        </div>
+                    </td>
+                    <td class="px-5 py-3.5 text-xs text-gray-500 whitespace-nowrap">${dateStr}</td>
+                    <td class="px-5 py-3.5 text-center">
+                        <div class="flex items-center justify-center gap-1.5">
+                            <button type="button" onclick="viewConsultationDetails(${c.id})" class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-semibold transition border border-blue-200 cursor-pointer" title="View Details">
+                                <i class="bi bi-eye"></i> View
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    const modalHtml = `
+        <div id="declined-submissions-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+            <div class="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+                <div class="px-6 py-4 bg-gradient-to-r from-rose-700 via-red-700 to-rose-800 text-white flex items-center justify-between shadow-xs">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-white border border-white/20">
+                            <i class="bi bi-archive-fill text-lg"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-extrabold tracking-tight">Declined Consultations Archive</h3>
+                        </div>
+                    </div>
+                    <button type="button" onclick="document.getElementById('declined-submissions-modal').remove()" class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg font-bold transition cursor-pointer">
+                        ✕
+                    </button>
+                </div>
+
+                <div class="p-6 overflow-y-auto flex-1 bg-slate-50/50">
+                    <div class="bg-white rounded-xl shadow-xs border border-gray-200 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="bg-slate-100/80 border-b border-gray-200 text-[11px] font-bold uppercase tracking-wider text-gray-600">
+                                    <tr>
+                                        <th class="px-5 py-3">Reference ID</th>
+                                        <th class="px-5 py-3">Citizen Submitter</th>
+                                        <th class="px-5 py-3">Proposal Title</th>
+                                        <th class="px-5 py-3">Decline Remarks</th>
+                                        <th class="px-5 py-3">Date</th>
+                                        <th class="px-5 py-3 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${rowsHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-6 py-3.5 bg-gray-50 border-t border-gray-200 flex items-center justify-between text-xs text-gray-500">
+                    <span class="font-semibold text-gray-700">Total Declined Proposals in Archive: <strong class="text-rose-600 font-extrabold text-sm">${declinedList.length}</strong></span>
+                    <button type="button" onclick="document.getElementById('declined-submissions-modal').remove()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition cursor-pointer">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+};
+
+window.restoreDeclinedSubmission = async function(id) {
+    if (!id) return;
+    const cid = Number(id);
+
+    try {
+        let apiUrl = 'API/consultations_api.php?action=restore_submission';
+        if (typeof getApiUrl === 'function') {
+            apiUrl = getApiUrl(apiUrl);
+        }
+
+        const resp = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'restore_submission', id: cid, consultation_id: cid })
+        });
+
+        const resData = await resp.json().catch(() => null);
+
+        if (resp.ok && resData && resData.success !== false) {
+            if (typeof alertToast === 'function') {
+                alertToast('Proposal restored back to Pending User Submissions!', 'success');
+            } else if (typeof showNotification === 'function') {
+                showNotification('Proposal restored back to Pending User Submissions!', 'success');
+            }
+
+            if (window.AppData && Array.isArray(window.AppData.consultations)) {
+                const item = window.AppData.consultations.find(c => Number(c.id) === cid);
+                if (item) {
+                    item.status = 'pending';
+                }
+            }
+
+            if (typeof renderAdminConsultationTables === 'function') {
+                renderAdminConsultationTables();
+            }
+
+            const oldModal = document.getElementById('declined-submissions-modal');
+            if (oldModal) {
+                oldModal.remove();
+                openDeclinedSubmissionsModal();
+            }
+        } else {
+            const msg = (resData && resData.message) ? resData.message : 'Failed to restore consultation';
+            if (typeof showNotification === 'function') {
+                showNotification(msg, 'error');
+            } else {
+                alert(msg);
+            }
+        }
+    } catch (err) {
+        console.error('Error restoring proposal:', err);
+        if (typeof showNotification === 'function') {
+            showNotification('Error restoring proposal', 'error');
+        }
+    }
+};
+
+if (typeof openDeclinedSubmissionsModal === 'undefined') {
+    var openDeclinedSubmissionsModal = window.openDeclinedSubmissionsModal;
+}
+if (typeof restoreDeclinedSubmission === 'undefined') {
+    var restoreDeclinedSubmission = window.restoreDeclinedSubmission;
 }
 
 

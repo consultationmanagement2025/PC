@@ -277,6 +277,15 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
 }
 
 // ==========================================
+// REQUIRE CITIZEN LOGIN TO ACCESS PORTAL VIEW
+// ==========================================
+// If citizen is not logged in or session timed out, redirect to main Landing Page (index.php)
+if (empty($_SESSION['user_id']) && empty($_SESSION['user_email']) && empty($_SESSION['citizen_logged_in'])) {
+    header("Location: ../index.php?timeout=1");
+    exit();
+}
+
+// ==========================================
 // REGULAR PAGE SUBMISSION HANDLER
 // ==========================================
 $submission_success = false;
