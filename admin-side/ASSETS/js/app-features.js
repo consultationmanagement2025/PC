@@ -13841,7 +13841,12 @@ function renderConsultationsTable() {
                     </button>
                 `;
             } else if (st === 'rejected' || st === 'declined') {
-                approveBtn = `<span class="px-2.5 py-1 bg-rose-100 text-rose-800 border border-rose-300 font-bold rounded-lg text-[11px] flex items-center gap-1"><i class="bi bi-x-circle-fill text-rose-600"></i> Declined</span>`;
+                approveBtn = `
+                    <span class="px-2.5 py-1 bg-rose-100 text-rose-800 border border-rose-300 font-bold rounded-lg text-[11px] flex items-center gap-1"><i class="bi bi-x-circle-fill text-rose-600"></i> Declined</span>
+                    <button type="button" onclick="event.preventDefault(); event.stopPropagation(); deleteConsultation(${consultation.id})" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer" title="Permanently Delete/Trash Rejected Proposal">
+                        <i class="bi bi-trash-fill"></i> Trash
+                    </button>
+                `;
             }
 
             userRows.push(`
@@ -14581,10 +14586,84 @@ function showConsultationSuccessModal(isEdit, title) {
     }
 }
 
-function deleteConsultation(id) {
+window.deleteConsultation = async function (id) {
+    if (!id) return;
 
-    showNotification('Delete is disabled to prevent data loss.', 'error');
+    let confirmed = false;
+    if (typeof Swal !== 'undefined') {
+        const result = await Swal.fire({
+            title: 'Delete Rejected Proposal?',
+            text: 'Are you sure you want to permanently delete/trash this consultation proposal? This action cannot be undone.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Yes, Trash Proposal',
+            cancelButtonText: 'Cancel'
+        });
+        confirmed = result.isConfirmed;
+    } else {
+        confirmed = confirm('Are you sure you want to permanently delete/trash this consultation proposal? This action cannot be undone.');
+    }
 
+    if (!confirmed) return;
+
+    try {
+        let apiUrl = 'API/consultations_api.php?action=delete';
+        if (typeof getApiUrl === 'function') {
+            apiUrl = getApiUrl('API/consultations_api.php?action=delete');
+        }
+
+        const resp = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete', id: Number(id) })
+        });
+
+        const resData = await resp.json().catch(() => null);
+
+        if (resp.ok && resData && resData.success !== false) {
+            if (typeof showToast === 'function') {
+                showToast('Consultation proposal deleted successfully', 'success');
+            } else if (typeof showNotification === 'function') {
+                showNotification('Consultation proposal deleted successfully', 'success');
+            }
+
+            if (window.AppData && Array.isArray(window.AppData.consultations)) {
+                window.AppData.consultations = window.AppData.consultations.filter(c => Number(c.id) !== Number(id));
+            }
+            if (window.AppData && Array.isArray(window.AppData.userSubmissions)) {
+                window.AppData.userSubmissions = window.AppData.userSubmissions.filter(c => Number(c.id) !== Number(id));
+            }
+
+            if (typeof renderAdminConsultationTables === 'function') {
+                renderAdminConsultationTables();
+            }
+
+            setTimeout(() => {
+                const tr = document.querySelector(`tr[data-consultation-id="${id}"]`);
+                if (tr) tr.remove();
+            }, 100);
+        } else {
+            const msg = (resData && resData.message) ? resData.message : 'Failed to delete consultation proposal';
+            if (typeof showNotification === 'function') {
+                showNotification(msg, 'error');
+            } else {
+                alert(msg);
+            }
+        }
+    } catch (err) {
+        console.error('Delete consultation error:', err);
+        if (typeof showNotification === 'function') {
+            showNotification('Error attempting to delete consultation', 'error');
+        } else {
+            alert('Error attempting to delete consultation');
+        }
+    }
+};
+
+if (typeof deleteConsultation === 'undefined') {
+    var deleteConsultation = window.deleteConsultation;
 }
 
 
@@ -17226,7 +17305,7 @@ function openFeedbackResponseModal(id) {
                                 ${f.committee_assigned ? `<span class="text-xs font-bold px-2 py-0.5 bg-indigo-200 text-indigo-900 rounded">Target: ${escapeHtml(f.committee_assigned)}</span>` : '<span class="text-xs text-indigo-600 font-medium">Target: ORTS (Ordinance Routing & Tracking System)</span>'}
                             </div>
                             <div class="grid grid-cols-1 gap-2">
-                                <button onclick="submitForwardToCommittee(${Number(f.id)})" class="w-full px-3 py-2 bg-indigo-700 text-white rounded text-xs font-bold hover:bg-indigo-800 shadow flex items-center justify-center gap-1 cursor-pointer">
+                                <button onclick="submitForwardToCommittee(${Number(f.consultation_id || f.id)})" class="w-full px-3 py-2 bg-indigo-700 text-white rounded text-xs font-bold hover:bg-indigo-800 shadow flex items-center justify-center gap-1 cursor-pointer">
                                     <i class="bi bi-send-check mr-1"></i> Forward to ORTS
                                 </button>
                             </div>
@@ -17286,6 +17365,9 @@ async function submitForwardToCommittee(id) {
         committee = 'ORTS Ordinance Routing System';
     }
 
+    const fRow = (AppData.feedback || []).find(f => Number(f.id) === Number(id));
+    const targetConsultationId = Number(fRow ? (fRow.consultation_id || fRow.id) : id);
+
     try {
         const res = await fetch('API/consultation_feedback_ai.php?action=forward_brief_to_orts', {
             method: 'POST',
@@ -17294,7 +17376,7 @@ async function submitForwardToCommittee(id) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                consultation_id: Number(id),
+                consultation_id: targetConsultationId,
                 committee: committee,
                 target: 'ORTS',
                 notes: 'Transmitted directly to ORTS'
@@ -17320,7 +17402,13 @@ async function submitForwardToCommittee(id) {
         closeFeedbackModal();
         pfpRenderStats();
         pfpRenderTable();
-        showNotification(data.message || `AI Brief & Report transmitted directly to ORTS!`, 'success');
+
+        showOrtsSuccessModal({
+            title: row ? (row.title || 'Public Consultation Feedback') : 'Public Consultation File',
+            consultation_id: targetConsultationId,
+            target: committee || 'ORTS Ordinance Routing System',
+            message: data.message || 'AI Brief & Validated Report transmitted directly to ORTS (Ordinance Routing & Tracking System)!'
+        });
     } catch (err) {
         showNotification(err && err.message ? String(err.message) : 'Failed to transmit to ORTS.', 'error');
     }
@@ -17908,15 +17996,28 @@ window.openPhmsDataApprovalSheetModal = async function() {
         const approveAllBtn = document.getElementById('phms-approve-all-btn');
 
         if (data && data.success && Array.isArray(data.data) && data.data.length > 0) {
-            const pendingList = data.data;
-            if (statusLabel) statusLabel.innerHTML = `<i class="bi bi-exclamation-circle-fill text-amber-600"></i> ${pendingList.length} Pending Approval`;
+            const groupedMap = new Map();
+            data.data.forEach(item => {
+                const key = item.phms_hearing_id || item.hearing_id || item.queue_id || 'unknown';
+                if (!groupedMap.has(key)) {
+                    groupedMap.set(key, { ...item, entriesCount: item.feedback_count || 1 });
+                } else {
+                    const existing = groupedMap.get(key);
+                    existing.entriesCount = (existing.entriesCount || 1) + (item.feedback_count || 1);
+                }
+            });
+            const pendingList = Array.from(groupedMap.values());
+
+            if (statusLabel) {
+                statusLabel.innerHTML = `<i class="bi bi-exclamation-circle-fill text-amber-600"></i> ${pendingList.length} Pending Approval`;
+            }
 
             tbody.innerHTML = pendingList.map(item => {
                 const qId = item.queue_id || item.phms_hearing_id;
                 const hId = item.phms_hearing_id ? `PHMS-H#${item.phms_hearing_id}` : `Queue #${item.queue_id}`;
                 const title = escapeHtmlHelper(item.full_name || item.hearing_title || 'Public Hearing Payload');
                 const dateStr = item.created_at || 'Just now';
-                const count = item.feedback_count || 0;
+                const count = item.entriesCount || item.feedback_count || 1;
 
                 return `
                     <tr class="hover:bg-slate-50 transition">
@@ -22651,19 +22752,14 @@ function renderAiCommitteeBriefModalHtml(brief) {
                             <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-[11px] font-bold shadow-2xs">
                                 <i class="bi bi-patch-check-fill text-emerald-600"></i> Validated by Resource Person
                             </span>
-                            <button onclick="pfpForwardBriefToOrts(${brief.consultation_id})" class="px-5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-2 cursor-pointer" title="Transmit to ORTS (Ordinance Routing & Tracking System)">
+                            <button onclick="pfpForwardBriefToOrts(${brief.consultation_id || 0}, '${escapeHtml(brief.title || '').replace(/'/g, "\\'")}')" class="px-5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-2 cursor-pointer" title="Transmit to ORTS (Ordinance Routing & Tracking System)">
                                 <i class="bi bi-send-check-fill"></i> Forward to ORTS
                             </button>
                         </div>
                     ` : `
-                        <div class="flex items-center gap-2">
-                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-[11px] font-bold shadow-2xs">
-                                <i class="bi bi-shield-lock-fill text-amber-600"></i> Awaiting Resource Person Review
-                            </span>
-                            <button type="button" onclick="showAwaitingExpertReviewNotice(${brief.consultation_id})" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold rounded-xl text-xs transition flex items-center gap-2 border border-slate-300 cursor-pointer" title="Forwarding to ORTS requires Resource Person review first">
-                                <i class="bi bi-lock-fill text-amber-500"></i> Forward to ORTS (Locked)
-                            </button>
-                        </div>
+                        <button onclick="showAwaitingExpertReviewNotice(${brief.consultation_id || 0})" class="px-5 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-extrabold rounded-xl text-xs transition flex items-center gap-2 cursor-not-allowed" title="Requires Resource Person (Expert) annotation before forwarding">
+                            <i class="bi bi-shield-lock-fill"></i> Awaiting Resource Person Verification
+                        </button>
                     `}
                 </div>
             </div>
@@ -22682,21 +22778,102 @@ window.showAwaitingExpertReviewNotice = function(consultationId) {
     }
 };
 
-async function pfpForwardBriefToOrts(consultationId) {
-    if (!consultationId) return;
+window.showOrtsSuccessModal = function (details) {
+    const existing = document.getElementById('orts-success-modal');
+    if (existing) existing.remove();
+
+    const title = escapeHtmlHelper(details.title || 'Public Consultation File');
+    const msg = escapeHtmlHelper(details.message || 'AI Brief & Validated Report transmitted directly to ORTS!');
+    const target = escapeHtmlHelper(details.target || 'ORTS (Ordinance Routing & Tracking System)');
+
+    const modal = document.createElement('div');
+    modal.id = 'orts-success-modal';
+    modal.className = 'fixed inset-0 bg-slate-900/70 backdrop-blur-md flex items-center justify-center z-50 p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200';
+
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200 my-auto">
+            <!-- Modal Header -->
+            <div class="bg-gradient-to-r from-indigo-800 via-purple-900 to-slate-900 text-white p-5 sm:p-6 flex items-center justify-between border-b border-indigo-900/40">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center shrink-0">
+                        <i class="bi bi-send-check-fill text-xl text-emerald-400"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-black text-base uppercase tracking-wider text-white">Transmitted to ORTS</h3>
+                        <p class="text-[11px] text-indigo-200 font-medium">Ordinance Routing & Tracking System Integration</p>
+                    </div>
+                </div>
+                <button type="button" onclick="document.getElementById('orts-success-modal').remove()" class="text-white/70 hover:text-white text-xl font-bold transition focus:outline-none bg-white/10 hover:bg-white/20 rounded-full w-8 h-8 flex items-center justify-center leading-none">&times;</button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 space-y-4 text-xs">
+                <div class="p-4 bg-emerald-50/80 rounded-xl border border-emerald-200 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            <i class="bi bi-check-circle-fill mr-1"></i> Transmittal Successful
+                        </span>
+                        <span class="text-[10px] text-emerald-700 font-bold">Status: TRANSMITTED</span>
+                    </div>
+                    <h4 class="font-extrabold text-slate-900 text-sm leading-snug">${title}</h4>
+                    <p class="text-slate-700 text-xs font-medium leading-relaxed">${msg}</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Target System</span>
+                        <strong class="text-indigo-900 font-extrabold text-xs block truncate">${target}</strong>
+                    </div>
+                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Archive Record</span>
+                        <strong class="text-purple-900 font-extrabold text-xs block truncate"><i class="bi bi-file-earmark-pdf-fill text-red-500 mr-1"></i> PDF Brief Registered</strong>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-blue-50/70 rounded-xl border border-blue-200 text-blue-950 text-[11px] flex items-center gap-2 font-medium">
+                    <i class="bi bi-info-circle-fill text-blue-600 text-sm shrink-0"></i>
+                    <span>The validated AI Synthesis Brief has been logged into Document Management and dispatched to the Sangguniang Panlungsod ORTS workflow.</span>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+                <button type="button" onclick="document.getElementById('orts-success-modal').remove()" class="px-5 py-2.5 bg-gradient-to-r from-indigo-700 to-purple-800 hover:from-indigo-800 hover:to-purple-900 text-white font-extrabold text-xs rounded-xl transition shadow-md flex items-center gap-1.5 cursor-pointer">
+                    <i class="bi bi-check-lg"></i> Done & Return to Portal
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+};
+
+async function pfpForwardBriefToOrts(consultationId, consultationTitle) {
+    const cid = Number(consultationId) || 0;
     try {
         showNotification('Forwarding document directly to ORTS & registering PDF in Document Management...', 'info');
         const res = await fetchWithTimeout('API/consultation_feedback_ai.php?action=forward_brief_to_orts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ consultation_id: consultationId, target: 'ORTS' })
+            body: JSON.stringify({
+                consultation_id: cid,
+                title: consultationTitle || '',
+                target: 'ORTS'
+            })
         }, 12000);
 
         const data = await res.json();
         if (res.ok && data.success) {
-            showNotification(`✅ AI Brief & Validated Report transmitted directly to ORTS (Ordinance Routing & Tracking System)! Registered in Document Management archives.`, 'success', 6000);
-            const modal = document.getElementById('pfq-ai-brief-modal');
-            if (modal) modal.remove();
+            const briefModal = document.getElementById('pfq-ai-brief-modal');
+            if (briefModal) briefModal.remove();
+
+            showOrtsSuccessModal({
+                title: consultationTitle || 'Public Consultation File',
+                consultation_id: cid,
+                target: data.target_system || 'ORTS',
+                message: data.message || 'AI Brief & Validated Report transmitted directly to ORTS (Ordinance Routing & Tracking System)!'
+            });
+
             if (typeof pfpRefreshData === 'function') pfpRefreshData();
             if (typeof renderDocumentsList === 'function') renderDocumentsList();
             if (typeof fetchDocuments === 'function') fetchDocuments();
@@ -23348,6 +23525,13 @@ window.openDeclineCitizenSubmissionModal = function (consultationId) {
     const cid = Number(consultationId);
     const consultation = (AppData.consultations || []).find(c => Number(c.id) === cid);
 
+    if (consultation && (consultation.status === 'declined' || consultation.status === 'rejected')) {
+        if (typeof alertToast === 'function') {
+            alertToast('This submission is already declined.', 'warning');
+        }
+        return;
+    }
+
     const old = document.getElementById('decline-submission-modal');
     if (old) old.remove();
 
@@ -23395,7 +23579,7 @@ window.openDeclineCitizenSubmissionModal = function (consultationId) {
                 <button type="button" onclick="event.preventDefault(); event.stopPropagation(); document.getElementById('decline-submission-modal').remove()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition">
                     Cancel
                 </button>
-                <button type="button" onclick="confirmDeclineCitizenSubmission(${cid}, event)" class="px-5 py-2 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 hover:to-red-800 text-white font-extrabold text-xs rounded-xl transition shadow flex items-center gap-1.5 cursor-pointer">
+                <button type="button" id="decline-confirm-submit-btn" onclick="confirmDeclineCitizenSubmission(${cid}, event)" class="px-5 py-2 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 hover:to-red-800 text-white font-extrabold text-xs rounded-xl transition shadow flex items-center gap-1.5 cursor-pointer">
                     <i class="bi bi-x-lg"></i> Confirm & Decline
                 </button>
             </div>
@@ -23410,87 +23594,164 @@ window.confirmDeclineCitizenSubmission = async function (consultationId, event) 
         try { event.preventDefault(); event.stopPropagation(); } catch (_) {}
     }
     const cid = Number(consultationId);
-    const reason = document.getElementById('decline-submission-reason')?.value || 'Submission declined by LGU Secretariat.';
+    const consultation = (AppData.consultations || []).find(c => Number(c.id) === cid);
 
-    const modal = document.getElementById('decline-submission-modal');
-    if (modal) modal.remove();
-
-    // 1. INSTANT OPTIMISTIC UI UPDATE
-    if (Array.isArray(AppData.consultations)) {
-        const item = AppData.consultations.find(c => Number(c.id) === cid);
-        if (item) {
-            item.status = 'declined';
-            item.admin_response = reason;
-            item.remarks = reason;
+    if (consultation && (consultation.status === 'declined' || consultation.status === 'rejected')) {
+        if (typeof alertToast === 'function') {
+            alertToast('This submission is already declined.', 'warning');
         }
+        const oldModal = document.getElementById('decline-submission-modal');
+        if (oldModal) oldModal.remove();
+        return;
     }
-    if (typeof renderConsultationsTable === 'function') {
-        renderConsultationsTable();
-    }
-    if (typeof renderConsultationManagement === 'function') {
-        renderConsultationManagement();
-    }
-    if (typeof alertToast === 'function') {
-        alertToast('Citizen Submission has been declined.', 'info');
-    } else if (typeof showNotification === 'function') {
-        showNotification('Citizen Submission has been declined.', 'info');
+
+    const reasonInput = document.getElementById('decline-submission-reason');
+    const reason = reasonInput?.value?.trim() || 'Submission declined by LGU Secretariat.';
+    const confirmBtn = document.getElementById('decline-confirm-submit-btn');
+
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin mr-1"></i> Declining...';
     }
 
     let executedSuccessfully = false;
 
-    // 2. Persist to API
+    // Detect primary target API
+    let targetApi = 'API/consultations_api.php?action=decline_submission';
+    if (typeof getApiUrl === 'function') {
+        targetApi = getApiUrl(targetApi);
+    } else if (window.location.pathname.includes('/admin/') || window.location.pathname.includes('/admin-side/')) {
+        targetApi = '../API/consultations_api.php?action=decline_submission';
+    }
+
+    const payload = {
+        action: 'decline_submission',
+        id: cid,
+        consultation_id: cid,
+        status: 'declined',
+        reason: reason,
+        remarks: reason
+    };
+
+    console.log('[Decline Execution] Target API:', targetApi, payload);
+
+    // 1. Primary JSON API call
     try {
-        const res = await fetch('API/consultations_api.php?action=decline_submission', {
+        const res = await fetch(targetApi, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                id: cid,
-                status: 'declined',
-                reason: reason
-            })
+            body: JSON.stringify(payload)
         });
-        const data = await res.json();
-        if (data && (data.success === true || data.success === 'true' || data.success == 1 || (data.message && data.message.toLowerCase().includes('declined')))) {
+        console.log('[Decline Execution] Primary API status:', res.status);
+        const data = await res.json().catch(() => null);
+        console.log('[Decline Execution] Primary API response:', data);
+        if (res.ok && data && (data.success === true || data.success === 'true' || data.success == 1)) {
             executedSuccessfully = true;
         }
-    } catch (e) {
-        console.warn('API endpoint decline fetch failed, trying template endpoint...', e);
+    } catch (err1) {
+        console.warn('[Decline Execution] Primary API error:', err1);
     }
 
-    // 3. Fallback to system-template-full.php status update endpoint
+    // 2. Alt API relative path
     if (!executedSuccessfully) {
+        const altApi = targetApi.startsWith('../') ? 'API/consultations_api.php?action=decline_submission' : '../API/consultations_api.php?action=decline_submission';
         try {
-            const fbRes = await fetch('system-template-full.php', {
+            console.log('[Decline Execution] Trying alt API:', altApi);
+            const res2 = await fetch(altApi, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `action=update_consultation_status&consultation_id=${cid}&status=declined&reason=${encodeURIComponent(reason)}`
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             });
-            const fbData = await fbRes.json();
-            if (fbData && (fbData.success === true || fbData.success === 'true' || fbData.success == 1)) {
+            const data2 = await res2.json().catch(() => null);
+            console.log('[Decline Execution] Alt API response:', data2);
+            if (res2.ok && data2 && (data2.success === true || data2.success === 'true' || data2.success == 1)) {
                 executedSuccessfully = true;
             }
-        } catch (e2) {
-            console.error('Template endpoint decline fetch failed:', e2);
+        } catch (err2) {
+            console.warn('[Decline Execution] Alt API error:', err2);
         }
     }
 
-    // 4. Fresh re-sync from server with cache-busting
-    if (typeof loadConsultationsFromApi === 'function') {
-        await loadConsultationsFromApi(true).catch(() => {});
-    }
-    if (typeof renderConsultationsTable === 'function') {
-        renderConsultationsTable();
-    }
-    if (typeof renderConsultationManagementSection === 'function') {
-        renderConsultationManagementSection();
+    // 3. Fallback form-urlencoded update_consultation_status to system-template-full.php
+    if (!executedSuccessfully) {
+        let templateTarget = 'system-template-full.php';
+        if (window.location.pathname.includes('/admin/') || window.location.pathname.includes('/admin-side/')) {
+            templateTarget = '../system-template-full.php';
+        }
+        try {
+            console.log('[Decline Execution] Trying template fallback:', templateTarget);
+            const bodyParams = new URLSearchParams();
+            bodyParams.append('action', 'update_consultation_status');
+            bodyParams.append('consultation_id', cid);
+            bodyParams.append('id', cid);
+            bodyParams.append('status', 'declined');
+            bodyParams.append('reason', reason);
+            bodyParams.append('remarks', reason);
+
+            const res3 = await fetch(templateTarget, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: bodyParams.toString()
+            });
+            console.log('[Decline Execution] Template fallback status:', res3.status);
+            const data3 = await res3.json().catch(() => null);
+            console.log('[Decline Execution] Template fallback response:', data3);
+            if (res3.ok && data3 && (data3.success === true || data3.success === 'true' || data3.success == 1)) {
+                executedSuccessfully = true;
+            }
+        } catch (err3) {
+            console.warn('[Decline Execution] Template fallback error:', err3);
+        }
     }
 
-    // Handle server-rendered PHP page view smoothly
-    setTimeout(() => {
-        if (!document.getElementById('consultations-user-table-body')) {
-            window.location.reload();
+    if (executedSuccessfully) {
+        // Remove modal after successful database update
+        const modal = document.getElementById('decline-submission-modal');
+        if (modal) modal.remove();
+
+        // Update local state
+        if (Array.isArray(AppData.consultations)) {
+            const item = AppData.consultations.find(c => Number(c.id) === cid);
+            if (item) {
+                item.status = 'declined';
+                item.admin_response = reason;
+                item.remarks = reason;
+            }
         }
-    }, 350);
+
+        // Display success toast
+        if (typeof alertToast === 'function') {
+            alertToast('Decline actions are now persistent and reflected in real time.', 'success');
+        } else if (typeof showNotification === 'function') {
+            showNotification('Decline actions are now persistent and reflected in real time.', 'success');
+        }
+
+        // Refresh UI state after database update is verified successful
+        if (typeof loadConsultationsFromApi === 'function') {
+            await loadConsultationsFromApi(true).catch(() => {});
+        }
+        if (typeof renderConsultationsTable === 'function') {
+            renderConsultationsTable();
+        }
+        if (typeof renderConsultationManagementSection === 'function') {
+            renderConsultationManagementSection();
+        }
+        if (typeof renderConsultationManagement === 'function') {
+            renderConsultationManagement();
+        }
+    } else {
+        // Error handling
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="bi bi-x-lg"></i> Confirm & Decline';
+        }
+        if (typeof alertToast === 'function') {
+            alertToast('Decline failed — please retry', 'error');
+        } else if (typeof showNotification === 'function') {
+            showNotification('Decline failed — please retry', 'error');
+        }
+        console.error('[Audit Tracking Failure Log] Decline action failed for consultation ID:', cid);
+    }
 };
 
 window.loadPendingUserApplications = async function() {

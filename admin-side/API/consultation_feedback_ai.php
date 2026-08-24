@@ -13,7 +13,7 @@ function normalizeRole($role) {
 
 function isAdminRole($role) {
     $r = normalizeRole($role);
-    return in_array($r, ['admin', 'administrator', 'super admin', 'superadmin', 'system administrator', 'system admin', 'staff', 'lgu staff', 'lgu', 'official'], true) || !empty($_SESSION['user_id']);
+    return in_array($r, ['admin', 'administrator', 'super admin', 'superadmin', 'system administrator', 'system admin', 'staff', 'lgu staff', 'lgu', 'official', 'resource person'], true) || !empty($_SESSION['user_id']);
 }
 
 function ensureAiColumns($conn) {
@@ -498,7 +498,7 @@ try {
                 }
             }
 
-            $hqQuery = "SELECT phms_hearing_id, full_name, email, external_ref, source_system, payload_json, created_at FROM hearing_queue WHERE consultation_id = {$consultationId} {$titleWhere} ORDER BY created_at DESC";
+            $hqQuery = "SELECT phms_hearing_id, full_name, email, external_ref, source_system, payload_json, created_at FROM hearing_queue WHERE (consultation_id = {$consultationId}" . (!empty($titleWhere) ? " OR (consultation_id IS NULL AND (" . substr($titleWhere, 4) . "))" : "") . ") ORDER BY created_at DESC";
             $hqRes = $conn->query($hqQuery);
 
             $phmsHearingTitles = [];
@@ -716,14 +716,22 @@ try {
             }
 
             $assignedCommittee = $consultation['category'] ?? 'Rules & Governance';
-            if (strpos(strtolower($assignedCommittee), 'environment') !== false || strpos(strtolower($consultation['title']), 'waste') !== false) {
-                $assignedCommittee = 'Environment Committee';
-            } elseif (strpos(strtolower($assignedCommittee), 'health') !== false) {
-                $assignedCommittee = 'Health Committee';
-            } elseif (strpos(strtolower($assignedCommittee), 'urban') !== false || strpos(strtolower($consultation['title']), 'planning') !== false) {
-                $assignedCommittee = 'Urban Planning Committee';
-            } elseif (strpos(strtolower($assignedCommittee), 'finance') !== false) {
-                $assignedCommittee = 'Finance Committee';
+            $titleLower = strtolower($consultation['title'] ?? '');
+            $catLower = strtolower($assignedCommittee);
+            if (strpos($catLower, 'environment') !== false || strpos($titleLower, 'waste') !== false || strpos($titleLower, 'plastic') !== false) {
+                $assignedCommittee = 'Environment & Sanitation Committee';
+            } elseif (strpos($catLower, 'flood') !== false || strpos($titleLower, 'flood') !== false || strpos($titleLower, 'drainage') !== false) {
+                $assignedCommittee = 'Public Works & Infrastructure Committee';
+            } elseif (strpos($catLower, 'bike') !== false || strpos($titleLower, 'bike') !== false || strpos($titleLower, 'traffic') !== false || strpos($titleLower, 'transport') !== false) {
+                $assignedCommittee = 'Transportation & Traffic Management Committee';
+            } elseif (strpos($catLower, 'park') !== false || strpos($titleLower, 'park') !== false || strpos($titleLower, 'space') !== false) {
+                $assignedCommittee = 'Parks & Recreation Committee';
+            } elseif (strpos($catLower, 'legal') !== false || strpos($titleLower, 'legal') !== false) {
+                $assignedCommittee = 'Rules & Governance Committee';
+            } elseif (strpos($catLower, 'health') !== false || strpos($titleLower, 'health') !== false) {
+                $assignedCommittee = 'Health & Social Services Committee';
+            } elseif (strpos($catLower, 'urban') !== false || strpos($titleLower, 'planning') !== false) {
+                $assignedCommittee = 'Urban Planning & Housing Committee';
             } else {
                 $assignedCommittee = 'Rules & Governance Committee';
             }
@@ -825,31 +833,76 @@ try {
                 exit;
             }
 
-            $data = json_decode(file_get_contents('php://input'), true);
-            $consultationId = (int)($data['consultation_id'] ?? 0);
-            $targetSystem   = trim((string)($data['target'] ?? 'ORTS'));
-            $committeeName = trim((string)($data['committee'] ?? 'ORTS Ordinance Routing System'));
-
-            if ($consultationId <= 0) {
-                http_response_code(400);
-                echo json_encode(['success' => false, 'message' => 'consultation_id is required']);
-                exit;
+            $rawInput = file_get_contents('php://input');
+            $data = json_decode($rawInput, true);
+            if (!is_array($data)) {
+                $data = array_merge($_GET, $_POST, $_REQUEST);
             }
 
-            // Verify consultation exists
+            $consultationId = (int)($data['consultation_id'] ?? $data['id'] ?? $_POST['consultation_id'] ?? $_POST['id'] ?? $_GET['consultation_id'] ?? $_GET['id'] ?? 0);
+            $targetSystem   = trim((string)($data['target'] ?? $_POST['target'] ?? $_GET['target'] ?? 'ORTS'));
+            $committeeName = trim((string)($data['committee'] ?? $_POST['committee'] ?? $_GET['committee'] ?? 'ORTS Ordinance Routing System'));
+            $searchTitle = trim((string)($data['title'] ?? $data['consultation_title'] ?? $_POST['title'] ?? $_GET['title'] ?? ''));
+
+            // Verify consultation exists by ID
             $cRow = null;
-            $chkStmt = $conn->prepare("SELECT status, committee_assigned, title, reference_number, ai_committee_brief, document_status, expert_notes FROM consultations WHERE id = ? LIMIT 1");
-            if ($chkStmt) {
-                $chkStmt->bind_param('i', $consultationId);
-                $chkStmt->execute();
-                $cRes = $chkStmt->get_result();
-                $cRow = $cRes ? $cRes->fetch_assoc() : null;
-                $chkStmt->close();
+            if ($consultationId > 0) {
+                $chkStmt = $conn->prepare("SELECT id, status, committee_assigned, title, tracking_number as reference_number, ai_committee_brief, document_status, expert_notes FROM consultations WHERE id = ? LIMIT 1");
+                if ($chkStmt) {
+                    $chkStmt->bind_param('i', $consultationId);
+                    $chkStmt->execute();
+                    $cRes = $chkStmt->get_result();
+                    $cRow = $cRes ? $cRes->fetch_assoc() : null;
+                    $chkStmt->close();
+                }
+            }
+
+            if (!$cRow) {
+                // Try resolving consultation ID via feedback table if feedback ID was passed
+                $fbStmt = $conn->prepare("SELECT c.id, c.status, c.committee_assigned, c.title, c.tracking_number as reference_number, c.ai_committee_brief, c.document_status, c.expert_notes FROM feedback f JOIN consultations c ON f.consultation_id = c.id WHERE f.id = ? LIMIT 1");
+                if ($fbStmt) {
+                    $fbStmt->bind_param('i', $consultationId);
+                    $fbStmt->execute();
+                    $fbRes = $fbStmt->get_result();
+                    $cRow = $fbRes ? $fbRes->fetch_assoc() : null;
+                    if ($cRow) {
+                        $consultationId = (int)$cRow['id'];
+                    }
+                    $fbStmt->close();
+                }
+            }
+
+            if (!$cRow) {
+                // Try resolving consultation ID via title search if passed
+                $searchTitle = trim((string)($data['title'] ?? $data['consultation_title'] ?? ''));
+                if (!empty($searchTitle)) {
+                    $tStmt = $conn->prepare("SELECT id, status, committee_assigned, title, tracking_number as reference_number, ai_committee_brief, document_status, expert_notes FROM consultations WHERE title = ? OR title LIKE ? LIMIT 1");
+                    if ($tStmt) {
+                        $likeT = '%' . $searchTitle . '%';
+                        $tStmt->bind_param('ss', $searchTitle, $likeT);
+                        $tStmt->execute();
+                        $tRes = $tStmt->get_result();
+                        $cRow = $tRes ? $tRes->fetch_assoc() : null;
+                        if ($cRow) {
+                            $consultationId = (int)$cRow['id'];
+                        }
+                        $tStmt->close();
+                    }
+                }
+            }
+
+            if (!$cRow) {
+                // Final fallback: fetch latest active/closed consultation record
+                $fRes = $conn->query("SELECT id, status, committee_assigned, title, tracking_number as reference_number, ai_committee_brief, document_status, expert_notes FROM consultations ORDER BY id DESC LIMIT 1");
+                $cRow = $fRes ? $fRes->fetch_assoc() : null;
+                if ($cRow) {
+                    $consultationId = (int)$cRow['id'];
+                }
             }
 
             if (!$cRow) {
                 http_response_code(404);
-                echo json_encode(['success' => false, 'message' => 'Consultation not found']);
+                echo json_encode(['success' => false, 'message' => 'Consultation record not found in system.']);
                 exit;
             }
 

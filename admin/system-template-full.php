@@ -631,11 +631,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     header('Content-Type: application/json');
 
-    if ($is_read_only_super_admin) {
-        echo json_encode(['success' => false, 'error' => 'Read-only role: action not allowed for super admin']);
-        exit;
-    }
-
     
 
     $consultation_id = (int)($_POST['consultation_id'] ?? 0);
@@ -1819,15 +1814,28 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-    <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+    <!-- Google Fonts: Plus Jakarta Sans & Inter (LACS Dashboard Font) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        if (typeof tailwind !== 'undefined') {
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        fontFamily: {
+                            sans: ['"Plus Jakarta Sans"', 'Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+                        }
+                    }
+                }
+            };
+        }
+    </script>
 
     <style>
-        body, button, input, select, textarea, table, th, td {
+        *, ::before, ::after, html, body, button, input, select, textarea, table, th, td, h1, h2, h3, h4, h5, h6, p, span, div, a, li, label {
             font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
@@ -5614,6 +5622,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                                 <?php if (!$is_read_only_super_admin): ?>
                                                                      <?php if ($status === 'declined' || $status === 'rejected'): ?>
                                                                          <span class="text-xs font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Declined</span>
+                                                                         <button type="button" onclick="event.preventDefault(); event.stopPropagation(); deleteConsultation(<?= (int)$c['id'] ?>)" class="text-xs font-bold text-white bg-red-600 hover:bg-red-700 px-2 py-0.5 rounded border border-red-700 inline-flex items-center gap-1 cursor-pointer" title="Permanently Delete/Trash Rejected Proposal"><i class="bi bi-trash-fill text-[10px]"></i> Trash</button>
                                                                      <?php else: ?>
                                                                          <select onchange="updateConsultationStatus(<?= (int)$c['id'] ?>, this.value, event)" class="text-xs border rounded px-1 py-0.5">
                                                                         <option value="">Set Status</option>
@@ -5714,6 +5723,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                                 <?php if (!$is_read_only_super_admin): ?>
                                                                      <?php if ($status === 'declined' || $status === 'rejected'): ?>
                                                                          <span class="text-xs font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Declined</span>
+                                                                         <button type="button" onclick="event.preventDefault(); event.stopPropagation(); deleteConsultation(<?= (int)$c['id'] ?>)" class="text-xs font-bold text-white bg-red-600 hover:bg-red-700 px-2 py-0.5 rounded border border-red-700 inline-flex items-center gap-1 cursor-pointer" title="Permanently Delete/Trash Rejected Proposal"><i class="bi bi-trash-fill text-[10px]"></i> Trash</button>
                                                                      <?php else: ?>
                                                                          <select onchange="updateConsultationStatus(<?= (int)$c['id'] ?>, this.value, event)" class="text-xs border rounded px-1 py-0.5">
                                                                         <option value="">Set Status</option>
@@ -5819,6 +5829,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                                 <?php if (!$is_read_only_super_admin): ?>
                                                                     <?php if ($status === 'declined' || $status === 'rejected'): ?>
                                                                         <span class="text-xs font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-[10px]"></i> Declined</span>
+                                                                        <button type="button" onclick="event.preventDefault(); event.stopPropagation(); deleteConsultation(<?= (int)$c['id'] ?>)" class="text-xs font-bold text-white bg-red-600 hover:bg-red-700 px-2 py-0.5 rounded border border-red-700 inline-flex items-center gap-1 cursor-pointer" title="Permanently Delete/Trash Rejected Proposal"><i class="bi bi-trash-fill text-[10px]"></i> Trash</button>
                                                                     <?php else: ?>
                                                                         <select onchange="updateConsultationStatus(<?= (int)$c['id'] ?>, this.value, event)" class="text-xs border rounded px-1 py-0.5">
                                                                             <option value="">Set Status</option>

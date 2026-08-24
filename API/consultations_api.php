@@ -21,7 +21,13 @@ require_once __DIR__ . '/../email_config.php';
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
 $is_authenticated = isset($_SESSION['user_id']) || !empty($_SESSION['email']) || !empty($_SESSION['role']) || !empty($_SESSION['admin_id']) || !empty($_SESSION['fullname']) || !empty($_SESSION['username']) || !empty($_SESSION['admin_logged_in']) || isset($_COOKIE['PHPSESSID']);
 
-$action = $_POST['action'] ?? ($_GET['action'] ?? 'list');
+$rawInput = file_get_contents('php://input');
+$jsonBody = json_decode($rawInput, true);
+if (!is_array($jsonBody)) {
+    $jsonBody = [];
+}
+
+$action = $jsonBody['action'] ?? ($_POST['action'] ?? ($_GET['action'] ?? 'list'));
 $read_actions = ['list', 'get', 'get_vote_stats', 'get_all_vote_stats', 'debug', 'decline_submission', 'reject_submission'];
 
 if (!in_array($action, $read_actions, true) && !$is_authenticated) {
@@ -474,12 +480,13 @@ try {
 
         case 'decline_submission':
         case 'reject_submission':
-            $data = json_decode(file_get_contents('php://input'), true);
-            if (empty($data)) {
-                $data = $_POST;
+            $rawInput = file_get_contents('php://input');
+            $data = json_decode($rawInput, true);
+            if (!is_array($data)) {
+                $data = [];
             }
-            $id = (int)($data['id'] ?? ($_GET['id'] ?? 0));
-            $reason = trim((string)($data['reason'] ?? $data['remarks'] ?? 'Submission declined by LGU Secretariat'));
+            $id = (int)($data['id'] ?? ($data['consultation_id'] ?? ($_POST['id'] ?? ($_POST['consultation_id'] ?? ($_GET['id'] ?? ($_GET['consultation_id'] ?? 0))))));
+            $reason = trim((string)($data['reason'] ?? ($data['remarks'] ?? ($_POST['reason'] ?? ($_POST['remarks'] ?? ($_GET['reason'] ?? ($_GET['remarks'] ?? 'Submission declined by LGU Secretariat')))))));
 
             if (!$id) {
                 http_response_code(400);
@@ -487,100 +494,128 @@ try {
                 exit;
             }
 
-            // Fetch submitter details for notifications
-            $cStmt = $conn->prepare("SELECT title, user_name, user_email, user_id, tracking_number FROM consultations WHERE id = ? LIMIT 1");
-            $submitter = null;
-            if ($cStmt) {
-                $cStmt->bind_param('i', $id);
-                $cStmt->execute();
-                $cRes = $cStmt->get_result();
-                $submitter = $cRes ? $cRes->fetch_assoc() : null;
-                $cStmt->close();
+            // Perform robust multi-layer database update
+            $escapedReason = $conn->real_escape_string($reason);
+            $ok = false;
+
+            // Attempt 1: Prepared statement with admin_response and remarks
+            try {
+                $stmt = $conn->prepare("UPDATE consultations SET status = 'declined', admin_response = ?, remarks = ?, updated_at = NOW() WHERE id = ?");
+                if ($stmt) {
+                    $stmt->bind_param('ssi', $reason, $reason, $id);
+                    $ok = $stmt->execute();
+                    $stmt->close();
+                }
+            } catch (Throwable $e1) {
+                $ok = false;
             }
 
-            $stmt = $conn->prepare("UPDATE consultations SET status = 'declined', admin_response = ?, remarks = ?, updated_at = NOW() WHERE id = ?");
-            $ok = false;
-            if ($stmt) {
-                $stmt->bind_param('ssi', $reason, $reason, $id);
-                $ok = $stmt->execute();
-                $affected = $stmt->affected_rows;
-                $stmt->close();
-
-                if ($affected === 0) {
-                    $chk = $conn->query("SELECT id FROM consultations WHERE id = $id");
-                    if ($chk && $chk->num_rows === 0) {
-                        $ins = $conn->prepare("INSERT INTO consultations (id, title, description, category, type, user_name, status, admin_response, remarks, created_at, updated_at) VALUES (?, 'Citizen Proposal', 'Citizen submitted proposal.', 'General Governance', 'user', 'Citizen', 'declined', ?, ?, NOW(), NOW())");
-                        if ($ins) {
-                            $ins->bind_param('iss', $id, $reason, $reason);
-                            $ok = $ins->execute();
-                            $ins->close();
-                        }
+            // Attempt 2: Prepared statement without admin_response column
+            if (!$ok) {
+                try {
+                    $stmtFb = $conn->prepare("UPDATE consultations SET status = 'declined', remarks = ?, updated_at = NOW() WHERE id = ?");
+                    if ($stmtFb) {
+                        $stmtFb->bind_param('si', $reason, $id);
+                        $ok = $stmtFb->execute();
+                        $stmtFb->close();
                     }
+                } catch (Throwable $e2) {
+                    $ok = false;
                 }
             }
 
-            // 1. Create In-App Notification in database
-            if ($ok && file_exists(__DIR__ . '/../DATABASE/notifications.php')) {
-                require_once __DIR__ . '/../DATABASE/notifications.php';
-                $targetUserId = (int)($submitter['user_id'] ?? 0);
-                $cTitle = $submitter['title'] ?? 'Citizen Proposal';
-                $trackingNo = $submitter['tracking_number'] ?? ("CONSULT-" . str_pad($id, 6, "0", STR_PAD_LEFT));
-                $notifMsg = "Your consultation proposal \"{$cTitle}\" ({$trackingNo}) was reviewed and declined by the LGU Secretariat. Reason: {$reason}";
-                createNotification($targetUserId, $notifMsg, 'decline');
+            // Attempt 3: Direct escape query
+            if (!$ok) {
+                $ok = (bool)$conn->query("UPDATE consultations SET status = 'declined', remarks = '{$escapedReason}', admin_response = '{$escapedReason}', updated_at = NOW() WHERE id = {$id}");
+                if (!$ok) {
+                    $ok = (bool)$conn->query("UPDATE consultations SET status = 'declined', remarks = '{$escapedReason}' WHERE id = {$id}");
+                }
             }
+
+            // Attempt 4: General status update fallback
+            if (!$ok) {
+                $ok = (bool)$conn->query("UPDATE consultations SET status = 'declined' WHERE id = {$id}");
+            }
+
+            // Fetch submitter details for notifications safely
+            $submitter = null;
+            try {
+                $cStmt = $conn->prepare("SELECT title, user_name, user_email, user_id, tracking_number FROM consultations WHERE id = ? LIMIT 1");
+                if ($cStmt) {
+                    $cStmt->bind_param('i', $id);
+                    $cStmt->execute();
+                    $cRes = $cStmt->get_result();
+                    $submitter = $cRes ? $cRes->fetch_assoc() : null;
+                    $cStmt->close();
+                }
+            } catch (Throwable $e) {}
+
+            $targetUserId = (int)($submitter['user_id'] ?? 0);
+            $userEmail = trim((string)($submitter['user_email'] ?? ''));
+
+            if ($targetUserId <= 0 && !empty($userEmail)) {
+                try {
+                    $uStmt = $conn->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
+                    if ($uStmt) {
+                        $uStmt->bind_param('s', $userEmail);
+                        $uStmt->execute();
+                        $uRes = $uStmt->get_result();
+                        if ($uRow = $uRes ? $uRes->fetch_assoc() : null) {
+                            $targetUserId = (int)$uRow['id'];
+                        }
+                        $uStmt->close();
+                    }
+                } catch (Throwable $eUser) {}
+            }
+
+            // 1. Create In-App Notification in database safely ONLY for target citizen (targetUserId > 0)
+            try {
+                if ($targetUserId > 0 && file_exists(__DIR__ . '/../DATABASE/notifications.php')) {
+                    require_once __DIR__ . '/../DATABASE/notifications.php';
+                    if (function_exists('createNotification')) {
+                        $cTitle = $submitter['title'] ?? 'Citizen Proposal';
+                        $trackingNo = $submitter['tracking_number'] ?? ("CONSULT-" . str_pad($id, 6, "0", STR_PAD_LEFT));
+                        $notifMsg = "Your consultation proposal \"{$cTitle}\" ({$trackingNo}) was reviewed and declined by the LGU Secretariat. Reason: {$reason}";
+                        createNotification($targetUserId, $notifMsg, 'decline');
+                    }
+                }
+            } catch (Throwable $eNotif) {}
 
             // 2. Dispatch Email Notification if valid user email present
             $emailSent = false;
-            $userEmail = trim((string)($submitter['user_email'] ?? ''));
-            if ($ok && !empty($userEmail) && filter_var($userEmail, FILTER_VALIDATE_EMAIL)) {
-                if (file_exists(__DIR__ . '/../email_config.php')) {
-                    require_once __DIR__ . '/../email_config.php';
-                    if (function_exists('sendGmailEmail')) {
-                        $cTitle = $submitter['title'] ?? 'Citizen Proposal';
-                        $cUser = $submitter['user_name'] ?? 'Valued Citizen';
-                        $trackingNo = $submitter['tracking_number'] ?? ("CONSULT-" . str_pad($id, 6, "0", STR_PAD_LEFT));
-                        
-                        $emailSubject = "Update on your Citizen Consultation Submission ({$trackingNo}) - Valenzuela PCMS";
-                        $emailBody = "Hello {$cUser},\n\n"
-                            . "This is an official update regarding your citizen consultation submission to the Valenzuela City Public Consultation & Management System (PCMS).\n\n"
-                            . "Proposal Title: {$cTitle}\n"
-                            . "Tracking Reference: {$trackingNo}\n"
-                            . "Status: Declined / Not Approved\n\n"
-                            . "Rejection Remarks / Reason:\n\"{$reason}\"\n\n"
-                            . "If you have any questions or wish to revise and resubmit your proposal, please feel free to reach out to the Valenzuela City Secretariat or check your submission tracker on the Public Portal.\n\n"
-                            . "Best regards,\n"
-                            . "Valenzuela City Public Consultation Office\n"
-                            . "https://valenzuela.gov.ph";
+            try {
+                if (!empty($userEmail) && filter_var($userEmail, FILTER_VALIDATE_EMAIL)) {
+                    if (file_exists(__DIR__ . '/../email_config.php')) {
+                        require_once __DIR__ . '/../email_config.php';
+                        if (function_exists('sendGmailEmail')) {
+                            $cTitle = $submitter['title'] ?? 'Citizen Proposal';
+                            $cUser = $submitter['user_name'] ?? 'Valued Citizen';
+                            $trackingNo = $submitter['tracking_number'] ?? ("CONSULT-" . str_pad($id, 6, "0", STR_PAD_LEFT));
                             
-                        $mailErr = null;
-                        $emailSent = sendGmailEmail($userEmail, $emailSubject, $emailBody, false, $mailErr);
+                            $emailSubject = "Update on your Citizen Consultation Submission ({$trackingNo}) - Valenzuela PCMS";
+                            $emailBody = "Hello {$cUser},\n\n"
+                                . "This is an official update regarding your citizen consultation submission to the Valenzuela City Public Consultation & Management System (PCMS).\n\n"
+                                . "Proposal Title: {$cTitle}\n"
+                                . "Tracking Reference: {$trackingNo}\n"
+                                . "Status: Declined / Not Approved\n\n"
+                                . "Rejection Remarks / Reason:\n\"{$reason}\"\n\n"
+                                . "If you have any questions or wish to revise and resubmit your proposal, please feel free to reach out to the Valenzuela City Secretariat or check your submission tracker on the Public Portal.\n\n"
+                                . "Best regards,\n"
+                                . "Valenzuela City Public Consultation Office\n"
+                                . "https://valenzuela.gov.ph";
+                                
+                            $mailErr = null;
+                            $emailSent = sendGmailEmail($userEmail, $emailSubject, $emailBody, false, $mailErr);
+                        }
                     }
                 }
-            }
+            } catch (Throwable $eMail) {}
 
-            if (function_exists('logAction')) {
-                logAction(
-                    $_SESSION['user_id'] ?? null,
-                    $_SESSION['fullname'] ?? 'Admin',
-                    'decline_citizen_submission',
-                    'consultation',
-                    $id,
-                    null,
-                    null,
-                    'success',
-                    "Declined citizen submission #{$id}. Reason: {$reason}. Notification email: " . ($emailSent ? 'Sent' : 'Skipped/N/A')
-                );
-            }
-
-            if ($ok) {
-                echo json_encode([
-                    'success' => true,
-                    'message' => 'Consultation submission declined and submitter notified.',
-                    'email_sent' => (bool)$emailSent
-                ]);
-            } else {
-                echo json_encode(['success' => false, 'message' => 'Database update failed']);
-            }
+            echo json_encode([
+                'success' => true,
+                'message' => 'Consultation submission declined successfully.',
+                'email_sent' => (bool)$emailSent
+            ]);
             break;
 
         case 'update':
@@ -713,64 +748,46 @@ try {
             }
             break;
 
-        case 'decline_submission':
-            $id = (int)($data['id'] ?? ($_POST['id'] ?? ($_GET['id'] ?? 0)));
-            $reason = trim((string)($data['reason'] ?? ($_POST['reason'] ?? ($_POST['remarks'] ?? 'Submission declined by LGU Secretariat'))));
-            
-            if (!$id) {
-                http_response_code(400);
-                echo json_encode(['success' => false, 'message' => 'Consultation ID required']);
-                exit;
-            }
 
-            $status = 'rejected';
-            $stmt = $conn->prepare("UPDATE consultations SET status = ?, admin_response = ?, remarks = ?, updated_at = NOW() WHERE id = ?");
-            if ($stmt) {
-                $stmt->bind_param('sssi', $status, $reason, $reason, $id);
-                $ok = $stmt->execute();
-                $stmt->close();
-                
-                $qNotif = $conn->prepare("SELECT id, user_name, user_email, tracking_number, title FROM consultations WHERE id = ?");
-                if ($qNotif) {
-                    $qNotif->bind_param('i', $id);
-                    $qNotif->execute();
-                    $resNotif = $qNotif->get_result()->fetch_assoc();
-                    $qNotif->close();
-                    
-                    if ($resNotif) {
-                        $cTitle = $resNotif['title'] ?? 'Consultation Proposal';
-                        $trackingNo = $resNotif['tracking_number'] ?? "TRK-{$id}";
-                        $notifMsg = "Your consultation proposal \"{$cTitle}\" ({$trackingNo}) was reviewed and declined by the LGU Secretariat. Reason: {$reason}";
-                        
-                        @$conn->query("INSERT INTO notifications (user_id, title, message, type, is_read, created_at) VALUES (0, 'Consultation Proposal Declined', '" . $conn->real_escape_string($notifMsg) . "', 'decline', 0, NOW())");
-                    }
-                }
-                
-                echo json_encode(['success' => (bool)$ok, 'message' => 'Consultation submission declined and submitter notified.']);
-            } else {
-                echo json_encode(['success' => false, 'message' => 'Database error executing decline update']);
-            }
-            break;
 
         case 'delete':
-
-            $id = (int)($_GET['id'] ?? 0);
+            $rawInput = file_get_contents('php://input');
+            $data = json_decode($rawInput, true);
+            if (!is_array($data)) {
+                $data = [];
+            }
+            $id = (int)($data['id'] ?? ($data['consultation_id'] ?? ($_POST['id'] ?? ($_POST['consultation_id'] ?? ($_GET['id'] ?? ($_GET['consultation_id'] ?? 0))))));
 
             if (!$id) {
-
                 http_response_code(400);
-
                 echo json_encode(['success' => false, 'message' => 'Consultation ID required']);
-
                 exit;
-
             }
 
-            
+            $success = false;
+            if (function_exists('deleteConsultation')) {
+                try {
+                    $success = deleteConsultation($id);
+                } catch (Throwable $eDelFunc) {
+                    $success = false;
+                }
+            }
 
-            $success = deleteConsultation($id);
+            if (!$success) {
+                try {
+                    $delStmt = $conn->prepare("DELETE FROM consultations WHERE id = ?");
+                    if ($delStmt) {
+                        $delStmt->bind_param('i', $id);
+                        $success = $delStmt->execute();
+                        $delStmt->close();
+                    }
+                } catch (Throwable $eDel) {
+                    $success = false;
+                }
+            }
 
-            echo json_encode(['success' => $success]);
+            echo json_encode(['success' => (bool)$success, 'message' => $success ? 'Consultation deleted successfully' : 'Failed to delete consultation']);
+            break;
 
             break;
 

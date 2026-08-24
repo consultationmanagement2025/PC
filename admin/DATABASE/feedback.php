@@ -724,11 +724,21 @@ function updatePhmsQueueStatus($queue_id, $status) {
 function getPendingPhmsApprovals() {
     global $conn;
     initializeHearingQueueTable();
-    $sql = "SELECT hq.*, c.title as consultation_title
+    $sql = "SELECT hq.phms_hearing_id, 
+                   MAX(hq.queue_id) as queue_id, 
+                   MAX(hq.full_name) as full_name, 
+                   MAX(hq.email) as email, 
+                   MAX(hq.status) as status, 
+                   MAX(hq.created_at) as created_at, 
+                   MAX(hq.consultation_id) as consultation_id, 
+                   MAX(hq.payload_json) as payload_json, 
+                   COUNT(*) as feedback_count, 
+                   c.title as consultation_title
             FROM hearing_queue hq
             LEFT JOIN consultations c ON hq.consultation_id = c.id
             WHERE hq.approval_status = 'pending'
-            ORDER BY hq.created_at DESC";
+            GROUP BY COALESCE(hq.phms_hearing_id, hq.queue_id)
+            ORDER BY created_at DESC";
     $res = $conn->query($sql);
     $items = [];
     if ($res && $res->num_rows > 0) {
@@ -739,7 +749,7 @@ function getPendingPhmsApprovals() {
             }
             $responses = $payload['citizen_responses'] ?? $payload['citizen_feedback'] ?? [];
             $row['parsed_payload'] = $payload;
-            $row['feedback_count'] = count($responses) ?: (int)($payload['feedback_count'] ?? 0);
+            $row['feedback_count'] = max((int)$row['feedback_count'], count($responses), (int)($payload['feedback_count'] ?? 0));
             $items[] = $row;
         }
     }
