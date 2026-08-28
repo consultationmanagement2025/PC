@@ -1,10 +1,10 @@
 <?php
 header('Content-Type: application/json');
 session_start();
-require_once '../db.php';
-require_once '../DATABASE/feedback.php';
-if (file_exists('../email_config_simple.php')) {
-    require_once '../email_config_simple.php';
+require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../DATABASE/feedback.php';
+if (file_exists(__DIR__ . '/../\1')) {
+    require_once __DIR__ . '/../email_config_simple.php';
 }
 
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
@@ -15,18 +15,26 @@ $allowed_roles = [
     'staff', 'barangay staff', 'barangay_staff', 'barangay', 'lgu staff', 'lgu', 'official', 'resource person', 'user', 'citizen'
 ];
 
-if (!$has_session_user && !in_array($current_role, $allowed_roles, true)) {
+$action = $_GET['action'] ?? ($_POST['action'] ?? 'list');
+$is_super_admin = ($current_role === 'super admin' || $current_role === 'superadmin');
+
+$read_actions = ['list', 'get', 'phms_list', 'phms_detail', 'phms_sync', 'phms_clear_newly_approved', 'stats', 'get_summary', 'debug'];
+if (!in_array($action, $read_actions, true) && !$has_session_user && !in_array($current_role, $allowed_roles, true)) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit;
 }
 
-$is_super_admin = ($current_role === 'super admin' || $current_role === 'superadmin');
-
-$action = $_GET['action'] ?? 'list';
-
 try {
     switch ($action) {
+        case 'phms_clear_newly_approved':
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $queue_id = (int)($data['hearing_id'] ?? $data['queue_id'] ?? $_GET['hearing_id'] ?? 0);
+            if ($queue_id > 0) {
+                $conn->query("UPDATE hearing_queue SET is_newly_approved = 0 WHERE queue_id = {$queue_id} OR phms_hearing_id = {$queue_id}");
+            }
+            echo json_encode(['success' => true]);
+            break;
         case 'debug':
             $dbRow = $conn->query("SELECT DATABASE() AS db") ? $conn->query("SELECT DATABASE() AS db")->fetch_assoc() : null;
             $dbName = $dbRow['db'] ?? null;

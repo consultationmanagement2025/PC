@@ -274,7 +274,7 @@ unset($c);
                 theme: {
                     extend: {
                         fontFamily: {
-                            sans: ['"Plus Jakarta Sans"', 'Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+                            sans: ['Inter', '"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
                         }
                     }
                 }
@@ -285,10 +285,25 @@ unset($c);
     <!-- Google Fonts: Plus Jakarta Sans & Inter (Admin Side Font Family) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+        /* Remove horizontal scrollbar track while allowing smooth scroll */
+        .no-scrollbar::-webkit-scrollbar,
+        [class*="overflow-x"]::-webkit-scrollbar,
+        [id*="container"]::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+        .no-scrollbar,
+        [class*="overflow-x"],
+        [id*="container"] {
+            -ms-overflow-style: none !important;
+            scrollbar-width: none !important;
+        }
+
         *, ::before, ::after, html, body, button, input, select, textarea, table, th, td, h1, h2, h3, h4, h5, h6, p, span, div, a, li, label {
-            font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+            font-family: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
@@ -513,7 +528,7 @@ unset($c);
                         <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
                             <i class="bi bi-file-earmark-word text-red-600"></i> Consultations Dispatched for Your Specialization
                         </h3>
-                        <p class="text-xs text-slate-500">Filtered by <strong><?php echo htmlspecialchars($expertise_areas); ?></strong> &bull; AI Analyzed & Admin Dispatched</p>
+                        
                     </div>
                     
                     <!-- Search & Filter Controls -->
@@ -562,7 +577,7 @@ unset($c);
                                 $auditCount = (int)($c['audit_count'] ?? 0);
                                 $infoRequestsCount = (int)($c['info_requests_count'] ?? 0);
                             ?>
-                            <div class="task-card bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition flex flex-col justify-between p-6 space-y-4"
+                            <div class="task-card bg-white rounded-2xl border <?php echo $hasExpertNotes ? 'border-emerald-400 shadow-md ring-2 ring-emerald-400/20' : 'border-slate-200 shadow-sm'; ?> hover:shadow-md transition flex flex-col justify-between p-6 space-y-4"
                                  data-assigned="<?php echo $cardTag; ?>"
                                  data-title="<?php echo htmlspecialchars(strtolower($c['title'])); ?>"
                                  data-category="<?php echo htmlspecialchars(strtolower($category)); ?>">
@@ -573,9 +588,15 @@ unset($c);
                                         <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
                                             <i class="bi bi-tag-fill text-red-600 mr-1"></i><?php echo $category; ?>
                                         </span>
-                                        <span class="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-slate-800 text-white flex items-center gap-1">
-                                            <i class="bi bi-file-earmark-code text-amber-300"></i> Master Doc <?php echo $docVersion; ?>
-                                        </span>
+                                        <?php if ($hasExpertNotes): ?>
+                                            <span class="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-emerald-700 text-white flex items-center gap-1 border border-emerald-500 shadow-2xs" title="Master Document Annotated">
+                                                <i class="bi bi-check-circle-fill text-emerald-300"></i> Master Doc <?php echo $docVersion; ?> (Annotated)
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-slate-800 text-white flex items-center gap-1">
+                                                <i class="bi bi-file-earmark-code text-amber-300"></i> Master Doc <?php echo $docVersion; ?>
+                                            </span>
+                                        <?php endif; ?>
                                     </div>
 
                                     <!-- Title & Description -->
@@ -594,12 +615,12 @@ unset($c);
                                             <i class="bi bi-robot text-xs"></i> AI Analyzed & Forwarded
                                         </span>
                                         <?php if ($hasExpertNotes): ?>
-                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1">
-                                                <i class="bi bi-check-circle-fill"></i> Notes Appended
+                                            <span class="px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-2xs">
+                                                <i class="bi bi-check-circle-fill text-emerald-600"></i> Expert Annotated
                                             </span>
                                         <?php else: ?>
-                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 flex items-center gap-1">
-                                                <i class="bi bi-pencil"></i> Needs Input
+                                            <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                                                <i class="bi bi-pencil-fill text-amber-600"></i> Needs Input
                                             </span>
                                         <?php endif; ?>
                                     </div>
@@ -611,10 +632,17 @@ unset($c);
 
                                     <!-- Main Primary Action: Annotate Single Master Document -->
                                     <div class="grid grid-cols-1 gap-2 pt-1">
-                                        <button onclick="openInlineInputModal(<?php echo $c['id']; ?>, '<?php echo htmlspecialchars(addslashes($c['title'])); ?>', '<?php echo $docVersion; ?>')" 
-                                                class="w-full bg-gradient-to-r from-red-800 to-red-900 hover:from-red-900 hover:to-black text-white font-extrabold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-sm cursor-pointer">
-                                            <i class="bi bi-pencil-square text-amber-300"></i> Annotate Master Document
-                                        </button>
+                                        <?php if ($hasExpertNotes): ?>
+                                            <button onclick="openInlineInputModal(<?php echo $c['id']; ?>, '<?php echo htmlspecialchars(addslashes($c['title'])); ?>', '<?php echo $docVersion; ?>')" 
+                                                    class="w-full bg-gradient-to-r from-emerald-800 to-emerald-900 hover:from-emerald-900 hover:to-black text-white font-extrabold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-sm cursor-pointer border border-emerald-700">
+                                                <i class="bi bi-pencil-square text-emerald-300"></i> Edit / Update Annotations (<?php echo $docVersion; ?>)
+                                            </button>
+                                        <?php else: ?>
+                                            <button onclick="openInlineInputModal(<?php echo $c['id']; ?>, '<?php echo htmlspecialchars(addslashes($c['title'])); ?>', '<?php echo $docVersion; ?>')" 
+                                                    class="w-full bg-gradient-to-r from-red-800 to-red-900 hover:from-red-900 hover:to-black text-white font-extrabold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-sm cursor-pointer">
+                                                <i class="bi bi-pencil-square text-amber-300"></i> Annotate Master Document
+                                            </button>
+                                        <?php endif; ?>
 
                                         <div class="grid grid-cols-2 gap-2">
                                             <button onclick="openInfoRequestModal(<?php echo $c['id']; ?>, '<?php echo htmlspecialchars(addslashes($c['title'])); ?>')" 
@@ -1078,7 +1106,10 @@ unset($c);
             btn.innerHTML = '<i class="bi bi-check-circle-fill"></i> Save & Append to Master Document';
             if (data.success) {
                 closeInlineInputModal();
-                showMasterDocSuccessModal(data.version, data.message);
+                if (typeof showNotification === 'function') {
+                    showNotification('Master Document annotated successfully (' + (data.version || 'v1.1') + ')', 'success');
+                }
+                setTimeout(function() { location.reload(); }, 600);
             } else {
                 showSystemErrorModal(data.message || 'Failed to save inline input');
             }
@@ -1168,9 +1199,9 @@ unset($c);
                         <p class="text-xs text-slate-500 mt-1">Your session has timed out due to inactivity.</p>
                     </div>
                     <div class="pt-2">
-                        <button onclick="window.location.href='index.php?timeout=1'" class="w-full px-4 py-3 bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
-                            <i class="bi bi-house-door text-sm"></i>
-                            <span>Return to Landing Page</span>
+                        <button onclick="window.location.href='login.php?timeout=1'" class="w-full px-4 py-3 bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+                            <i class="bi bi-box-arrow-in-right text-sm"></i>
+                            <span>Back to Login Page</span>
                         </button>
                     </div>
                 </div>

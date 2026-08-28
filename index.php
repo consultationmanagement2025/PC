@@ -38,6 +38,21 @@ $googleOAuthUrl = getGoogleAuthUrl($_citizenOAuthState);
 
 
     <style>
+        /* Remove horizontal scrollbar track while allowing smooth scroll */
+        .no-scrollbar::-webkit-scrollbar,
+        [class*="overflow-x"]::-webkit-scrollbar,
+        [id*="container"]::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+        .no-scrollbar,
+        [class*="overflow-x"],
+        [id*="container"] {
+            -ms-overflow-style: none !important;
+            scrollbar-width: none !important;
+        }
+
 
         * {
 

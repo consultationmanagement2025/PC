@@ -352,16 +352,7 @@ try {
             }
 
             $cStatus = strtolower(trim((string)($consultation['status'] ?? '')));
-            if ($cStatus !== 'closed' && $cStatus !== 'completed' && !$force) {
-                http_response_code(403);
-                echo json_encode([
-                    'success' => false,
-                    'is_gated' => true,
-                    'status' => $cStatus,
-                    'message' => "Consultation is currently '{$consultation['status']}'. Feedback can only be compiled into an AI Brief and forwarded to the Committee after the consultation is officially Closed."
-                ]);
-                exit;
-            }
+            // Allow compilation and viewing for all consultations
 
             // Gather all feedback entries (from feedback, posts, guest_votes, comments, and hearing_queue)
             $allFeedback = [];
@@ -910,22 +901,14 @@ try {
             if (file_exists(__DIR__ . '/../UTILS/orts_integration_utils.php')) {
                 require_once __DIR__ . '/../UTILS/orts_integration_utils.php';
             }
-            if (function_exists('isConsultationCheckedByExpert') && !isConsultationCheckedByExpert($consultationId, $conn)) {
-                http_response_code(422);
-                echo json_encode([
-                    'success' => false,
-                    'awaiting_expert' => true,
-                    'message' => 'Action Blocked: This consultation file cannot be forwarded to ORTS yet. It must first be reviewed and checked by an assigned Resource Person (Technical Expert).'
-                ]);
-                exit;
-            }
+            // Resource Person verification gate bypassed for Admin direct transmittal
 
             if (!$committeeName) {
                 $committeeName = 'ORTS Ordinance Routing System';
             }
 
             // Ensure consultation status is set to forwarded_orts (Stage 5)
-            $fwdStmt = $conn->prepare("UPDATE consultations SET status = 'forwarded_orts', committee_assigned = ?, committee_forwarded_at = NOW() WHERE id = ?");
+            $fwdStmt = $conn->prepare("UPDATE consultations SET status = 'forwarded_orts', document_status = 'forwarded_to_committee', committee_assigned = ?, committee_forwarded_at = NOW() WHERE id = ?");
             if ($fwdStmt) {
                 $fwdStmt->bind_param('si', $committeeName, $consultationId);
                 $fwdStmt->execute();

@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json');
 session_start();
-require_once '../db.php';
+require_once __DIR__ . '/../db.php';
 
 // Check admin role
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
@@ -91,7 +91,7 @@ try {
             $stmt->bind_param('ssssss', $name, $username, $email, $hashed, $role, $status);
             
             if ($stmt->execute()) {
-                require_once '../DATABASE/audit-log.php';
+                require_once __DIR__ . '/../DATABASE/audit-log.php';
                 logAction(
                     $_SESSION['user_id'],
                     $_SESSION['fullname'] ?? $_SESSION['username'] ?? 'admin',
@@ -174,7 +174,7 @@ try {
             $stmt->bind_param($types, ...$params);
             
             if ($stmt->execute()) {
-                require_once '../DATABASE/audit-log.php';
+                require_once __DIR__ . '/../DATABASE/audit-log.php';
                 $change_description = 'Updated staff account #' . $id;
                 if (isset($data['role'])) $change_description .= ' - Role: ' . $data['role'];
                 if (isset($data['status'])) $change_description .= ' - Status: ' . $data['status'];
@@ -213,7 +213,7 @@ try {
             $stmt = $conn->prepare("UPDATE users SET status = ? WHERE id = ?");
             $stmt->bind_param('si', $newStatus, $id);
             if ($stmt->execute()) {
-                require_once '../DATABASE/audit-log.php';
+                require_once __DIR__ . '/../DATABASE/audit-log.php';
                 logAction(
                     $_SESSION['user_id'] ?? 0,
                     $_SESSION['fullname'] ?? $_SESSION['username'] ?? 'admin',
@@ -253,7 +253,7 @@ try {
             $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
             $stmt->bind_param('i', $id);
             if ($stmt->execute()) {
-                require_once '../DATABASE/audit-log.php';
+                require_once __DIR__ . '/../DATABASE/audit-log.php';
                 logAction(
                     $_SESSION['user_id'] ?? 0,
                     $_SESSION['fullname'] ?? $_SESSION['username'] ?? 'admin',

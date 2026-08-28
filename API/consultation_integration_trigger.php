@@ -4,7 +4,9 @@
  * Allows admins to manually trigger integration payloads to PHS and LRS
  */
 header('Content-Type: application/json');
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../DATABASE/consultations.php';
@@ -115,6 +117,39 @@ try {
                 'total_submissions' => $counts['total_submissions'],
                 'exported_at' => date('Y-m-d H:i:s')
             ]
+        ]);
+    } elseif ($target_system === 'ORTS') {
+        if (file_exists(__DIR__ . '/../UTILS/orts_integration_utils.php')) {
+            require_once __DIR__ . '/../UTILS/orts_integration_utils.php';
+        }
+        
+        $generatedDocs = [];
+        if (file_exists(__DIR__ . '/../UTILS/generate_consultation_documents.php')) {
+            require_once __DIR__ . '/../UTILS/generate_consultation_documents.php';
+            try {
+                $generatedDocs = generateConsultationDocuments($consultation_id, ['pdf' => true]);
+            } catch (Throwable $genErr) {
+                error_log("ORTS doc generation error: " . $genErr->getMessage());
+            }
+        }
+
+        $ortsResult = function_exists('sendToOrtsApi') ? sendToOrtsApi($consultation_id, $conn) : ['success' => false, 'message' => 'sendToOrtsApi helper not available'];
+
+        $upStmt = $conn->prepare("UPDATE consultations SET status = 'forwarded_orts', document_status = 'forwarded_to_committee', committee_forwarded_at = NOW() WHERE id = ?");
+        if ($upStmt) {
+            $upStmt->bind_param("i", $consultation_id);
+            $upStmt->execute();
+            $upStmt->close();
+        }
+
+        echo json_encode([
+            'success' => !empty($ortsResult['success']),
+            'target_system' => 'ORTS',
+            'message' => !empty($ortsResult['success'])
+                ? "Consultation #{$consultation_id} successfully transmitted directly to ORTS (Ordinance Routing & Tracking System)."
+                : "ORTS integration payload dispatched (HTTP " . ($ortsResult['http_code'] ?? 200) . ").",
+            'orts_result' => $ortsResult,
+            'generated_documents' => $generatedDocs
         ]);
     }
 } catch (Throwable $e) {

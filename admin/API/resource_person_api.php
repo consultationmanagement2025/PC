@@ -5,8 +5,8 @@
  */
 header('Content-Type: application/json');
 session_start();
-require_once '../db.php';
-require_once '../DATABASE/audit-log.php';
+require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../DATABASE/audit-log.php';
 
 // Only allow admins
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';

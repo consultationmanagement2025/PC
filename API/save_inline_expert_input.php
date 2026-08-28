@@ -5,7 +5,7 @@
  * maintains version history/audit trail, and updates single consolidated master document.
  */
 session_start();
-require_once '../db.php';
+require_once __DIR__ . '/../db.php';
 
 header('Content-Type: application/json');
 
@@ -230,6 +230,17 @@ echo json_encode(['success' => false, 'message' => 'Failed to update consultatio
 }
 $updStmt->close();
 
+// Create System Notification for Admin (Resource Person -> Admin Pass Back)
+if (file_exists(__DIR__ . '/../DATABASE/notifications.php')) {
+    require_once __DIR__ . '/../DATABASE/notifications.php';
+    $cTitle = (string)($consultation['title'] ?? 'Consultation');
+    $tCode = !empty($consultation['tracking_number']) ? $consultation['tracking_number'] : ('TRK-' . str_pad($consultation_id, 6, '0', STR_PAD_LEFT));
+    $adminNotifMsg = "📝 Expert Annotation Completed: Resource Person {$user_name} has annotated and passed back consultation '{$cTitle} - {$tCode}' ({$new_version_label}). Ready for ORTS forwarding!";
+    if (function_exists('createNotification')) {
+        createNotification(0, $adminNotifMsg, 'annotation');
+    }
+}
+
 // Log Audit Trail Entry
 @$conn->query("CREATE TABLE IF NOT EXISTS consultation_document_audit_trail (
     id INT(11) NOT NULL AUTO_INCREMENT,
@@ -259,6 +270,17 @@ $filename = "master_consultation_doc_" . $consultation_id . ".pdf";
 $notes_summary = "Master Document Updated ($new_version_label): " . mb_substr($technical_rationale, 0, 150) . "...";
 
 @$conn->query("INSERT INTO resolution_reports (consultation_id, uploaded_by, file_path, notes, version_label, status, created_at) VALUES ($consultation_id, $user_id, '$filename', '" . $conn->real_escape_string($notes_summary) . "', '$new_version_label', 'pending_review', NOW())");
+
+// Create System Notification for Admin
+if (file_exists(__DIR__ . '/../DATABASE/notifications.php')) {
+    require_once __DIR__ . '/../DATABASE/notifications.php';
+    $cTitle = (string)($consultation['title'] ?? 'Consultation');
+    $trackingCode = !empty($consultation['tracking_number']) ? $consultation['tracking_number'] : ('TRK-' . str_pad($consultation_id, 6, '0', STR_PAD_LEFT));
+    $adminNotifMsg = "📝 Expert Annotation Added: {$user_name} annotated consultation '{$cTitle} - {$trackingCode}' ({$new_version_label})";
+    if (function_exists('createNotification')) {
+        createNotification(0, $adminNotifMsg, 'annotation');
+    }
+}
 
 // Create Expert Notification for Secretariat
 @$conn->query("INSERT INTO expert_notifications (user_id, title, message, type, consultation_id, is_read, created_at) VALUES ($user_id, 'Master Document Updated ($new_version_label)', 'Your inline expert input was appended to Master Document #$consultation_id ($new_version_label).', 'inline_annotation', $consultation_id, 0, NOW())");

@@ -413,6 +413,22 @@ try {
                     error_log('Admin consultation PDF/document save failed: ' . $e->getMessage());
                 }
 
+                if (file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+                    require_once __DIR__ . '/../DATABASE/audit-log.php';
+                    if (function_exists('logAction')) {
+                        logAction(
+                            $_SESSION['user_id'] ?? 1,
+                            $_SESSION['fullname'] ?? $_SESSION['email'] ?? 'System Admin',
+                            'Posted Consultation',
+                            'Consultation',
+                            $id,
+                            null,
+                            $data['title'],
+                            'success',
+                            "Posted new consultation topic '" . $conn->real_escape_string($data['title']) . "' in category '" . $conn->real_escape_string($data['category']) . "'"
+                        );
+                    }
+                }
                 $consultation = getConsultationById($id);
                 echo json_encode(['success' => true, 'data' => $consultation]);
             } else {
@@ -452,7 +468,7 @@ try {
                     try {
                         require_once __DIR__ . '/../UTILS/generate_consultation_documents.php';
                         if (function_exists('generateConsultationDocuments')) {
-                            generateConsultationDocuments($id);
+                        // generateConsultationDocuments($id); // Document generated only upon ORTS forwarding
                         }
                         $dStmt = $conn->prepare("SELECT id FROM documents WHERE consultation_id = ? ORDER BY id DESC LIMIT 1");
                         if ($dStmt) {
@@ -472,6 +488,22 @@ try {
                     }
                 }
 
+                if ($ok && file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+                    require_once __DIR__ . '/../DATABASE/audit-log.php';
+                    if (function_exists('logAction')) {
+                        logAction(
+                            $_SESSION['user_id'] ?? 1,
+                            $_SESSION['fullname'] ?? $_SESSION['email'] ?? 'System Admin',
+                            'Approved Consultation',
+                            'Consultation',
+                            $id,
+                            'submitted',
+                            'active',
+                            'success',
+                            "Approved and published public consultation ID #{$id} with committee '{$committee}'"
+                        );
+                    }
+                }
                 echo json_encode(['success' => $ok]);
             } else {
                 echo json_encode(['success' => false, 'message' => 'Database statement prepare failed']);
@@ -630,6 +662,22 @@ try {
                 }
             } catch (Throwable $eMail) {}
 
+            if (file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+                require_once __DIR__ . '/../DATABASE/audit-log.php';
+                if (function_exists('logAction')) {
+                    logAction(
+                        $_SESSION['user_id'] ?? 1,
+                        $_SESSION['fullname'] ?? $_SESSION['email'] ?? 'System Admin',
+                        'Declined Consultation Submission',
+                        'Consultation',
+                        $id,
+                        'submitted',
+                        'declined',
+                        'success',
+                        "Declined consultation submission ID #{$id}. Reason: " . $conn->real_escape_string($reason)
+                    );
+                }
+            }
             echo json_encode([
                 'success' => true,
                 'message' => 'Consultation submission declined successfully.',

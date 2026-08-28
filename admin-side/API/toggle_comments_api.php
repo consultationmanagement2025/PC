@@ -1,7 +1,7 @@
 <?php
 session_start();
-require_once '../db.php';
-require_once '../DATABASE/announcements.php';
+require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../DATABASE/announcements.php';
 
 // Ensure user is logged in and is admin
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';

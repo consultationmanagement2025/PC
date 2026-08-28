@@ -1059,7 +1059,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_consultation']
 
                         require_once __DIR__ . '/UTILS/generate_consultation_documents.php';
 
-                        generateConsultationDocuments($new_consultation_id, ['pdf' => true, 'docx' => false, 'created_by' => $_SESSION['user_id'] ?? 0]);
+                        // generateConsultationDocuments($new_consultation_id, ['pdf' => true, 'docx' => false, 'created_by' => $_SESSION['user_id'] ?? 0]); // Document generated only upon ORTS forwarding
 
                     } catch (Throwable $e) {
 
@@ -3585,6 +3585,21 @@ $current_form_step = $_SESSION['form_step'] ?? 'phone_otp';
 
 
     <style>
+        /* Remove horizontal scrollbar track while allowing smooth scroll */
+        .no-scrollbar::-webkit-scrollbar,
+        [class*="overflow-x"]::-webkit-scrollbar,
+        [id*="container"]::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+        .no-scrollbar,
+        [class*="overflow-x"],
+        [id*="container"] {
+            -ms-overflow-style: none !important;
+            scrollbar-width: none !important;
+        }
+
 
 
 

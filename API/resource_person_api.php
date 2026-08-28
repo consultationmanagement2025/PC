@@ -5,8 +5,8 @@
  */
 header('Content-Type: application/json');
 session_start();
-require_once '../db.php';
-require_once '../DATABASE/audit-log.php';
+require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../DATABASE/audit-log.php';
 
 // Allow admins, staff, and resource persons
 $current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
@@ -63,6 +63,22 @@ try {
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
                 @$conn->query("INSERT INTO expert_notifications (user_id, title, message, type, is_read, created_at) VALUES ($user_id, 'Application Approved!', 'Congratulations! Your Resource Person application has been approved by City Admin $admin_name. You can now access your Expert Workspace.', 'approval', 0, NOW())");
 
+                if (file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+                    require_once __DIR__ . '/../DATABASE/audit-log.php';
+                    if (function_exists('logAction')) {
+                        logAction(
+                            $admin_id ?: 1,
+                            $admin_name,
+                            'Approved Resource Person',
+                            'User',
+                            $user_id,
+                            'pending',
+                            'verified',
+                            'success',
+                            "Approved Resource Person application for user ID #{$user_id}"
+                        );
+                    }
+                }
                 echo json_encode(['success' => true, 'message' => 'Resource Person application approved successfully! User is now verified and active.']);
             } else {
                 echo json_encode(['success' => false, 'message' => 'Failed to approve application: ' . $stmt->error]);
@@ -193,15 +209,11 @@ try {
             $notif_id = (int)($_POST['id'] ?? 0);
             $user_id = (int)($_SESSION['user_id'] ?? 0);
             if ($notif_id > 0) {
-                $stmt = $conn->prepare("UPDATE expert_notifications SET is_read = 1 WHERE id = ? AND user_id = ?");
-                $stmt->bind_param('ii', $notif_id, $user_id);
-                $stmt->execute();
-                $stmt->close();
+                $conn->query("UPDATE expert_notifications SET is_read = 1 WHERE id = {$notif_id}");
+                $conn->query("UPDATE notifications SET is_read = 1 WHERE id = {$notif_id}");
             } else {
-                $stmt = $conn->prepare("UPDATE expert_notifications SET is_read = 1 WHERE user_id = ?");
-                $stmt->bind_param('i', $user_id);
-                $stmt->execute();
-                $stmt->close();
+                $conn->query("UPDATE expert_notifications SET is_read = 1");
+                $conn->query("UPDATE notifications SET is_read = 1");
             }
             echo json_encode(['success' => true, 'message' => 'Notifications updated']);
             break;

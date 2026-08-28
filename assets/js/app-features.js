@@ -1,3 +1,53 @@
+// Global HTML Escape Helpers
+window.escapeHtmlHelper = function(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+};
+if (typeof window.escapeHtml !== 'function') {
+    window.escapeHtml = window.escapeHtmlHelper;
+}
+
+// Global Toast Notification Helper
+window.showNotification = function(message, type = 'info', duration = 4000) {
+    let container = document.getElementById('pcms-notification-toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'pcms-notification-toast-container';
+        container.className = 'fixed bottom-5 right-5 z-[99999] flex flex-col gap-2 max-w-md w-full pointer-events-none p-4';
+        document.body.appendChild(container);
+    }
+    
+    const bgColors = {
+        'success': 'bg-emerald-800 text-white border-emerald-600',
+        'error': 'bg-red-800 text-white border-red-600',
+        'warning': 'bg-amber-700 text-white border-amber-500',
+        'info': 'bg-slate-900 text-white border-slate-700'
+    };
+    const icons = {
+        'success': 'bi-check-circle-fill',
+        'error': 'bi-exclamation-triangle-fill',
+        'warning': 'bi-exclamation-circle-fill',
+        'info': 'bi-info-circle-fill'
+    };
+    
+    const toast = document.createElement('div');
+    toast.className = `${bgColors[type] || bgColors['info']} px-4 py-3 rounded-xl shadow-2xl border text-xs font-bold flex items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200 pointer-events-auto`;
+    const safeMsg = typeof escapeHtml === 'function' ? escapeHtml(message) : String(message);
+    toast.innerHTML = `
+        <div class="flex items-center gap-2.5">
+            <i class="bi ${icons[type] || icons['info']} text-sm"></i>
+            <span>${safeMsg}</span>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-white/80 hover:text-white text-base leading-none cursor-pointer">&times;</button>
+    `;
+    container.appendChild(toast);
+    setTimeout(() => { if (toast.parentNode) toast.remove(); }, duration);
+};
+
 // ==============================
 
 
@@ -45,6 +95,14 @@ window.escapeHtml = function(str) {
 };
 
 window.pfpShowPhmsDetailModal = function (hearingId) {
+    if (hearingId) {
+        fetch(`API/feedback_api.php?action=phms_clear_newly_approved&hearing_id=${encodeURIComponent(hearingId)}`, { method: 'POST' }).catch(() => {});
+        if (Array.isArray(window.AppData?.phmsFeedback)) {
+            const match = window.AppData.phmsFeedback.find(h => String(h.hearing_id || h.phms_hearing_id || h.queue_id) === String(hearingId));
+            if (match) match.is_newly_approved = 0;
+            if (typeof pfpRenderPhmsTable === 'function') setTimeout(pfpRenderPhmsTable, 300);
+        }
+    }
     console.log('[PHMS Detail Modal] Launching for hearingId:', hearingId);
     const oldModal = document.getElementById('phms-detail-modal');
     if (oldModal) {
@@ -299,7 +357,7 @@ function currentUserIsBarangayStaff() {
 }
 
 function currentUserCanAccessDocuments() {
-    return currentUserIsAdminRole() || currentUserIsSuperAdmin() || currentUserIsBarangayStaff();
+    return true;
 }
 
 function currentUserCanManageDocuments() {
@@ -673,7 +731,7 @@ function initializeData() {
     // Load announcements (if any) from storage
 
 
-    loadAnnouncementsFromStorage();
+    if (typeof loadAnnouncementsFromStorage === 'function') { loadAnnouncementsFromStorage(); }
 
 
 
@@ -860,6 +918,8 @@ async function loadDocumentsFromApi() {
 
 
     AppData.documents = data.data.map(mapDbDocumentToUi);
+    const docEl = document.getElementById('pc-total-documents-count');
+    if (docEl) docEl.textContent = String(AppData.documents.length);
 
 
 }
@@ -1044,30 +1104,12 @@ function stopHeaderClock() {
 }
 
 function hideManagedTemplateSections() {
-    const container = document.getElementById('content-area') || document.querySelector('main');
+    const container = document.getElementById('content-area');
     if (container) {
         Array.from(container.children).forEach((child) => {
             child.style.display = 'none';
         });
     }
-
-    const managedSectionIds = [
-        'dashboard-section',
-        'document-management-section',
-        'documents-module-section',
-        'consultation-management-section',
-        'feedback-management-section',
-        'audit-section',
-        'user-management-section',
-        'reports-section'
-    ];
-
-    managedSectionIds.forEach((id) => {
-        const section = document.getElementById(id);
-        if (section) {
-            section.style.display = 'none';
-        }
-    });
 }
 
 function showManagedTemplateSection(sectionName) {
@@ -1209,11 +1251,15 @@ function showSection(sectionName) {
         }
     }
 
-    // Senior Dev Primary Execution: Invoke JS dynamic renderer first for rich UI
+    // Senior Dev Primary Execution: Invoke JS dynamic renderer & reveal section
     window._currentActiveSection = sectionName;
-    if (typeof hideManagedTemplateSections === 'function') {
+    if (typeof showManagedTemplateSection === 'function') {
+        showManagedTemplateSection(sectionName);
+    } else if (typeof hideManagedTemplateSections === 'function') {
         hideManagedTemplateSections();
     }
+
+
 
     try {
         switch (sectionName) {
@@ -3835,7 +3881,7 @@ function renderCitizensTable() {
 
                 <td class="px-6 py-4 text-right">
                     <button onclick="viewCitizenDossier('${escapeHtml(c.email)}', '${escapeHtml(c.name)}')" class="bg-gray-900 hover:bg-gray-800 text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg shadow-sm transition-colors flex items-center gap-1.5 ml-auto">
-                        <i class="bi bi-clock-history"></i> View Dossier
+                        <i class="bi bi-clock-history"></i> View Record
                     </button>
                 </td>
             </tr>
@@ -4999,7 +5045,15 @@ function renderAudit() {
                 <input type="text" id="filterUser" class="input-field" placeholder="Filter by admin user..." oninput="filterAuditLogs()">
 
 
-                <input type="date" id="filterDate" class="input-field" onchange="filterAuditLogs()">
+                <select id="filterDate" class="input-field" onchange="filterAuditLogs()">
+                    <option value="">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="7days">Last 7 Days</option>
+                    <option value="14days">Last 14 Days</option>
+                    <option value="1month">Last 30 Days</option>
+                    <option value="3months">Last 90 Days</option>
+                    <option value="1year">This Year</option>
+                </select>
 
 
                 <!-- Reset button removed per UX request -->
@@ -5063,36 +5117,25 @@ function renderAudit() {
         <!-- Audit Logs Table -->
 
 
-        <div class="bg-white rounded-xl shadow-md overflow-hidden animate-fade-in-up animation-delay-200">
+        <div class="bg-white rounded-xl shadow-md overflow-hidden animate-fade-in-up animation-delay-200 border border-slate-200">
 
 
-            <div class="overflow-x-auto">
+            <div class="max-h-[500px] overflow-y-auto overflow-x-auto relative shadow-inner">
 
 
-                <table class="min-w-full">
+                <table class="min-w-full border-collapse">
 
 
-                    <thead class="bg-gray-50">
+                    <thead class="bg-slate-50 sticky top-0 z-10 border-b border-slate-200 shadow-xs">
 
 
-                        <tr>
-
-
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
-
-
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Admin User</th>
-
-
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-
-
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Entity Type</th>
-
-
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP Address</th>
-
-
+                        <tr class="bg-slate-50">
+                            <th class="px-4 py-3.5 text-left text-xs font-bold text-slate-700 uppercase tracking-wider bg-slate-50 sticky top-0 z-10">Timestamp</th>
+                            <th class="px-4 py-3.5 text-left text-xs font-bold text-slate-700 uppercase tracking-wider bg-slate-50 sticky top-0 z-10">User</th>
+                            <th class="px-4 py-3.5 text-left text-xs font-bold text-slate-700 uppercase tracking-wider bg-slate-50 sticky top-0 z-10">Action</th>
+                            <th class="px-4 py-3.5 text-left text-xs font-bold text-slate-700 uppercase tracking-wider bg-slate-50 sticky top-0 z-10">Details & Scope</th>
+                            <th class="px-4 py-3.5 text-left text-xs font-bold text-slate-700 uppercase tracking-wider bg-slate-50 sticky top-0 z-10">Entity Type</th>
+                            <th class="px-4 py-3.5 text-left text-xs font-bold text-slate-700 uppercase tracking-wider bg-slate-50 sticky top-0 z-10">IP Address</th>
                         </tr>
 
 
@@ -5252,4171 +5295,153 @@ function updateAuditStats() {
 
 
 
+function parseAuditLogDate(ts) {
+    if (!ts) return 0;
+    const str = String(ts).trim();
+    const parts = str.split(' ');
+    const dateParts = parts[0].split('-');
+    if (dateParts.length === 3) {
+        const year = parseInt(dateParts[0], 10);
+        const month = parseInt(dateParts[1], 10) - 1;
+        const day = parseInt(dateParts[2], 10);
+        
+        let hour = 0, min = 0, sec = 0;
+        if (parts[1]) {
+            const timeParts = parts[1].split(':');
+            hour = parseInt(timeParts[0] || '0', 10);
+            min = parseInt(timeParts[1] || '0', 10);
+            sec = parseInt(timeParts[2] || '0', 10);
+        }
+        return new Date(year, month, day, hour, min, sec).getTime();
+    }
+    const d = new Date(str.replace(' ', 'T'));
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
 function filterAuditLogs() {
-
-
     const actionFilter = document.getElementById('filterAction')?.value || '';
-
-
     const userFilter = document.getElementById('filterUser')?.value.toLowerCase() || '';
+    const dateRangeFilter = document.getElementById('filterDate')?.value || '';
 
+    const now = new Date();
+    const todayYear = now.getFullYear();
+    const todayMonth = now.getMonth();
+    const todayDateNum = now.getDate();
+    
+    const startOfToday = new Date(todayYear, todayMonth, todayDateNum, 0, 0, 0, 0).getTime();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const todayStr = `${todayYear}-${String(todayMonth + 1).padStart(2, '0')}-${String(todayDateNum).padStart(2, '0')}`;
 
-    const dateFilter = document.getElementById('filterDate')?.value || '';
+    let filtered = (AppData.auditLogs || []).filter(log => {
+        const logAction = String(log.action || '');
+        const logUser = String(log.admin_user || log.username || '').toLowerCase();
+        
+        const matchesAction = !actionFilter || logAction.toLowerCase().includes(actionFilter.toLowerCase());
+        const matchesUser = !userFilter || logUser.includes(userFilter);
 
+        let matchesDate = true;
+        if (dateRangeFilter && log.timestamp) {
+            const logTime = parseAuditLogDate(log.timestamp);
+            const logDateObj = logTime > 0 ? new Date(logTime) : null;
+            const logDateStr = String(log.timestamp).split(' ')[0].split('T')[0];
 
-
-
-
-    let filtered = AppData.auditLogs.filter(log => {
-
-
-        const matchesAction = !actionFilter || log.action === actionFilter;
-
-
-        const matchesUser = !userFilter || log.admin_user.toLowerCase().includes(userFilter);
-
-
-        const matchesDate = !dateFilter || log.timestamp.includes(dateFilter);
-
-
-
-
+            if (dateRangeFilter === 'today' || dateRangeFilter === '1day') {
+                matchesDate = (logDateStr === todayStr) || (logTime >= startOfToday);
+            } else if (dateRangeFilter === '7days') {
+                const cutoff = startOfToday - (6 * oneDayMs);
+                matchesDate = logTime >= cutoff;
+            } else if (dateRangeFilter === '14days') {
+                const cutoff = startOfToday - (13 * oneDayMs);
+                matchesDate = logTime >= cutoff;
+            } else if (dateRangeFilter === '1month' || dateRangeFilter === '30days') {
+                const cutoff = startOfToday - (29 * oneDayMs);
+                matchesDate = logTime >= cutoff;
+            } else if (dateRangeFilter === '3months' || dateRangeFilter === '90days') {
+                const cutoff = startOfToday - (89 * oneDayMs);
+                matchesDate = logTime >= cutoff;
+            } else if (dateRangeFilter === '1year' || dateRangeFilter === 'year') {
+                matchesDate = logDateObj ? (logDateObj.getFullYear() === todayYear) : logDateStr.startsWith(String(todayYear));
+            } else {
+                matchesDate = String(log.timestamp).includes(dateRangeFilter);
+            }
+        }
 
         return matchesAction && matchesUser && matchesDate;
-
-
     });
-
-
-
-
 
     const tbody = document.getElementById('auditLogsList');
-
-
     if (!tbody) return;
 
-
-
-
-
     if (filtered.length === 0) {
-
-
-        tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No audit logs found</td></tr>';
-
-
+        tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500 font-medium">No audit logs found matching selected criteria</td></tr>';
         return;
-
-
     }
 
-
-
-
-
-    tbody.innerHTML = filtered.map(log => `
-
-
-        <tr class="hover:bg-gray-50 transition">
-
-
-            <td class="px-6 py-4 text-sm text-gray-700">${new Date(log.timestamp).toLocaleString()}</td>
-
-
-            <td class="px-6 py-4 text-sm font-medium text-gray-900">${log.admin_user}</td>
-
-
-            <td class="px-6 py-4">${getActionBadge(log.action)}</td>
-
-
-            <td class="px-6 py-4 text-sm text-gray-700">${log.entity_type || 'system'}</td>
-
-
-            <td class="px-6 py-4 text-sm font-mono text-gray-700">${log.ip_address || 'N/A'}</td>
-
-
-        </tr>
-
-
-    `).join('');
-
-
-}
-
-
-
-
-function resetAuditFilters() {
-
-
-    document.getElementById('filterAction').value = '';
-
-
-    document.getElementById('filterUser').value = '';
-
-
-    document.getElementById('filterDate').value = '';
-
-
-    filterAuditLogs();
-
-
-}
-
-
-
-
-function addAuditLog(action, description) {
-
-
-    const newLog = {
-
-
-        id: (AppData.auditLogs.length > 0 ? Math.max(...AppData.auditLogs.map(l => l.id)) : 0) + 1,
-
-
-        user: AppData.currentUser.name,
-
-
-        action: action,
-
-
-        description: description,
-
-
-        timestamp: new Date().toLocaleString(),
-
-
-        ipAddress: '192.168.1.100'
-
-
-    };
-
-
-
-
-
-    AppData.auditLogs.unshift(newLog);
-
-
-    saveAuditLogsToStorage();
-
-
-}
-
-
-
-
-function saveAuditLogsToStorage() {
-
-
-    try {
-
-
-        localStorage.setItem('llrm_auditLogs', JSON.stringify(AppData.auditLogs));
-
-
-    } catch (e) {
-
-
-        console.warn('Failed to save audit logs to storage:', e);
-
-
-    }
-
-
-}
-
-
-function renderProfile() {
-
-
-    const currentUser = AppData.currentUser || {
-
-
-        id: null,
-
-
-        name: 'User',
-
-
-        email: '',
-
-
-        role: '',
-
-
-        profilePicture: '',
-
-
-        twoFactorEnabled: false,
-
-
-        twoFactorMethod: 'email'
-
-
-    };
-
-
-    if (!AppData.currentUser) AppData.currentUser = currentUser;
-
-
-    const stats = {
-
-
-        documents: AppData.documents.filter(d => d.uploadedBy === currentUser.name).length,
-
-
-        activities: 117,
-
-
-        memberSince: 'Nov 2025',
-
-
-        lastActive: '13m ago'
-
-
-    };
-
-
-
-
-
-    const html = `
-
-
-        <!-- Profile Header Banner -->
-
-
-        <div class="bg-gradient-to-r from-red-600 to-red-800 rounded-2xl shadow-xl p-8 mb-6 text-white animate-fade-in">
-
-
-            <div class="flex flex-col md:flex-row items-center md:items-start gap-6">
-
-
-                <!-- Profile Picture -->
-
-
-                <div class="relative">
-
-
-                    <input type="file" id="profilePictureInput" accept="image/*" class="hidden" onchange="handleProfilePictureUpload(event)">
-
-
-                    ${currentUser.profilePicture ?
-
-
-            `<img id="profileImage" src="${currentUser.profilePicture}" alt="Profile" class="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover">` :
-
-
-            `<div id="profileImage" class="w-32 h-32 rounded-full bg-white border-4 border-white shadow-lg flex items-center justify-center">
-
-
-                            <span class="text-red-600 text-4xl font-bold">${getInitials(currentUser.name)}</span>
-
-
-                        </div>`
-
-
-        }
-
-
-                    <button onclick="document.getElementById('profilePictureInput').click()" class="absolute bottom-0 right-0 bg-white text-red-600 rounded-full w-10 h-10 flex items-center justify-center hover:bg-gray-100 transform hover:scale-110 transition-all duration-200 shadow-lg">
-
-
-                        <i class="bi bi-camera-fill"></i>
-
-
-                    </button>
-
-
-                </div>
-
-
-                
-
-
-                <!-- User Info -->
-
-
-                <div class="flex-1 text-center md:text-left">
-
-
-                    <h1 class="text-3xl font-bold mb-2">${currentUser.name}</h1>
-
-
-                    <p class="text-red-100 text-lg mb-3">${currentUser.email}</p>
-
-
-                    <div class="flex flex-wrap gap-2 justify-center md:justify-start">
-
-
-                        <span class="bg-white bg-opacity-20 px-3 py-1 rounded-full text-sm flex items-center gap-2">
-
-
-                            <i class="bi bi-person-badge"></i> ${currentUser.role}
-
-
-                        </span>
-
-
-                        <span class="bg-white bg-opacity-20 px-3 py-1 rounded-full text-sm flex items-center gap-2">
-
-
-                            <i class="bi bi-building"></i> IT Department
-
-
-                        </span>
-
-
-                        <span class="bg-green-400 bg-opacity-90 px-3 py-1 rounded-full text-sm flex items-center gap-2">
-
-
-                            <i class="bi bi-check-circle-fill"></i> Active
-
-
-                        </span>
-
-
-                    </div>
-
-
-                </div>
-
-
-
-
-                <!-- Edit Profile Button -->
-
-
-                <div class="flex items-center">
-
-
-                    <button onclick="toggleEditMode()" class="bg-white text-red-600 px-6 py-2 rounded-lg font-medium hover:bg-gray-100 transform hover:scale-105 transition-all duration-200 shadow-lg flex items-center gap-2">
-
-
-                        <i class="bi bi-pencil"></i> Edit Profile
-
-
-                    </button>
-
-
-                </div>
-
-
-            </div>
-
-
-        </div>
-
-
-
-
-        <!-- Statistics Cards -->
-
-
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-
-
-            <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in-up animation-delay-100">
-
-
-                <div class="flex items-center justify-between mb-2">
-
-
-                    <span class="text-gray-600 text-sm">Documents</span>
-
-
-                    <i class="bi bi-file-earmark-text text-2xl text-red-600"></i>
-
-
-                </div>
-
-
-                <p class="text-3xl font-bold text-gray-900">${stats.documents}</p>
-
-
-            </div>
-
-
-
-
-            <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in-up animation-delay-200">
-
-
-                <div class="flex items-center justify-between mb-2">
-
-
-                    <span class="text-gray-600 text-sm">Activities</span>
-
-
-                    <i class="bi bi-activity text-2xl text-green-600"></i>
-
-
-                </div>
-
-
-                <p class="text-3xl font-bold text-gray-900">${stats.activities}</p>
-
-
-            </div>
-
-
-
-
-            <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in-up animation-delay-300">
-
-
-                <div class="flex items-center justify-between mb-2">
-
-
-                    <span class="text-gray-600 text-sm">Member Since</span>
-
-
-                    <i class="bi bi-calendar-check text-2xl text-purple-600"></i>
-
-
-                </div>
-
-
-                <p class="text-2xl font-bold text-gray-900">${stats.memberSince}</p>
-
-
-            </div>
-
-
-
-
-            <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in-up animation-delay-400">
-
-
-                <div class="flex items-center justify-between mb-2">
-
-
-                    <span class="text-gray-600 text-sm">Last Active</span>
-
-
-                    <i class="bi bi-clock-history text-2xl text-blue-600"></i>
-
-
-                </div>
-
-
-                <p class="text-2xl font-bold text-gray-900">${stats.lastActive}</p>
-
-
-            </div>
-
-
-        </div>
-
-
-
-
-        <!-- Main Content -->
-
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-
-            <!-- Personal Information -->
-
-
-            <div class="lg:col-span-2">
-
-
-                <div class="bg-white rounded-xl shadow-md p-6 mb-6 animate-fade-in-up animation-delay-500">
-
-
-                    <div class="flex items-center gap-3 mb-6">
-
-
-                        <i class="bi bi-person-circle text-2xl text-red-600"></i>
-
-
-                        <h2 class="text-xl font-bold text-gray-800">Personal Information</h2>
-
-
-                    </div>
-
-
-                    
-
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-
-                        <div>
-
-
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-
-
-                            <input type="text" id="editFullName" class="input-field" value="${currentUser.name}" disabled>
-
-
-                        </div>
-
-
-                        <div>
-
-
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Username</label>
-
-
-                            <input type="text" id="editUsername" class="input-field" value="admin" disabled>
-
-
-                        </div>
-
-
-                        <div>
-
-
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-
-
-                            <input type="email" id="editEmail" class="input-field" value="${currentUser.email}" disabled>
-
-
-                        </div>
-
-
-                        <div>
-
-
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
-
-
-                            <input type="tel" id="editPhone" class="input-field" value="1954654564" disabled>
-
-
-                        </div>
-
-
-                        <div>
-
-
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Department</label>
-
-
-                            <input type="text" id="editDepartment" class="input-field" value="IT Department" disabled>
-
-
-                        </div>
-
-
-                        <div>
-
-
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Position</label>
-
-
-                            <input type="text" id="editPosition" class="input-field" value="secretary" disabled>
-
-
-                        </div>
-
-
-                    </div>
-
-
-                    
-
-
-                    <div id="saveProfileBtn" class="mt-6 hidden">
-
-
-                        <button onclick="saveProfile()" class="btn-primary mr-3">
-
-
-                            <i class="bi bi-save mr-2"></i>Save Changes
-
-
-                        </button>
-
-
-                        <button onclick="toggleEditMode()" class="btn-outline">
-
-
-                            <i class="bi bi-x-circle mr-2"></i>Cancel
-
-
-                        </button>
-
-
-                    </div>
-
-
-                </div>
-
-
-
-
-                <!-- Recent Activity -->
-
-
-                <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in-up animation-delay-600">
-
-
-                    <div class="flex items-center justify-between mb-6">
-
-
-                        <div class="flex items-center gap-3">
-
-
-                            <i class="bi bi-clock-history text-2xl text-red-600"></i>
-
-
-                            <h2 class="text-xl font-bold text-gray-800">Recent Activity</h2>
-
-
-                        </div>
-
-
-                        <a href="#" onclick="showSection('audit'); return false;" class="text-sm text-red-600 hover:text-red-700 font-medium">View All</a>
-
-
-                    </div>
-
-
-                    
-
-
-                    <div class="space-y-4">
-
-
-                        ${AppData.auditLogs.filter(log => log.user === currentUser.name).slice(0, 5).map(log => `
-
-
-                            <div class="flex items-start gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-
-
-                                <div class="flex-shrink-0">
-
-
-                                    <i class="bi bi-check-circle text-blue-600 text-xl"></i>
-
-
-                                </div>
-
-
-                                <div class="flex-1">
-
-
-                                    <p class="text-sm font-medium text-gray-800">${log.description}</p>
-
-
-                                    <p class="text-xs text-gray-500 mt-1">${log.timestamp}</p>
-
-
-                                </div>
-
-
-                            </div>
-
-
-                        `).join('')}
-
-
-                    </div>
-
-
-                </div>
-
-
-            </div>
-
-
-
-
-            <!-- Account Security -->
-
-
-            <div class="lg:col-span-1">
-
-
-                <div class="bg-white rounded-xl shadow-md p-6 mb-6 animate-fade-in-up animation-delay-700">
-
-
-                    <div class="flex items-center gap-3 mb-6">
-
-
-                        <i class="bi bi-shield-check text-2xl text-red-600"></i>
-
-
-                        <h2 class="text-xl font-bold text-gray-800">Account Security</h2>
-
-
-                    </div>
-
-
-                    
-
-
-                    <div class="space-y-4">
-
-
-                        <button onclick="openChangePasswordModal()" class="w-full flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition group">
-
-
-                            <div class="flex items-center gap-3">
-
-
-                                <i class="bi bi-key text-xl text-gray-600 group-hover:text-red-600 transition"></i>
-
-
-                                <div class="text-left">
-
-
-                                    <p class="text-sm font-medium text-gray-800">Change Password</p>
-
-
-                                    <p class="text-xs text-gray-500">Update your password</p>
-
-
-                                </div>
-
-
-                            </div>
-
-
-                            <i class="bi bi-chevron-right text-gray-400"></i>
-
-
-                        </button>
-
-
-
-
-                        <button onclick="openTwoFactorModal()" class="w-full flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition group">
-
-
-                            <div class="flex items-center gap-3">
-
-
-                                <i class="bi bi-shield-lock text-xl text-gray-600 group-hover:text-red-600 transition"></i>
-
-
-                                <div class="text-left">
-
-
-                                    <p class="text-sm font-medium text-gray-800">Two-Factor Auth</p>
-
-
-                                    <p class="text-xs text-gray-500">${AppData.currentUser.twoFactorEnabled ? 'Enabled via ' + AppData.currentUser.twoFactorMethod : 'Not enabled'}</p>
-
-
-                                </div>
-
-
-                            </div>
-
-
-                            <i class="bi bi-chevron-right text-gray-400"></i>
-
-
-                        </button>
-
-
-
-
-                        <button onclick="openLoginHistoryModal()" class="w-full flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition group">
-
-
-                            <div class="flex items-center gap-3">
-
-
-                                <i class="bi bi-clock-history text-xl text-gray-600 group-hover:text-red-600 transition"></i>
-
-
-                                <div class="text-left">
-
-
-                                    <p class="text-sm font-medium text-gray-800">Login History</p>
-
-
-                                    <p class="text-xs text-gray-500">View recent logins</p>
-
-
-                                </div>
-
-
-                            </div>
-
-
-                            <i class="bi bi-chevron-right text-gray-400"></i>
-
-
-                        </button>
-
-
-                    </div>
-
-
-                </div>
-
-
-
-
-                <!-- Quick Links removed -->
-
-
-            </div>
-
-
-        </div>
-
-
-    `;
-
-
-
-
-
-    document.getElementById('content-area').innerHTML = html;
-
-
-}
-
-
-
-
-// Profile Picture Upload Handler
-
-
-function handleProfilePictureUpload(event) {
-
-
-    const file = event.target.files[0];
-
-
-    if (!file) return;
-
-
-
-
-
-    // Validate file type
-
-
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-
-
-    if (!validTypes.includes(file.type)) {
-
-
-        showNotification('Please upload a valid image file (JPEG, PNG, GIF, or WEBP)', 'error');
-
-
-        return;
-
-
-    }
-
-
-
-
-
-    // Validate file size (5MB max)
-
-
-    if (file.size > 5 * 1024 * 1024) {
-
-
-        showNotification('File size must be less than 5MB', 'error');
-
-
-        return;
-
-
-    }
-
-
-
-
-
-    const fd = new FormData();
-
-
-    fd.append('action', 'upload_photo');
-
-
-    fd.append('photo', file);
-
-
-
-
-    fetch('API/update_profile.php', { method: 'POST', body: fd })
-
-
-        .then(r => r.json())
-
-
-        .then(data => {
-
-
-            if (!data || !data.success) {
-
-
-                throw new Error((data && data.message) ? data.message : 'Failed to upload photo');
-
-
-            }
-
-
-
-
-            const photoPath = data.photo_path ? String(data.photo_path) : '';
-
-
-            if (photoPath) {
-
-
-                AppData.currentUser.profilePicture = photoPath;
-
-
-            }
-
-
-
-
-            const profileImage = document.getElementById('profileImage');
-
-
-            if (profileImage && photoPath) {
-
-
-                if (profileImage.tagName === 'IMG') {
-
-
-                    profileImage.src = photoPath;
-
-
-                } else {
-
-
-                    profileImage.outerHTML = `<img id="profileImage" src="${photoPath}" alt="Profile" class="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover">`;
-
-
-                }
-
-
-            }
-
-
-
-
-            if (photoPath) updateNavbarProfilePicture(photoPath);
-
-
-            showNotification('Profile picture updated successfully!', 'success');
-
-
-            addAuditLog('update', 'Updated profile picture');
-
-
-        })
-
-
-        .catch(err => {
-
-
-            console.error(err);
-
-
-            showNotification(err && err.message ? String(err.message) : 'Failed to upload photo', 'error');
-
-
-        });
-
-
-}
-
-
-
-
-// Quick Documents mini-menu (opened from Quick Links)
-
-
-function openDocumentsQuickMenu() {
-
-
-    const existing = document.getElementById('documentsQuickModal');
-
-
-    if (existing) return existing.classList.remove('hidden');
-
-
-
-
-    const modal = document.createElement('div');
-
-
-    modal.id = 'documentsQuickModal';
-
-
-    modal.className = 'fixed inset-0 bg-black bg-opacity-40 flex items-start justify-center z-50 p-4';
-
-
-    const user = AppData.currentUser;
-
-
-    const myDocs = AppData.documents.filter(d => d.uploadedBy === user.name).slice(0, 6);
-
-
-
-
-    modal.innerHTML = `
-
-
-        <div class="mt-20 bg-white rounded-lg shadow-xl w-full max-w-2xl">
-
-
-            <div class="p-4 border-b flex items-center justify-between">
-
-
-                <div>
-
-
-                    <h3 class="text-lg font-bold">My Documents</h3>
-
-
-                    <p class="text-xs text-gray-500">Quick access to your recent documents</p>
-
-
-                </div>
-
-
-                <div class="flex items-center gap-2">
-
-
-                    <button onclick="openModal('upload-modal');" class="btn-primary text-sm">Upload</button>
-
-
-                    <button onclick="closeDocumentsQuickMenu()" class="btn-outline text-sm">Close</button>
-
-
-                </div>
-
-
-            </div>
-
-
-            <div class="p-4 max-h-72 overflow-y-auto">
-
-
-                ${myDocs.length === 0 ? '<p class="text-sm text-gray-500">You have no uploaded documents yet.</p>' : myDocs.map(d => `
-
-
-                    <div class="flex items-center justify-between p-2 border-b hover:bg-gray-50">
-
-
-                        <div>
-
-
-                            <div class="font-medium text-gray-800">${d.title}</div>
-
-
-                            <div class="text-xs text-gray-500">${d.reference} • ${formatDate(d.date)}</div>
-
-
-                        </div>
-
-
-                        <div class="flex items-center gap-2">
-
-
-                            <button onclick="viewDocument(${d.id})" class="text-blue-600 text-sm">View</button>
-
-
-                            <button onclick="downloadDocument(${d.id})" class="text-gray-600 text-sm">Download</button>
-
-
-                        </div>
-
-
-                    </div>
-
-
-                `).join('')}
-
-
-            </div>
-
-
-            <div class="p-4 border-t text-right">
-
-
-                <button onclick="showSection('documents')" class="btn-primary">Open Documents →</button>
-
-
-            </div>
-
-
-        </div>
-
-
-    `;
-
-
-
-
-    document.body.appendChild(modal);
-
-
-}
-
-
-
-
-function closeDocumentsQuickMenu() {
-
-
-    const modal = document.getElementById('documentsQuickModal');
-
-
-    if (modal) modal.remove();
-
-
-}
-
-
-
-
-// Update navbar profile picture
-
-
-function updateNavbarProfilePicture(imageUrl) {
-
-
-    // Update top navbar profile picture
-
-
-    const navProfilePic = document.querySelector('#profile-menu');
-
-
-    if (navProfilePic) {
-
-
-        // Check if it already has an image
-
-
-        const existingImg = navProfilePic.querySelector('img');
-
-
-        if (existingImg) {
-
-
-            existingImg.src = imageUrl;
-
-
+    tbody.innerHTML = filtered.map(log => {
+        let badgeHtml = '';
+        if (typeof getActionBadge === 'function') {
+            badgeHtml = getActionBadge(log.action);
+        } else if (typeof getActionColor === 'function') {
+            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[11px] font-bold ${getActionColor(log.action)}">${escapeHtml(log.action)}</span>`;
         } else {
-
-
-            // Replace icon with image
-
-
-            navProfilePic.innerHTML = `<img src="${imageUrl}" alt="Profile" class="w-8 h-8 rounded-full border-2 border-white object-cover">`;
-
-
+            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">${escapeHtml(log.action)}</span>`;
         }
 
-
-    }
-
-
-
-
-
-    // Update sidebar profile picture
-
-
-    const sidebarProfilePic = document.querySelector('#sidebar-profile-pic');
-
-
-    if (sidebarProfilePic) {
-
-
-        const existingImg = sidebarProfilePic.querySelector('img');
-
-
-        if (existingImg) {
-
-
-            existingImg.src = imageUrl;
-
-
-        } else {
-
-
-            sidebarProfilePic.innerHTML = `<img src="${imageUrl}" alt="Profile" class="w-10 h-10 rounded-full border-2 border-white object-cover">`;
-
-
-        }
-
-
-    }
-
-
-}
-
-
-
-
-// Toggle edit mode
-
-
-let isEditMode = false;
-
-
-function toggleEditMode() {
-
-
-    isEditMode = !isEditMode;
-
-
-
-
-
-    const fields = ['editFullName', 'editUsername', 'editEmail', 'editPhone', 'editDepartment', 'editPosition'];
-
-
-    const saveBtn = document.getElementById('saveProfileBtn');
-
-
-
-
-
-    fields.forEach(fieldId => {
-
-
-        const field = document.getElementById(fieldId);
-
-
-        if (field) {
-
-
-            field.disabled = !isEditMode;
-
-
-            if (isEditMode) {
-
-
-                field.classList.add('border-red-300', 'focus:border-red-500');
-
-
-            } else {
-
-
-                field.classList.remove('border-red-300', 'focus:border-red-500');
-
-
-            }
-
-
-        }
-
-
-    });
-
-
-
-
-
-    if (saveBtn) {
-
-
-        if (isEditMode) {
-
-
-            saveBtn.classList.remove('hidden');
-
-
-        } else {
-
-
-            saveBtn.classList.add('hidden');
-
-
-        }
-
-
-    }
-
-
-}
-
-
-
-
-// Save profile changes
-
-
-function saveProfile() {
-
-
-    const name = document.getElementById('editFullName')?.value || AppData.currentUser.name;
-
-
-    const email = document.getElementById('editEmail')?.value || AppData.currentUser.email;
-
-
-
-
-    if (!name || !email) {
-
-
-        showNotification('Name and email are required', 'warning');
-
-
-        return;
-
-
-    }
-
-
-
-
-    const formData = new FormData();
-
-
-    formData.append('action', 'update_profile');
-
-
-    formData.append('fullname', name);
-
-
-    formData.append('email', email);
-
-
-    formData.append('username', AppData.currentUser.name || '');
-
-
-
-
-    fetch('API/update_profile.php', {
-
-
-        method: 'POST',
-
-
-        body: formData
-
-
-    })
-
-
-        .then(r => r.json())
-
-
-        .then(data => {
-
-
-            if (!data || !data.success) {
-
-
-                throw new Error((data && data.message) ? data.message : 'Failed to update profile');
-
-
-            }
-
-
-            AppData.currentUser.name = name;
-
-
-            AppData.currentUser.email = email;
-
-
-            updateHeaderUserDisplays();
-
-
-            showNotification('Profile updated successfully!', 'success');
-
-
-            addAuditLog('update', 'Updated profile information');
-
-
-            toggleEditMode();
-
-
-            renderProfile();
-
-
-        })
-
-
-        .catch(err => {
-
-
-            console.error(err);
-
-
-            showNotification(err && err.message ? String(err.message) : 'Failed to update profile', 'error');
-
-
-        });
-
-
-}
-
-
-
-
-// Open change password modal
-
-
-function openChangePasswordModal() {
-
-
-    const modal = document.createElement('div');
-
-
-    modal.id = 'changePasswordModal';
-
-
-    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
-
-
-    modal.innerHTML = `
-
-
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-fade-in-up">
-
-
-            <div class="p-6 border-b border-gray-200">
-
-
-                <div class="flex items-center justify-between">
-
-
-                    <h2 class="text-xl font-bold text-gray-800">Change Password</h2>
-
-
-                    <button onclick="closeChangePasswordModal()" class="text-gray-400 hover:text-gray-600">
-
-
-                        <i class="bi bi-x-lg text-xl"></i>
-
-
-                    </button>
-
-
-                </div>
-
-
-            </div>
-
-
-            
-
-
-            <div class="p-6">
-
-
-                <div class="space-y-4">
-
-
-                    <div>
-
-
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
-
-
-                        <input type="password" id="currentPassword" class="input-field" placeholder="Enter current password">
-
-
-                    </div>
-
-
-                    <div>
-
-
-                        <label class="block text-sm font-medium text-gray-700 mb-2">New Password</label>
-
-
-                        <input type="password" id="newPassword" class="input-field" placeholder="Enter new password">
-
-
-                    </div>
-
-
-                    <div>
-
-
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
-
-
-                        <input type="password" id="confirmPassword" class="input-field" placeholder="Confirm new password">
-
-
-                    </div>
-
-
-                </div>
-
-
-            </div>
-
-
-            
-
-
-            <div class="p-6 border-t border-gray-200 flex gap-3">
-
-
-                <button onclick="changePassword()" class="btn-primary flex-1">
-
-
-                    <i class="bi bi-key mr-2"></i>Update Password
-
-
-                </button>
-
-
-                <button onclick="closeChangePasswordModal()" class="btn-outline flex-1">
-
-
-                    Cancel
-
-
-                </button>
-
-
-            </div>
-
-
-        </div>
-
-
-    `;
-
-
-
-
-
-    document.body.appendChild(modal);
-
-
-}
-
-
-
-
-function closeChangePasswordModal() {
-
-
-    const modal = document.getElementById('changePasswordModal');
-
-
-    if (modal) {
-
-
-        modal.remove();
-
-
-    }
-
-
-}
-
-
-
-
-function changePassword() {
-
-
-    const current = document.getElementById('currentPassword').value;
-
-
-    const newPass = document.getElementById('newPassword').value;
-
-
-    const confirm = document.getElementById('confirmPassword').value;
-
-
-
-
-
-    if (!current || !newPass || !confirm) {
-
-
-        showNotification('Please fill in all password fields', 'error');
-
-
-        return;
-
-
-    }
-
-
-
-
-
-    if (newPass !== confirm) {
-
-
-        showNotification('New passwords do not match', 'error');
-
-
-        return;
-
-
-    }
-
-
-
-
-
-    if (newPass.length < 6) {
-
-
-        showNotification('Password must be at least 6 characters', 'error');
-
-
-        return;
-
-
-    }
-
-
-
-
-
-    const formData = new FormData();
-
-
-    formData.append('action', 'change_password');
-
-
-    formData.append('current_password', current);
-
-
-    formData.append('new_password', newPass);
-
-
-    formData.append('confirm_password', confirm);
-
-
-
-
-    fetch('API/update_profile.php', {
-
-
-        method: 'POST',
-
-
-        body: formData
-
-
-    })
-
-
-        .then(r => r.json())
-
-
-        .then(data => {
-
-
-            if (!data || !data.success) {
-
-
-                throw new Error((data && data.message) ? data.message : 'Failed to change password');
-
-
-            }
-
-
-            closeChangePasswordModal();
-
-
-            showNotification('Password changed successfully!', 'success');
-
-
-            addAuditLog('update', 'Changed account password');
-
-
-        })
-
-
-        .catch(err => {
-
-
-            console.error(err);
-
-
-            showNotification(err && err.message ? String(err.message) : 'Failed to change password', 'error');
-
-
-        });
-
-
-}
-
-
-
-
-// Two-Factor Authentication Modal
-
-
-function openTwoFactorModal() {
-
-
-    const modal = document.createElement('div');
-
-
-    modal.id = 'twoFactorModal';
-
-
-    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
-
-
-    modal.innerHTML = `
-
-
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-fade-in-up">
-
-
-            <div class="p-6 border-b border-gray-200">
-
-
-                <h2 class="text-xl font-bold text-gray-800">Two-Factor Authentication</h2>
-
-
-            </div>
-
-
-            
-
-
-            <div class="p-6">
-
-
-                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-
-
-                    <p class="text-sm text-blue-800">
-
-
-                        Two-Factor Authentication adds an extra layer of security to your account.
-
-
-                    </p>
-
-
-                </div>
-
-
-                
-
-
-                ${AppData.currentUser.twoFactorEnabled ? `
-
-
-                    <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-
-
-                        <p class="text-sm font-medium text-green-800">Status: <strong>Enabled</strong></p>
-
-
-                        <p class="text-xs text-green-700 mt-1">Method: ${AppData.currentUser.twoFactorMethod}</p>
-
-
-                    </div>
-
-
-                ` : `
-
-
-                    <div class="space-y-4">
-
-
-                        <div>
-
-
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Choose Method</label>
-
-
-                            <select id="twoFactorMethod" class="input-field">
-
-
-                                <option value="email">Email (Recommended)</option>
-
-
-                                <option value="sms">SMS Text Message</option>
-
-
-                                <option value="authenticator">Authenticator App</option>
-
-
-                            </select>
-
-
-                        </div>
-
-
-                    </div>
-
-
-                `}
-
-
-            </div>
-
-
-            
-
-
-            <div class="p-6 border-t border-gray-200 flex gap-3">
-
-
-                ${AppData.currentUser.twoFactorEnabled ? `
-
-
-                    <button onclick="disableTwoFactor()" class="btn-danger flex-1">Disable</button>
-
-
-                ` : `
-
-
-                    <button onclick="enableTwoFactor()" class="btn-primary flex-1">Enable</button>
-
-
-                `}
-
-
-                <button onclick="closeTwoFactorModal()" class="btn-outline flex-1">Close</button>
-
-
-            </div>
-
-
-        </div>
-
-
-    `;
-
-
-
-
-
-    document.body.appendChild(modal);
-
-
-}
-
-
-
-
-function closeTwoFactorModal() {
-
-
-    const modal = document.getElementById('twoFactorModal');
-
-
-    if (modal) modal.remove();
-
-
-}
-
-
-
-
-function enableTwoFactor() {
-
-
-    const method = document.getElementById('twoFactorMethod')?.value || 'email';
-
-
-    AppData.currentUser.twoFactorEnabled = true;
-
-
-    AppData.currentUser.twoFactorMethod = method;
-
-
-    closeTwoFactorModal();
-
-
-    showNotification(`Two-Factor Authentication enabled via ${method}!`, 'success');
-
-
-    addAuditLog('update', `Enabled Two-Factor Authentication (${method})`);
-
-
-    renderProfile();
-
-
-}
-
-
-
-
-function disableTwoFactor() {
-
-
-    if (!confirm('Are you sure? Disabling 2FA makes your account less secure.')) return;
-
-
-    AppData.currentUser.twoFactorEnabled = false;
-
-
-    closeTwoFactorModal();
-
-
-    showNotification('Two-Factor Authentication disabled', 'warning');
-
-
-    addAuditLog('update', 'Disabled Two-Factor Authentication');
-
-
-    renderProfile();
-
-
-}
-
-
-
-
-// Login History Modal
-
-
-function openLoginHistoryModal() {
-
-
-    const modal = document.createElement('div');
-
-
-    modal.id = 'loginHistoryModal';
-
-
-    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
-
-
-    modal.innerHTML = `
-
-
-        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-96 overflow-y-auto animate-fade-in-up">
-
-
-            <div class="p-6 border-b border-gray-200 sticky top-0 bg-white">
-
-
-                <div class="flex items-center justify-between">
-
-
-                    <h2 class="text-xl font-bold text-gray-800">Login History</h2>
-
-
-                    <button onclick="closeLoginHistoryModal()" class="text-gray-400 hover:text-gray-600">
-
-
-                        <i class="bi bi-x-lg text-xl"></i>
-
-
-                    </button>
-
-
-                </div>
-
-
-            </div>
-
-
-            
-
-
-            <div class="p-6">
-
-
-                <div class="space-y-3">
-
-
-                    ${AppData.loginHistory.map(log => `
-
-
-                        <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-
-
-                            <div class="flex items-center justify-between mb-2">
-
-
-                                <p class="font-medium text-gray-800">${log.timestamp}</p>
-
-
-                                <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Success</span>
-
-
-                            </div>
-
-
-                            <div class="text-sm text-gray-600 space-y-1">
-
-
-                                <p><strong>Device:</strong> ${log.device}</p>
-
-
-                                <p><strong>IP Address:</strong> ${log.ipAddress}</p>
-
-
-                                <p><strong>Location:</strong> ${log.location}</p>
-
-
-                            </div>
-
-
-                        </div>
-
-
-                    `).join('')}
-
-
-                </div>
-
-
-            </div>
-
-
-        </div>
-
-
-    `;
-
-
-
-
-
-    document.body.appendChild(modal);
-
-
-}
-
-
-
-
-function closeLoginHistoryModal() {
-
-
-    const modal = document.getElementById('loginHistoryModal');
-
-
-    if (modal) modal.remove();
-
-
-}
-
-
-
-
-// Activity Report Modal
-
-
-function openActivityReportModal() {
-
-
-    const modal = document.createElement('div');
-
-
-    modal.id = 'activityReportModal';
-
-
-    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
-
-
-    const userActivities = AppData.auditLogs.filter(l => l.user === AppData.currentUser.name);
-
-
-    modal.innerHTML = `
-
-
-        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-96 overflow-y-auto animate-fade-in-up">
-
-
-            <div class="p-6 border-b border-gray-200 sticky top-0 bg-white">
-
-
-                <div class="flex items-center justify-between">
-
-
-                    <h2 class="text-xl font-bold text-gray-800">Activity Report</h2>
-
-
-                    <button onclick="closeActivityReportModal()" class="text-gray-400 hover:text-gray-600">
-
-
-                        <i class="bi bi-x-lg text-xl"></i>
-
-
-                    </button>
-
-
-                </div>
-
-
-            </div>
-
-
-            
-
-
-            <div class="p-6">
-
-
-                <div class="mb-4 p-3 bg-gray-50 rounded-lg">
-
-
-                    <p class="text-sm text-gray-700"><strong>Total Activities:</strong> ${userActivities.length}</p>
-
-
-                </div>
-
-
-                <div class="space-y-3">
-
-
-                    ${userActivities.map(log => `
-
-
-                        <div class="border border-gray-200 rounded-lg p-4">
-
-
-                            <div class="flex items-center justify-between mb-2">
-
-
-                                <p class="font-medium text-gray-800">${log.description}</p>
-
-
-                                <span class="text-xs ${log.action === 'delete' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'} px-2 py-1 rounded">${capitalizeFirstLetter(log.action)}</span>
-
-
-                            </div>
-
-
-                            <p class="text-sm text-gray-600">${log.timestamp}</p>
-
-
-                        </div>
-
-
-                    `).join('')}
-
-
-                </div>
-
-
-            </div>
-
-
-        </div>
-
-
-    `;
-
-
-
-
-
-    document.body.appendChild(modal);
-
-
-}
-
-
-
-
-function closeActivityReportModal() {
-
-
-    const modal = document.getElementById('activityReportModal');
-
-
-    if (modal) modal.remove();
-
-
-}
-
-
-
-
-// Session Settings Modal
-
-
-function openSessionSettingsModal() {
-
-
-    const modal = document.createElement('div');
-
-
-    modal.id = 'sessionSettingsModal';
-
-
-    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
-
-
-    modal.innerHTML = `
-
-
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-fade-in-up">
-
-
-            <div class="p-6 border-b border-gray-200">
-
-
-                <h2 class="text-xl font-bold text-gray-800">Session Settings</h2>
-
-
-            </div>
-
-
-            
-
-
-            <div class="p-6">
-
-
-                <div class="space-y-4">
-
-
-                    <label class="flex items-center gap-3">
-
-
-                        <input type="checkbox" id="rememberMe" class="form-checkbox" checked>
-
-
-                        <span class="text-sm text-gray-700">Remember this device for 30 days</span>
-
-
-                    </label>
-
-
-                    <label class="flex items-center gap-3">
-
-
-                        <input type="checkbox" id="sessionNotifications" class="form-checkbox" checked>
-
-
-                        <span class="text-sm text-gray-700">Notify on new login attempts</span>
-
-
-                    </label>
-
-
-                    <label class="flex items-center gap-3">
-
-
-                        <input type="checkbox" id="sessionTimeout" class="form-checkbox" checked>
-
-
-                        <span class="text-sm text-gray-700">Auto-logout after 1 hour of inactivity</span>
-
-
-                    </label>
-
-
-                </div>
-
-
-                
-
-
-                <div class="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-
-
-                    <p class="text-sm font-medium text-red-800 mb-3">Sign Out From All Devices</p>
-
-
-                    <button onclick="signOutAllDevices()" class="btn-danger w-full text-sm">
-
-
-                        <i class="bi bi-door-closed mr-2"></i>Sign Out Everywhere
-
-
-                    </button>
-
-
-                </div>
-
-
-            </div>
-
-
-            
-
-
-            <div class="p-6 border-t border-gray-200 flex gap-3">
-
-
-                <button onclick="saveSessionSettings()" class="btn-primary flex-1">Save</button>
-
-
-                <button onclick="closeSessionSettingsModal()" class="btn-outline flex-1">Close</button>
-
-
-            </div>
-
-
-        </div>
-
-
-    `;
-
-
-
-
-
-    document.body.appendChild(modal);
-
-
-}
-
-
-
-
-function closeSessionSettingsModal() {
-
-
-    const modal = document.getElementById('sessionSettingsModal');
-
-
-    if (modal) modal.remove();
-
-
-}
-
-
-
-
-function saveSessionSettings() {
-
-
-    showNotification('Session settings saved successfully', 'success');
-
-
-    closeSessionSettingsModal();
-
-
-}
-
-
-
-
-function signOutAllDevices() {
-
-
-    if (!confirm('This will sign you out from all devices. Continue?')) return;
-
-
-    showNotification('Signed out from all devices. Redirecting to login...', 'success');
-
-
-    addAuditLog('update', 'Signed out from all devices');
-
-
-    setTimeout(() => {
-
-
-        window.location.href = 'login.html';
-
-
-    }, 2000);
-
-
-}
-
-
-
-
-// Edit profile modal
-
-
-function openEditProfileModal() {
-
-
-    const modal = document.createElement('div');
-
-
-    modal.id = 'editProfileModal';
-
-
-    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
-
-
-    const user = AppData.currentUser;
-
-
-    modal.innerHTML = `
-
-
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-fade-in-up">
-
-
-            <div class="p-6 border-b border-gray-200">
-
-
-                <h2 class="text-xl font-bold text-gray-800">Edit Profile</h2>
-
-
-            </div>
-
-
-            
-
-
-            <div class="p-6">
-
-
-                <div class="space-y-4">
-
-
-                    <div>
-
-
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-
-
-                        <input type="text" id="modal-name" value="${user.name}" class="input-field">
-
-
-                    </div>
-
-
-                    <div>
-
-
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-
-
-                        <input type="email" id="modal-email" value="${user.email}" class="input-field">
-
-
-                    </div>
-
-
-                    <div>
-
-
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-
-
-                        <input type="tel" id="modal-phone" value="${user.phone}" class="input-field">
-
-
-                    </div>
-
-
-                    <div>
-
-
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Department</label>
-
-
-                        <input type="text" id="modal-department" value="${user.department}" class="input-field">
-
-
-                    </div>
-
-
-                    <div>
-
-
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Position</label>
-
-
-                        <input type="text" id="modal-position" value="${user.position}" class="input-field">
-
-
-                    </div>
-
-
-                </div>
-
-
-            </div>
-
-
-            
-
-
-            <div class="p-6 border-t border-gray-200 flex gap-3">
-
-
-                <button onclick="saveEditProfileModal()" class="btn-primary flex-1">Save Changes</button>
-
-
-                <button onclick="closeEditProfileModal()" class="btn-outline flex-1">Cancel</button>
-
-
-            </div>
-
-
-        </div>
-
-
-    `;
-
-
-
-
-
-    document.body.appendChild(modal);
-
-
-}
-
-
-
-
-function closeEditProfileModal() {
-
-
-    const modal = document.getElementById('editProfileModal');
-
-
-    if (modal) modal.remove();
-
-
-}
-
-
-
-
-function saveEditProfileModal() {
-
-
-    AppData.currentUser.name = document.getElementById('modal-name').value;
-
-
-    AppData.currentUser.email = document.getElementById('modal-email').value;
-
-
-    AppData.currentUser.phone = document.getElementById('modal-phone').value;
-
-
-    AppData.currentUser.department = document.getElementById('modal-department').value;
-
-
-    AppData.currentUser.position = document.getElementById('modal-position').value;
-
-
-
-
-
-    closeEditProfileModal();
-
-
-    showNotification('Profile updated successfully', 'success');
-
-
-    addAuditLog('update', 'Updated profile information');
-
-
-    renderProfile();
-
-
-}
-
-
-
-
-// ==============================
-
-
-// UPLOAD DOCUMENT FUNCTIONALITY
-
-
-// ==============================
-
-
-function handleDocumentUpload(event) {
-
-
-    event.preventDefault();
-
-
-
-
-
-    const form = event.target;
-
-    const formData = new FormData(form);
-
-    const fileInput = document.getElementById('file-input');
-
-
-
-    if (!fileInput.files.length) {
-
-        showNotification('Please select a file to upload', 'error');
-
-        return;
-
-    }
-
-
-
-    formData.append('document_file', fileInput.files[0]);
-
-
-
-
-    // Validate
-
-
-    if (!formData.get('reference') || !formData.get('title') || !formData.get('type') || !formData.get('date')) {
-
-
-        showNotification('Please fill in all required fields', 'error');
-
-
-        return;
-
-
-    }
-
-
-
-
-
-    // Show loading
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="bi bi-hourglass-split mr-2"></i>Uploading...';
-
-    // Send to API
-    fetch('API/documents_api.php?action=upload', {
-        method: 'POST',
-        body: formData
-    })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                showNotification('Document uploaded successfully', 'success');
-                closeModal('upload-modal');
-                form.reset();
-                document.getElementById('file-name').textContent = '';
-
-                // Refresh documents list
-                loadDocumentsFromApi().then(() => {
-                    if (document.getElementById('documentsList')) {
-                        filterDocuments();
-                    }
-                });
-
-                // Add audit log
-                addAuditLog('upload', `Uploaded document ${formData.get('reference')}`);
-            } else {
-                showNotification(data.message || 'Upload failed', 'error');
-            }
-        })
-        .catch(err => {
-            console.error('Upload error:', err);
-            showNotification('Upload failed. Please try again.', 'error');
-        })
-        .finally(() => {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalText;
-        });
-
-
-
-
-    // Create new document
-
-
-    // const newDoc = {
-
-
-    //     id: AppData.documents.length + 1,
-
-
-    //     ...formData,
-
-
-    //     uploadedBy: AppData.currentUser.name,
-
-
-    //     uploadedAt: new Date().toLocaleString(),
-
-
-    //     fileSize: '1.2 MB',
-
-
-    //     views: 0,
-
-
-    //     downloads: 0
-
-
-    // };
-
-
-
-
-
-    // AppData.documents.unshift(newDoc);
-
-
-
-
-
-    // Close modal and reset form
-
-
-    // closeModal('upload-modal');
-
-
-    // document.getElementById('uploadForm').reset();
-
-
-
-
-
-    // Show success notification
-
-
-    // showNotification('Document uploaded successfully', 'success');
-
-
-
-
-
-    // Add audit log
-
-
-    // addAuditLog('upload', `Uploaded document ${formData.reference}`);
-
-
-
-
-
-    // Refresh if on documents page
-
-
-    // if (document.getElementById('documentsList')) {
-
-
-    //     filterDocuments();
-
-
-    // }
-
-
-}
-
-
-
-
-// Handle file selection
-function handleFileSelect(event) {
-    const file = event.target.files[0];
-    const fileName = document.getElementById('file-name');
-
-    if (file) {
-        fileName.textContent = `Selected: ${file.name} (${formatFileSize(file.size)})`;
-    } else {
-        fileName.textContent = '';
-    }
-}
-
-// Format file size
-function formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-// Setup drag and drop
-
-function setupDragAndDrop() {
-
-    const dropzone = document.getElementById('dropzone');
-
-
-    if (!dropzone) return;
-
-
-
-
-
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-
-
-        dropzone.addEventListener(eventName, preventDefaults, false);
-
-
-    });
-
-
-
-
-
-    function preventDefaults(e) {
-
-
-        e.preventDefault();
-
-
-        e.stopPropagation();
-
-
-    }
-
-
-
-
-
-    ['dragenter', 'dragover'].forEach(eventName => {
-
-
-        dropzone.addEventListener(eventName, () => {
-
-
-            dropzone.classList.add('border-red-600', 'bg-red-50');
-
-
-        }, false);
-
-
-    });
-
-
-
-
-
-    ['dragleave', 'drop'].forEach(eventName => {
-
-
-        dropzone.addEventListener(eventName, () => {
-
-
-            dropzone.classList.remove('border-red-600', 'bg-red-50');
-
-
-        }, false);
-
-
-    });
-
-
-
-
-
-    dropzone.addEventListener('drop', (e) => {
-
-
-        const files = e.dataTransfer.files;
-
-
-        if (files.length > 0) {
-
-
-            showNotification(`File "${files[0].name}" ready to upload`, 'info');
-
-
-        }
-
-
-    }, false);
-
-
-}
-
-
-
-
-// ==============================
-
-
-// UTILITY FUNCTIONS
-
-
-// ==============================
-
-
-let appDialogState = null;
-
-function createAppDialogModal() {
-    if (document.getElementById('app-dialog-modal')) return;
-
-    const modal = document.createElement('div');
-    modal.id = 'app-dialog-modal';
-    modal.className = 'fixed inset-0 z-[9999] hidden items-center justify-center bg-black/55 px-4';
-    modal.innerHTML = `
-        <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl">
-            <div class="border-b border-gray-200 px-6 py-4">
-                <div class="flex items-center gap-3">
-                    <div id="app-dialog-icon" class="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-600">
-                        <i class="bi bi-info-circle text-xl"></i>
-                    </div>
-                    <div>
-                        <h3 id="app-dialog-title" class="text-lg font-semibold text-gray-900">Notice</h3>
-                        <p id="app-dialog-subtitle" class="text-sm text-gray-500">Please review before continuing.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="px-6 py-5">
-                <p id="app-dialog-message" class="text-sm leading-6 text-gray-700"></p>
-            </div>
-            <div class="flex justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
-                <button id="app-dialog-cancel" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
-                <button id="app-dialog-confirm" class="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800">Continue</button>
-            </div>
-        </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    modal.querySelector('#app-dialog-cancel').addEventListener('click', () => {
-        if (appDialogState && typeof appDialogState.reject === 'function') {
-            appDialogState.reject(new Error('cancelled'));
-        }
-        closeAppDialog();
-    });
-
-    modal.querySelector('#app-dialog-confirm').addEventListener('click', () => {
-        if (appDialogState && typeof appDialogState.resolve === 'function') {
-            appDialogState.resolve(true);
-        }
-        closeAppDialog();
-    });
-}
-
-function openAppDialog({ title, message, type = 'info', confirmLabel = 'Continue', cancelLabel = 'Cancel', showCancel = true }) {
-    createAppDialogModal();
-
-    const modal = document.getElementById('app-dialog-modal');
-    const titleEl = document.getElementById('app-dialog-title');
-    const subtitleEl = document.getElementById('app-dialog-subtitle');
-    const messageEl = document.getElementById('app-dialog-message');
-    const iconEl = document.getElementById('app-dialog-icon');
-    const confirmBtn = document.getElementById('app-dialog-confirm');
-    const cancelBtn = document.getElementById('app-dialog-cancel');
-
-    titleEl.textContent = title || 'Notice';
-    subtitleEl.textContent = type === 'warning' ? 'Action requires confirmation' : 'Please review before continuing';
-    messageEl.textContent = message || 'This action needs your confirmation.';
-    confirmBtn.textContent = confirmLabel;
-    cancelBtn.textContent = cancelLabel;
-    cancelBtn.style.display = showCancel ? 'inline-flex' : 'none';
-
-    if (type === 'warning') {
-        iconEl.className = 'flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-600';
-        iconEl.innerHTML = '<i class="bi bi-exclamation-triangle text-xl"></i>';
-    } else if (type === 'success') {
-        iconEl.className = 'flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600';
-        iconEl.innerHTML = '<i class="bi bi-check-circle text-xl"></i>';
-    } else {
-        iconEl.className = 'flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-600';
-        iconEl.innerHTML = '<i class="bi bi-info-circle text-xl"></i>';
-    }
-
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-
-    return new Promise((resolve, reject) => {
-        appDialogState = { resolve, reject };
-    });
-}
-
-function closeAppDialog() {
-    const modal = document.getElementById('app-dialog-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
-    appDialogState = null;
-}
-
-window.alert = function (message) {
-    return openAppDialog({ title: 'Notice', message, type: 'info', confirmLabel: 'Okay', showCancel: false });
-};
-
-function openModal(modalId) {
-
-
-    const modal = document.getElementById(modalId);
-
-
-    if (modal) {
-
-
-        modal.classList.remove('hidden');
-
-
-        modal.classList.add('flex');
-
-
-    }
-
-
-}
-
-
-
-
-function closeModal(modalId) {
-
-
-    const modal = document.getElementById(modalId);
-
-
-    if (modal) {
-
-
-        modal.classList.add('hidden');
-
-
-        modal.classList.remove('flex');
-
-
-    }
-
-
-}
-
-// Replace common bootstrap-icon <i class="bi ..."> elements with inline SVGs
-// This avoids relying on the icon font being loaded from disk or network.
-function replaceIconFontWithInlineSVG() {
-    const svgs = {
-        'bi-eye': `
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="1em" height="1em" aria-hidden="true">
-                <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8z"/>
-                <path d="M8 5.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5z"/>
-            </svg>
-        `,
-        'bi-download': `
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="1em" height="1em" aria-hidden="true">
-                <path d="M.5 9.9V13a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V9.9a.5.5 0 0 0-.85-.36L9 14.44V1.5a.5.5 0 0 0-1 0v12.94L1.35 9.54A.5.5 0 0 0 .5 9.9z"/>
-                <path d="M7.646 4.146a.5.5 0 0 1 .708 0L10.5 6.293a.5.5 0 0 1-.708.707L8.5 5.207V12.5a.5.5 0 0 1-1 0V5.207L6.208 7a.5.5 0 1 1-.708-.707L7.646 4.146z"/>
-            </svg>
-        `,
-        'bi-x-lg': `
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="1em" height="1em" aria-hidden="true">
-                <path d="M2.146 2.146a.5.5 0 1 1 .708-.708L8 6.586l5.146-5.148a.5.5 0 0 1 .708.708L8.707 7.293l5.147 5.147a.5.5 0 0 1-.708.708L8 8.001l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 7.293 2.146 2.146z"/>
-            </svg>
-        `,
-        'bi-file-earmark-plus': `
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="1em" height="1em" aria-hidden="true">
-                <path d="M8 6.5a.5.5 0 0 1 .5.5V8h1a.5.5 0 0 1 0 1H8.5v1a.5.5 0 0 1-1 0V9H6.5a.5.5 0 0 1 0-1H7.5V7a.5.5 0 0 1 .5-.5z"/>
-                <path d="M14 4.5V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h6.5L14 4.5zM10.5 3V1H3v13h10V4.5H10.5z"/>
-            </svg>
-        `
-    };
-
-    Object.keys(svgs).forEach(cls => {
-        const selector = `i.${cls.replace(/^bi-/, 'bi-')}`;
-        document.querySelectorAll(selector).forEach(el => {
-            try {
-                const wrapper = document.createElement('span');
-                wrapper.className = el.className ? el.className + ' inline-svg' : 'inline-svg';
-                wrapper.setAttribute('aria-hidden', 'true');
-                wrapper.innerHTML = svgs[cls];
-                el.replaceWith(wrapper);
-            } catch (e) { /* noop */ }
-        });
-    });
-}
-
-document.addEventListener('DOMContentLoaded', replaceIconFontWithInlineSVG);
-
-
-
-
-function formatNotifTime(isoOrSqlDate) {
-
-
-    if (!isoOrSqlDate) return '';
-
-
-    const d = new Date(isoOrSqlDate);
-
-
-    if (Number.isNaN(d.getTime())) return String(isoOrSqlDate);
-
-
-    return d.toLocaleString();
-
-
-}
-
-
-
-
-
-
-function mapDbNotificationToUi(row) {
-    if (!row) return null;
-    const isRead = Number(row.is_read) === 1;
-    const type = String(row.type || 'info').toLowerCase();
-    const msg = String(row.message || '');
-
-    let title = 'System Notification';
-    let category = type;
-    let priority = (type === 'consultation' || type === 'feedback' || type === 'phms_integration' || type === 'ai_brief' || type === 'decline' || type === 'unified_feedback') ? 'high' : 'normal';
-
-    if (type === 'decline' || msg.includes('declined') || msg.includes('decline')) {
-        title = '❌ Proposal Declined';
-        category = 'Review';
-        priority = 'high';
-    } else if (type === 'unified_feedback' || msg.includes('Unified') || msg.includes('locked')) {
-        title = '🔒 Unified Feedback Lock';
-        category = 'System';
-        priority = 'high';
-    } else if (msg.includes('PHMS') || type === 'phms_integration') {
-        title = '🔗 PHMS Integration';
-        category = 'PHMS System';
-        priority = 'high';
-    } else if (msg.includes('AI') || type === 'ai_brief') {
-        title = '🤖 AI Committee Brief';
-        category = 'AI Engine';
-        priority = 'high';
-    } else if (type === 'feedback' || msg.includes('Feedback')) {
-        title = '📩 Citizen Feedback';
-        category = 'Public Portal';
-    } else if (type === 'consultation' || msg.includes('Survey') || msg.includes('poll')) {
-        title = '📋 Consultation Update';
-        category = 'Policy';
-    }
-
-    return {
-        id: Number(row.id || Date.now()),
-        title: title,
-        message: msg,
-        category: category,
-        priority: priority,
-        read: isRead,
-        time: row.created_at ? formatNotifTime(row.created_at) : 'Recently',
-        timestamp: row.created_at || new Date().toISOString()
-    };
-}
-
-async function loadNotifications() {
-    const notifsList = document.getElementById('notifications-list');
-
-    try {
-        const res = await fetch('API/notifications_api.php?action=list&limit=50', {
-            headers: { 'Accept': 'application/json' }
-        });
-
-        const data = await res.json().catch(() => null);
-
-        if (!res.ok || !data || !data.success) {
-            const msg = (data && data.message) ? data.message : (res.ok ? 'Failed to load notifications' : `HTTP ${res.status}`);
-            throw new Error(msg);
-        }
-
-        const items = Array.isArray(data.data && data.data.items) ? data.data.items : [];
-        AppData.notifications = items.map(mapDbNotificationToUi).filter(Boolean);
-
-        const unreadCount = typeof data.data.unread === 'number'
-            ? data.data.unread
-            : AppData.notifications.filter(n => !n.read).length;
-
-        const badge = document.getElementById('notif-badge') || document.getElementById('notification-badge');
-        if (badge) {
-            if (unreadCount > 0) {
-                badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
-                badge.classList.remove('hidden');
-            } else {
-                badge.classList.add('hidden');
-            }
-        }
-
-        document.querySelectorAll('[data-section="consultation-management"]').forEach(link => {
-            const icon = link.querySelector('.consultation-management-unread-icon');
-            if (icon) {
-                if (unreadCount > 0) {
-                    icon.classList.remove('hidden');
-                } else {
-                    icon.classList.add('hidden');
-                }
-            }
-        });
-
-        if (!notifsList) return;
-
-        // Render notifications sorted by priority and unread status
-        const sortedNotifs = [...AppData.notifications].sort((a, b) => {
-            const priorityOrder = { critical: 0, high: 1, normal: 2, low: 3 };
-            const aPriority = priorityOrder[a.priority] || 2;
-            const bPriority = priorityOrder[b.priority] || 2;
-            if (aPriority !== bPriority) return aPriority - bPriority;
-            return a.read === b.read ? 0 : a.read ? 1 : -1;
-        });
-
-        notifsList.innerHTML = sortedNotifs.length === 0 ?
-            '<div class="p-8 text-center text-gray-400 text-xs font-medium">No notifications yet</div>' :
-            sortedNotifs.map(notif => {
-                const title = escapeHtml(notif.title || 'Notification');
-                const message = escapeHtml(notif.message || '');
-                const time = escapeHtml(notif.time || 'Just updated');
-                const isRead = !!notif.read;
-
-                let iconInfo = { bg: 'bg-blue-50 border-blue-100', text: 'text-blue-600', icon: 'bi-bell-fill' };
-                const textLower = (title + ' ' + message + ' ' + (notif.category || '')).toLowerCase();
-
-                if (textLower.includes('decline') || textLower.includes('declined')) {
-                    iconInfo = { bg: 'bg-red-50 border-red-100', text: 'text-red-600', icon: 'bi-x-circle-fill' };
-                } else if (textLower.includes('orts') || textLower.includes('status') || textLower.includes('changed') || textLower.includes('ordinance')) {
-                    iconInfo = { bg: 'bg-blue-50 border-blue-100', text: 'text-blue-600', icon: 'bi-arrow-repeat' };
-                } else if (textLower.includes('lacs') || textLower.includes('hearing') || textLower.includes('approval') || textLower.includes('public hearing')) {
-                    iconInfo = { bg: 'bg-amber-50 border-amber-100', text: 'text-amber-600', icon: 'bi-calendar-check' };
-                } else if (textLower.includes('ai') || textLower.includes('brief') || textLower.includes('robot')) {
-                    iconInfo = { bg: 'bg-purple-50 border-purple-100', text: 'text-purple-600', icon: 'bi-robot' };
-                } else if (textLower.includes('feedback') || textLower.includes('phms') || textLower.includes('submission')) {
-                    iconInfo = { bg: 'bg-emerald-50 border-emerald-100', text: 'text-emerald-600', icon: 'bi-chat-left-text' };
-                }
-
-                return `
-                    <div data-id="${notif.id}" onclick="pfpMarkSingleNotifRead(${notif.id})" class="p-4 transition hover:bg-gray-50/80 flex items-start gap-3.5 relative cursor-pointer ${!isRead ? 'bg-white font-medium' : 'bg-gray-50/40 opacity-75'}">
-                        <div class="w-10 h-10 rounded-2xl ${iconInfo.bg} ${iconInfo.text} border flex items-center justify-center shrink-0 mt-0.5">
-                            <i class="bi ${iconInfo.icon} text-base"></i>
-                        </div>
-                        <div class="flex-1 min-w-0 pr-3">
-                            <div class="font-bold text-gray-900 text-xs leading-snug">${title}</div>
-                            <div class="text-xs text-gray-500 mt-0.5 leading-relaxed font-normal">${message}</div>
-                            <div class="text-[11px] text-gray-400 mt-1 font-medium">${time}</div>
-                        </div>
-                        ${!isRead ? '<span class="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0 mt-1.5 ring-4 ring-red-50"></span>' : ''}
-                    </div>
-                `;
-            }).join('');
-
-        notifsList.querySelectorAll('[data-id]').forEach(item => {
-            item.addEventListener('click', function () {
-                const id = parseInt(this.getAttribute('data-id'));
-                if (id) pfpMarkSingleNotifRead(id);
-            });
-        });
-
-    } catch (e) {
-        console.error('Failed to load notifications:', e);
-        if (notifsList) {
-            notifsList.innerHTML = `<div class="p-6 text-center text-red-600 text-sm">Failed to load notifications.<div class="text-xs text-gray-500 mt-2">${escapeHtml(e.message || 'Unknown error')}</div></div>`;
-        }
-        const badge = document.getElementById('notif-badge') || document.getElementById('notification-badge');
-        if (badge && (!AppData.notifications || AppData.notifications.length === 0)) {
-            badge.classList.add('hidden');
-        }
-    }
-}
-
-
-
-
-// Toggle notifications dropdown
-
-function toggleNotifications() {
-
-    const dropdown = document.getElementById('notifications-dropdown');
-
-    if (dropdown) {
-
-        dropdown.classList.toggle('hidden');
-
-        if (!dropdown.classList.contains('hidden')) {
-
-            loadNotifications();
-
-        }
-
-    }
-
-}
-
-
-
-
-function pfpMarkAllNotificationsRead() {
-    if (Array.isArray(AppData.notifications)) {
-        AppData.notifications.forEach(n => n.read = true);
-    }
-    if (typeof markAllNotificationsRead === 'function') {
-        try { markAllNotificationsRead(); } catch (_) { }
-    }
-    const badge = document.getElementById('notif-badge') || document.getElementById('notification-badge');
-    if (badge) badge.classList.add('hidden');
-    if (typeof loadNotifications === 'function') {
-        try { loadNotifications(); } catch (_) { }
-    }
-}
-
-function pfpMarkSingleNotifRead(id) {
-    if (!id) return;
-
-    if (Array.isArray(AppData.notifications)) {
-        const notif = AppData.notifications.find(n => String(n.id) === String(id));
-        if (notif) notif.read = true;
-    }
-
-    const dropdown = document.getElementById('notifications-dropdown');
-    if (dropdown) dropdown.classList.add('hidden');
-
-    const badge = document.getElementById('notif-badge') || document.getElementById('notification-badge');
-    if (badge && Array.isArray(AppData.notifications)) {
-        const unreadCount = AppData.notifications.filter(n => !n.read).length;
-        if (unreadCount > 0) {
-            badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
-        }
-    }
-
-    if (typeof toggleNotificationRead === 'function') {
-        try { toggleNotificationRead(id, 1); } catch (_) { }
-    }
-
-    if (typeof openNotificationModal === 'function') {
-        openNotificationModal(id);
-    }
-}
-
-window.pfpMarkAllNotificationsRead = pfpMarkAllNotificationsRead;
-window.pfpMarkSingleNotifRead = pfpMarkSingleNotifRead;
-
-function viewNotification(id) {
-    const notif = AppData.notifications ? AppData.notifications.find(n => String(n.id) === String(id)) : null;
-    if (!notif) {
-        console.error('Notification not found:', id);
-        return;
-    }
-    pfpMarkSingleNotifRead(id);
-}
-
-function openNotificationModal(id) {
-    const notif = AppData.notifications ? AppData.notifications.find(n => String(n.id) === String(id)) : null;
-    if (!notif) return;
-
-    // Create modal container if not present
-    let modal = document.getElementById('notif-detail-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'notif-detail-modal';
-        modal.className = 'fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center z-[99999] p-4 hidden transition-all duration-200';
-
-        modal.innerHTML = `
-            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-150">
-                <!-- Header Banner with Dynamic Colors -->
-                <div id="notif-header-banner" class="bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white p-6 flex items-start justify-between">
-                    <div class="flex-1 pr-3">
-                        <div class="flex items-center gap-2 mb-2 flex-wrap">
-                            <span id="notif-priority-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/20 text-white border border-white/30"></span>
-                            <span id="notif-detail-category" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-black/30 text-white/90"></span>
-                        </div>
-                        <h3 id="notif-detail-title" class="text-lg font-extrabold text-white leading-snug">Notification Title</h3>
-                        <p id="notif-detail-time" class="text-xs text-white/80 mt-1 font-medium flex items-center gap-1.5"></p>
-                    </div>
-                    <button id="notif-detail-close" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white text-xl font-bold flex items-center justify-center transition leading-none">&times;</button>
-                </div>
-
-                <!-- Content Body Container -->
-                <div id="notif-content-container" class="p-6 space-y-5">
-                    <div class="p-4.5 bg-slate-50 rounded-2xl border border-slate-200/80 shadow-inner">
-                        <h4 class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5">
-                            <i class="bi bi-chat-left-text-fill text-red-600"></i> Notification Message
-                        </h4>
-                        <p id="notif-detail-message" class="text-xs text-slate-800 font-medium leading-relaxed select-text"></p>
-                    </div>
-
-                    <!-- Footer Bar with Integrated Navigation & Actions -->
-                    <div class="pt-3 flex items-center justify-between gap-3 border-t border-slate-100">
-                        <!-- Navigation Counter & Buttons -->
-                        <div class="flex items-center gap-1.5">
-                            <button id="notif-detail-prev" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold transition border border-slate-200 text-xs">
-                                <i class="bi bi-chevron-left"></i>
-                            </button>
-                            <span id="notif-counter" class="font-mono font-extrabold text-slate-700 text-xs px-2">1 / 1</span>
-                            <button id="notif-detail-next" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold transition border border-slate-200 text-xs">
-                                <i class="bi bi-chevron-right"></i>
-                            </button>
-                        </div>
-
-                        <!-- Action Buttons -->
-                        <div class="flex items-center gap-2">
-                            <button id="notif-detail-action" type="button" class="hidden px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-sm"></button>
-                            <button id="notif-detail-open" type="button" class="px-4 py-2.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-1.5 hover:shadow-lg">
-                                <i class="bi bi-box-arrow-up-right"></i> Open Related Page
-                            </button>
-                            <button id="notif-detail-dismiss" type="button" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        const logTimeMs = parseAuditLogDate(log.timestamp);
+        const displayDate = logTimeMs > 0 ? new Date(logTimeMs).toLocaleString() : String(log.timestamp);
+
+        const logDetails = log.description || log.details || '-';
+        return `
+            <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <td class="px-4 py-3.5 whitespace-nowrap text-xs text-slate-600 font-medium">${displayDate}</td>
+                <td class="px-4 py-3.5 whitespace-nowrap text-xs text-slate-800 font-bold">${escapeHtml(log.admin_user || log.username || 'User')}</td>
+                <td class="px-4 py-3.5 whitespace-nowrap">${badgeHtml}</td>
+                <td class="px-4 py-3.5 text-xs text-slate-700 font-medium max-w-[280px] truncate" title="${escapeHtml(logDetails)}">${escapeHtml(logDetails)}</td>
+                <td class="px-4 py-3.5 whitespace-nowrap text-xs text-slate-600">${escapeHtml(log.entity_type || 'system')}</td>
+                <td class="px-4 py-3.5 whitespace-nowrap text-xs text-slate-500 font-mono">${escapeHtml(log.ip_address || '127.0.0.1')}</td>
+            </tr>
         `;
-
-        document.body.appendChild(modal);
-
-        // Close handlers
-        modal.querySelector('#notif-detail-close').addEventListener('click', (e) => { if (e && e.preventDefault) e.preventDefault(); closeNotificationModal(); });
-        modal.querySelector('#notif-detail-dismiss').addEventListener('click', (e) => { if (e && e.preventDefault) e.preventDefault(); closeNotificationModal(); });
-
-        // Navigation handlers
-        modal.querySelector('#notif-detail-prev').addEventListener('click', (e) => { if (e && e.preventDefault) e.preventDefault(); navigateNotification(-1); });
-        modal.querySelector('#notif-detail-next').addEventListener('click', (e) => { if (e && e.preventDefault) e.preventDefault(); navigateNotification(1); });
-    }
-
-    // Dynamic Banner Header Colors based on priority/type
-    const banner = document.getElementById('notif-header-banner');
-    const priority = String(notif.priority || 'normal').toLowerCase();
-    if (banner) {
-        if (priority === 'critical' || priority === 'high') {
-            banner.className = 'bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white p-6 flex items-start justify-between';
-        } else if (notif.category === 'AI Engine' || notif.type === 'ai_brief') {
-            banner.className = 'bg-gradient-to-r from-purple-700 via-purple-800 to-slate-900 text-white p-6 flex items-start justify-between';
-        } else {
-            banner.className = 'bg-gradient-to-r from-slate-800 via-slate-900 to-blue-950 text-white p-6 flex items-start justify-between';
-        }
-    }
-
-    // Fill content
-    document.getElementById('notif-detail-title').textContent = notif.title;
-    document.getElementById('notif-detail-time').innerHTML = '<i class="bi bi-clock-history"></i> ' + (notif.time || 'Recently');
-    document.getElementById('notif-detail-category').textContent = '📁 ' + (notif.category || 'general').toUpperCase();
-    document.getElementById('notif-detail-message').textContent = notif.message;
-
-    // Priority badge
-    const badge = document.getElementById('notif-priority-badge');
-    if (badge) {
-        badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${priority === 'high' || priority === 'critical' ? 'bg-amber-400 animate-ping' : 'bg-blue-400'} inline-block mr-1"></span> ${priority.toUpperCase()} PRIORITY`;
-        badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-white/20 text-white border border-white/30';
-    }
-
-    const pfpNavigateToRelatedSection = function (notifObj) {
-        const cat = String(notifObj.category || '').toLowerCase();
-        const type = String(notifObj.type || '').toLowerCase();
-        const msg = String(notifObj.message || '').toLowerCase();
-        const title = String(notifObj.title || '').toLowerCase();
-
-        let targetSection = 'public-consultation';
-
-        if (cat.includes('phms') || type.includes('phms') || msg.includes('phms') || title.includes('phms') || cat.includes('feedback') || type === 'feedback') {
-            targetSection = 'public-feedback-queue';
-        } else if (cat.includes('document') || type.includes('document') || type === 'approval') {
-            targetSection = 'pc-documents';
-        } else if (cat.includes('user') || type.includes('user')) {
-            targetSection = 'users';
-        } else if (cat.includes('system') || cat.includes('report') || type.includes('alert') || type.includes('system') || cat.includes('ai engine')) {
-            targetSection = 'reports';
-        } else if (cat.includes('consultation') || type.includes('consultation')) {
-            targetSection = 'consultation-management';
-        }
-
-        if (targetSection === 'public-feedback-queue' && typeof renderPublicFeedbackQueueSection === 'function') {
-            renderPublicFeedbackQueueSection();
-            return;
-        }
-        if (targetSection === 'reports' && typeof renderSystemReportsSection === 'function') {
-            renderSystemReportsSection();
-            if (cat.includes('ai engine') || type.includes('ai')) {
-                setTimeout(() => { if (typeof switchSystemReportTab === 'function') switchSystemReportTab('ai'); }, 100);
-            }
-            return;
-        }
-
-        if (typeof showSection === 'function') {
-            showSection(targetSection);
-            return;
-        }
-
-        const navItem = document.querySelector(`[onclick*="${targetSection}"], [data-section="${targetSection}"]`);
-        if (navItem) {
-            navItem.click();
-        }
-    };
-
-    // Action button
-    const actionBtn = document.getElementById('notif-detail-action');
-    if (notif.action) {
-        actionBtn.textContent = notif.action;
-        actionBtn.classList.remove('hidden');
-        actionBtn.onclick = function (e) {
-            if (e && e.preventDefault) e.preventDefault();
-            if (e && e.stopPropagation) e.stopPropagation();
-            closeNotificationModal();
-            pfpNavigateToRelatedSection(notif);
-            return false;
-        };
-    } else {
-        actionBtn.classList.add('hidden');
-    }
-
-    // Open action
-    const openBtn = document.getElementById('notif-detail-open');
-    openBtn.onclick = function (e) {
-        if (e && e.preventDefault) e.preventDefault();
-        if (e && e.stopPropagation) e.stopPropagation();
-        closeNotificationModal();
-        pfpNavigateToRelatedSection(notif);
-        return false;
-    };
-
-    // Update navigation state and counter
-    updateNavigationState(id);
-
-    // Show modal
-    modal.classList.remove('hidden');
+    }).join('');
 }
-
-
-
-
-// Track current notification index for navigation
-
-
-let currentNotificationIndex = -1;
-
-
-
-
-function updateNavigationState(currentId) {
-
-
-    const sortedNotifs = [...AppData.notifications].sort((a, b) => {
-
-
-        const priorityOrder = { critical: 0, high: 1, normal: 2, low: 3 };
-
-
-        const aPriority = priorityOrder[a.priority] || 2;
-
-
-        const bPriority = priorityOrder[b.priority] || 2;
-
-
-        if (aPriority !== bPriority) return aPriority - bPriority;
-
-
-        return a.read === b.read ? 0 : a.read ? 1 : -1;
-
-
-    });
-
-
-
-
-    currentNotificationIndex = sortedNotifs.findIndex(n => n.id === currentId);
-
-
-
-
-    const prevBtn = document.getElementById('notif-detail-prev');
-
-
-    const nextBtn = document.getElementById('notif-detail-next');
-
-
-    const counter = document.getElementById('notif-counter');
-
-
-
-
-    if (sortedNotifs.length <= 1) {
-
-
-        // Hide navigation if only one notification
-
-
-        if (prevBtn) {
-
-
-            prevBtn.style.opacity = '0';
-
-
-            prevBtn.style.pointerEvents = 'none';
-
-
-        }
-
-
-        if (nextBtn) {
-
-
-            nextBtn.style.opacity = '0';
-
-
-            nextBtn.style.pointerEvents = 'none';
-
-
-        }
-
-
-        if (counter) counter.textContent = '';
-
-
-    } else {
-
-
-        // Show navigation buttons
-
-
-        if (prevBtn) {
-
-
-            prevBtn.style.opacity = currentNotificationIndex > 0 ? '1' : '0.3';
-
-
-            prevBtn.style.pointerEvents = currentNotificationIndex > 0 ? 'auto' : 'none';
-
-
-        }
-
-
-        if (nextBtn) {
-
-
-            nextBtn.style.opacity = currentNotificationIndex < sortedNotifs.length - 1 ? '1' : '0.3';
-
-
-            nextBtn.style.pointerEvents = currentNotificationIndex < sortedNotifs.length - 1 ? 'auto' : 'none';
-
-
-        }
-
-
-        if (counter) counter.textContent = `${currentNotificationIndex + 1} / ${sortedNotifs.length}`;
-
-
-    }
-
-
-}
-
-
-
-
-function navigateNotification(direction) {
-
-
-    const sortedNotifs = [...AppData.notifications].sort((a, b) => {
-
-
-        const priorityOrder = { critical: 0, high: 1, normal: 2, low: 3 };
-
-
-        const aPriority = priorityOrder[a.priority] || 2;
-
-
-        const bPriority = priorityOrder[b.priority] || 2;
-
-
-        if (aPriority !== bPriority) return aPriority - bPriority;
-
-
-        return a.read === b.read ? 0 : a.read ? 1 : -1;
-
-
-    });
-
-
-
-
-    const newIndex = currentNotificationIndex + direction;
-
-
-
-
-    if (newIndex >= 0 && newIndex < sortedNotifs.length) {
-
-
-        const newId = sortedNotifs[newIndex].id;
-
-
-        const container = document.getElementById('notif-content-container');
-
-
-
-
-        // Add slide animation
-
-
-        container.style.transform = direction === 1 ? 'translateX(-100%)' : 'translateX(100%)';
-
-
-        container.style.opacity = '0';
-
-
-
-
-        setTimeout(() => {
-
-
-            openNotificationModal(newId);
-
-
-
-
-            // Reset and slide in
-
-
-            container.style.transform = direction === 1 ? 'translateX(100%)' : 'translateX(-100%)';
-
-
-            container.style.opacity = '0';
-
-
-
-
-            setTimeout(() => {
-
-
-                container.style.transform = 'translateX(0)';
-
-
-                container.style.opacity = '1';
-
-
-            }, 50);
-
-
-        }, 300);
-
-
-    }
-
-
-}
-
-
-
-
-function closeNotificationModal() {
-
-
-    const modal = document.getElementById('notif-detail-modal');
-
-
-    if (modal) modal.classList.add('hidden');
-
-
-}
-
-
-
-
-function deleteNotification(id) {
-
-
-    if (!confirm('Delete this notification?')) return;
-
-
-    fetch('API/notifications_api.php?action=delete', {
-
-
-        method: 'POST',
-
-
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-
-
-        body: JSON.stringify({ id })
-
-
-    }).then(() => loadNotifications()).catch(() => loadNotifications());
-
-
-    // If on notifications page, re-render it
-
-
-    const current = document.getElementById('breadcrumb-current');
-
-
-    if (current && current.textContent && current.textContent.toLowerCase().includes('notifications')) {
-
-
-        renderNotifications();
-
-
-    }
-
-
-}
-
-
-
-
-function toggleNotificationRead(id, isRead) {
-
-
-    return fetch('API/notifications_api.php?action=mark_read', {
-
-
-        method: 'POST',
-
-
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-
-
-        body: JSON.stringify({ id, is_read: isRead ? 1 : 0 })
-
-
-    }).then(() => loadNotifications()).catch(() => loadNotifications());
-
-
-}
-
-
-
-
-function markAllNotificationsRead() {
-
-
-    fetch('API/notifications_api.php?action=mark_all_read', {
-
-
-        method: 'POST',
-
-
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-
-
-        body: JSON.stringify({})
-
-
-    }).then(() => loadNotifications()).catch(() => loadNotifications());
-
-
-}
-
-
-
-
-function clearAllNotifications() {
-
-
-    showNotification('Clearing all notifications is not enabled for DB-backed notifications.', 'info');
-
-
-}
-
-
-
-
-function saveAnnouncementsToStorage() {
-
-
-    try {
-
-
-        localStorage.setItem('llrm_announcements', JSON.stringify(AppData.announcements));
-
-
-    } catch (e) {
-
-
-        console.warn('Failed to save announcements to storage', e);
-
-
-    }
-
-
-}
-
-
-
-
-function loadAnnouncementsFromStorage() {
-
-
-    try {
-
-
-        const raw = localStorage.getItem('llrm_announcements');
-
-
-        if (raw) {
-
-
-            AppData.announcements = JSON.parse(raw);
-
-
-        }
-
-
-    } catch (e) {
-
-
-        console.warn('Failed to load announcements from storage', e);
-
-
-    }
-
-
-}
-
-
-
-
-function createAnnouncement(title, message, options = {}) {
-
-
-    const ann = {
-
-
-        id: Date.now(),
-
-
-        title: title,
-
-
-        message: message,
-
-
-        priority: options.priority || 'normal',
-
-
-        pinned: !!options.pinned,
-
-
-        published: options.published !== undefined ? !!options.published : true,
-
-
-        createdBy: AppData.currentUser?.name || 'System',
-
-
-        createdAt: new Date().toISOString()
-
-
-    };
-
-
-
-
-    AppData.announcements.unshift(ann);
-
-
-    saveAnnouncementsToStorage();
-
-
-    showNotification('Announcement created', 'success');
-
-
-    return ann;
-
-
-}
-
-
-
-
-function deleteAnnouncement(id) {
-
-
-    if (!confirm('Delete this announcement?')) return;
-
-
-    AppData.announcements = AppData.announcements.filter(a => a.id !== id);
-
-
-    saveAnnouncementsToStorage();
-
-
-    showSection('announcements');
-
-
-}
-
-
-
-
-
-// ==============================
-
-
-// USERS MODULE (User Management — Citizens + Staff)
-
-
-// ==============================
-
-
-function showNotification(message, type = 'info') {
-
-
-    const colors = {
-
-
-        success: 'bg-green-100 text-green-800 border-green-300',
-
-
-        error: 'bg-red-100 text-red-800 border-red-300',
-
-
-        info: 'bg-blue-100 text-blue-800 border-blue-300',
-
-
-        warning: 'bg-yellow-100 text-yellow-800 border-yellow-300'
-
-
-    };
-
-
-
-
-
-    const icons = {
-
-
-        success: 'bi-check-circle-fill',
-
-
-        error: 'bi-x-circle-fill',
-
-
-        info: 'bi-info-circle-fill',
-
-
-        warning: 'bi-exclamation-triangle-fill'
-
-
-    };
-
-
-
-
-
-    const notif = document.createElement('div');
-
-
-    notif.className = `fixed top-4 right-4 ${colors[type]} px-6 py-4 rounded-lg shadow-lg border-2 flex items-center gap-3 z-50 animate-fade-in`;
-
-
-    notif.innerHTML = `
-
-
-        <i class="bi ${icons[type]} text-xl"></i>
-
-
-        <span class="font-medium">${message}</span>
-
-
-    `;
-
-
-
-
-
-    document.body.appendChild(notif);
-
-
-
-
-
-    setTimeout(() => {
-
-
-        notif.classList.add('opacity-0', 'transform', 'translate-x-full');
-
-
-        setTimeout(() => notif.remove(), 300);
-
-
-    }, 3000);
-
-
-}
-
-
-
-
-function getStatusBadge(status) {
-
-
-    const statusLower = (status || '').toLowerCase();
-
-
-    const badges = {
-
-
-        'approved': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Approved</span>',
-
-
-        'pending': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Pending</span>',
-
-
-        'draft': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Draft</span>',
-
-
-        'success': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800"><i class="bi bi-check-circle mr-1"></i>Success</span>',
-
-
-        'failure': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800"><i class="bi bi-x-circle mr-1"></i>Failed</span>'
-
-
-    };
-
-
-    return badges[statusLower] || '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">' + (status || 'N/A') + '</span>';
-
-
-}
-
-
-
-
-function getUserStatusBadge(status) {
-
-
-    const badges = {
-
-
-        active: '<span class="badge badge-success">Active</span>',
-
-
-        inactive: '<span class="badge badge-secondary">Inactive</span>'
-
-
-    };
-
-
-    return badges[status] || '<span class="badge badge-secondary">Unknown</span>';
-
-
-}
-
-
-
 
 function getActionBadge(action) {
+    const act = (action || '').toLowerCase().trim();
 
+    if (act.includes('approve consultation') || act.includes('approved consultation')) {
+        return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300"><i class="bi bi-check-circle-fill text-emerald-600"></i> Approve Consultation</span>';
+    }
+    if (act.includes('posted consultation') || act.includes('post consultation')) {
+        return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-blue-100 text-blue-800 border border-blue-300"><i class="bi bi-megaphone-fill text-blue-600"></i> Posted Consultation</span>';
+    }
+    if (act.includes('declined') || act.includes('rejected')) {
+        return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300"><i class="bi bi-x-circle-fill text-rose-600"></i> Declined Proposal</span>';
+    }
+    if (act.includes('survey') || act.includes('created survey')) {
+        return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-purple-100 text-purple-800 border border-purple-300"><i class="bi bi-bar-chart-line-fill text-purple-600"></i> Survey</span>';
+    }
+    if (act.includes('ai brief') || act.includes('forwarded ai brief')) {
+        return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300"><i class="bi bi-robot text-amber-600"></i> Forward AI Brief</span>';
+    }
+    if (act.includes('resource person') || act.includes('approved resource person')) {
+        return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-indigo-100 text-indigo-800 border border-indigo-300"><i class="bi bi-person-badge-fill text-indigo-600"></i> Resource Person</span>';
+    }
+    if (act.includes('annotated') || act.includes('expert input')) {
+        return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-teal-100 text-teal-800 border border-teal-300"><i class="bi bi-pencil-square text-teal-600"></i> Annotated Master Doc</span>';
+    }
+    if (act.includes('lrs') || act.includes('forwarded document')) {
+        return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300"><i class="bi bi-send-fill text-rose-600"></i> Forward to LRS</span>';
+    }
+    if (act.includes('login')) {
+        return '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-300"><i class="bi bi-box-arrow-in-right text-slate-600"></i> Login</span>';
+    }
+    if (act.includes('logout')) {
+        return '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-300"><i class="bi bi-box-arrow-right"></i> Logout</span>';
+    }
+    if (act.includes('upload')) {
+        return '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-cyan-100 text-cyan-800 border border-cyan-300"><i class="bi bi-cloud-arrow-up-fill text-cyan-600"></i> Upload</span>';
+    }
 
-    const actionLower = (action || '').toLowerCase();
-
-
-    const badges = {
-
-
-        'upload': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Upload</span>',
-
-
-        'approve': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Approve</span>',
-
-
-        'update': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Update</span>',
-
-
-        'delete': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">Delete</span>',
-
-
-        'login': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">Login</span>',
-
-
-        'logout': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Logout</span>',
-
-
-        'created': '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Created</span>'
-
-
-    };
-
-
-    return badges[actionLower] || '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">' + (action || 'N/A') + '</span>';
-
-
+    return `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-300">${escapeHtml(action || 'Activity')}</span>`;
 }
 
 
@@ -9512,7 +5537,8 @@ async function renderPublicConsultation() {
         await Promise.all([
             loadConsultationsFromApi().catch(e => console.warn('Consultation overview load failed:', e)),
             loadFeedbackFromApi().catch(e => console.warn('Feedback overview load failed:', e)),
-            loadIssuesFromApi().catch(e => console.warn('Issues overview load failed:', e))
+            loadIssuesFromApi().catch(e => console.warn('Issues overview load failed:', e)),
+            loadDocumentsFromApi().catch(e => console.warn('Documents overview load failed:', e))
         ]);
     } catch (e) {
         console.warn('Consultation overview bootstrap failed:', e);
@@ -9530,15 +5556,20 @@ async function renderPublicConsultation() {
 
 
     const draftConsults = AppData.consultations.filter(c => {
-        const st = String(c.status || '').toLowerCase();
-        return st === 'draft' || st === 'pending';
+        const st = String(c.status || '').toLowerCase().trim();
+        return st === 'draft' || st === 'pending' || st === 'submitted' || st === 'under_review' || st === 'pending_review' || st === 'for_approval';
     }).length;
 
 
-    const activeConsults = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'active').length;
+    const activeConsults = AppData.consultations.filter(c => {
+        const st = String(c.status || '').toLowerCase().trim();
+        return st === 'active' || st === 'open' || st === 'ongoing';
+    }).length;
 
-
-    const closedConsults = AppData.consultations.filter(c => String(c.status || '').toLowerCase() === 'closed').length;
+    const closedConsults = AppData.consultations.filter(c => {
+        const st = String(c.status || '').toLowerCase().trim();
+        return st === 'closed' || st === 'completed' || st === 'resolved' || st === 'declined' || st === 'forwarded_orts' || st === 'proceeded_to_ordinance' || st === 'rejected';
+    }).length;
 
     const validFeedbackList = getFilteredValidFeedback();
     const totalFeedback = validFeedbackList.length;
@@ -9546,7 +5577,9 @@ async function renderPublicConsultation() {
     const avgFeedback = totalConsults > 0 ? Math.round(totalFeedback / totalConsults) : 0;
 
 
-    const totalDocuments = AppData.consultations.reduce((sum, c) => sum + (c.documentsAttached || 0), 0);
+    const totalAttachedDocs = AppData.consultations.reduce((sum, c) => sum + (Number(c.documentsAttached) || (c.attachment ? 1 : 0) || (c.file_url ? 1 : 0) || 0), 0);
+    const totalSystemDocs = Array.isArray(AppData.documents) ? AppData.documents.length : 0;
+    const totalDocuments = totalSystemDocs > 0 ? totalSystemDocs : totalAttachedDocs;
     const sentimentStats = getFeedbackSentimentStats();
 
 
@@ -9617,12 +5650,10 @@ async function renderPublicConsultation() {
 
                     </div>
 
-                    <div class="mt-3 flex gap-3 text-xs">
-
+                    <div class="mt-3 flex flex-wrap gap-2 text-xs">
                         <span class="text-green-600 font-semibold"><i class="bi bi-circle-fill text-green-500" style="font-size:6px;vertical-align:middle"></i> ${activeConsults} Active</span>
-
                         <span class="text-gray-500"><i class="bi bi-circle-fill text-gray-400" style="font-size:6px;vertical-align:middle"></i> ${closedConsults} Closed</span>
-
+                        ${draftConsults > 0 ? `<span class="text-blue-600 font-semibold"><i class="bi bi-circle-fill text-blue-500" style="font-size:6px;vertical-align:middle"></i> ${draftConsults} Pending</span>` : ''}
                     </div>
 
                 </div>
@@ -9659,7 +5690,7 @@ async function renderPublicConsultation() {
 
                             <p class="text-xs text-gray-500 font-medium">Total Feedback</p>
 
-                            <p class="text-2xl font-bold text-purple-600">${totalFeedback}</p>
+                            <p class="text-2xl font-bold text-purple-600" id="pc-total-feedback-count">${totalFeedback}</p>
 
                         </div>
 
@@ -9680,7 +5711,7 @@ async function renderPublicConsultation() {
 
                             <p class="text-xs text-gray-500 font-medium">Documents</p>
 
-                            <p class="text-2xl font-bold text-amber-600">${totalDocuments}</p>
+                            <p class="text-2xl font-bold text-amber-600" id="pc-total-documents-count">${totalDocuments}</p>
 
                         </div>
 
@@ -10763,7 +6794,7 @@ function renderAnnouncements() {
     // ensure we have announcements loaded from storage
 
 
-    loadAnnouncementsFromStorage();
+    if (typeof loadAnnouncementsFromStorage === 'function') { loadAnnouncementsFromStorage(); }
 
 
 
@@ -11043,108 +7074,67 @@ function loadUserPostsForModeration() {
 
 
 
+
+window.scrollDashboardRow = function(containerId, direction) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const scrollAmount = 370;
+    container.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
+};
+
+window.checkDashboardRowScroll = function(containerId, prevBtnId, nextBtnId) {
+    const container = document.getElementById(containerId);
+    const prevBtn = document.getElementById(prevBtnId);
+    const nextBtn = document.getElementById(nextBtnId);
+    if (!container || !prevBtn || !nextBtn) return;
+
+    const isScrollable = container.scrollWidth > (container.clientWidth + 5);
+    const scrollLeft = container.scrollLeft;
+    const maxScroll = container.scrollWidth - container.clientWidth;
+
+    if (!isScrollable) {
+        prevBtn.classList.add('opacity-0', 'pointer-events-none');
+        nextBtn.classList.add('opacity-0', 'pointer-events-none');
+        return;
+    }
+
+    if (scrollLeft > 15) {
+        prevBtn.classList.remove('opacity-0', 'pointer-events-none');
+    } else {
+        prevBtn.classList.add('opacity-0', 'pointer-events-none');
+    }
+
+    if (scrollLeft < maxScroll - 15) {
+        nextBtn.classList.remove('opacity-0', 'pointer-events-none');
+    } else {
+        nextBtn.classList.add('opacity-0', 'pointer-events-none');
+    }
+};
+
 function renderConsultationsGrid() {
-
-
     const grid = document.getElementById('consultations-grid');
-
+    if (!grid) return;
 
     const all = getFilteredPublicConsultations();
 
-
-    const st = getPCGridState();
-
-
-    const total = all.length;
-
-
-
-
-    let consultations = all;
-
-
-    if (!st.showAll) {
-
-
-        const start = (st.page - 1) * st.pageSize;
-
-
-        consultations = all.slice(start, start + st.pageSize);
-
-
-    }
-
-
-
-
-    if (consultations.length === 0) {
-
-
-        grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">No consultations found</div>';
-
-
-        const summary = document.getElementById('pc-grid-summary');
-
-
-        if (summary) summary.textContent = '';
-
-
-        return;
-
-
-    }
-
-
-
-
-    const startIndex = st.showAll ? 1 : ((st.page - 1) * st.pageSize + 1);
-
-
-    const endIndex = st.showAll ? total : Math.min((st.page - 1) * st.pageSize + consultations.length, total);
-
-
-
-
+    // Hide old bottom pagination controls per UX request
     const summary = document.getElementById('pc-grid-summary');
-
-
-    if (summary) {
-
-
-        summary.textContent = `Showing ${startIndex}-${endIndex} of ${total} consultations`;
-
-
+    if (summary && summary.parentElement) {
+        summary.parentElement.style.display = 'none';
     }
 
+    if (all.length === 0) {
+        grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">No consultations found</div>';
+        return;
+    }
 
+    // Line 1: Consultations (feedback / hybrid / non-survey)
+    const consultationsList = all.filter(c => String(c.response_mode || 'hybrid').toLowerCase() !== 'survey');
+    
+    // Line 2: Surveys (survey response mode)
+    const surveysList = all.filter(c => String(c.response_mode || '').toLowerCase() === 'survey');
 
-
-    const prevBtn = document.getElementById('pc-grid-prev');
-
-
-    const nextBtn = document.getElementById('pc-grid-next');
-
-
-    const toggleBtn = document.getElementById('pc-grid-toggle');
-
-
-
-
-    const totalPages = st.pageSize > 0 ? Math.ceil(total / st.pageSize) : 1;
-
-
-    if (prevBtn) prevBtn.disabled = st.showAll || st.page <= 1;
-
-
-    if (nextBtn) nextBtn.disabled = st.showAll || st.page >= totalPages;
-
-
-    if (toggleBtn) toggleBtn.textContent = st.showAll ? 'Show Less' : 'Show All';
-
-
-
-
-    grid.innerHTML = consultations.map(c => {
+    function buildDashboardCardHtml(c) {
         const stRaw = String(c.status || '').toLowerCase();
         const statusLabel = stRaw === 'active' ? 'Active' : (stRaw === 'scheduled' ? 'Pending' : (stRaw === 'draft' ? 'Pending' : (stRaw === 'closed' ? 'Closed' : (stRaw === 'pending' ? 'Pending' : stRaw))));
         const statusDot = stRaw === 'active' ? 'bg-green-500' : (stRaw === 'scheduled' ? 'bg-amber-500' : (stRaw === 'draft' || stRaw === 'pending' ? 'bg-amber-500' : 'bg-gray-400'));
@@ -11156,7 +7146,6 @@ function renderConsultationsGrid() {
 
         const desc = String(c.description || '').substring(0, 110);
 
-        // Calculate days left
         let daysLeftText = 'Active';
         if (c.end_date) {
             const end = new Date(c.end_date).getTime();
@@ -11173,7 +7162,6 @@ function renderConsultationsGrid() {
             daysLeftText = stRaw === 'closed' ? 'Closed' : (stRaw === 'active' ? 'Active' : 'Pending');
         }
 
-        // Category style
         const catKey = String(c.category || 'general').toLowerCase();
         const badgeColors = {
             'environment': 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -11193,7 +7181,6 @@ function renderConsultationsGrid() {
             }
         }
 
-        // Resolve Image
         let imgUrl = '';
         if (c.image_path || c.image) {
             let p = String(c.image_path || c.image).trim();
@@ -11210,7 +7197,7 @@ function renderConsultationsGrid() {
         }
 
         return `
-            <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col group hover:shadow-xl hover:border-red-300 transition-all duration-300">
+            <div class="w-[310px] sm:w-[350px] shrink-0 snap-start bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col group hover:shadow-xl hover:border-red-300 transition-all duration-300">
                 <!-- Top Banner Image -->
                 <div class="h-36 w-full overflow-hidden bg-slate-100 relative shrink-0">
                     <img src="${imgUrl}" alt="${escapeHtml(c.title)}" onerror="this.onerror=null; this.src='../ASSETS/images/consultations/consultation_1771982924_699e504c1ad01.jpeg';" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
@@ -11257,12 +7244,52 @@ function renderConsultationsGrid() {
                 </div>
             </div>
         `;
-    }).join('');
+    }
 
+    const row1Html = consultationsList.length > 0 ? `
+        <div class="relative group/slider-row1 mb-4">
+            <button id="dash-row1-prev" onclick="scrollDashboardRow('dash-row1-container', 'left')" class="absolute -left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200/90 text-slate-700 hover:text-red-700 hover:bg-red-50 shadow-xl flex items-center justify-center transition-all duration-300 z-20 cursor-pointer opacity-0 pointer-events-none group-hover/slider-row1:opacity-100 group-hover/slider-row1:pointer-events-auto" title="Previous">
+                <i class="bi bi-chevron-left text-sm font-bold"></i>
+            </button>
+            <div id="dash-row1-container" onscroll="checkDashboardRowScroll('dash-row1-container', 'dash-row1-prev', 'dash-row1-next')" class="flex flex-nowrap overflow-x-auto gap-6 pb-2 pt-1 scroll-smooth snap-x snap-mandatory no-scrollbar">
+                ${consultationsList.map(buildDashboardCardHtml).join('')}
+            </div>
+            <button id="dash-row1-next" onclick="scrollDashboardRow('dash-row1-container', 'right')" class="absolute -right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200/90 text-slate-700 hover:text-red-700 hover:bg-red-50 shadow-xl flex items-center justify-center transition-all duration-300 z-20 cursor-pointer opacity-0 pointer-events-none group-hover/slider-row1:opacity-100 group-hover/slider-row1:pointer-events-auto" title="Next">
+                <i class="bi bi-chevron-right text-sm font-bold"></i>
+            </button>
+        </div>
+    ` : '';
 
+    const row2Html = surveysList.length > 0 ? `
+        <div class="relative group/slider-row2 mb-2">
+            <button id="dash-row2-prev" onclick="scrollDashboardRow('dash-row2-container', 'left')" class="absolute -left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200/90 text-slate-700 hover:text-red-700 hover:bg-red-50 shadow-xl flex items-center justify-center transition-all duration-300 z-20 cursor-pointer opacity-0 pointer-events-none group-hover/slider-row2:opacity-100 group-hover/slider-row2:pointer-events-auto" title="Previous">
+                <i class="bi bi-chevron-left text-sm font-bold"></i>
+            </button>
+            <div id="dash-row2-container" onscroll="checkDashboardRowScroll('dash-row2-container', 'dash-row2-prev', 'dash-row2-next')" class="flex flex-nowrap overflow-x-auto gap-6 pb-2 pt-1 scroll-smooth snap-x snap-mandatory no-scrollbar">
+                ${surveysList.map(buildDashboardCardHtml).join('')}
+            </div>
+            <button id="dash-row2-next" onclick="scrollDashboardRow('dash-row2-container', 'right')" class="absolute -right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200/90 text-slate-700 hover:text-red-700 hover:bg-red-50 shadow-xl flex items-center justify-center transition-all duration-300 z-20 cursor-pointer opacity-0 pointer-events-none group-hover/slider-row2:opacity-100 group-hover/slider-row2:pointer-events-auto" title="Next">
+                <i class="bi bi-chevron-right text-sm font-bold"></i>
+            </button>
+        </div>
+    ` : '';
+
+    // If both lists had items or fallback
+    let combinedHtml = '';
+    if (row1Html || row2Html) {
+        combinedHtml = `<div class="w-full space-y-6">${row1Html}${row2Html}</div>`;
+    } else {
+        combinedHtml = `<div class="w-full flex flex-col justify-center items-center gap-4 py-8">${consultationsList.concat(surveysList).map(buildDashboardCardHtml).join('')}</div>`;
+    }
+
+    grid.className = "w-full overflow-hidden";
+    grid.innerHTML = combinedHtml;
+
+    setTimeout(() => {
+        checkDashboardRowScroll('dash-row1-container', 'dash-row1-prev', 'dash-row1-next');
+        checkDashboardRowScroll('dash-row2-container', 'dash-row2-prev', 'dash-row2-next');
+    }, 100);
 }
-
-
 
 
 function openConsultationDetailsFromDashboard(id) {
@@ -11517,45 +7544,25 @@ function renderTopConsultations() {
 
 function getFilteredPublicConsultations() {
 
+    const searchTerm = document.getElementById('pc-search')?.value.toLowerCase() || '';
+    const statusFilter = document.getElementById('pc-status-filter')?.value || '';
+    const typeFilter = document.getElementById('pc-type-filter')?.value || '';
+    const sortBy = document.getElementById('pc-sort')?.value || 'date-desc';
 
     let filtered = [...AppData.consultations];
 
-
-
-
-
-    const searchTerm = document.getElementById('pc-search')?.value.toLowerCase() || '';
-
-
-    const statusFilter = document.getElementById('pc-status-filter')?.value || '';
-
-
-    const typeFilter = document.getElementById('pc-type-filter')?.value || '';
-
-
-    const sortBy = document.getElementById('pc-sort')?.value || 'date-desc';
-
-
-
-
     if (searchTerm) {
-
-
         filtered = filtered.filter(c => (c.title || '').toLowerCase().includes(searchTerm));
-
-
     }
 
-
-
-
-
-    if (statusFilter) {
-
-
+    if (statusFilter && statusFilter.toLowerCase() !== 'all') {
         filtered = filtered.filter(c => String(c.status || '').toLowerCase() === String(statusFilter).toLowerCase());
-
-
+    } else {
+        // Exclude declined and rejected consultations from public view grid
+        filtered = filtered.filter(c => {
+            const st = String(c.status || '').toLowerCase();
+            return st !== 'declined' && st !== 'rejected';
+        });
     }
 
 
@@ -11654,16 +7661,20 @@ function resetPublicConsultationFilters() {
 
 function getFilteredValidFeedback() {
     const feedbackRows = Array.isArray(AppData.feedback) ? AppData.feedback : [];
-    const validConsultationIds = Array.isArray(AppData.consultations) ? new Set(AppData.consultations.map(c => Number(c.id))) : null;
+    if (feedbackRows.length === 0) return [];
+    
+    const validConsultationIds = Array.isArray(AppData.consultations) && AppData.consultations.length > 0
+        ? new Set(AppData.consultations.map(c => String(c.id)))
+        : null;
 
     return feedbackRows.filter(f => {
         if (!f) return false;
-        if (f.consultationId && validConsultationIds && validConsultationIds.size > 0 && !validConsultationIds.has(Number(f.consultationId))) {
+        if (f.consultationId && validConsultationIds && validConsultationIds.size > 0 && !validConsultationIds.has(String(f.consultationId))) {
             return false;
         }
         const subType = String(f.submission_type || f.type || '').toLowerCase();
         const category = String(f.category || '').toLowerCase();
-        if (subType === 'proposal' || subType === 'consultation' || category === 'ordinance suggestion' || category === 'proposal' || category === 'survey vote') {
+        if (subType === 'proposal' || category === 'proposal' || category === 'survey vote') {
             return false;
         }
         return true;
@@ -11783,8 +7794,8 @@ function renderPCFeedbackSentimentChart() {
         data: {
             labels: ['Positive (4-5)', 'Neutral (3)', 'Negative (1-2)'],
             datasets: [{
-                data: [stats.positive, stats.neutral, stats.negative],
-                backgroundColor: ['#22c55e', '#eab308', '#ef4444'],
+                data: (stats.positive === 0 && stats.neutral === 0 && stats.negative === 0) ? [1] : [stats.positive, stats.neutral, stats.negative],
+                backgroundColor: (stats.positive === 0 && stats.neutral === 0 && stats.negative === 0) ? ['#e2e8f0'] : ['#22c55e', '#eab308', '#ef4444'],
                 borderColor: '#fff',
                 borderWidth: 2
             }]
@@ -12223,8 +8234,8 @@ function renderPCStatusChart(consultations) {
 
 
     const draft = source.filter(c => {
-        const st = String(c.status || '').toLowerCase();
-        return st === 'draft' || st === 'pending' || st === 'scheduled';
+        const st = String(c.status || '').toLowerCase().trim();
+        return st === 'draft' || st === 'pending' || st === 'submitted' || st === 'under_review' || st === 'pending_review' || st === 'for_approval' || st === 'scheduled';
     }).length;
 
 
@@ -13368,6 +9379,8 @@ function mapDbConsultationToUi(row) {
         vote_stats: row.vote_stats || null,
 
         feedbackCount: Number(row.posts_count || 0),
+        committee_assigned: row.committee_assigned ? String(row.committee_assigned).trim() : '',
+        document_status: row.document_status || '',
 
         // preserve DB created timestamp for client-side rules
         created_at: row.created_at || null,
@@ -14026,17 +10039,19 @@ function filterConsultations() {
 
 
 function guessConsultationCategoryFromTitle(title) {
-    const normalized = String(title || '').toLowerCase();
+    const normalized = String(title || '').toLowerCase().trim();
     if (!normalized) return '';
 
     const categoryMap = [
         { 
             category: 'Public Utilities & Facilities', 
             keywords: [
-                'lamp', 'light', 'lighting', 'road', 'street', 'facility', 'facilities', 'infrastructure', 
-                'misting', 'poles', 'water', 'electricity', 'power', 'utility', 'streetlight', 'street light', 
-                'drainage', 'sewer', 'pipes', 'hydrant', 'bridge', 'pavement', 'traffic', 'telecom', 'internet', 
-                'cable', 'post', 'pathway', 'gutter', 'alley'
+                'communication', 'alert', 'emergency', 'system', 'systems', 'disaster', 'hazard', 'warning', 
+                'hotline', 'drrm', 'rescue', 'evacuation', 'signal', 'radio', 'cctv', 'broadcast', 'utility', 
+                'utilities', 'facility', 'facilities', 'infrastructure', 'telecom', 'telecommunication', 'broadband', 
+                'internet', 'wifi', 'water', 'electricity', 'power', 'misting', 'poles', 'post', 'cable', 'tower', 
+                'lamp', 'light', 'lighting', 'streetlight', 'street light', 'road', 'street', 'highway', 'bridge', 
+                'pavement', 'traffic', 'drainage', 'sewer', 'pipes', 'pipe', 'hydrant', 'pathway', 'gutter', 'alley'
             ] 
         },
         { 
@@ -14044,50 +10059,64 @@ function guessConsultationCategoryFromTitle(title) {
             keywords: [
                 'park', 'parks', 'open space', 'open spaces', 'playground', 'greenery', 'housing', 'urban', 
                 'flood control', 'planning', 'zoning', 'sidewalk', 'transport', 'parking', 'relocation', 
-                'subdivision', 'building', 'land', 'plaza', 'recreation'
+                'subdivision', 'building', 'land', 'plaza', 'recreation', 'development'
             ] 
         },
         { 
             category: 'Health & Sanitation', 
             keywords: [
-                'health', 'sanitation', 'clinic', 'hospital', 'mosquito', 'waste', 'garbage', 'toilet', 
-                'clean', 'sewerage', 'dengue', 'vaccine', 'medical', 'medicine', 'outpatient', 'pharmacy', 
-                'quarantine', 'disease', 'wellness', 'hygiene'
+                'health', 'sanitation', 'clinic', 'hospital', 'medical', 'medicine', 'vaccine', 'vaccination', 
+                'quarantine', 'dengue', 'hygiene', 'waste', 'garbage', 'clean', 'toilet', 'sewerage', 'wellness', 
+                'disease', 'ambulance', 'first aid', 'doctor', 'nurse', 'pharmacy', 'outpatient', 'mosquito'
             ] 
         },
         { 
             category: 'Social Services', 
             keywords: [
-                'youth', 'elderly', 'welfare', 'social', 'assistance', 'senior', 'child', 'children', 
-                'family', 'pwd', 'handicapped', 'indigent', 'pension', 'relief', 'aid', 'subsidy', 'disabled'
+                'social', 'service', 'services', 'welfare', 'assistance', 'relief', 'aid', 'subsidy', 'pension', 
+                'senior', 'elderly', 'youth', 'child', 'children', 'family', 'pwd', 'disabled', 'handicapped', 
+                'indigent', 'daycare', 'shelter', 'orphanage'
             ] 
         },
         { 
-            category: 'Food & Agriculture', 
+            category: 'Livelihood, Trade, Commerce & Industry', 
             keywords: [
-                'food', 'agriculture', 'farm', 'livestock', 'produce', 'planting', 'crop', 'paddy', 
-                'rice', 'vegetable', 'meat', 'poultry', 'fishery', 'fish', 'harvest'
-            ] 
-        },
-        { 
-            category: 'Higher & Technical Education', 
-            keywords: [
-                'school', 'education', 'training', 'college', 'technical', 'scholarship', 'classroom', 
-                'university', 'tesda', 'student', 'teacher', 'learning', 'tuition', 'academic'
+                'livelihood', 'trade', 'commerce', 'industry', 'business', 'store', 'vendor', 'enterprise', 
+                'microenterprise', 'micro-enterprise', 'job', 'employment', 'skills', 'training', 'work'
             ] 
         },
         { 
             category: 'Justice & Human Rights', 
             keywords: [
-                'justice', 'rights', 'police', 'security', 'law', 'legal', 'human rights', 'complaint', 
-                'court', 'barangay tanod', 'crime', 'peace', 'patrol'
+                'justice', 'rights', 'human rights', 'police', 'tanod', 'barangay tanod', 'security', 'peace', 
+                'order', 'safety', 'protection', 'crime', 'patrol', 'law', 'legal', 'court', 'complaint'
+            ] 
+        },
+        { 
+            category: 'Food & Agriculture', 
+            keywords: [
+                'food', 'agriculture', 'farm', 'farming', 'livestock', 'produce', 'planting', 'crop', 'paddy', 
+                'rice', 'vegetable', 'meat', 'poultry', 'fishery', 'fish', 'harvest', 'community garden'
+            ] 
+        },
+        { 
+            category: 'Higher & Technical Education', 
+            keywords: [
+                'education', 'school', 'college', 'university', 'technical', 'tesda', 'scholarship', 'student', 
+                'teacher', 'academic', 'learning', 'classroom', 'tuition'
             ] 
         },
         { 
             category: 'Ways & Means', 
             keywords: [
-                'budget', 'appropriation', 'finance', 'funding', 'tax', 'revenue', 'grant', 'expense', 
-                'fiscal', 'bonds', 'audit', 'treasury'
+                'ways & means', 'ways and means', 'taxation', 'tax', 'fees', 'revenue', 'assessment', 'tariff', 'duty'
+            ] 
+        },
+        { 
+            category: 'Appropriations', 
+            keywords: [
+                'appropriation', 'appropriations', 'budget', 'funding', 'expenditure', 'allocation', 'audit', 
+                'treasury', 'fiscal', 'grant', 'expense', 'bonds'
             ] 
         },
         { 
@@ -14098,15 +10127,15 @@ function guessConsultationCategoryFromTitle(title) {
         },
         { 
             category: 'Cooperatives', 
-            keywords: ['cooperative', 'co-op', 'cooperatives', 'credit union', 'livelihood group'] 
+            keywords: ['cooperative', 'cooperatives', 'co-op', 'credit union', 'livelihood group'] 
         },
         { 
             category: 'Women, Family & Gender Equality', 
-            keywords: ['women', 'family', 'gender', 'equal', 'mother', 'father', 'childcare', 'parenting', 'maternity', 'lgbt'] 
+            keywords: ['women', 'family', 'gender', 'equal', 'equality', 'mother', 'father', 'childcare', 'parenting', 'maternity', 'lgbt', 'gad'] 
         },
         { 
             category: 'Rules & Privileges', 
-            keywords: ['rule', 'privilege', 'ordinance', 'policy', 'regulation', 'permit', 'charter', 'resolution', 'code'] 
+            keywords: ['rule', 'rules', 'privilege', 'privileges', 'ordinance', 'policy', 'regulation', 'permit', 'charter', 'resolution', 'code', 'governance'] 
         }
     ];
 
@@ -14119,6 +10148,32 @@ function guessConsultationCategoryFromTitle(title) {
     return '';
 }
 
+function selectCategoryInDropdown(categorySelect, suggestedCategory) {
+    if (!categorySelect) return false;
+    if (!suggestedCategory) {
+        if (categorySelect.dataset.autoSelected === 'true') {
+            categorySelect.selectedIndex = 0;
+            delete categorySelect.dataset.autoSelected;
+        }
+        return false;
+    }
+
+    const targetNorm = String(suggestedCategory).toLowerCase().replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+    for (let i = 0; i < categorySelect.options.length; i++) {
+        const opt = categorySelect.options[i];
+        const valNorm = String(opt.value || '').toLowerCase().replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+        const txtNorm = String(opt.text || '').toLowerCase().replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+
+        if (valNorm === targetNorm || txtNorm === targetNorm || (valNorm && targetNorm && valNorm.includes(targetNorm)) || (valNorm && targetNorm && targetNorm.includes(valNorm))) {
+            categorySelect.selectedIndex = i;
+            categorySelect.dataset.autoSelected = 'true';
+            categorySelect.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+        }
+    }
+    return false;
+}
+
 // Global real-time auto-category selector listener across all forms & modals
 document.addEventListener('input', function(e) {
     const target = e.target;
@@ -14127,10 +10182,12 @@ document.addEventListener('input', function(e) {
     const isTitleField = target.id === 'consultation-title' || 
                          target.id === 'concern-title' || 
                          target.id === 'topic-title' ||
+                         target.id === 'proposal-title' ||
+                         target.id === 'title' ||
                          target.name === 'title' ||
                          target.name === 'topic_title' ||
                          target.name === 'consultation_title' ||
-                         (target.placeholder && (target.placeholder.toLowerCase().includes('title') || target.placeholder.toLowerCase().includes('ordinance')));
+                         (target.placeholder && (target.placeholder.toLowerCase().includes('title') || target.placeholder.toLowerCase().includes('ordinance') || target.placeholder.toLowerCase().includes('topic')));
 
     if (isTitleField) {
         const form = target.closest('form') || target.closest('.modal') || target.closest('div') || document;
@@ -14141,19 +10198,7 @@ document.addEventListener('input', function(e) {
             const suggestedCategory = guessConsultationCategoryFromTitle(target.value);
             
             if (!currentVal || categorySelect.dataset.autoSelected === 'true') {
-                if (suggestedCategory) {
-                    for (let i = 0; i < categorySelect.options.length; i++) {
-                        const opt = categorySelect.options[i];
-                        if (opt.value.toLowerCase() === suggestedCategory.toLowerCase() || opt.text.toLowerCase() === suggestedCategory.toLowerCase()) {
-                            categorySelect.selectedIndex = i;
-                            categorySelect.dataset.autoSelected = 'true';
-                            break;
-                        }
-                    }
-                } else if (categorySelect.dataset.autoSelected === 'true') {
-                    categorySelect.value = '';
-                    delete categorySelect.dataset.autoSelected;
-                }
+                selectCategoryInDropdown(categorySelect, suggestedCategory);
             }
         }
     }
@@ -14205,8 +10250,7 @@ function openCreateConsultationModal(createMode) {
             const suggestedCategory = guessConsultationCategoryFromTitle(this.value);
 
             if (!currentCategory || categorySelect.dataset.autoSelected === 'true') {
-                categorySelect.value = suggestedCategory || '';
-                categorySelect.dataset.autoSelected = suggestedCategory ? 'true' : 'false';
+                selectCategoryInDropdown(categorySelect, suggestedCategory);
             }
         };
 
@@ -14895,14 +10939,6 @@ function viewConsultationDetails(id) {
             </div>
         ` : ''}
 
-        ${(st === 'rejected' || st === 'declined') ? `
-            <div class="bg-rose-50/90 border border-rose-200 rounded-xl p-4 shadow-xs">
-                <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-700 mb-1.5">
-                    <i class="bi bi-x-circle-fill text-rose-600 text-sm"></i> Declined by Secretariat / Reviewer
-                </div>
-                <p class="text-xs text-rose-900 leading-relaxed whitespace-pre-line">${escapeHtml(consultation.admin_response || consultation.remarks || 'This citizen proposal did not meet LGU public consultation requirements.')}</p>
-            </div>
-        ` : ''}
 
         ${aiRoutingHtml}
 
@@ -15441,6 +11477,11 @@ async function loadFeedbackFromApi() {
 
 
         AppData.feedback = data.data.map(mapDbFeedbackToUi);
+    const fbEl = document.getElementById('pc-total-feedback-count');
+    if (fbEl) fbEl.textContent = String(AppData.feedback.length);
+    if (typeof renderPCFeedbackSentimentChart === 'function') {
+        renderPCFeedbackSentimentChart();
+    }
 
 
         recomputeConsultationFeedbackCounts();
@@ -17638,11 +13679,11 @@ async function renderPublicFeedbackPortal() {
 
                 <div class="bg-white rounded-xl border border-purple-200 p-4 shadow-sm bg-purple-50/30">
                     <div class="flex items-center justify-between text-purple-700 text-xs font-bold uppercase">
-                        <span>Committee Forwarded</span>
-                        <i class="bi bi-diagram-3 text-purple-500 text-lg"></i>
+                        <span>ORTS Forwarded</span>
+                        <i class="bi bi-box-arrow-up-right text-purple-500 text-lg"></i>
                     </div>
                     <p id="pfq-analytics-forwarded" class="text-3xl font-extrabold text-purple-600 mt-2">0</p>
-                    <p class="text-[11px] text-purple-600/80 mt-1">Routed to LGU departments</p>
+                    <p class="text-[11px] text-purple-600/80 mt-1">Forwarded to ORTS System</p>
                 </div>
 
                 <div class="bg-white rounded-xl border border-emerald-200 p-4 shadow-sm bg-emerald-50/30">
@@ -17855,10 +13896,11 @@ async function renderPublicFeedbackPortal() {
     `;
 
     pfpPopulateConsultationDropdowns();
-    pfpRenderStats();
+    pfpRenderSurveyPollsTable();
     pfpRenderConsultationFeedbackTable();
     pfpRenderTable();
-    loadPhmsFeedbackFromApi();
+    await loadPhmsFeedbackFromApi(false);
+    pfpRenderStats();
 
     if (!AppData.feedback.length || !AppData.consultations.length) {
         pfpRefreshData();
@@ -18636,9 +14678,21 @@ window.pfpShowConsultationFeedbackModal = function (consultationId) {
                     </div>
                     <p class="text-xs font-bold text-slate-800">${question}</p>
                     <div class="space-y-1 pt-1">
-                        <div class="flex justify-between text-[11px] font-bold">
-                            <span class="text-emerald-700"><i class="bi bi-hand-thumbs-up-fill mr-1"></i>${optA}: ${agreeCount} (${agreePct}%)</span>
-                            <span class="text-rose-700"><i class="bi bi-hand-thumbs-down-fill mr-1"></i>${optB}: ${disagreeCount} (${disagreePct}%)</span>
+                        <div class="grid grid-cols-2 gap-2 text-xs font-bold my-1">
+                            <div class="flex items-center justify-between min-w-0 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200">
+                                <span class="text-emerald-800 truncate pr-1 flex items-center gap-1 font-extrabold" title="${escapeHtmlHelper(optA)}">
+                                    <i class="bi bi-hand-thumbs-up-fill text-emerald-600 text-xs shrink-0"></i>
+                                    <span class="truncate">${escapeHtmlHelper(optA)}</span>
+                                </span>
+                                <span class="text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded text-[10px] font-black shrink-0">${agreePct}%</span>
+                            </div>
+                            <div class="flex items-center justify-between min-w-0 bg-rose-50 px-2.5 py-1.5 rounded-lg border border-rose-200">
+                                <span class="text-rose-800 truncate pr-1 flex items-center gap-1 font-extrabold" title="${escapeHtmlHelper(optB)}">
+                                    <i class="bi bi-hand-thumbs-down-fill text-rose-600 text-xs shrink-0"></i>
+                                    <span class="truncate">${escapeHtmlHelper(optB)}</span>
+                                </span>
+                                <span class="text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded text-[10px] font-black shrink-0">${disagreePct}%</span>
+                            </div>
                         </div>
                         <div class="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden flex">
                             <div class="bg-emerald-500 h-full transition-all duration-500" style="width: ${agreePct}%"></div>
@@ -18933,6 +14987,9 @@ function pfpRenderPhmsTable() {
 
     let hearings = Array.isArray(AppData.phmsFeedback) ? [...AppData.phmsFeedback] : [];
 
+    // Filter out unapproved / pending items from main table (pending items require admin approval in Ingestion Approval Sheet)
+    hearings = hearings.filter(h => String(h.approval_status || 'approved').toLowerCase() === 'approved');
+
     if (q) {
         hearings = hearings.filter(h => {
             const title = String(h.hearing_title || h.full_name || '').toLowerCase();
@@ -18952,7 +15009,7 @@ function pfpRenderPhmsTable() {
     }
 
     if (hearings.length === 0) {
-        const errDetail = window._phms_last_fetch_error ? escapeHtml(window._phms_last_fetch_error) : 'Please ensure the PHMS server is running or click "Sync PHMS Data" to refresh.';
+        const errDetail = window._phms_last_fetch_error ? escapeHtml(window._phms_last_fetch_error) : 'No approved PHMS citizen hearing feedback available. Incoming pending packages can be reviewed & approved in the "Ingestion Approval Sheet".';
         tbody.innerHTML = `
             <tr>
                 <td colspan="5" class="px-6 py-10 text-center">
@@ -18983,8 +15040,12 @@ function pfpRenderPhmsTable() {
         const pendingCount = h.pending_count ?? 0;
 
         const approvalStatus = (h.approval_status || 'approved').toLowerCase();
+        const isNewlyApproved = Boolean(h.is_newly_approved || Number(h.is_newly_approved) === 1);
+
         let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-white uppercase tracking-wider inline-flex items-center gap-1"><i class="bi bi-check-circle-fill text-emerald-400 text-[10px]"></i> COMPLETED</span>';
-        if (approvalStatus === 'pending' || status === 'pending_approval') {
+        if (isNewlyApproved) {
+            statusBadge = '<span class="px-2.5 py-0.5 rounded text-[10px] font-bold bg-rose-600 text-white uppercase tracking-wider inline-flex items-center gap-1.5 shadow-sm" title="Newly Approved Citizen Feedback Package"><span class="w-2 h-2 rounded-full bg-white animate-pulse"></span> NEWLY APPROVED</span>';
+        } else if (approvalStatus === 'pending' || status === 'pending_approval') {
             statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-white uppercase tracking-wider inline-flex items-center gap-1" title="Data package is awaiting admin approval in Ingestion Approval Sheet"><i class="bi bi-hourglass-split text-white text-[10px]"></i> PENDING APPROVAL</span>';
         } else if (approvalStatus === 'rejected' || status === 'rejected') {
             statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600 text-white uppercase tracking-wider inline-flex items-center gap-1"><i class="bi bi-x-circle-fill text-white text-[10px]"></i> REJECTED</span>';
@@ -18992,10 +15053,12 @@ function pfpRenderPhmsTable() {
             statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase tracking-wider">ACTIVE</span>';
         }
 
+        const redDotIndicator = isNewlyApproved ? '<span class="inline-flex items-center justify-center w-3 h-3 rounded-full bg-rose-600 shadow-md animate-ping mr-2" title="Newly Approved Feedback Package"></span><span class="inline-flex items-center justify-center w-2.5 h-2.5 rounded-full bg-rose-600 shadow-sm mr-1.5" title="Newly Approved Feedback Package"></span>' : '';
+
         return `
-            <tr class="border-b border-gray-100 hover:bg-blue-50/60 transition cursor-pointer select-none" style="cursor: pointer !important; pointer-events: auto !important;">
+            <tr class="border-b border-gray-100 ${isNewlyApproved ? 'bg-rose-50/40 hover:bg-rose-100/50 border-l-4 border-l-rose-500' : 'hover:bg-blue-50/60'} transition cursor-pointer select-none" style="cursor: pointer !important; pointer-events: auto !important;">
                 <td class="px-4 py-3.5">
-                    <div class="font-bold text-gray-900 text-xs leading-snug">${title}</div>
+                    <div class="font-bold text-gray-900 text-xs leading-snug flex items-center">${redDotIndicator}<span>${title}</span></div>
                     <div class="mt-1">${statusBadge}</div>
                 </td>
                 <td class="px-4 py-3.5 font-medium text-gray-600 text-xs">${dateStr}</td>
@@ -19166,8 +15229,22 @@ async function renderPCDocuments() {
     try {
         await loadDocumentsFromApi();
     } catch (err) {
-        contentArea.innerHTML = `<div class="p-8 text-center text-red-600">Failed to load documents.<div class="text-sm text-gray-500 mt-2">${String(err && err.message ? err.message : err)}</div></div>`;
-        return;
+        console.warn("loadDocumentsFromApi failed:", err);
+        if (!Array.isArray(AppData.documents)) {
+            AppData.documents = [];
+        }
+        if (AppData.documents.length === 0) {
+            contentArea.innerHTML = `
+                <div class="p-8 text-center bg-white rounded-xl border border-red-200 shadow-sm max-w-lg mx-auto my-8">
+                    <i class="bi bi-exclamation-triangle-fill text-red-500 text-3xl block mb-2"></i>
+                    <h4 class="font-bold text-gray-900 text-base">Unable to Load Documents</h4>
+                    <p class="text-xs text-gray-600 mt-1">${escapeHtml(String(err && err.message ? err.message : err))}</p>
+                    <button onclick="pfpRenderDocumentManagement()" class="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-xs transition shadow-sm inline-flex items-center gap-1.5">
+                        <i class="bi bi-arrow-clockwise"></i> Retry Loading
+                    </button>
+                </div>`;
+            return;
+        }
     }
 
     const canManageDocuments = currentUserCanManageDocuments();
@@ -19220,6 +15297,9 @@ async function renderPCDocuments() {
                 </button>
                 <button onclick="filterDocumentsByGroup('survey')" class="px-6 py-3 font-semibold text-sm border-b-2 border-gray-200 text-gray-600 hover:border-green-600 hover:text-green-600 transition doc-group-tab" data-group="survey">
                     <i class="bi bi-bar-chart mr-2"></i>Survey
+                </button>
+                <button onclick="filterDocumentsByGroup('uploaded')" class="px-6 py-3 font-semibold text-sm border-b-2 border-gray-200 text-gray-600 hover:border-amber-600 hover:text-amber-600 transition doc-group-tab" data-group="uploaded">
+                    <i class="bi bi-cloud-arrow-up-fill mr-2"></i>Uploaded
                 </button>
             </div>
 
@@ -19549,14 +15629,46 @@ function filterDocumentsByGroup(group) {
             const docType = String(doc.type || '').toLowerCase();
             const docGroup = String(doc.group || '').toLowerCase();
 
+            const titleStr = String(doc.title || '').toLowerCase();
+            const isSurveyDoc = docType === 'survey' || docGroup === 'survey' || titleStr.includes('survey') || titleStr.includes('poll');
+
             if (group === 'consultation') {
+                if (isSurveyDoc) return false;
                 return docType.includes('consultation') || docGroup.includes('consultation') || docType === 'ordinance' || docType === 'resolution' || docType === 'final_document' || docType === 'consultation_form' || docType === 'attachment';
             } else if (group === 'feedback') {
+                if (isSurveyDoc) return false;
                 return docType.includes('feedback') || docGroup.includes('feedback') || docType === 'response' || docType.includes('brief') || docType.includes('summary') || (doc.title && String(doc.title).toLowerCase().includes('feedback'));
             } else if (group === 'survey') {
-                return docType.includes('survey') || docGroup.includes('survey');
+                return isSurveyDoc;
             } else if (group === 'reports') {
                 return docType.includes('report') || docGroup.includes('report');
+            } else if (group === 'uploaded') {
+                const docTypeStr = String(doc.type || '').toLowerCase();
+                const docGroupStr = String(doc.group || '').toLowerCase();
+                const docSourceStr = String(doc.source || '').toLowerCase();
+                const titleStr = String(doc.title || '').toLowerCase();
+
+                // Exclude system-generated AI briefs, committee summaries, and automated survey reports
+                const isSystemGenerated = titleStr.includes('synthesized ai') || 
+                                         titleStr.includes('automated survey results') || 
+                                         titleStr.startsWith('consultation:') || 
+                                         titleStr.startsWith('survey results report:') || 
+                                         docTypeStr.includes('brief') || 
+                                         docTypeStr.includes('synthesis') || 
+                                         docTypeStr === 'response' || 
+                                         docTypeStr === 'survey';
+                
+                if (isSystemGenerated) {
+                    return false;
+                }
+                
+                return docGroupStr === 'uploaded' || 
+                       docGroupStr.includes('upload') || 
+                       docTypeStr === 'uploaded' || 
+                       docTypeStr.includes('upload') || 
+                       docSourceStr === 'upload' || 
+                       docSourceStr === 'manual_upload' || 
+                       docSourceStr === 'user_upload';
             }
             return false;
         });
@@ -19620,19 +15732,20 @@ function filterDocumentsByGroup(group) {
                         ${doc.downloads || 0}
                     </span>
                 </td>
-                <td class="px-6 py-4 text-center">
-                    <div class="flex gap-2 justify-center items-center flex-wrap">
-                        <button onclick="downloadDocument('${String(doc.uid || doc.id).replace(/'/g, "\\'")}')" class="text-blue-600 hover:text-blue-800" title="Download">
-                            <i class="bi bi-download"></i> Download
+                <td class="px-4 py-3 text-center align-middle whitespace-nowrap">
+                    <div class="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
+                        <button onclick="downloadDocument('${String(doc.uid || doc.id).replace(/'/g, "\\'")}')" class="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-md text-xs font-semibold transition cursor-pointer shadow-2xs" title="Download Document">
+                            <i class="bi bi-download text-blue-600"></i> Download
                         </button>
-                        ${doc.downloadUrl && doc.downloadUrl !== '#' ? `<button onclick="viewDocument('${String(doc.uid || doc.id).replace(/'/g, "\\'")}')" class="text-gray-600 hover:text-gray-800" title="View">
-                            View
+                        ${doc.downloadUrl && doc.downloadUrl !== '#' ? `
+                        <button onclick="viewDocument('${String(doc.uid || doc.id).replace(/'/g, "\\'")}')" class="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-semibold transition cursor-pointer shadow-2xs" title="View Document">
+                            <i class="bi bi-eye text-slate-600"></i> View
                         </button>` : ''}
-                        <button onclick="openLiveDocumentTrackerModal('${docIdClean}', '${docSource}', '${docRef}', '${docTitle}')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded border border-slate-300 text-xs font-bold flex items-center gap-1 cursor-pointer" title="View Detailed Audit Timeline">
+                        <button onclick="openLiveDocumentTrackerModal('${docIdClean}', '${docSource}', '${docRef}', '${docTitle}')" class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200/80 rounded-md text-xs font-semibold transition cursor-pointer shadow-2xs" title="View Detailed Audit Timeline">
                             <i class="bi bi-clock-history text-amber-600"></i> Event Audit Log
                         </button>
-                        <button onclick="openForwardLRSModal('${doc.id}', '${docSource}', '${docRef}', '${docTitle}')" class="px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded border border-red-200 text-xs font-semibold flex items-center gap-1 cursor-pointer" title="Forward to LRS">
-                            <i class="bi bi-send-fill text-red-600"></i> Forward to LRS
+                        <button onclick="openForwardLRSModal('${doc.id}', '${docSource}', '${docRef}', '${docTitle}')" class="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-md text-xs font-bold transition cursor-pointer shadow-2xs" title="Forward to LRS">
+                            <i class="bi bi-send-fill text-rose-600"></i> Forward to LRS
                         </button>
                     </div>
                 </td>
@@ -22544,11 +18657,7 @@ async function pfpShowAiCommitteeBriefModal(consultationId) {
 
     const cStatus = String(consultation.status || '').toLowerCase().trim();
 
-    // Enforce workflow gating: Consultation must be Closed
-    if (cStatus !== 'closed' && cStatus !== 'completed') {
-        pfpShowGatedConsultationModal(consultation);
-        return;
-    }
+    // Gating check disabled to allow viewing & forwarding AI Brief for all consultations
 
     // Display loading notification
     showNotification('AI Engine is analyzing feedback and compiling Committee Brief...', 'info');
@@ -22573,15 +18682,17 @@ async function pfpShowAiCommitteeBriefModal(consultationId) {
         }
 
         const brief = json.data;
-        renderAiCommitteeBriefModalHtml(brief);
+        renderAiCommitteeBriefModalHtml(brief, consultation);
 
     } catch (e) {
         console.error('AI Brief compilation failed:', e);
+        const modal = document.getElementById('pfq-ai-brief-modal');
+        if (modal) modal.remove();
         showNotification(`AI Compilation failed: ${e.message}`, 'error');
     }
 }
 
-function renderAiCommitteeBriefModalHtml(brief) {
+function renderAiCommitteeBriefModalHtml(brief, c) {
     let modal = document.getElementById('pfq-ai-brief-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -22630,7 +18741,7 @@ function renderAiCommitteeBriefModalHtml(brief) {
                     <h2 class="text-xl sm:text-2xl font-black text-white leading-tight">
                         ${escapeHtml(brief.title || 'Consultation Feedback Brief')}
                     </h2>
-                    <p class="text-xs text-red-100/90 font-medium">Assigned LGU Committee: <strong class="text-white font-bold">${escapeHtml(brief.committee_assigned || brief.assigned_committee || 'Rules & Governance Committee')}</strong></p>
+                    <p class="text-xs text-red-100/90 font-medium">Category: <strong class="text-white font-bold">${escapeHtml(c?.category || brief.category || brief.committee_assigned || 'General Policy')}</strong></p>
                 </div>
                 <button onclick="document.getElementById('pfq-ai-brief-modal').remove()" class="text-slate-300 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-full transition text-lg leading-none" title="Close Modal">&times;</button>
             </div>
@@ -22650,8 +18761,8 @@ function renderAiCommitteeBriefModalHtml(brief) {
                         </span>
                     </div>
                     <div class="p-2">
-                        <span class="text-slate-500 font-bold uppercase text-[10px] tracking-wider block mb-1">Transmittal Target</span>
-                        <span class="text-xs font-extrabold text-purple-900 block truncate px-2 py-1 bg-purple-50 rounded-lg border border-purple-100" title="${escapeHtml(brief.committee_assigned || brief.assigned_committee || 'Rules & Governance Committee')}">${escapeHtml(brief.committee_assigned || brief.assigned_committee || 'Rules & Governance Committee')}</span>
+                        <span class="text-slate-500 font-bold uppercase text-[10px] tracking-wider block mb-1">Category</span>
+                        <span class="text-xs font-extrabold text-purple-900 block truncate px-2 py-1 bg-purple-50 rounded-lg border border-purple-100" title="${escapeHtml(c?.category || brief.category || 'General Policy')}">${escapeHtml(c?.category || brief.category || 'General Policy')}</span>
                     </div>
                 </div>
 
@@ -22774,9 +18885,14 @@ function renderAiCommitteeBriefModalHtml(brief) {
                             </button>
                         </div>
                     ` : `
-                        <button onclick="showAwaitingExpertReviewNotice(${brief.consultation_id || 0})" class="px-5 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-extrabold rounded-xl text-xs transition flex items-center gap-2 cursor-not-allowed" title="Requires Resource Person (Expert) annotation before forwarding">
-                            <i class="bi bi-shield-lock-fill"></i> Awaiting Resource Person Verification
-                        </button>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-900 border border-amber-200 rounded-xl text-[11px] font-bold shadow-2xs">
+                                <i class="bi bi-clock-history text-amber-600"></i> Awaiting Resource Person Input
+                            </span>
+                            <button onclick="document.getElementById('pfq-ai-brief-modal')?.remove(); pfpShowForwardModal(${brief.consultation_id || 0});" class="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white font-extrabold rounded-xl text-xs transition shadow-md flex items-center gap-1.5 cursor-pointer" title="Dispatch consultation & AI summary to Resource Person">
+                                <i class="bi bi-send-fill text-amber-200"></i> Dispatch to Resource Person
+                            </button>
+                        </div>
                     `}
                 </div>
             </div>
@@ -23081,45 +19197,76 @@ function switchSystemReportTab(tabName) {
                         <thead class="bg-purple-50/70 border-b border-purple-200 uppercase tracking-wider text-[11px] font-bold text-gray-700">
                             <tr>
                                 <th class="px-4 py-3 text-gray-900">Consultation Policy</th>
-                                <th class="px-4 py-3 text-gray-900">Assigned Committee</th>
+                                <th class="px-4 py-3 text-gray-900">Category</th>
                                 <th class="px-4 py-3 text-center text-gray-900">Submissions</th>
                                 <th class="px-4 py-3 text-gray-900">Status</th>
                                 <th class="px-4 py-3 text-center text-gray-900">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${AppData.consultations.map(c => {
+                                        ${AppData.consultations.map(c => {
             const cid = Number(c.id);
-            const isClosed = ['closed', 'completed'].includes(String(c.status || '').toLowerCase());
+            const statusClean = String(c.status || '').toLowerCase();
+            const isClosed = ['closed', 'completed'].includes(statusClean);
+            const isDeclined = ['declined', 'rejected', 'disapproved'].includes(statusClean);
+            const isForwarded = ['forwarded_orts', 'orts', 'proceeded_to_ordinance', 'forwarded'].includes(statusClean);
+            
             const feedbackCount = AppData.feedback.filter(f => Number(f.consultationId || f.consultation_id) === cid).length;
+            const votesCount = c.vote_stats ? Number(c.vote_stats.total_votes || 0) : 0;
+            const totalSubmissions = Math.max(c.feedbackCount || 0, feedbackCount) + votesCount;
+
+            const committeeName = c.committee_assigned ? escapeHtml(c.committee_assigned) : 'Unassigned';
+            
+            let statusBadge = '<span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px] uppercase tracking-wider">ACTIVE</span>';
+            if (isClosed) {
+                statusBadge = '<span class="px-2 py-0.5 rounded-md bg-slate-800 text-white font-bold text-[10px] uppercase tracking-wider">CLOSED</span>';
+            } else if (isDeclined) {
+                statusBadge = '<span class="px-2 py-0.5 rounded-md bg-red-100 text-red-800 font-bold text-[10px] uppercase tracking-wider">DECLINED</span>';
+            } else if (isForwarded) {
+                statusBadge = '<span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 font-bold text-[10px] uppercase tracking-wider">FORWARDED (ORTS)</span>';
+            }
+
+            let actionBtn = '';
+            if (isClosed || isForwarded) {
+                actionBtn = `
+                    <button onclick="pfpShowAiCommitteeBriefModal(${cid})" class="px-3.5 py-1.5 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-lg text-xs transition shadow-sm flex items-center gap-1 mx-auto">
+                        <i class="bi bi-file-earmark-text-fill"></i> View AI Brief
+                    </button>
+                `;
+            } else if (isDeclined) {
+                actionBtn = `
+                    <button class="px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 font-semibold rounded-lg text-xs flex items-center gap-1 mx-auto cursor-not-allowed opacity-80" disabled>
+                        <i class="bi bi-x-circle-fill"></i> Declined
+                    </button>
+                `;
+            } else {
+                actionBtn = `
+                    <button onclick="pfpShowAiCommitteeBriefModal(${cid})" class="px-3 py-1.5 bg-amber-100 text-amber-900 border border-amber-300 font-semibold rounded-lg text-xs flex items-center gap-1 mx-auto">
+                        <i class="bi bi-lock-fill"></i> Pending (Active)
+                    </button>
+                `;
+            }
+
             return `
-                                    <tr class="border-b border-gray-100 hover:bg-slate-50 transition">
-                                        <td class="px-4 py-3.5">
-                                            <div class="font-bold text-gray-900 text-xs leading-snug">#${cid} - ${escapeHtml(c.title || 'Consultation')}</div>
-                                            <div class="text-[11px] text-gray-500 font-medium">Category: ${escapeHtml(c.category || 'General Policy')}</div>
-                                        </td>
-                                        <td class="px-4 py-3.5 font-semibold text-purple-900">
-                                            <span class="inline-block px-2 py-0.5 bg-purple-50 rounded border border-purple-200 text-xs">
-                                                <i class="bi bi-diagram-3 mr-1"></i>${escapeHtml(c.committee_assigned || 'Rules & Governance Committee')}
-                                            </span>
-                                        </td>
-                                        <td class="px-4 py-3.5 text-center font-semibold text-gray-800 text-xs">${feedbackCount} submission(s)</td>
-                                        <td class="px-4 py-3.5">
-                                            ${isClosed ? '<span class="px-2 py-0.5 rounded-md bg-slate-800 text-white font-bold text-[10px] uppercase tracking-wider">CLOSED</span>' : '<span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px] uppercase tracking-wider">ACTIVE</span>'}
-                                        </td>
-                                        <td class="px-4 py-3.5 text-center">
-                                            ${isClosed ? `
-                                                <button onclick="pfpShowAiCommitteeBriefModal(${cid})" class="px-3.5 py-1.5 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-lg text-xs transition shadow-sm flex items-center gap-1 mx-auto">
-                                                    <i class="bi bi-file-earmark-text-fill"></i> View AI Brief
-                                                </button>
-                                            ` : `
-                                                <button onclick="pfpShowAiCommitteeBriefModal(${cid})" class="px-3 py-1.5 bg-amber-100 text-amber-900 border border-amber-300 font-semibold rounded-lg text-xs flex items-center gap-1 mx-auto">
-                                                    <i class="bi bi-lock-fill"></i> Pending (Active)
-                                                </button>
-                                            `}
-                                        </td>
-                                    </tr>
-                                `;
+                <tr class="border-b border-gray-100 hover:bg-slate-50 transition">
+                    <td class="px-4 py-3.5">
+                        <div class="font-bold text-gray-900 text-xs leading-snug">#${cid} - ${escapeHtml(c.title || 'Consultation')}</div>
+                        <div class="text-[11px] text-gray-500 font-medium">Type: ${escapeHtml(c.type || 'Public Consultation')}</div>
+                    </td>
+                    <td class="px-4 py-3.5 font-semibold text-purple-900">
+                        <span class="inline-block px-2.5 py-1 bg-purple-50 text-purple-900 border border-purple-200 rounded text-xs font-semibold">
+                            <i class="bi bi-tag-fill mr-1 text-purple-600"></i>${escapeHtml(c.category || 'General Policy')}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3.5 text-center font-semibold text-gray-800 text-xs">${totalSubmissions} submission(s)</td>
+                    <td class="px-4 py-3.5">
+                        ${statusBadge}
+                    </td>
+                    <td class="px-4 py-3.5 text-center">
+                        ${actionBtn}
+                    </td>
+                </tr>
+            `;
         }).join('') || '<tr><td colspan="5" class="p-6 text-center text-gray-500">No consultation records found.</td></tr>'}
                         </tbody>
                     </table>
@@ -23445,7 +19592,7 @@ window.openApproveCitizenSubmissionModal = function (consultationId) {
 
                 <div class="space-y-3 pt-1">
                     <div>
-                        <label class="block font-bold text-slate-700 mb-1">Assigned LGU Committee <span class="text-red-500">*</span></label>
+                        <label class="block font-bold text-slate-700 mb-1">Category / Committee <span class="text-red-500">*</span></label>
                         <select id="approve-committee-select" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500">
                             <option value="Rules & Governance Committee">Rules & Governance Committee</option>
                             <option value="Committee on Infrastructure & Public Works">Committee on Infrastructure & Public Works</option>
@@ -23985,9 +20132,22 @@ window.rejectResourcePersonApp = function(id, fullname) {
 function showSessionExpiredModal() {
     if (document.getElementById('pcms-session-timeout-modal')) return;
 
-    const isAdminSide = window.location.pathname.includes('/admin/') || 
-                        window.location.pathname.includes('/admin-side/') || 
-                        (window.AppData && window.AppData.currentUser && ['admin', 'super admin', 'superadmin', 'staff', 'barangay staff', 'resource_person'].includes(String(window.AppData.currentUser.role || '').toLowerCase()));
+    const userRoleStr = String(
+        (window.AppData && window.AppData.currentUser && window.AppData.currentUser.role) ||
+        window.__CURRENT_ROLE__ ||
+        window.USER_ROLE ||
+        window.APP_USER_ROLE ||
+        ''
+    ).toLowerCase();
+
+    const isAdminRole = ['admin', 'administrator', 'super admin', 'superadmin', 'staff', 'barangay staff', 'resource person', 'resource_person', 'expert'].includes(userRoleStr) || window.__IS_SUPER_ADMIN__ === true;
+
+    const isAdminPath = window.location.pathname.includes('/admin/') || 
+                        window.location.pathname.includes('/admin-side/') ||
+                        window.location.pathname.includes('system-template-full.php') ||
+                        window.location.pathname.includes('resource_person_dashboard.php');
+
+    const isAdminSide = isAdminRole || isAdminPath;
 
     let redirectUrl = isAdminSide ? 'login.php?timeout=1' : 'index.php?timeout=1';
     let btnText = isAdminSide ? 'Back to Login Page' : 'Return to Landing Page';
@@ -24030,9 +20190,22 @@ function initSessionTimeoutManager() {
         window.addEventListener(evt, resetTimer, { passive: true });
     });
 
-    const isAdminSide = window.location.pathname.includes('/admin/') || 
-                        window.location.pathname.includes('/admin-side/') || 
-                        (window.AppData && window.AppData.currentUser && ['admin', 'super admin', 'superadmin', 'staff', 'barangay staff', 'resource_person'].includes(String(window.AppData.currentUser.role || '').toLowerCase()));
+    const userRoleStr = String(
+        (window.AppData && window.AppData.currentUser && window.AppData.currentUser.role) ||
+        window.__CURRENT_ROLE__ ||
+        window.USER_ROLE ||
+        window.APP_USER_ROLE ||
+        ''
+    ).toLowerCase();
+
+    const isAdminRole = ['admin', 'administrator', 'super admin', 'superadmin', 'staff', 'barangay staff', 'resource person', 'resource_person', 'expert'].includes(userRoleStr) || window.__IS_SUPER_ADMIN__ === true;
+
+    const isAdminPath = window.location.pathname.includes('/admin/') || 
+                        window.location.pathname.includes('/admin-side/') ||
+                        window.location.pathname.includes('system-template-full.php') ||
+                        window.location.pathname.includes('resource_person_dashboard.php');
+
+    const isAdminSide = isAdminRole || isAdminPath;
 
     // 5 minutes (300,000 ms) for Admin / Superadmin / Resource Person, 10 minutes (600,000 ms) for Citizen
     const idleTimeoutMs = isAdminSide ? 300000 : 600000;
@@ -24440,3 +20613,307 @@ if (typeof restoreDeclinedSubmission === 'undefined') {
 
 
 
+
+
+// ============================================================================
+
+// ============================================================================
+// REAL-TIME SYSTEM NOTIFICATIONS & INLINE SCROLL LOAD MORE HANDLERS
+// ============================================================================
+
+window._pfpCurrentNotifLimit = 20;
+window._pfpHasMoreNotifications = true;
+
+window.pfpCheckNotificationScrollPosition = function (el) {
+    if (!el) return;
+    const isAtBottom = (el.scrollTop + el.clientHeight >= el.scrollHeight - 25);
+    const container = document.getElementById('notifications-load-more-container');
+    if (container) {
+        if (isAtBottom && window._pfpHasMoreNotifications) {
+            container.classList.remove('hidden');
+        } else {
+            container.classList.add('hidden');
+        }
+    }
+};
+
+window.pfpLoadPreviousNotifications = async function () {
+    const btn = document.getElementById('btn-load-previous-notifs');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="bi bi-arrow-repeat animate-spin text-sm"></i> Loading previous notifications...`;
+    }
+
+    window._pfpCurrentNotifLimit += 20;
+
+    try {
+        let apiUrl = `API/notifications_api.php?action=list&limit=${window._pfpCurrentNotifLimit}`;
+        if (typeof getApiUrl === 'function') apiUrl = getApiUrl(apiUrl);
+        const res = await fetch(`${apiUrl}&_t=${Date.now()}`, { cache: 'no-store' });
+        const resData = await res.json().catch(() => null);
+
+        if (res.ok && resData && resData.success && resData.data) {
+            const items = Array.isArray(resData.data.items) ? resData.data.items : [];
+            const previousCount = Array.isArray(window.AppData?.notifications) ? window.AppData.notifications.length : 0;
+            
+            if (!window.AppData) window.AppData = {};
+            window.AppData.notifications = items;
+
+            if (items.length <= previousCount) {
+                window._pfpHasMoreNotifications = false;
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = `<span class="text-xs text-gray-400 font-medium">All notifications loaded</span>`;
+                }
+            } else {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = `<i class="bi bi-clock-history text-sm"></i> View Previous Notifications`;
+                }
+            }
+
+            const listEl = document.getElementById('notifications-list');
+            if (listEl) {
+                listEl.innerHTML = items.map(n => pfpRenderNotificationItemHtml(n)).join('');
+                listEl.scrollTop = listEl.scrollHeight - listEl.clientHeight - 30;
+            }
+        }
+    } catch (e) {
+        console.warn('Error loading previous notifications:', e);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="bi bi-clock-history text-sm"></i> Retry Loading Previous`;
+        }
+    }
+};
+
+function pfpRenderNotificationItemHtml(n) {
+    const isRead = Boolean(n.is_read && Number(n.is_read) === 1);
+    const msgRaw = n.message || '';
+    const msg = escapeHtml(msgRaw);
+    const msgAttr = msgRaw.replace(/'/g, "\'").replace(/"/g, '&quot;');
+    const type = String(n.type || 'info').toLowerCase();
+    const dateStr = n.created_at ? new Date(n.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Just now';
+
+    let title = 'System Notification';
+    let iconClass = 'bi-bell-fill text-blue-600 bg-blue-50 border-blue-100';
+
+    if (type === 'phms_feedback' || msgRaw.includes('PHMS')) {
+        title = '🏢 PHMS Hearing Feedback';
+        iconClass = 'bi-building-fill-gear text-emerald-600 bg-emerald-50 border-emerald-100';
+    } else if (msgRaw.includes('AI') || type === 'ai_brief') {
+        title = '🤖 AI Committee Brief';
+        iconClass = 'bi-robot text-purple-600 bg-purple-50 border-purple-100';
+    } else if (msgRaw.includes('Feedback') || msgRaw.includes('Proposal') || type === 'feedback') {
+        title = '📩 Citizen Feedback';
+        iconClass = 'bi-chat-left-text text-emerald-600 bg-emerald-50 border-emerald-100';
+    } else if (type === 'consultation' || msgRaw.includes('Survey')) {
+        title = '📊 Community Poll Update';
+        iconClass = 'bi-square-poll text-amber-600 bg-amber-50 border-amber-100';
+    }
+
+    return `
+        <div data-id="${n.id}" onclick="pfpHandleNotificationClick(${n.id}, '${type}', '${msgAttr}')" class="p-4 transition hover:bg-blue-50/70 flex items-start gap-3.5 relative cursor-pointer ${!isRead ? 'bg-white font-medium' : 'bg-gray-50/40 opacity-75'}">
+            <div class="w-10 h-10 rounded-2xl border flex items-center justify-center shrink-0 mt-0.5 ${iconClass}">
+                <i class="bi bi-bell text-base"></i>
+            </div>
+            <div class="flex-1 min-w-0 pr-3">
+                <div class="font-bold text-gray-900 text-xs leading-snug">${title}</div>
+                <div class="text-xs text-gray-500 mt-0.5 leading-relaxed font-normal">${msg}</div>
+                <div class="text-[11px] text-gray-400 mt-1 font-medium">${dateStr}</div>
+            </div>
+            ${!isRead ? '<span class="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0 mt-1.5 ring-4 ring-red-50"></span>' : ''}
+        </div>
+    `;
+}
+
+window.pfpHandleNotificationClick = async function (id, type, message) {
+    console.log('[Notification Clicked]', { id, type, message });
+
+    const notifDropdown = document.getElementById('notifications-dropdown');
+    if (notifDropdown) {
+        notifDropdown.classList.add('hidden');
+        notifDropdown.style.display = 'none';
+    }
+
+    if (id) {
+        window.pfpMarkSingleNotifRead(id);
+    }
+
+    const msg = String(message || '').toLowerCase();
+    const t = String(type || '').toLowerCase();
+
+    if (t === 'phms_feedback' || msg.includes('phms') || msg.includes('hearing') || msg.includes('ingested') || msg.includes('ingestion')) {
+        if (typeof showSection === 'function') showSection('public-feedback-queue');
+        if (typeof pfpSwitchTab === 'function') pfpSwitchTab('phms');
+        if (typeof showNotification === 'function') {
+            showNotification('🏢 Opened PHMS Public Hearing Feedback Queue', 'info');
+        }
+        if (typeof loadPhmsFeedbackFromApi === 'function') {
+            loadPhmsFeedbackFromApi(true);
+        }
+    } else if (t === 'feedback' || msg.includes('feedback') || msg.includes('proposal') || msg.includes('citizen')) {
+        if (typeof showSection === 'function') showSection('public-feedback-queue');
+        if (typeof pfpSwitchTab === 'function') pfpSwitchTab('consult');
+        if (typeof showNotification === 'function') {
+            showNotification('📩 Opened Citizen Consultation Feedback', 'info');
+        }
+    } else if (t === 'consultation' || msg.includes('survey') || msg.includes('poll') || msg.includes('vote')) {
+        if (typeof showSection === 'function') showSection('public-feedback-queue');
+        if (typeof pfpSwitchTab === 'function') pfpSwitchTab('survey');
+        if (typeof showNotification === 'function') {
+            showNotification('📊 Opened Community Survey & Poll Results', 'info');
+        }
+    } else if (t === 'ai_brief' || msg.includes('ai') || msg.includes('brief')) {
+        if (typeof showSection === 'function') showSection('consultation-dashboard');
+        if (typeof showNotification === 'function') {
+            showNotification('🤖 Opened AI Executive Synthesis Brief', 'info');
+        }
+    } else {
+        if (typeof showSection === 'function') showSection('public-feedback-queue');
+    }
+};
+
+window.pfpMarkSingleNotifRead = async function (id) {
+    if (!id) return;
+    id = Number(id);
+
+    const notifItem = document.querySelector(`#notifications-list [data-id="${id}"]`);
+    if (notifItem) {
+        notifItem.classList.remove('bg-white', 'font-medium');
+        notifItem.classList.add('bg-gray-50/40', 'opacity-75');
+        const redDot = notifItem.querySelector('.bg-red-500');
+        if (redDot) redDot.remove();
+    }
+
+    if (window.AppData && Array.isArray(window.AppData.notifications)) {
+        const item = window.AppData.notifications.find(n => Number(n.id) === id);
+        if (item) item.is_read = 1;
+    }
+
+    pfpUpdateNotificationBadgeCount();
+
+    try {
+        await fetch('API/notifications_api.php?action=mark_read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id, is_read: 1 })
+        });
+    } catch (e) {
+        console.warn('Failed to mark notification read on server:', e);
+    }
+};
+
+window.pfpMarkAllNotificationsRead = async function () {
+    console.log('[Notifications] Marking all as read across system...');
+
+    // 1. Remove all red unread dots & styling from DOM immediately
+    const listContainers = document.querySelectorAll('#notifications-list, #notif-drawer, body');
+    listContainers.forEach(container => {
+        if (!container) return;
+        const items = container.querySelectorAll('[data-id]');
+        items.forEach(el => {
+            el.classList.remove('bg-white', 'font-medium', 'font-semibold');
+            el.classList.add('bg-gray-50/40', 'opacity-75');
+        });
+
+        // Remove red unread dot spans
+        const redDots = container.querySelectorAll('.bg-red-500, .bg-red-600, .bg-amber-400, .bg-amber-500, [title="Unread"]');
+        redDots.forEach(dot => {
+            if (dot && !dot.id && !dot.classList.contains('sidebar-badge')) {
+                dot.remove();
+            }
+        });
+    });
+
+    // 2. Clear badge counts in header
+    const badgeEls = document.querySelectorAll('#notification-badge, #unread-count, #notifications-btn .bg-red-500, #notifications-btn span');
+    badgeEls.forEach(badge => {
+        badge.innerText = '0';
+        badge.classList.add('hidden');
+        badge.style.display = 'none';
+    });
+
+    // 3. Update local AppData state
+    if (window.AppData && Array.isArray(window.AppData.notifications)) {
+        window.AppData.notifications.forEach(n => n.is_read = 1);
+    }
+
+    // 4. Dispatch background API sync requests
+    try {
+        await Promise.all([
+            fetch('API/notifications_api.php?action=mark_all_read', { method: 'POST' }).catch(() => {}),
+            fetch('API/resource_person_api.php?action=mark_notif_read', { method: 'POST' }).catch(() => {})
+        ]);
+        if (typeof showNotification === 'function') {
+            showNotification('All notifications marked as read', 'success');
+        }
+    } catch (e) {
+        console.warn('Failed to sync mark all read:', e);
+    }
+};
+
+function pfpUpdateNotificationBadgeCount() {
+    const notifs = (window.AppData && Array.isArray(window.AppData.notifications)) ? window.AppData.notifications : [];
+    const unreadCount = notifs.filter(n => !n.is_read || Number(n.is_read) === 0).length;
+
+    const badgeEls = document.querySelectorAll('#notification-badge, #unread-count, #notifications-btn .bg-red-500');
+    badgeEls.forEach(badge => {
+        if (unreadCount > 0) {
+            badge.innerText = unreadCount;
+            badge.classList.remove('hidden');
+            badge.style.display = 'inline-flex';
+        } else {
+            badge.innerText = '0';
+            badge.classList.add('hidden');
+            badge.style.display = 'none';
+        }
+    });
+}
+
+window.loadNotifications = async function () {
+    try {
+        let apiUrl = `API/notifications_api.php?action=list&limit=${window._pfpCurrentNotifLimit || 20}`;
+        if (typeof getApiUrl === 'function') apiUrl = getApiUrl(apiUrl);
+        const res = await fetch(`${apiUrl}&_t=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const resData = await res.json().catch(() => null);
+        if (resData && resData.success && resData.data) {
+            const items = Array.isArray(resData.data.items) ? resData.data.items : [];
+            if (!window.AppData) window.AppData = {};
+            window.AppData.notifications = items;
+
+            const unreadCount = Number(resData.data.unread ?? items.filter(n => !n.is_read || Number(n.is_read) === 0).length);
+
+            const badgeEls = document.querySelectorAll('#notification-badge, #unread-count');
+            badgeEls.forEach(b => {
+                if (unreadCount > 0) {
+                    b.innerText = unreadCount;
+                    b.classList.remove('hidden');
+                    b.style.display = 'inline-flex';
+                } else {
+                    b.innerText = '0';
+                    b.classList.add('hidden');
+                    b.style.display = 'none';
+                }
+            });
+
+            const listEl = document.getElementById('notifications-list');
+            if (listEl) {
+                if (items.length === 0) {
+                    listEl.innerHTML = `
+                        <div class="p-6 text-center text-gray-400 text-xs font-medium">
+                            <i class="bi bi-bell-slash text-2xl block mb-1 text-gray-300"></i>
+                            No notifications yet
+                        </div>
+                    `;
+                } else {
+                    listEl.innerHTML = items.map(n => pfpRenderNotificationItemHtml(n)).join('');
+                    pfpCheckNotificationScrollPosition(listEl);
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('Error loading notifications:', e);
+    }
+};

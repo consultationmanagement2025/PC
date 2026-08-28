@@ -94,8 +94,10 @@ function compileUnifiedFeedback($conn, $userId = null, $userName = 'System Admin
         if ($phmsStmt) {
             while ($r = $phmsStmt->fetch_assoc()) {
                 $payload = json_decode($r['payload_json'] ?? '[]', true);
-                $hTitle = $payload['hearing_title'] ?? $r['full_name'] ?? 'PHMS Public Hearing';
-                $responses = $payload['citizen_responses'] ?? $payload['citizen_feedback'] ?? [];
+                if (!is_array($payload)) $payload = [];
+                $hTitle = $payload['hearing_title'] ?? $payload['title'] ?? $r['full_name'] ?? 'PHMS Public Hearing';
+                $rawResponses = $payload['citizen_responses'] ?? $payload['citizen_feedback'] ?? $payload['testimonies'] ?? $payload['responses'] ?? $payload['feedback'] ?? null;
+                $responses = is_array($rawResponses) ? $rawResponses : [$payload];
 
                 if (is_array($responses) && !empty($responses)) {
                     foreach ($responses as $resp) {

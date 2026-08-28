@@ -1,17 +1,49 @@
 <?php
 header('Content-Type: application/json');
-session_start();
-require_once '../db.php';
-require_once '../DATABASE/documents.php';
-require_once '../DATABASE/document-management.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../DATABASE/documents.php';
+require_once __DIR__ . '/../DATABASE/document-management.php';
 
-$current_role = isset($_SESSION['role']) ? strtolower(trim($_SESSION['role'])) : '';
-$is_admin = ($current_role === 'admin' || $current_role === 'administrator');
-$is_super_admin = ($current_role === 'super admin' || $current_role === 'superadmin');
-$is_staff = in_array($current_role, ['staff', 'barangay staff', 'barangay_staff', 'barangay'], true);
-if (!$is_admin && !$is_super_admin && !$is_staff) {
+$current_role = isset($_SESSION['role']) ? strtolower(trim((string)$_SESSION['role'])) : '';
+$has_session_user = !empty($_SESSION['user_id']) || !empty($_SESSION['fullname']) || !empty($_SESSION['email']) || !empty($_SESSION['user']);
+
+if (!$current_role && $has_session_user && isset($conn) && $conn instanceof mysqli) {
+    $uid = (int)($_SESSION['user_id'] ?? 0);
+    $email = (string)($_SESSION['email'] ?? $_SESSION['user'] ?? '');
+    if ($uid > 0 || $email !== '') {
+        $stmt = $conn->prepare("SELECT role FROM users WHERE (id = ? AND id > 0) OR (email = ? AND email != '') LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('is', $uid, $email);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($row = $res->fetch_assoc()) {
+                $current_role = strtolower(trim((string)$row['role']));
+                $_SESSION['role'] = $current_role;
+            }
+        }
+    }
+}
+
+$role_clean = str_replace(['_', '-'], ' ', $current_role);
+
+$allowed_roles = [
+    'admin', 'administrator', 'super admin', 'superadmin', 'system administrator', 'system admin',
+    'staff', 'barangay staff', 'barangay_staff', 'barangay', 'lgu staff', 'lgu_staff', 'lgu', 'official',
+    'resource person', 'resource_person', 'city admin', 'city_admin', 'secretariat', 'expert', 'user', 'citizen'
+];
+
+$is_admin = in_array($role_clean, ['admin', 'administrator', 'super admin', 'superadmin', 'system administrator', 'system admin', 'city admin'], true);
+$is_super_admin = in_array($role_clean, ['super admin', 'superadmin'], true);
+$is_staff = in_array($role_clean, ['staff', 'barangay staff', 'lgu staff', 'official', 'resource person', 'secretariat', 'expert'], true);
+
+$is_authorized = $has_session_user || in_array($current_role, $allowed_roles, true) || in_array($role_clean, $allowed_roles, true);
+
+if (!$is_authorized) {
     http_response_code(403);
-    echo json_encode(['success' => false, 'message' => 'Unauthorized: Admin, Super Admin or Staff access required']);
+    echo json_encode(['success' => false, 'message' => 'Unauthorized: Logged in user access required']);
     exit;
 }
 

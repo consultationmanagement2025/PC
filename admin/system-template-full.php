@@ -58,33 +58,26 @@ if ($sidebar_display_name === '') {
 }
 $sidebar_role_label = 'User';
 if ($is_super_admin) {
-    $sidebar_role_label = 'Super Admin';
-} elseif ($is_admin) {
-    $sidebar_role_label = 'Administrator';
-} elseif ($is_resource_person) {
-    // Prefer a concise label for 'staff'
-    $sidebar_role_label = ($current_role === 'staff') ? 'Staff' : 'Resource Person';
-}
-
-
-
-if (!($is_admin_or_super || $is_resource_person)) {
-
-
-
-    header('Location: login.php');
-
-
-
-    exit();
-
-
-
-}
-
-// If super admin, show dashboard with full read-only appearance
-if ($is_super_admin) {
-    echo "<style>\n        /* Hide action buttons in dashboard for super admin read-only */\n        #dashboard-section .btn { display: none !important; }\n        #dashboard-section button:not(.btn):not([onclick*='openModuleReportModal']) { display: none !important; }\n        #dashboard-section [onclick*='manage'] { display: none !important; }\n        </style>";
+    echo '<style>
+        /* Remove horizontal scrollbar track while allowing smooth scroll */
+        .no-scrollbar::-webkit-scrollbar,
+        [class*="overflow-x"]::-webkit-scrollbar,
+        [id*="container"]::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+        .no-scrollbar,
+        [class*="overflow-x"],
+        [id*="container"] {
+            -ms-overflow-style: none !important;
+            scrollbar-width: none !important;
+        }
+        /* Hide action buttons in dashboard for super admin read-only */
+        #dashboard-section .btn { display: none !important; }
+        #dashboard-section button:not(.btn):not([onclick*=\'openModuleReportModal\']) { display: none !important; }
+        #dashboard-section [onclick*=\'manage\'] { display: none !important; }
+        </style>';
 }
 
 
@@ -1817,7 +1810,7 @@ $totalPages = ceil($totalLogs / $pageSize);
     <!-- Google Fonts: Plus Jakarta Sans & Inter (LACS Dashboard Font) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -1826,7 +1819,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                 theme: {
                     extend: {
                         fontFamily: {
-                            sans: ['"Plus Jakarta Sans"', 'Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+                            sans: ['Inter', '"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
                         }
                     }
                 }
@@ -1836,7 +1829,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
     <style>
         *, ::before, ::after, html, body, button, input, select, textarea, table, th, td, h1, h2, h3, h4, h5, h6, p, span, div, a, li, label {
-            font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+            font-family: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
@@ -2594,12 +2587,10 @@ $totalPages = ceil($totalLogs / $pageSize);
 
             </a>
 
-            <?php if ($is_admin_or_super || $is_resource_person): ?>
             <a href="#" onclick="showSection('pc-documents')" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
                 <i class="bi bi-folder2-open mr-3 text-lg"></i>
                 <span>Document Management</span>
             </a>
-            <?php endif; ?>
 
             <a href="#" onclick="showSection('reports')" class="nav-item flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1" data-section="reports">
                 <i class="bi bi-file-earmark-bar-graph mr-3 text-lg"></i>
@@ -2644,7 +2635,6 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-            <?php if ($is_admin_or_super || $is_resource_person): ?>
             <a href="#" onclick="showSection('audit')" class="flex items-center px-4 py-3 text-white hover:bg-red-700/70 rounded-lg mb-1 transition-all duration-200 hover:translate-x-1">
 
 
@@ -2658,7 +2648,6 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
             </a>
-            <?php endif; ?>
 
 
 
@@ -2917,12 +2906,10 @@ $totalPages = ceil($totalLogs / $pageSize);
 
                     </a>
 
-                    <?php if ($is_admin_or_super || $is_resource_person): ?>
                     <a href="#" onclick="showSection('pc-documents')" class="nav-item" data-section="pc-documents">
                         <i class="bi bi-folder2-open"></i>
                         <span class="sidebar-text">Document Management</span>
                     </a>
-                    <?php endif; ?>
 
                     <a href="#" onclick="showSection('reports')" class="nav-item" data-section="reports">
                         <i class="bi bi-file-earmark-bar-graph"></i>
@@ -2968,7 +2955,6 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                    <?php if ($is_admin_or_super || $is_resource_person): ?>
                     <a href="#" onclick="showSection('audit')" class="nav-item" data-section="audit">
 
 
@@ -2982,7 +2968,6 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
                     </a>
-                    <?php endif; ?>
 
 
 
@@ -3308,22 +3293,27 @@ $totalPages = ceil($totalLogs / $pageSize);
 
                                 <!-- Notifications Dropdown -->
 
-                                <div id="notifications-dropdown" class="hidden absolute right-0 mt-2 w-80 md:w-[380px] bg-white rounded-2xl shadow-xl border border-gray-100 z-50 max-h-96 flex flex-col overflow-hidden transition-all duration-200" style="z-index: 9999 !important;">
+                                <div id="notifications-dropdown" class="hidden absolute right-0 mt-2 w-80 md:w-[380px] bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 flex flex-col overflow-hidden transition-all duration-200" style="z-index: 9999 !important; max-height: 480px;">
                                     <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-white">
                                         <h3 class="font-extrabold text-gray-900 text-sm md:text-base">Notifications</h3>
                                         <button type="button" onclick="pfpMarkAllNotificationsRead()" class="text-xs font-bold text-red-600 hover:text-red-700 transition cursor-pointer">Mark all read</button>
                                     </div>
-                                    <div id="notifications-list" class="overflow-y-auto max-h-80 divide-y divide-gray-100">
+                                    <div id="notifications-list" class="overflow-y-auto flex-1 min-h-0 divide-y divide-gray-100 max-h-[330px]">
                                         <?php if (!empty($serverNotifsList)): ?>
                                             <?php foreach ($serverNotifsList as $sn): 
                                                 $isRead = !empty($sn['is_read']);
-                                                $msg = htmlspecialchars($sn['message']);
+                                                $rawMsg = $sn['message'] ?? '';
+                                                $msg = htmlspecialchars($rawMsg);
+                                                $safeMsgAttr = str_replace(['\'', '"'], ['\\\'', '&quot;'], $rawMsg);
                                                 $time = date('M d, Y H:i', strtotime($sn['created_at']));
                                                 $title = 'System Notification';
                                                 $type = strtolower($sn['type'] ?? 'info');
                                                 $iconClass = 'bi-bell-fill text-blue-600 bg-blue-50 border-blue-100';
 
-                                                if (strpos($msg, 'AI') !== false || $type === 'ai_brief') {
+                                                if ($type === 'phms_feedback' || strpos($msg, 'PHMS') !== false) {
+                                                    $title = '🏢 PHMS Hearing Feedback';
+                                                    $iconClass = 'bi-building-fill-gear text-emerald-600 bg-emerald-50 border-emerald-100';
+                                                } else if (strpos($msg, 'AI') !== false || $type === 'ai_brief') {
                                                     $title = '🤖 AI Committee Brief';
                                                     $iconClass = 'bi-robot text-purple-600 bg-purple-50 border-purple-100';
                                                 } else if (strpos($msg, 'Feedback') !== false || strpos($msg, 'Proposal') !== false || $type === 'feedback') {
@@ -3334,7 +3324,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                     $iconClass = 'bi-square-poll text-amber-600 bg-amber-50 border-amber-100';
                                                 }
                                             ?>
-                                                <div data-id="<?php echo $sn['id']; ?>" onclick="pfpMarkSingleNotifRead(<?php echo $sn['id']; ?>)" class="p-4 transition hover:bg-gray-50/80 flex items-start gap-3.5 relative cursor-pointer <?php echo !$isRead ? 'bg-white font-medium' : 'bg-gray-50/40 opacity-75'; ?>">
+                                                <div data-id="<?php echo $sn['id']; ?>" onclick="pfpHandleNotificationClick(<?php echo $sn['id']; ?>, '<?php echo addslashes($type); ?>', '<?php echo $safeMsgAttr; ?>')" class="p-4 transition hover:bg-blue-50/70 flex items-start gap-3.5 relative cursor-pointer <?php echo !$isRead ? 'bg-white font-medium' : 'bg-gray-50/40 opacity-75'; ?>">
                                                     <div class="w-10 h-10 rounded-2xl border flex items-center justify-center shrink-0 mt-0.5 <?php echo $iconClass; ?>">
                                                         <i class="bi bi-bell text-base"></i>
                                                     </div>
@@ -3349,8 +3339,13 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                 </div>
                                             <?php endforeach; ?>
                                         <?php else: ?>
-                                            <div class="p-6 text-center text-gray-400 text-xs font-medium">No notifications yet</div>
+                                            <div class="p-6 text-center text-gray-400 text-xs font-medium"><i class="bi bi-bell-slash text-2xl block mb-1 text-gray-300"></i> No notifications yet</div>
                                         <?php endif; ?>
+                                    </div>
+                                    <div id="notifications-load-more-container" class="hidden px-4 py-3 bg-gray-50 border-t border-gray-100 text-center shrink-0 transition-all duration-200">
+                                        <button id="btn-load-previous-notifs" type="button" onclick="pfpLoadPreviousNotifications()" class="w-full py-2 px-3 bg-white hover:bg-gray-100 text-red-600 border border-gray-200 rounded-xl text-xs font-extrabold transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer">
+                                            <i class="bi bi-clock-history text-sm"></i> View Previous Notifications
+                                        </button>
                                     </div>
                                 </div>
 
@@ -3828,7 +3823,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                            <div id="admin-logs-section" class="overflow-x-auto">
+                            <div id="admin-logs-section" class="max-h-[500px] overflow-y-auto overflow-x-auto relative shadow-inner rounded-xl border border-gray-200">
 
 
 
@@ -3860,7 +3855,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                                        <thead class="bg-gray-50 border-b border-gray-200">
+                                        <thead class="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-xs">
 
 
 
@@ -4089,7 +4084,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                                        <thead class="bg-gray-50 border-b border-gray-200">
+                                        <thead class="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-xs">
 
 
 
@@ -4641,9 +4636,9 @@ $totalPages = ceil($totalLogs / $pageSize);
 
                                                 <td class="p-3"><?= htmlspecialchars($c['category'] ?? '-') ?></td>
 
-                                                <td class="p-3 text-xs text-gray-600"><?= !empty($c['start_date']) ? htmlspecialchars(date('M d, Y', strtotime($c['start_date']))) : '-' ?></td>
+                                                <td class="p-3 text-xs text-gray-600"><?php echo !empty($c['start_date']) ? htmlspecialchars(date('M d, Y', strtotime($c['start_date']))) : '-' ?></td>
 
-                                                <td class="p-3 text-xs text-gray-600"><?= !empty($c['end_date']) ? htmlspecialchars(date('M d, Y', strtotime($c['end_date']))) : '-' ?></td>
+                                                <td class="p-3 text-xs text-gray-600"><?php echo !empty($c['end_date']) ? htmlspecialchars(date('M d, Y', strtotime($c['end_date']))) : '-' ?></td>
 
                                                 <td class="p-3">
 
@@ -5249,16 +5244,6 @@ $totalPages = ceil($totalLogs / $pageSize);
                         })
                         .catch(err => alert('Failed to reject application.'));
                     }
-                        .then(data => {
-                            if (data.success) {
-                                alert('Application rejected.');
-                                loadPendingResourcePersonApplications();
-                            } else {
-                                alert('Error: ' + (data.message || 'Rejection failed'));
-                            }
-                        })
-                        .catch(err => alert('Failed to reject application.'));
-                    }
 
                     function loadApprovedResourcePersons() {
                         var container = document.getElementById('resource-persons-list');
@@ -5331,7 +5316,6 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                    <?php if ($is_admin_or_super): ?>
                     <!-- DOCUMENT MANAGEMENT SECTION -->
 
 
@@ -5387,6 +5371,9 @@ $totalPages = ceil($totalLogs / $pageSize);
                                 <button onclick="filterDocumentsByGroup('survey')" class="px-6 py-3 font-semibold text-sm border-b-2 border-gray-200 text-gray-600 hover:border-green-600 hover:text-green-600 transition doc-group-tab" data-group="survey">
                                     <i class="bi bi-bar-chart mr-2"></i>Survey
                                 </button>
+                                <button onclick="filterDocumentsByGroup('uploaded')" class="px-6 py-3 font-semibold text-sm border-b-2 border-gray-200 text-gray-600 hover:border-amber-600 hover:text-amber-600 transition doc-group-tab" data-group="uploaded">
+                                    <i class="bi bi-cloud-arrow-up-fill mr-2"></i>Uploaded
+                                </button>
                                 <button onclick="filterDocumentsByGroup('reports')" class="px-6 py-3 font-semibold text-sm border-b-2 border-gray-200 text-gray-600 hover:border-purple-600 hover:text-purple-600 transition doc-group-tab" data-group="reports">
                                     <i class="bi bi-file-earmark-text mr-2"></i>Reports
                                 </button>
@@ -5399,7 +5386,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                             <div class="bg-white rounded-lg shadow overflow-hidden mt-6">
                                 <div class="overflow-x-auto">
                                     <table class="w-full text-sm">
-                                        <thead class="bg-gray-50 border-b border-gray-200">
+                                        <thead class="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-xs">
                                             <tr>
                                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Document Title</th>
                                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">User / Type</th>
@@ -5423,7 +5410,6 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
                     </section>
-                    <?php endif; ?>
 
 
 

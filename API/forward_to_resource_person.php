@@ -4,7 +4,7 @@
  * Triggered by City Admin / Secretariat on the Admin Dashboard
  */
 session_start();
-require_once '../db.php';
+require_once __DIR__ . '/../db.php';
 
 header('Content-Type: application/json');
 
@@ -93,6 +93,22 @@ if ($resource_person_id > 0) {
     $upd->bind_param('ssi', $deadline_date, $aiJson, $consultation_id);
 }
 
+if (file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+    require_once __DIR__ . '/../DATABASE/audit-log.php';
+    if (function_exists('logAction')) {
+        logAction(
+            $_SESSION['user_id'] ?? 1,
+            $_SESSION['fullname'] ?? $_SESSION['email'] ?? 'City Secretariat',
+            'Forwarded AI Brief to Resource Person',
+            'Consultation',
+            $consultation_id,
+            'draft',
+            'sent_to_expert',
+            'success',
+            "Forwarded AI Brief & Consultation ID #{$consultation_id} to Resource Person ID #{$resource_person_id} with {$deadline_days}-day deadline."
+        );
+    }
+}
 if (!$upd->execute()) {
     echo json_encode(['success' => false, 'message' => 'Failed to update consultation status: ' . $upd->error]);
     exit;
@@ -147,8 +163,47 @@ if ($audit) {
     PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+// Dispatch Notification to Target Resource Person(s)
+$targetUserIds = [];
 if ($resource_person_id > 0) {
-    @$conn->query("INSERT INTO expert_notifications (user_id, title, message, type, consultation_id, is_read, created_at) VALUES ($resource_person_id, 'New Consultation Dispatched (#$consultation_id)', 'Admin $admin_name has dispatched consultation #$consultation_id to you for expert annotation.', 'assignment', $consultation_id, 0, NOW())");
+    $targetUserIds[] = $resource_person_id;
+} else {
+    $rpRes = $conn->query("SELECT id FROM users WHERE LOWER(role) IN ('resource person', 'resource_person', 'staff')");
+    if ($rpRes) {
+        while ($rpRow = $rpRes->fetch_assoc()) {
+            $targetUserIds[] = (int)$rpRow['id'];
+        }
+    }
+}
+
+$cTitle = 'Consultation';
+$tCode = 'TRK-' . str_pad($consultation_id, 6, '0', STR_PAD_LEFT);
+$cCheck = $conn->query("SELECT title, tracking_number FROM consultations WHERE id = $consultation_id LIMIT 1");
+if ($cCheck && $cRow = $cCheck->fetch_assoc()) {
+    $cTitle = $cRow['title'];
+    if (!empty($cRow['tracking_number'])) $tCode = $cRow['tracking_number'];
+}
+
+foreach ($targetUserIds as $rpUid) {
+    $notifTitle = "📋 New Consultation Dispatched ($tCode)";
+    $notifMsg = "Admin $admin_name has dispatched consultation '$cTitle - $tCode' (ID #$consultation_id) for your expert review & master document annotation.";
+    
+    // Expert notifications table
+    $stmtExp = $conn->prepare("INSERT INTO expert_notifications (user_id, title, message, type, consultation_id, is_read, created_at) VALUES (?, ?, ?, 'assignment', ?, 0, NOW())");
+    if ($stmtExp) {
+        $stmtExp->bind_param('issi', $rpUid, $notifTitle, $notifMsg, $consultation_id);
+        $stmtExp->execute();
+        $stmtExp->close();
+    }
+
+    // Main notifications table
+    $stmtNotif = $conn->prepare("INSERT INTO notifications (user_id, message, type, is_read, created_at) VALUES (?, ?, 'assignment', 0, NOW())");
+    if ($stmtNotif) {
+        $fullMsg = "📋 New Consultation Dispatched: $notifMsg";
+        $stmtNotif->bind_param('is', $rpUid, $fullMsg);
+        $stmtNotif->execute();
+        $stmtNotif->close();
+    }
 }
 
 echo json_encode([

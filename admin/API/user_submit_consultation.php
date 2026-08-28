@@ -109,7 +109,7 @@ if ($stmt->execute()) {
     try {
         require_once __DIR__ . '/../UTILS/generate_consultation_documents.php';
         // create PDF; DOCX optional (disabled by default)
-        generateConsultationDocuments((int)$entity_id, ['pdf' => true, 'docx' => false, 'created_by' => $user_id]);
+                        // generateConsultationDocuments((int)$entity_id, ['pdf' => true, 'docx' => false, 'created_by' => $user_id]); // Document generated only upon ORTS forwarding
     } catch (Throwable $e) {
         error_log('Document generation error: ' . $e->getMessage());
     }

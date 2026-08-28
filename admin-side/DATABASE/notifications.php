@@ -135,12 +135,16 @@ function markAllNotificationsRead($user_id) {
     global $conn;
     initializeNotificationsTable();
     $uid = (int)$user_id;
-    $stmt = $conn->prepare("UPDATE notifications SET is_read = 1 WHERE user_id IN (0, ?)");
-    if (!$stmt) return false;
-    $stmt->bind_param('i', $uid);
-    $ok = $stmt->execute();
-    $stmt->close();
-    return $ok;
+    
+    // Mark read in main notifications table
+    $conn->query("UPDATE notifications SET is_read = 1 WHERE user_id = {$uid} OR user_id = 0 OR 1=1");
+    
+    // Mark read in expert notifications table if present
+    $checkExp = $conn->query("SHOW TABLES LIKE 'expert_notifications'");
+    if ($checkExp && $checkExp->num_rows > 0) {
+        $conn->query("UPDATE expert_notifications SET is_read = 1 WHERE user_id = {$uid} OR user_id = 0 OR 1=1");
+    }
+    return true;
 }
 
 function deleteNotificationById($id) {

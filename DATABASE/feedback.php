@@ -52,10 +52,8 @@ function initializeFeedbackTable() {
         INDEX idx_archived_at (archived_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
     
-    if ($conn->query($sql) === TRUE) {
-        return true;
-    } else {
-        
+    @$conn->query($sql);
+    
     $cols = [];
     $res = $conn->query("SHOW COLUMNS FROM feedback");
     if ($res) {
@@ -81,8 +79,11 @@ function initializeFeedbackTable() {
     if (!in_array('impact_summary', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN impact_summary LONGTEXT");
     if (!in_array('tracking_token', $cols)) @$conn->query("ALTER TABLE feedback ADD COLUMN tracking_token VARCHAR(64) DEFAULT NULL");
 
-        return true;
+        $checkColNew = $conn->query("SHOW COLUMNS FROM hearing_queue LIKE 'is_newly_approved'");
+    if ($checkColNew && $checkColNew->num_rows === 0) {
+        $conn->query("ALTER TABLE hearing_queue ADD COLUMN is_newly_approved TINYINT(1) DEFAULT 0");
     }
+    return true;
 }
 
 // Submit feedback (with automatic tracking token generation)
@@ -145,6 +146,48 @@ function submitFeedback($guest_name, $guest_email, $guest_phone, $consultation_i
                 logAction($uid, $guest_name, 'Submitted Feedback', 'feedback', $consultation_id, null, null, 'success', 'Submitted citizen feedback');
             }
         }
+        
+        // Auto-push citizen feedback event directly to ORTS API
+        try {
+            $ortsUtilsPath = __DIR__ . '/../UTILS/orts_integration_utils.php';
+            if (file_exists($ortsUtilsPath)) {
+                require_once $ortsUtilsPath;
+                if (function_exists('sendFeedbackToOrts')) {
+                    $fbType = 'general';
+                    $catLower = strtolower(trim((string)$category));
+                    if (in_array($catLower, ['support', 'oppose', 'suggestion', 'general'], true)) {
+                        $fbType = $catLower;
+                    } elseif ($rating >= 4) {
+                        $fbType = 'support';
+                    } elseif ($rating > 0 && $rating <= 2) {
+                        $fbType = 'oppose';
+                    } elseif ($catLower === 'recommendation' || strcasecmp($sentiment_tag, 'neutral') === 0) {
+                        $fbType = 'suggestion';
+                    }
+                    $refNo = "CONSULT-" . sprintf("%06d", (int)$consultation_id);
+                    if (isset($conn) && $conn instanceof mysqli) {
+                        $cStmt = $conn->prepare("SELECT tracking_number, external_ref FROM consultations WHERE id = ? LIMIT 1");
+                        if ($cStmt) {
+                            $cStmt->bind_param('i', $consultation_id);
+                            $cStmt->execute();
+                            $cRes = $cStmt->get_result();
+                            if ($cRow = $cRes->fetch_assoc()) {
+                                if (!empty($cRow['tracking_number'])) {
+                                    $refNo = trim($cRow['tracking_number']);
+                                } elseif (!empty($cRow['external_ref'])) {
+                                    $refNo = trim($cRow['external_ref']);
+                                }
+                            }
+                            $cStmt->close();
+                        }
+                    }
+                    sendFeedbackToOrts((int)$consultation_id, $refNo, $message, $guest_name, $fbType);
+                }
+            }
+        } catch (Throwable $ortsErr) {
+            error_log("Failed to auto-push feedback to ORTS: " . $ortsErr->getMessage());
+        }
+
         return ['id' => $id, 'tracking_token' => $tracking_token, 'sentiment' => $sentiment_tag, 'topics' => $analysis['topics']];
     }
 
@@ -490,6 +533,10 @@ function initializeHearingQueueTable() {
     if ($checkCol && $checkCol->num_rows === 0) {
         $conn->query("ALTER TABLE hearing_queue ADD COLUMN approval_status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending'");
     }
+        $checkColNew = $conn->query("SHOW COLUMNS FROM hearing_queue LIKE 'is_newly_approved'");
+    if ($checkColNew && $checkColNew->num_rows === 0) {
+        $conn->query("ALTER TABLE hearing_queue ADD COLUMN is_newly_approved TINYINT(1) DEFAULT 0");
+    }
     return true;
 }
 
@@ -625,7 +672,12 @@ function syncPhmsCollectionToDatabase(array $hearings) {
             }
         }
 
+        
         $conn->commit();
+        if (file_exists(__DIR__ . '/notifications.php')) {
+            require_once __DIR__ . '/notifications.php';
+        }
+        // Silent background sync - user requested no noisy sync notifications.
         return true;
     } catch (Throwable $e) {
         $conn->rollback();
@@ -762,7 +814,7 @@ function approvePhmsIngestion($queue_id) {
     initializeHearingQueueTable();
     $queue_id = (int)$queue_id;
     if ($queue_id <= 0) return false;
-    $stmt = $conn->prepare("UPDATE hearing_queue SET approval_status = 'approved', status = 'completed' WHERE queue_id = ? OR phms_hearing_id = ?");
+    $stmt = $conn->prepare("UPDATE hearing_queue SET approval_status = 'approved', status = 'completed', is_newly_approved = 1 WHERE queue_id = ? OR phms_hearing_id = ?");
     if (!$stmt) {
         error_log("approvePhmsIngestion prepare failed: " . $conn->error);
         return false;
@@ -777,7 +829,7 @@ function approvePhmsIngestion($queue_id) {
 function approveAllPhmsIngestions() {
     global $conn;
     initializeHearingQueueTable();
-    $res = $conn->query("UPDATE hearing_queue SET approval_status = 'approved', status = 'completed' WHERE approval_status = 'pending' OR approval_status IS NULL");
+    $res = $conn->query("UPDATE hearing_queue SET approval_status = 'approved', status = 'completed', is_newly_approved = 1 WHERE approval_status = 'pending' OR approval_status IS NULL");
     return (bool)$res;
 }
 

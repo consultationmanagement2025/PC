@@ -10,7 +10,9 @@ header('X-Content-Type-Options: nosniff');
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $token = isset($_GET['t']) ? trim((string)$_GET['t']) : '';
 
-if ($id <= 0 || $token === '') {
+$isPublicReq = isset($_GET['public']) && $_GET['public'] == '1';
+
+if ($id <= 0 || ($token === '' && !$isPublicReq)) {
     http_response_code(400);
     echo 'Invalid request.';
     exit;
@@ -52,10 +54,24 @@ if ($stmt) {
 $dbToken = $tokRow && isset($tokRow['summary_token']) ? (string)$tokRow['summary_token'] : '';
 $dbExp = $tokRow && isset($tokRow['summary_token_expires']) ? (string)$tokRow['summary_token_expires'] : '';
 
-if ($dbToken === '' || !hash_equals($dbToken, $token)) {
-    http_response_code(403);
-    echo 'Unauthorized.';
-    exit;
+if (!$isPublicReq) {
+    if ($dbToken === '' || !hash_equals($dbToken, $token)) {
+        http_response_code(403);
+        echo 'Unauthorized.';
+        exit;
+    }
+} else {
+    // For public download requests, verify consultation is concluded or past end date or valid
+    $st = strtolower(trim($consultation['status'] ?? ''));
+    $endDate = !empty($consultation['end_date']) ? strtotime($consultation['end_date']) : null;
+    $isPast = ($endDate && $endDate < strtotime('today'));
+    $isClosed = in_array($st, ['closed', 'completed', 'resolved', 'declined', 'forwarded_orts', 'proceeded_to_ordinance', 'rejected', 'archived', 'endorsed', 'active', 'pending'], true);
+
+    if (!$isClosed && !$isPast) {
+        http_response_code(403);
+        echo 'Public report is only available for concluded or active consultations.';
+        exit;
+    }
 }
 
 if ($dbExp) {

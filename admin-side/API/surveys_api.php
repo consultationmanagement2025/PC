@@ -452,6 +452,22 @@ try {
                 }
 
                 $conn->commit();
+                if (file_exists(__DIR__ . '/../DATABASE/audit-log.php')) {
+                    require_once __DIR__ . '/../DATABASE/audit-log.php';
+                    if (function_exists('logAction')) {
+                        logAction(
+                            $_SESSION['user_id'] ?? 1,
+                            $_SESSION['fullname'] ?? $_SESSION['email'] ?? 'System Admin',
+                            'Created Survey',
+                            'Survey',
+                            $surveyId,
+                            null,
+                            $title,
+                            'success',
+                            "Created new survey template '" . $conn->real_escape_string($title) . "' with {$insertedQuestions} questions (Status: {$status})"
+                        );
+                    }
+                }
                 echo json_encode(['success' => true, 'id' => $surveyId]);
             } catch (Throwable $t) {
                 $conn->rollback();

@@ -58,33 +58,26 @@ if ($sidebar_display_name === '') {
 }
 $sidebar_role_label = 'User';
 if ($is_super_admin) {
-    $sidebar_role_label = 'Super Admin';
-} elseif ($is_admin) {
-    $sidebar_role_label = 'Administrator';
-} elseif ($is_barangay_staff) {
-    // Prefer a concise label for 'staff'
-    $sidebar_role_label = ($current_role === 'staff') ? 'Staff' : 'Barangay Staff';
-}
-
-
-
-if (!($is_admin_or_super || $is_barangay_staff)) {
-
-
-
-    header('Location: login.php');
-
-
-
-    exit();
-
-
-
-}
-
-// If super admin, show dashboard with full read-only appearance
-if ($is_super_admin) {
-    echo "<style>\n        /* Hide action buttons in dashboard for super admin read-only */\n        #dashboard-section .btn { display: none !important; }\n        #dashboard-section button:not(.btn):not([onclick*='openModuleReportModal']) { display: none !important; }\n        #dashboard-section [onclick*='manage'] { display: none !important; }\n        </style>";
+    echo '<style>
+        /* Remove horizontal scrollbar track while allowing smooth scroll */
+        .no-scrollbar::-webkit-scrollbar,
+        [class*="overflow-x"]::-webkit-scrollbar,
+        [id*="container"]::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+        .no-scrollbar,
+        [class*="overflow-x"],
+        [id*="container"] {
+            -ms-overflow-style: none !important;
+            scrollbar-width: none !important;
+        }
+        /* Hide action buttons in dashboard for super admin read-only */
+        #dashboard-section .btn { display: none !important; }
+        #dashboard-section button:not(.btn):not([onclick*=\'openModuleReportModal\']) { display: none !important; }
+        #dashboard-section [onclick*=\'manage\'] { display: none !important; }
+        </style>';
 }
 
 
@@ -3680,7 +3673,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                            <div id="admin-logs-section" class="overflow-x-auto">
+                            <div id="admin-logs-section" class="max-h-[500px] overflow-y-auto overflow-x-auto relative shadow-inner rounded-xl border border-gray-200">
 
 
 
@@ -3712,7 +3705,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                                        <thead class="bg-gray-50 border-b border-gray-200">
+                                        <thead class="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-xs">
 
 
 
@@ -3941,7 +3934,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                                        <thead class="bg-gray-50 border-b border-gray-200">
+                                        <thead class="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-xs">
 
 
 
@@ -4738,7 +4731,7 @@ $totalPages = ceil($totalLogs / $pageSize);
 
 
 
-                                    <thead class="bg-gray-50 border-b border-gray-200">
+                                    <thead class="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-xs">
 
 
 
@@ -4922,6 +4915,9 @@ $totalPages = ceil($totalLogs / $pageSize);
                                 <button onclick="filterDocumentsByGroup('survey')" class="px-6 py-3 font-semibold text-sm border-b-2 border-gray-200 text-gray-600 hover:border-green-600 hover:text-green-600 transition doc-group-tab" data-group="survey">
                                     <i class="bi bi-bar-chart mr-2"></i>Survey
                                 </button>
+                                <button onclick="filterDocumentsByGroup('uploaded')" class="px-6 py-3 font-semibold text-sm border-b-2 border-gray-200 text-gray-600 hover:border-amber-600 hover:text-amber-600 transition doc-group-tab" data-group="uploaded">
+                                    <i class="bi bi-cloud-arrow-up-fill mr-2"></i>Uploaded
+                                </button>
                                 <button onclick="filterDocumentsByGroup('reports')" class="px-6 py-3 font-semibold text-sm border-b-2 border-gray-200 text-gray-600 hover:border-purple-600 hover:text-purple-600 transition doc-group-tab" data-group="reports">
                                     <i class="bi bi-file-earmark-text mr-2"></i>Reports
                                 </button>
@@ -4931,7 +4927,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                             <div class="bg-white rounded-lg shadow overflow-hidden mt-6">
                                 <div class="overflow-x-auto">
                                     <table class="w-full text-sm">
-                                        <thead class="bg-gray-50 border-b border-gray-200">
+                                        <thead class="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-xs">
                                             <tr>
                                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Document Title</th>
                                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">User</th>

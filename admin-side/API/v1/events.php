@@ -9,7 +9,7 @@ $conn = $GLOBALS['integration_conn'];
 $requestId = $GLOBALS['integration_request_id'];
 $client = lgu2_require_auth($conn, $requestId, ['events:write', 'hearings:write', 'registrations:write']);
 
-$input = lgu2_json_input();
+$input = lgu2_read_json_body();
 if (empty($input) && isset($_POST['payload_json'])) {
     $input = json_decode($_POST['payload_json'], true) ?: [];
 }
@@ -18,7 +18,7 @@ $event = $input['event'] ?? $input['event_type'] ?? 'unknown';
 $srcSys = !empty($client['source_system']) ? $client['source_system'] : 'PHMS';
 $extRef = (string) ($input['external_ref'] ?? $input['ref'] ?? '');
 
-lgu2_inbox_record($conn, $event, $srcSys, $extRef !== '' ? $extRef : null, $input);
+lgu2_store_inbox($conn, $event, $srcSys, $extRef !== '' ? $extRef : null, $input);
 
 $phmsId = (int) ($input['phms_hearing_id'] ?? $input['hearing_id'] ?? $input['id'] ?? 0);
 $fullName = trim((string) ($input['hearing_title'] ?? $input['full_name'] ?? $input['title'] ?? $input['registrant_name'] ?? 'Public Hearing'));
@@ -64,6 +64,19 @@ if ($phmsId > 0) {
 }
 
 lgu2_log_request($conn, (int) $client['client_id'], $_SERVER['SCRIPT_NAME'] ?? '/API/v1/events.php', 'POST', $requestId, 200);
+
+
+// Create system notification for ingested PHMS event
+if (file_exists(__DIR__ . '/../../DATABASE/notifications.php')) {
+    require_once __DIR__ . '/../../DATABASE/notifications.php';
+} elseif (file_exists(__DIR__ . '/../DATABASE/notifications.php')) {
+    require_once __DIR__ . '/../DATABASE/notifications.php';
+}
+if (function_exists('createNotification')) {
+    $notifTitle = !empty($fullName) ? $fullName : ("PHMS Hearing #" . $phmsId);
+    $notifMsg = "🏢 New PHMS Citizen Hearing Feedback Received: '{$notifTitle}' (Event: {$event})";
+    createNotification(0, $notifMsg, 'phms_feedback');
+}
 
 echo json_encode([
     'success' => true,

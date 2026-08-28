@@ -669,7 +669,7 @@ function forwardDocumentToLRS($id, $source = 'consultation', $customDescription 
                     if ($cExists) {
                         require_once __DIR__ . '/../UTILS/generate_consultation_documents.php';
                         if (function_exists('generateConsultationDocuments')) {
-                            generateConsultationDocuments($id);
+                        // generateConsultationDocuments($id); // Document generated only upon ORTS forwarding
                             $chkByCId = $conn->prepare("SELECT * FROM documents WHERE consultation_id = ? ORDER BY id DESC LIMIT 1");
                             if ($chkByCId) {
                                 $chkByCId->bind_param('i', $id);
@@ -722,7 +722,7 @@ function forwardDocumentToLRS($id, $source = 'consultation', $customDescription 
             if ($consultation_id > 0) {
                 require_once __DIR__ . '/../UTILS/generate_consultation_documents.php';
                 if (function_exists('generateConsultationDocuments')) {
-                    generateConsultationDocuments($consultation_id);
+                        // generateConsultationDocuments($consultation_id); // Document generated only upon ORTS forwarding
                     $refetchedDoc = getDocumentById($id);
                     if ($refetchedDoc && !empty($refetchedDoc['stored_filename'])) {
                         $storedFilename = $refetchedDoc['stored_filename'];
@@ -823,6 +823,25 @@ function forwardDocumentToLRS($id, $source = 'consultation', $customDescription 
         updateDocumentStatus($id, 'forwarded_to_lrs');
     } else {
         updateDocument($id, $reference, $title, $docType, 'forwarded_to_lrs', $docDate, $description, $doc['tags'] ?? '');
+    }
+
+    if (file_exists(__DIR__ . '/audit-log.php')) {
+        require_once __DIR__ . '/audit-log.php';
+        if (function_exists('logAction')) {
+            $perf = $performerName ?: ($_SESSION['fullname'] ?? $_SESSION['email'] ?? 'System Admin');
+            $uId = $_SESSION['user_id'] ?? 1;
+            logAction(
+                $uId,
+                $perf,
+                'Forwarded Document to LRS',
+                'Document',
+                $id,
+                'submitted',
+                'forwarded_to_lrs',
+                $allSuccess ? 'success' : 'failed',
+                "Forwarded document '{$title}' (Ref: {$reference}) to Legislative Reference System (Tracking ID: " . ($trackingId ?: 'N/A') . ")"
+            );
+        }
     }
 
     if (!$uploadRes['success']) {

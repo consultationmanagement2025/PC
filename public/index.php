@@ -69,12 +69,41 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
             exit;
         }
 
+        // Verify if consultation is concluded or past end date
+        $statusCheck = $conn->query("SELECT status, end_date, type FROM consultations WHERE id = $consultation_id LIMIT 1");
+        $cRow = $statusCheck ? $statusCheck->fetch_assoc() : null;
+        if ($cRow) {
+            $stClean = strtolower(trim($cRow['status'] ?? ''));
+            $endDate = !empty($cRow['end_date']) ? strtotime($cRow['end_date']) : null;
+            $isPastEnd = ($endDate && $endDate < strtotime('today'));
+            $isClosed = in_array($stClean, ['closed', 'completed', 'resolved', 'declined', 'forwarded_orts', 'proceeded_to_ordinance', 'rejected', 'archived', 'endorsed'], true);
+
+            if ($isPastEnd || $isClosed) {
+                echo json_encode(['success' => false, 'message' => 'This public consultation has concluded and is closed for new feedback submissions.']);
+                exit;
+            }
+        }
+
         // Verify consultation type is 'admin'
         $typeCheck = $conn->query("SELECT type FROM consultations WHERE id = $consultation_id LIMIT 1");
         $typeRow = $typeCheck ? $typeCheck->fetch_assoc() : null;
         if ($typeRow && strtolower(trim($typeRow['type'])) === 'user') {
             echo json_encode(['success' => false, 'message' => 'Feedback is only accepted on official Admin Consultations, not on citizen proposals.']);
             exit;
+        }
+
+        // Check if item is an ORTS Ordinance
+        $isOrtsDoc = false;
+        $docRefNum = 'ORD-' . date('Y') . '-' . sprintf('%03d', $consultation_id);
+        $cCheck = $conn->query("SELECT type, source_system, tracking_number, external_ref FROM consultations WHERE id = $consultation_id LIMIT 1");
+        if ($cCheck && $cRow = $cCheck->fetch_assoc()) {
+            $stClean = strtoupper($cRow['source_system'] ?? '');
+            $tpClean = strtolower($cRow['type'] ?? '');
+            if ($stClean === 'ORTS' || $tpClean === 'ordinance') {
+                $isOrtsDoc = true;
+                if (!empty($cRow['tracking_number'])) $docRefNum = $cRow['tracking_number'];
+                elseif (!empty($cRow['external_ref'])) $docRefNum = $cRow['external_ref'];
+            }
         }
 
         // Generate feedback tracking token
@@ -88,10 +117,53 @@ if (isset($_GET['api']) || isset($_POST['api_action'])) {
             $conn->query("UPDATE consultations SET posts_count = posts_count + 1 WHERE id = " . $consultation_id);
             require_once __DIR__ . '/../DATABASE/notifications.php';
             @createNotification(0, "💬 New Citizen Feedback Received from " . htmlspecialchars($user_name) . " ($tracking_token)", 'feedback');
+            
+            // Dispatch to ORTS Outbound API if ORTS Ordinance
+            $ortsData = null;
+            if ($isOrtsDoc) {
+                if (file_exists(__DIR__ . '/../UTILS/orts_integration_utils.php')) {
+                    require_once __DIR__ . '/../UTILS/orts_integration_utils.php';
+                    
+                    // Map feedback type to spec options: support | oppose | suggestion | general
+                    $mappedType = 'general';
+                    $catLower = strtolower($category);
+                    if (strpos($catLower, 'support') !== false) {
+                        $mappedType = 'support';
+                    } elseif (strpos($catLower, 'oppose') !== false || strpos($catLower, 'concern') !== false || strpos($catLower, 'objection') !== false) {
+                        $mappedType = 'oppose';
+                    } elseif (strpos($catLower, 'suggest') !== false || strpos($catLower, 'recommend') !== false) {
+                        $mappedType = 'suggestion';
+                    }
+
+                    if (function_exists('sendFeedbackToOrts')) {
+                        $ortsData = sendFeedbackToOrts($consultation_id, $docRefNum, $message, $user_name, $mappedType);
+                    } elseif (function_exists('sendOrtsEvent')) {
+                        $ortsPayload = [
+                            'event' => 'public_feedback_received',
+                            'document_id' => $consultation_id,
+                            'reference_number' => $docRefNum,
+                            'tracking_number' => $docRefNum,
+                            'submitter_name' => $user_name,
+                            'feedback_type' => $mappedType,
+                            'notes' => $message,
+                            'source_system' => 'PCMS'
+                        ];
+                        $ortsData = sendOrtsEvent($ortsPayload);
+                    }
+                }
+            }
+
             echo json_encode([
                 'success' => true, 
-                'message' => 'Thank you! Your feedback has been submitted successfully.',
-                'tracking_token' => $tracking_token
+                'message' => $isOrtsDoc ? 'Event accepted — Feedback successfully transmitted to ORTS and stored in PCMS!' : 'Thank you! Your feedback has been submitted successfully.',
+                'tracking_token' => $tracking_token,
+                'data' => [
+                    'event' => 'public_feedback_received',
+                    'document_id' => $consultation_id,
+                    'reference_number' => $docRefNum,
+                    'action' => 'feedback_stored',
+                    'feedback_type' => $category
+                ]
             ]);
         } else {
             echo json_encode(['success' => false, 'message' => 'Database error while saving feedback: ' . $conn->error]);
@@ -585,6 +657,21 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="../assets/css/index.css">
     <style>
+        /* Remove horizontal scrollbar track while allowing smooth scroll */
+        .no-scrollbar::-webkit-scrollbar,
+        [class*="overflow-x"]::-webkit-scrollbar,
+        [id*="container"]::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+        .no-scrollbar,
+        [class*="overflow-x"],
+        [id*="container"] {
+            -ms-overflow-style: none !important;
+            scrollbar-width: none !important;
+        }
+
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
         .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); }
         .hero-gradient { background: linear-gradient(135deg, #0033a0 0%, #001a55 60%, #1e293b 100%); }
@@ -1010,17 +1097,46 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
                         ?>
                         <div class="w-[310px] sm:w-[360px] md:w-[380px] shrink-0 snap-start bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col card-hover group hover:shadow-xl transition-all duration-300">
                             
-                            <!-- Top Banner Image if available -->
-                            <?php if (!empty($c['image_path']) && file_exists(__DIR__ . '/../' . $c['image_path'])): ?>
-                                <div class="h-44 w-full overflow-hidden bg-slate-100 relative">
+                            <?php
+                                $tLow = strtolower($c['title'] ?? '');
+                                $cLow = strtolower($c['category'] ?? '');
+                                $typeClean = strtolower($c['type'] ?? '');
+                                $srcClean = strtoupper($c['source_system'] ?? '');
+
+                                $isOrtsItem = ($typeClean === 'ordinance' || $srcClean === 'ORTS' || strpos($tLow, 'ordinance') !== false || strpos($cLow, 'orts') !== false || strpos($cLow, 'ordinance') !== false);
+                                $isSurveyItem = (!$isOrtsItem) && (strpos($tLow, 'survey') !== false || strpos($tLow, 'poll') !== false || strpos($cLow, 'survey') !== false);
+                            ?>
+                            <div class="h-44 w-full overflow-hidden bg-slate-900 relative">
+                                <?php if (!empty($c['image_path']) && file_exists(__DIR__ . '/../' . $c['image_path'])): ?>
                                     <img src="../<?php echo htmlspecialchars($c['image_path']); ?>" alt="Consultation Image" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                                    <div class="absolute top-3 right-3 bg-white/95 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-extrabold text-slate-800 shadow-md">
-                                        <i class="fa-regular fa-clock text-red-600 mr-1"></i> <?php echo $days_left; ?>d remaining
+                                <?php else: ?>
+                                    <div class="w-full h-full bg-gradient-to-r from-red-900 via-slate-900 to-indigo-950 flex items-center justify-center p-6 text-white/20">
+                                        <i class="fa-solid <?php echo $isOrtsItem ? 'fa-scale-balanced text-6xl text-indigo-400/30' : ($isSurveyItem ? 'fa-square-poll-vertical text-6xl text-purple-400/30' : 'fa-scroll text-6xl text-amber-400/30'); ?>"></i>
                                     </div>
+                                <?php endif; ?>
+
+                                <!-- Upper Left Corner Badge (Ord vs Draft vs Survey) -->
+                                <div class="absolute top-3 left-3 z-10">
+                                    <?php if ($isOrtsItem): ?>
+                                        <span class="px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-indigo-900/90 text-indigo-100 border border-indigo-400/40 backdrop-blur-md shadow-md flex items-center gap-1.5" title="Ordinance from ORTS">
+                                            <i class="fa-solid fa-scale-balanced text-indigo-300"></i> Ord
+                                        </span>
+                                    <?php elseif ($isSurveyItem): ?>
+                                        <span class="px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-purple-900/90 text-purple-100 border border-purple-400/40 backdrop-blur-md shadow-md flex items-center gap-1.5" title="Community Survey">
+                                            <i class="fa-solid fa-square-poll-vertical text-purple-300"></i> Survey
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-500/95 text-white border border-amber-300/50 backdrop-blur-md shadow-md flex items-center gap-1.5" title="Draft Ordinance Idea from Admin">
+                                            <i class="fa-solid fa-scroll text-amber-100"></i> Draft
+                                        </span>
+                                    <?php endif; ?>
                                 </div>
-                            <?php else: ?>
-                                <div class="h-3 w-full bg-gradient-to-r from-red-700 via-slate-800 to-blue-900"></div>
-                            <?php endif; ?>
+
+                                <!-- Upper Right Corner Badge (Days Remaining) -->
+                                <div class="absolute top-3 right-3 bg-white/95 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-extrabold text-slate-800 shadow-md z-10">
+                                    <i class="fa-regular fa-clock text-red-600 mr-1"></i> <?php echo $days_left; ?>d remaining
+                                </div>
+                            </div>
 
                             <div class="p-6 flex-grow flex flex-col justify-between">
                                 <div>
@@ -1028,11 +1144,6 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
                                         <span class="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-lg border <?php echo $badgeStyle; ?>">
                                             <?php echo htmlspecialchars($c['category'] ?? 'General Governance'); ?>
                                         </span>
-                                        <?php if (empty($c['image_path'])): ?>
-                                            <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1">
-                                                <i class="fa-regular fa-clock"></i> Closes in <?php echo $days_left; ?>d
-                                            </span>
-                                        <?php endif; ?>
                                     </div>
 
                                     <h4 class="text-base font-extrabold text-slate-900 group-hover:text-red-700 transition-colors line-clamp-2 mb-2 leading-snug">
@@ -1152,17 +1263,23 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
                                     <?php endif; ?>
 
                                     <!-- Poll Single-Line Progress Bar -->
-                                    <div class="my-3 bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5">
-                                        <div class="flex justify-between items-center text-xs font-bold text-slate-700">
-                                            <span class="text-emerald-700 flex items-center gap-1">
-                                                <i class="fa-solid fa-thumbs-up text-emerald-600 text-[10px]"></i>
-                                                <?php echo htmlspecialchars($optA); ?> (<span id="survey-pct-a-<?php echo $s['id']; ?>"><?php echo $pctA; ?>%</span>)
-                                            </span>
-                                            <span class="text-rose-700 flex items-center gap-1">
-                                                <?php echo htmlspecialchars($optB); ?> (<span id="survey-pct-b-<?php echo $s['id']; ?>"><?php echo $pctB; ?>%</span>)
-                                                <i class="fa-solid fa-thumbs-down text-rose-600 text-[10px]"></i>
-                                            </span>
+                                    <div class="my-3 bg-slate-50/90 p-3 rounded-xl border border-slate-200/80 space-y-2">
+                                        <div class="grid grid-cols-2 gap-2 text-xs font-bold">
+                                            <div class="flex items-center justify-between min-w-0 bg-emerald-50/90 px-3 py-1.5 rounded-lg border border-emerald-200/70 shadow-2xs">
+                                                <span class="text-emerald-800 flex items-center gap-1.5 font-extrabold" title="Support Rate">
+                                                    <i class="fa-solid fa-thumbs-up text-emerald-600 text-xs shrink-0"></i>
+                                                </span>
+                                                <span class="text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-md text-[11px] font-black shrink-0" id="survey-pct-a-<?php echo $s['id']; ?>"><?php echo $pctA; ?>%</span>
+                                            </div>
+
+                                            <div class="flex items-center justify-between min-w-0 bg-rose-50/90 px-3 py-1.5 rounded-lg border border-rose-200/70 shadow-2xs">
+                                                <span class="text-rose-800 flex items-center gap-1.5 font-extrabold" title="Oppose Rate">
+                                                    <i class="fa-solid fa-thumbs-down text-rose-600 text-xs shrink-0"></i>
+                                                </span>
+                                                <span class="text-rose-700 bg-rose-100/90 px-2 py-0.5 rounded-md text-[11px] font-black shrink-0" id="survey-pct-b-<?php echo $s['id']; ?>"><?php echo $pctB; ?>%</span>
+                                            </div>
                                         </div>
+
                                         <div class="w-full bg-slate-200 rounded-full h-2 flex overflow-hidden p-0.5 border border-slate-200/60">
                                             <div id="survey-bar-a-<?php echo $s['id']; ?>" class="bg-emerald-500 h-full rounded-l-full transition-all duration-500" style="width: <?php echo $pctA; ?>%"></div>
                                             <div id="survey-bar-b-<?php echo $s['id']; ?>" class="bg-rose-500 h-full rounded-r-full transition-all duration-500" style="width: <?php echo $pctB; ?>%"></div>
@@ -1172,14 +1289,36 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
 
                                 <!-- Vote Action / Voted Status Buttons -->
                                 <div id="survey-action-buttons-<?php echo $s['id']; ?>" class="mt-2 space-y-2" data-opta="<?php echo htmlspecialchars($optA); ?>" data-optb="<?php echo htmlspecialchars($optB); ?>">
+                                    <?php 
+                                        $userV = $is_logged_in ? strtolower(trim($s['user_vote'] ?? '')) : '';
+                                        $isA = ($is_logged_in && $userV !== '' && ($userV === strtolower(trim($optA)) || $userV === 'agree'));
+                                        $isB = ($is_logged_in && $userV !== '' && ($userV === strtolower(trim($optB)) || $userV === 'disagree'));
+
+                                        $displayVoteText = $s['user_vote'] ?? '';
+                                        if (strtolower($displayVoteText) === 'agree') {
+                                            $displayVoteText = $optA;
+                                        } elseif (strtolower($displayVoteText) === 'disagree') {
+                                            $displayVoteText = $optB;
+                                        }
+                                    ?>
                                     <?php if ($is_logged_in && !empty($s['user_vote'])): ?>
-                                        <div class="w-full bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold py-1.5 px-3 rounded-xl text-xs flex items-center justify-between shadow-xs">
-                                            <span class="flex items-center gap-1.5">
-                                                <i class="fa-solid fa-circle-check text-emerald-600"></i>
-                                                <span>You voted: <strong class="uppercase font-extrabold text-emerald-950"><?php echo htmlspecialchars($s['user_vote']); ?></strong></span>
-                                            </span>
-                                            <span class="text-[9px] text-emerald-700 font-semibold bg-emerald-100 px-1.5 py-0.5 rounded-full">Change</span>
-                                        </div>
+                                        <?php if ($isB): ?>
+                                            <div class="w-full bg-rose-50 text-rose-800 border border-rose-300 font-semibold py-1.5 px-3 rounded-xl text-xs flex items-center justify-between shadow-2xs">
+                                                <span class="flex items-center gap-1.5 truncate pr-2">
+                                                    <i class="fa-solid fa-circle-check text-rose-600 shrink-0"></i>
+                                                    <span class="truncate">You voted: <strong class="font-extrabold text-rose-950"><?php echo htmlspecialchars($displayVoteText); ?></strong></span>
+                                                </span>
+                                                <span class="text-[9px] text-rose-700 font-semibold bg-rose-100 px-1.5 py-0.5 rounded-full shrink-0">Change</span>
+                                            </div>
+                                        <?php else: ?>
+                                            <div class="w-full bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold py-1.5 px-3 rounded-xl text-xs flex items-center justify-between shadow-2xs">
+                                                <span class="flex items-center gap-1.5 truncate pr-2">
+                                                    <i class="fa-solid fa-circle-check text-emerald-600 shrink-0"></i>
+                                                    <span class="truncate">You voted: <strong class="font-extrabold text-emerald-950"><?php echo htmlspecialchars($displayVoteText); ?></strong></span>
+                                                </span>
+                                                <span class="text-[9px] text-emerald-700 font-semibold bg-emerald-100 px-1.5 py-0.5 rounded-full shrink-0">Change</span>
+                                            </div>
+                                        <?php endif; ?>
                                     <?php endif; ?>
 
                                     <div class="grid grid-cols-2 gap-2">
@@ -1188,12 +1327,14 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
                                             $isA = ($is_logged_in && $userV !== '' && $userV === strtolower(trim($optA)));
                                             $isB = ($is_logged_in && $userV !== '' && $userV === strtolower(trim($optB)));
                                         ?>
-                                        <button onclick="castSurveyVote(<?php echo $s['id']; ?>, '<?php echo addslashes($optA); ?>')" class="w-full <?php echo $isA ? 'bg-emerald-600 text-white border-emerald-700 font-extrabold shadow-sm' : 'bg-blue-50 hover:bg-valenzuela-blue hover:text-white text-valenzuela-blue border-blue-200 font-bold'; ?> border py-2.5 px-3 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5">
-                                            <i class="fa-solid <?php echo $isA ? 'fa-check-circle' : 'fa-thumbs-up'; ?>"></i> <?php echo $isA ? 'Voted ' . htmlspecialchars($optA) : 'Vote ' . htmlspecialchars($optA); ?>
+                                        <button onclick="castSurveyVote(<?php echo $s['id']; ?>, '<?php echo addslashes($optA); ?>')" class="w-full <?php echo $isA ? 'bg-emerald-600 text-white border-emerald-700 font-extrabold shadow-sm' : 'bg-emerald-50/90 hover:bg-emerald-600 hover:text-white text-emerald-800 border-emerald-200/80 font-bold'; ?> border py-2 px-2.5 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 min-w-0" title="<?php echo htmlspecialchars($optA); ?>">
+                                            <i class="fa-solid <?php echo $isA ? 'fa-check-circle' : 'fa-thumbs-up'; ?> text-xs shrink-0"></i>
+                                            <span class="truncate"><?php echo htmlspecialchars($optA); ?></span>
                                         </button>
 
-                                        <button onclick="castSurveyVote(<?php echo $s['id']; ?>, '<?php echo addslashes($optB); ?>')" class="w-full <?php echo $isB ? 'bg-red-600 text-white border-red-700 font-extrabold shadow-sm' : 'bg-red-50 hover:bg-valenzuela-red hover:text-white text-valenzuela-red border-red-200 font-bold'; ?> border py-2.5 px-3 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5">
-                                            <i class="fa-solid <?php echo $isB ? 'fa-check-circle' : 'fa-thumbs-down'; ?>"></i> <?php echo $isB ? 'Voted ' . htmlspecialchars($optB) : 'Vote ' . htmlspecialchars($optB); ?>
+                                        <button onclick="castSurveyVote(<?php echo $s['id']; ?>, '<?php echo addslashes($optB); ?>')" class="w-full <?php echo $isB ? 'bg-red-600 text-white border-red-700 font-extrabold shadow-sm' : 'bg-rose-50/90 hover:bg-red-600 hover:text-white text-rose-800 border-rose-200/80 font-bold'; ?> border py-2 px-2.5 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 min-w-0" title="<?php echo htmlspecialchars($optB); ?>">
+                                            <i class="fa-solid <?php echo $isB ? 'fa-check-circle' : 'fa-thumbs-down'; ?> text-xs shrink-0"></i>
+                                            <span class="truncate"><?php echo htmlspecialchars($optB); ?></span>
                                         </button>
                                     </div>
                                 </div>
@@ -1544,10 +1685,24 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
                 <i class="fa-solid fa-xmark text-lg"></i>
             </button>
 
-            <div class="p-6 sm:p-8 border-b border-slate-100">
-                <span id="modal-category" class="text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-blue-50 text-valenzuela-blue border border-blue-200 mb-3 inline-block"></span>
-                <h3 id="modal-title" class="text-2xl font-black text-slate-900 mb-3"></h3>
-                <div class="flex flex-wrap items-center gap-4 text-xs text-slate-500 mb-4">
+            <div class="p-6 sm:p-8 border-b border-slate-100 space-y-3">
+                <span id="modal-category" class="text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-blue-50 text-valenzuela-blue border border-blue-200 inline-block"></span>
+                
+                <!-- ORTS Document Provenance Box -->
+                <div id="modal-orts-ref-card" class="hidden bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white p-4 rounded-2xl border border-indigo-700 shadow-xs space-y-1">
+                    <div class="flex justify-between items-center text-[10px] uppercase font-bold text-indigo-300 tracking-wider">
+                        <span><i class="fa-solid fa-scale-balanced mr-1"></i> ORTS Interconnected Legislative File</span>
+                        <span class="px-2 py-0.5 rounded bg-indigo-500/20 border border-indigo-400/30 text-indigo-200">ORTS Live Synced</span>
+                    </div>
+                    <div class="flex items-center gap-4 text-xs pt-0.5">
+                        <span>Document ID: <strong id="orts-doc-id" class="font-mono text-white">#104</strong></span>
+                        <span class="text-indigo-400">|</span>
+                        <span>Ref Number: <strong id="orts-ref-num" class="font-mono text-indigo-200">ORD-2025-001</strong></span>
+                    </div>
+                </div>
+
+                <h3 id="modal-title" class="text-2xl font-black text-slate-900 pt-1"></h3>
+                <div class="flex flex-wrap items-center gap-4 text-xs text-slate-500">
                     <span><i class="fa-solid fa-barcode text-valenzuela-red"></i> Code: <strong id="modal-code" class="font-mono text-slate-700"></strong></span>
                     <span><i class="fa-regular fa-clock text-valenzuela-blue"></i> End Date: <strong id="modal-end-date" class="text-slate-700"></strong></span>
                 </div>
@@ -1566,49 +1721,68 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
                 </div>
 
                 <div class="pt-6 border-t border-slate-100">
-                    <h4 class="text-sm font-bold text-slate-900 mb-3">Submit Your Voice & Rating</h4>
-                    <form id="feedback-form" onsubmit="handleFeedbackSubmit(event)" class="space-y-4">
-                        <input type="hidden" id="modal-consultation-id" name="consultation_id" value="">
-
-                        <div class="flex items-center gap-3">
-                            <span class="text-xs font-bold text-slate-700">Rating:</span>
-                            <div class="star-rating flex items-center gap-1 text-slate-300 text-lg" id="star-rating-picker">
-                                <i class="fa-solid fa-star active" data-rating="1"></i>
-                                <i class="fa-solid fa-star active" data-rating="2"></i>
-                                <i class="fa-solid fa-star active" data-rating="3"></i>
-                                <i class="fa-solid fa-star active" data-rating="4"></i>
-                                <i class="fa-solid fa-star active" data-rating="5"></i>
+                    <!-- Concluded / Closed Consultation Banner -->
+                    <div id="concluded-consultation-banner" class="hidden p-5 bg-amber-50/90 border border-amber-200/90 rounded-2xl text-amber-900 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div class="flex items-center gap-3.5">
+                            <div class="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 border border-amber-200/80 flex items-center justify-center shrink-0 text-base font-bold">
+                                <i class="fa-solid fa-lock"></i>
                             </div>
-                            <input type="hidden" id="feedback-rating" name="rating" value="5">
-                        </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-xs font-bold text-slate-700 mb-1">Feedback Type</label>
-                                <select id="feedback-category" name="category" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300">
-                                    <option value="suggestion">Suggestion / Improvement</option>
-                                    <option value="concern">Concern / Objection</option>
-                                    <option value="question">Inquiry / Question</option>
-                                    <option value="support">Full Support</option>
-                                </select>
+                                <h4 class="font-black text-xs text-amber-950 uppercase tracking-wider">Public Consultation Concluded</h4>
+                                <p class="text-xs text-amber-800 font-medium mt-0.5 leading-relaxed">This consultation survey has concluded. Submissions are closed and public feedback is available for viewing only.</p>
                             </div>
-                            <?php if (!$is_logged_in): ?>
+                        </div>
+                        <a id="concluded-download-pdf-btn" href="#" target="_blank" class="shrink-0 px-4 py-2.5 bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-2 border border-amber-800 cursor-pointer no-underline">
+                            <i class="fa-solid fa-file-pdf"></i> Download PDF Summary
+                        </a>
+                    </div>
+
+                    <!-- Open Feedback Submission Form Wrapper -->
+                    <div id="feedback-submission-wrapper">
+                        <h4 class="text-sm font-bold text-slate-900 mb-3">Submit Your Voice & Rating</h4>
+                        <form id="feedback-form" onsubmit="handleFeedbackSubmit(event)" class="space-y-4">
+                            <input type="hidden" id="modal-consultation-id" name="consultation_id" value="">
+
+                            <div class="flex items-center gap-3">
+                                <span class="text-xs font-bold text-slate-700">Rating:</span>
+                                <div class="star-rating flex items-center gap-1 text-slate-300 text-lg" id="star-rating-picker">
+                                    <i class="fa-solid fa-star active" data-rating="1"></i>
+                                    <i class="fa-solid fa-star active" data-rating="2"></i>
+                                    <i class="fa-solid fa-star active" data-rating="3"></i>
+                                    <i class="fa-solid fa-star active" data-rating="4"></i>
+                                    <i class="fa-solid fa-star active" data-rating="5"></i>
+                                </div>
+                                <input type="hidden" id="feedback-rating" name="rating" value="5">
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-700 mb-1">Feedback Type</label>
+                                    <select id="feedback-category" name="category" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300">
+                                        <option value="suggestion">Suggestion / Improvement</option>
+                                        <option value="concern">Concern / Objection</option>
+                                        <option value="question">Inquiry / Question</option>
+                                        <option value="support">Full Support</option>
+                                    </select>
+                                </div>
+                                <?php if (!$is_logged_in): ?>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-700 mb-1">Your Name</label>
+                                    <input type="text" id="feedback-name" name="guest_name" placeholder="Citizen Name" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300">
+                                </div>
+                                <?php endif; ?>
+                            </div>
+
                             <div>
-                                <label class="block text-xs font-bold text-slate-700 mb-1">Your Name</label>
-                                <input type="text" id="feedback-name" name="guest_name" placeholder="Citizen Name" class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300">
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Your Detailed Feedback</label>
+                                <textarea id="feedback-message" name="message" rows="3" required placeholder="State your recommendations or comments regarding this consultation topic..." class="w-full px-4 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-valenzuela-blue outline-none resize-none"></textarea>
                             </div>
-                            <?php endif; ?>
-                        </div>
 
-                        <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">Your Detailed Feedback</label>
-                            <textarea id="feedback-message" name="message" rows="3" required placeholder="State your recommendations or comments regarding this consultation topic..." class="w-full px-4 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-valenzuela-blue outline-none resize-none"></textarea>
-                        </div>
-
-                        <button type="submit" class="w-full bg-valenzuela-blue hover:bg-blue-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-colors shadow-sm">
-                            Submit Feedback & Voice
-                        </button>
-                    </form>
+                            <button type="submit" class="w-full bg-valenzuela-blue hover:bg-blue-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-colors shadow-sm">
+                                Submit Feedback & Voice
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2009,10 +2183,81 @@ if ($fStatRes && $fRow = $fStatRes->fetch_assoc()) {
                         const d = res.data;
                         document.getElementById('modal-consultation-id').value = d.id;
                         document.getElementById('modal-title').textContent = d.title;
-                        document.getElementById('modal-category').textContent = (d.category || 'General Governance').toUpperCase();
+                        const cLow = String(d.category || '').toLowerCase();
+                        const tLow = String(d.title || '').toLowerCase();
+                        const typeClean = String(d.type || '').toLowerCase();
+                        const srcClean = String(d.source_system || '').toUpperCase();
+
+                        const isOrtsModal = (typeClean === 'ordinance' || srcClean === 'ORTS' || cLow.includes('orts') || cLow.includes('ordinance') || tLow.includes('ordinance'));
+                        const isSurveyModal = (!isOrtsModal) && (cLow.includes('survey') || tLow.includes('survey') || tLow.includes('poll'));
+                        
+                        const categoryEl = document.getElementById('modal-category');
+                        const ortsCard = document.getElementById('modal-orts-ref-card');
+                        const formTitle = document.querySelector('#feedback-submission-wrapper h4');
+                        const submitBtn = document.querySelector('#feedback-form button[type="submit"]');
+
+                        if (isOrtsModal) {
+                            categoryEl.className = 'text-[11px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 inline-block';
+                            categoryEl.innerHTML = '<i class="fa-solid fa-scale-balanced mr-1.5"></i> ORTS ORDINANCE (ORD)';
+                            
+                            if (ortsCard) {
+                                ortsCard.classList.remove('hidden');
+                                document.getElementById('orts-doc-id').textContent = '#' + (d.id || '104');
+                                document.getElementById('orts-ref-num').textContent = d.tracking_number || d.external_ref || 'ORD-2025-001';
+                            }
+                            if (formTitle) formTitle.innerHTML = '<i class="fa-solid fa-paper-plane text-indigo-600 mr-1.5"></i> Submit Feedback to ORTS (Ordinance & Resolution Tracking)';
+                            if (submitBtn) {
+                                submitBtn.className = 'w-full bg-indigo-700 hover:bg-indigo-800 text-white font-extrabold py-3 px-4 rounded-xl text-xs transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer';
+                                submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Feedback to ORTS';
+                            }
+                        } else if (isSurveyModal) {
+                            categoryEl.className = 'text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-md bg-purple-50 text-purple-700 border border-purple-200 inline-block';
+                            categoryEl.innerHTML = '<i class="fa-solid fa-square-poll-vertical mr-1.5"></i> COMMUNITY SURVEY & POLL';
+                            if (ortsCard) ortsCard.classList.add('hidden');
+                            if (formTitle) formTitle.textContent = 'Submit Your Voice & Rating';
+                            if (submitBtn) {
+                                submitBtn.className = 'w-full bg-valenzuela-blue hover:bg-blue-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-colors shadow-sm';
+                                submitBtn.innerHTML = 'Submit Feedback & Voice';
+                            }
+                        } else {
+                            categoryEl.className = 'text-[11px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-md bg-amber-50 text-amber-900 border border-amber-200 inline-block';
+                            categoryEl.innerHTML = '<i class="fa-solid fa-scroll mr-1.5"></i> DRAFT ORDINANCE CONSULTATION';
+                            if (ortsCard) ortsCard.classList.add('hidden');
+                            if (formTitle) formTitle.textContent = 'Submit Your Voice & Rating';
+                            if (submitBtn) {
+                                submitBtn.className = 'w-full bg-valenzuela-blue hover:bg-blue-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-colors shadow-sm';
+                                submitBtn.innerHTML = 'Submit Feedback & Voice';
+                            }
+                        }
                         document.getElementById('modal-code').textContent = d.tracking_number || ('TRK-' + d.id);
                         document.getElementById('modal-end-date').textContent = d.end_date ? new Date(d.end_date).toLocaleDateString() : 'N/A';
                         document.getElementById('modal-description').textContent = d.description;
+
+                        // Check if consultation is concluded/closed or past end_date
+                        const stClean = String(d.status || '').toLowerCase().trim();
+                        let isPastEndDate = false;
+                        if (d.end_date) {
+                            const endDateVal = new Date(d.end_date);
+                            endDateVal.setHours(23, 59, 59, 999);
+                            if (endDateVal.getTime() < Date.now()) {
+                                isPastEndDate = true;
+                            }
+                        }
+
+                        const isConcludedOrClosed = isPastEndDate || ['closed', 'completed', 'resolved', 'declined', 'forwarded_orts', 'proceeded_to_ordinance', 'rejected', 'archived', 'endorsed'].includes(stClean);
+
+                        const wrapperEl = document.getElementById('feedback-submission-wrapper');
+                        const bannerEl = document.getElementById('concluded-consultation-banner');
+
+                        if (isConcludedOrClosed) {
+                            if (wrapperEl) wrapperEl.classList.add('hidden');
+                            if (bannerEl) bannerEl.classList.remove('hidden');
+                            const dlBtn = document.getElementById('concluded-download-pdf-btn');
+                            if (dlBtn) dlBtn.href = `download-consultation.php?id=${d.id}&public=1`;
+                        } else {
+                            if (wrapperEl) wrapperEl.classList.remove('hidden');
+                            if (bannerEl) bannerEl.classList.add('hidden');
+                        }
 
                         // Render feedback list
                         const list = document.getElementById('modal-feedback-list');
