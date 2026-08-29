@@ -865,8 +865,8 @@ $totalPages = ceil($totalLogs / $pageSize);
         </div>
     </div>
 
-    <script src="script.js"></script>
-    <script src="app-features.js"></script>
+    <script src="script.js?v=1003"></script>
+    <script src="app-features.js?v=1003"></script>
     
     <!-- Desktop Sidebar Toggle Functionality - Must run after DOM is ready -->
     <script>

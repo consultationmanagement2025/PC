@@ -6450,7 +6450,7 @@ $totalPages = ceil($totalLogs / $pageSize);
     }
     </script>
 
-    <script src="script.js"></script>
+    <script src="script.js?v=1003"></script>
 
 
 
