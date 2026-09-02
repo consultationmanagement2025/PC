@@ -189,6 +189,7 @@ try {
             $approveAll = !empty($data['all']);
             if ($approveAll) {
                 $ok = approveAllPhmsIngestions();
+                if (function_exists('logAction')) { logAction($_SESSION['user_id'] ?? 1, $_SESSION['fullname'] ?? 'Superadmin', 'Approved PHMS Data Packages', 'phms_ingestion', 0, null, null, 'success', 'Approved & merged all pending PHMS data ingestion packages into PCMS'); }
                 echo json_encode(['success' => (bool)$ok, 'message' => "Successfully approved all pending PHMS ingestion packages."]);
             } else {
                 if (!$queue_id) {
@@ -197,6 +198,7 @@ try {
                     exit;
                 }
                 $ok = approvePhmsIngestion($queue_id);
+                if (function_exists('logAction')) { logAction($_SESSION['user_id'] ?? 1, $_SESSION['fullname'] ?? 'Superadmin', 'Approved PHMS Data Package', 'phms_ingestion', $queue_id, null, null, 'success', "Approved & merged PHMS queue item #{$queue_id} into PCMS"); }
                 echo json_encode(['success' => (bool)$ok, 'message' => $ok ? 'Ingestion package approved and merged.' : 'Failed to approve ingestion package.']);
             }
             break;

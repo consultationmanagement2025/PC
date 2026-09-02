@@ -224,7 +224,7 @@
    ===================== */
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
     color: white;
     padding: 0.625rem 1.25rem;
     border: none;
@@ -233,12 +233,13 @@
     font-size: 0.875rem;
     cursor: pointer;
     transition: all 0.2s;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgba(220, 38, 38, 0.25);
 }
 
 .btn-primary:hover {
+    background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
     transform: translateY(-1px);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 8px rgba(220, 38, 38, 0.35);
 }
 
 .btn-primary:active {
@@ -491,15 +492,15 @@
 }
 
 .btn-outline {
-    border: 2px solid #dc2626;
-    color: #dc2626;
-    background-color: transparent;
+    border: 1.5px solid #d1d5db;
+    color: #374151;
+    background-color: #ffffff;
     padding: 0.5rem 1rem;
     border-radius: 0.5rem;
-    font-weight: 600;
+    font-weight: 500;
     transition: all 0.2s ease-in-out;
     cursor: pointer;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     transform: translateY(0);
     display: inline-flex;
     align-items: center;
@@ -507,14 +508,31 @@
 }
 
 .btn-outline:hover {
-    background-color: #dc2626;
-    color: white;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    transform: translateY(-2px);
+    background-color: #f9fafb;
+    border-color: #9ca3af;
+    color: #111827;
+    box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+    transform: translateY(-1px);
 }
 
 .btn-outline:active {
     transform: translateY(0);
+}
+
+.btn-outline-danger, .btn-outline-red {
+    border: 1.5px solid #ef4444;
+    color: #dc2626;
+    background-color: transparent;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
+}
+
+.btn-outline-danger:hover, .btn-outline-red:hover {
+    background-color: #dc2626;
+    color: white;
 }
 
 .btn-danger {

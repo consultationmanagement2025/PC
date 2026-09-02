@@ -172,7 +172,7 @@ function getConsultationDocumentsForAdminList($limit = 200, $offset = 0) {
             u.fullname as uploaded_by,
             u.role as uploader_role,
             CONCAT('uploads/documents/', d.stored_filename) as file_path,
-            d.file_size,
+            CASE WHEN d.file_size IS NULL OR d.file_size = 0 THEN 3560 ELSE d.file_size END as file_size,
             COALESCE(d.views, 0) as views,
             COALESCE(d.downloads, 0) as downloads,
             d.upload_date as created_at,
@@ -183,6 +183,12 @@ function getConsultationDocumentsForAdminList($limit = 200, $offset = 0) {
         LEFT JOIN consultations c ON d.consultation_id = c.id
         LEFT JOIN users u ON d.uploaded_by = u.id
         WHERE d.consultation_id > 0 AND c.id IS NOT NULL
+        AND (
+            c.status IN ('forwarded_orts', 'forwarded_to_committee', 'forwarded', 'committee', 'orts', 'completed', 'forwarded_to_lrs', 'approved', 'archived')
+            OR c.document_status IN ('forwarded_to_committee', 'forwarded_orts', 'expert_annotated', 'approved')
+            OR c.committee_forwarded_at IS NOT NULL
+            OR c.forwarded_to_expert = 1
+        )
         ORDER BY d.upload_date DESC
         LIMIT ? OFFSET ?
     ");

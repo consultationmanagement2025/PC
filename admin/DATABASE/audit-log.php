@@ -59,6 +59,19 @@ function logAction($admin_id, $admin_user, $action, $entity_type = null, $entity
     // Ensure table exists
     initializeAuditTable();
     
+    if (!$admin_id && isset($_SESSION['user_id'])) {
+        $admin_id = (int)$_SESSION['user_id'];
+    }
+    if ((!$admin_user || trim($admin_user) === '') && !empty($_SESSION['fullname'])) {
+        $admin_user = $_SESSION['fullname'];
+    }
+    if ((!$admin_user || trim($admin_user) === '') && !empty($_SESSION['email'])) {
+        $admin_user = $_SESSION['email'];
+    }
+    if (!$admin_user || trim($admin_user) === '') {
+        $admin_user = 'System / Citizen';
+    }
+    
     $ip_address = $_SERVER['REMOTE_ADDR'] ?? '';
     $user_agent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
     
@@ -166,6 +179,12 @@ function getAuditLogs($limit = 100, $offset = 0, $filters = []) {
         $query .= " AND entity_type = ?";
         $params[] = $filters['entity_type'];
         $types .= "s";
+    }
+
+    // Exclude superadmin logs for regular admins
+    if (!empty($filters['exclude_superadmin'])) {
+        $query .= " AND (admin_id IS NULL OR admin_id NOT IN (SELECT id FROM users WHERE LOWER(role) IN ('super admin', 'superadmin', 'super_admin')))";
+        $query .= " AND LOWER(admin_user) NOT LIKE '%superadmin%' AND LOWER(admin_user) NOT LIKE '%super administrator%' AND LOWER(admin_user) NOT LIKE '%super admin%'";
     }
     
     // Filter by date range
@@ -292,6 +311,12 @@ function getAdminAuditLogs($limit = 100, $offset = 0, $filters = []) {
         $params[] = $filters['entity_type'];
         $types .= "s";
     }
+
+    // Exclude superadmin logs for regular admins
+    if (!empty($filters['exclude_superadmin'])) {
+        $query .= " AND (admin_id IS NULL OR admin_id NOT IN (SELECT id FROM users WHERE LOWER(role) IN ('super admin', 'superadmin', 'super_admin')))";
+        $query .= " AND LOWER(admin_user) NOT LIKE '%superadmin%' AND LOWER(admin_user) NOT LIKE '%super administrator%' AND LOWER(admin_user) NOT LIKE '%super admin%'";
+    }
     
     // Sort by newest first and limit
     $query .= " ORDER BY timestamp DESC LIMIT ? OFFSET ?";
@@ -339,6 +364,12 @@ function getUserActivityLogs($limit = 100, $offset = 0, $filters = []) {
         $query .= " AND entity_type = ?";
         $params[] = $filters['entity_type'];
         $types .= "s";
+    }
+
+    // Exclude superadmin logs for regular admins
+    if (!empty($filters['exclude_superadmin'])) {
+        $query .= " AND (admin_id IS NULL OR admin_id NOT IN (SELECT id FROM users WHERE LOWER(role) IN ('super admin', 'superadmin', 'super_admin')))";
+        $query .= " AND LOWER(admin_user) NOT LIKE '%superadmin%' AND LOWER(admin_user) NOT LIKE '%super administrator%' AND LOWER(admin_user) NOT LIKE '%super admin%'";
     }
     
     // Sort by newest first and limit

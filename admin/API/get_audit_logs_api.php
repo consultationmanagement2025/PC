@@ -39,11 +39,18 @@ if (!in_array($current_role, $allowed_roles, true) && empty($user_id) && empty($
 $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 100;
 $offset = isset($_GET['offset']) ? (int)$_GET['offset'] : 0;
 
+// Check if current user is superadmin
+$is_super_admin = in_array(strtolower(trim($current_role)), ['super admin', 'superadmin', 'super_admin'], true);
+
 // Build filters
 $filters = [];
 if (!empty($_GET['filter_admin'])) $filters['admin_user'] = $_GET['filter_admin'];
 if (!empty($_GET['filter_action'])) $filters['action'] = $_GET['filter_action'];
 if (!empty($_GET['filter_type'])) $filters['entity_type'] = $_GET['filter_type'];
+
+if (!$is_super_admin) {
+    $filters['exclude_superadmin'] = true;
+}
 
 // Get audit logs from database
 initializeAuditTable();

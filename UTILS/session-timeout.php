@@ -20,7 +20,7 @@ function checkSessionTimeout($timeout_duration = 1800) {
         $isAdminPath = strpos($_SERVER['REQUEST_URI'] ?? '', '/admin/') !== false || strpos($_SERVER['REQUEST_URI'] ?? '', '/admin-side/') !== false;
 
         // 5 minutes (300s) for Admin/Resource Person/Staff, 10 minutes (600s) for Citizen
-        $timeout_duration = ($isAdminRole || $isAdminPath) ? 300 : 600;
+        $timeout_duration = ($isAdminRole || $isAdminPath) ? 120 : 600; // 2 minutes (120s) for Admin/Superadmin
         $current_time = time();
         $last_activity = $_SESSION['last_activity'] ?? $_SESSION['login_time'] ?? $current_time;
         

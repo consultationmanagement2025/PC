@@ -1,6 +1,14 @@
 <?php
-require_once __DIR__ . '/../db.php';
-$res = $conn->query("SELECT id, phms_hearing_id, approval_status, status, is_processed FROM hearing_queue ORDER BY id DESC LIMIT 5");
-while ($r = $res->fetch_assoc()) {
-    print_r($r);
+require_once 'db.php';
+$conn = dbEnsureConnection();
+
+echo "=== HEARING_QUEUE TABLE CONTENT ===\n";
+$res = $conn->query("SELECT * FROM hearing_queue");
+if ($res && $res->num_rows > 0) {
+    while ($row = $res->fetch_assoc()) {
+        print_r($row);
+    }
+} else {
+    echo "No rows found in hearing_queue or error: " . $conn->error . "\n";
 }
+?>

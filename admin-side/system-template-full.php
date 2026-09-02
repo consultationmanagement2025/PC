@@ -50,7 +50,7 @@ $is_admin = ($current_role === 'admin' || $current_role === 'administrator');
 $is_super_admin = ($current_role === 'super admin' || $current_role === 'superadmin');
 $is_resource_person = ($current_role === 'resource person' || $current_role === 'resource_person' || $current_role === 'staff');
 $is_admin_or_super = ($is_admin || $is_super_admin);
-$is_read_only_super_admin = $is_super_admin;
+$is_read_only_super_admin = false;
 
 $sidebar_display_name = trim((string)($_SESSION['fullname'] ?? 'Admin User'));
 if ($sidebar_display_name === '') {
@@ -3324,7 +3324,11 @@ $totalPages = ceil($totalLogs / $pageSize);
                                                     $iconClass = 'bi-square-poll text-amber-600 bg-amber-50 border-amber-100';
                                                 }
                                             ?>
-                                                <div data-id="<?php echo $sn['id']; ?>" onclick="pfpHandleNotificationClick(<?php echo $sn['id']; ?>, '<?php echo addslashes($type); ?>', '<?php echo $safeMsgAttr; ?>')" class="p-4 transition hover:bg-blue-50/70 flex items-start gap-3.5 relative cursor-pointer <?php echo !$isRead ? 'bg-white font-medium' : 'bg-gray-50/40 opacity-75'; ?>">
+                                                <?php 
+$cleanMsgAttr = htmlspecialchars(preg_replace('/\s+/', ' ', trim($rawMsg)), ENT_QUOTES, 'UTF-8');
+$cleanTypeAttr = htmlspecialchars($type, ENT_QUOTES, 'UTF-8');
+?>
+<div data-id="<?php echo $sn['id']; ?>" data-type="<?php echo $cleanTypeAttr; ?>" data-msg="<?php echo $cleanMsgAttr; ?>" onclick="pfpHandleNotifElementClick(this)" class="p-4 transition hover:bg-blue-50/70 flex items-start gap-3.5 relative cursor-pointer <?php echo !$isRead ? 'bg-white font-medium' : 'bg-gray-50/40 opacity-75'; ?>">
                                                     <div class="w-10 h-10 rounded-2xl border flex items-center justify-center shrink-0 mt-0.5 <?php echo $iconClass; ?>">
                                                         <i class="bi bi-bell text-base"></i>
                                                     </div>
@@ -5390,14 +5394,14 @@ $totalPages = ceil($totalLogs / $pageSize);
                                             <tr>
                                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">Document Title</th>
                                                 <th class="px-6 py-3 text-left font-semibold text-gray-700">User / Type</th>
-                                                <th class="px-6 py-3 text-center font-semibold text-gray-700">Status Tracker</th>
+                                                
                                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Size</th>
                                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Downloads</th>
                                                 <th class="px-6 py-3 text-center font-semibold text-gray-700">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody id="group-documents-table-body">
-                                            <tr><td colspan="6" class="text-center text-gray-400 p-6">No documents in this group</td></tr>
+                                            <tr><td colspan="5" class="text-center text-gray-400 p-6">No documents in this group</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
@@ -6949,30 +6953,48 @@ $totalPages = ceil($totalLogs / $pageSize);
 
     <!-- Alert Modal -->
     <div id="alert-modal" class="modal" style="display: none; align-items: center; justify-content: center;">
-        <div class="modal-content p-6 max-w-md w-full">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-900" id="alert-title">Alert</h3>
-                <button onclick="closeModal('alert-modal')" class="text-gray-400 hover:text-gray-600">
+        <div class="modal-content p-6 max-w-md w-full rounded-2xl shadow-2xl bg-white border border-gray-100 transform transition-all">
+            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
+                <div class="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                    <i class="bi bi-info-circle text-xl"></i>
+                </div>
+                <div class="flex-1">
+                    <h3 class="text-lg font-bold text-gray-900 leading-tight" id="alert-title">Alert</h3>
+                </div>
+                <button onclick="closeModal('alert-modal')" class="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                     <i class="bi bi-x-lg"></i>
                 </button>
             </div>
-            <p class="text-gray-700 mb-6" id="alert-message"></p>
-            <div class="flex justify-end gap-2">
-                <button class="btn-primary" onclick="closeModal('alert-modal')">OK</button>
+            <p class="text-gray-600 text-sm leading-relaxed mb-6" id="alert-message"></p>
+            <div class="flex justify-end gap-3 pt-2">
+                <button class="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-semibold text-sm shadow-md hover:shadow-lg transition-all flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-red-500/50" onclick="closeModal('alert-modal')">
+                    <span>OK</span>
+                </button>
             </div>
         </div>
     </div>
 
     <!-- Confirmation Modal -->
     <div id="confirm-modal" class="modal" style="display: none; align-items: center; justify-content: center;">
-        <div class="modal-content p-6 max-w-md w-full">
-            <div class="flex items-center mb-4">
-                <h3 class="text-lg font-semibold text-gray-900" id="confirm-title">Confirm</h3>
+        <div class="modal-content p-6 max-w-md w-full rounded-2xl shadow-2xl bg-white border border-gray-100 transform transition-all">
+            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
+                <div class="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center shrink-0" id="confirm-icon-box">
+                    <i class="bi bi-question-circle text-xl" id="confirm-icon"></i>
+                </div>
+                <div class="flex-1">
+                    <h3 class="text-lg font-bold text-gray-900 leading-tight" id="confirm-title">Confirm</h3>
+                </div>
+                <button onclick="closeModal('confirm-modal')" class="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                    <i class="bi bi-x-lg"></i>
+                </button>
             </div>
-            <p class="text-gray-700 mb-6" id="confirm-message"></p>
-            <div class="flex justify-end gap-2">
-                <button class="btn-outline" onclick="closeModal('confirm-modal')">Cancel</button>
-                <button class="btn-primary" onclick="executeConfirmCallback()">OK</button>
+            <p class="text-gray-600 text-sm leading-relaxed mb-6" id="confirm-message"></p>
+            <div class="flex justify-end gap-3 pt-2">
+                <button class="btn-outline px-4 py-2.5 rounded-xl font-semibold text-sm transition-all focus:outline-none focus:ring-2 focus:ring-gray-200" onclick="closeModal('confirm-modal')">Cancel</button>
+                <button id="confirm-btn-action" class="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-semibold text-sm shadow-md hover:shadow-lg transition-all flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-red-500/50" onclick="executeConfirmCallback()">
+                    <span id="confirm-btn-text">Confirm</span>
+                    <i class="bi bi-check-lg" id="confirm-btn-icon"></i>
+                </button>
             </div>
         </div>
     </div>
@@ -8442,8 +8464,32 @@ $totalPages = ceil($totalLogs / $pageSize);
         let confirmCallback = null;
         function showConfirm(message, callback, title = 'Confirm') {
             confirmCallback = callback;
-            document.getElementById('confirm-title').textContent = title;
-            document.getElementById('confirm-message').textContent = message;
+            const titleEl = document.getElementById('confirm-title');
+            const msgEl = document.getElementById('confirm-message');
+            if (titleEl) titleEl.textContent = title;
+            if (msgEl) msgEl.textContent = message;
+
+            const iconEl = document.getElementById('confirm-icon');
+            const btnText = document.getElementById('confirm-btn-text');
+            const btnIcon = document.getElementById('confirm-btn-icon');
+
+            const lowerTitle = (title || '').toLowerCase();
+            const lowerMsg = (message || '').toLowerCase();
+
+            if (lowerTitle.includes('logout') || lowerMsg.includes('logout')) {
+                if (iconEl) iconEl.className = 'bi bi-box-arrow-right text-xl';
+                if (btnText) btnText.textContent = 'Logout';
+                if (btnIcon) btnIcon.className = 'bi bi-box-arrow-right';
+            } else if (lowerTitle.includes('delete') || lowerMsg.includes('delete') || lowerTitle.includes('remove')) {
+                if (iconEl) iconEl.className = 'bi bi-trash text-xl';
+                if (btnText) btnText.textContent = 'Delete';
+                if (btnIcon) btnIcon.className = 'bi bi-trash';
+            } else {
+                if (iconEl) iconEl.className = 'bi bi-question-circle text-xl';
+                if (btnText) btnText.textContent = 'OK';
+                if (btnIcon) btnIcon.className = 'bi bi-check-lg';
+            }
+
             openModal('confirm-modal');
         }
 
@@ -8855,6 +8901,31 @@ $totalPages = ceil($totalLogs / $pageSize);
         }
 
         
+        
+window.pfpShowForwardModal = function(consultationId) {
+    let title = 'Public Consultation File';
+    let category = 'General Policy';
+    const list = (window.AppData && Array.isArray(window.AppData.consultations)) ? window.AppData.consultations : [];
+    const found = list.find(c => Number(c.id) === Number(consultationId));
+    if (found) {
+        title = found.title || title;
+        category = found.category || category;
+    }
+    if (typeof openForwardToExpertModal === 'function') {
+        openForwardToExpertModal(consultationId, title, category);
+    } else {
+        const modal = document.getElementById('forward-expert-modal');
+        if (modal) {
+            const idInput = document.getElementById('forward-consultation-id');
+            if (idInput) idInput.value = consultationId;
+            modal.classList.remove('hidden');
+            modal.style.display = 'flex';
+        } else {
+            console.warn('[pfpShowForwardModal] forward-expert-modal not found');
+        }
+    }
+};
+
         function openForwardToExpertModal(id, title, category) {
             document.getElementById('forward-consultation-id').value = id;
             document.getElementById('forward-modal-consult-title').textContent = title + ' (' + (category || 'General') + ')';

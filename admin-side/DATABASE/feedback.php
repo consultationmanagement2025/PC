@@ -773,28 +773,62 @@ function updatePhmsQueueStatus($queue_id, $status) {
 }
 
 // Get all pending PHMS ingestion packages
-function getPendingPhmsApprovals() {
+function getPendingPhmsApprovals($statusFilter = 'all') {
     global $conn;
     initializeHearingQueueTable();
-    $sql = "SELECT hq.phms_hearing_id, 
-                   MAX(hq.queue_id) as queue_id, 
-                   MAX(hq.full_name) as full_name, 
-                   MAX(hq.email) as email, 
-                   MAX(hq.status) as status, 
-                   MAX(hq.created_at) as created_at, 
-                   MAX(hq.consultation_id) as consultation_id, 
-                   MAX(hq.payload_json) as payload_json, 
-                   COUNT(*) as feedback_count, 
-                   c.title as consultation_title
-            FROM hearing_queue hq
-            LEFT JOIN consultations c ON hq.consultation_id = c.id
-            WHERE hq.approval_status = 'pending'
-            GROUP BY COALESCE(hq.phms_hearing_id, hq.queue_id)
-            ORDER BY created_at DESC";
-    $res = $conn->query($sql);
+    
+    // First try fetching strictly pending items
+    $sqlPending = "SELECT hq.phms_hearing_id, 
+                          MAX(hq.queue_id) as queue_id, 
+                          MAX(hq.full_name) as full_name, 
+                          MAX(hq.email) as email, 
+                          MAX(hq.status) as status, 
+                          MAX(hq.approval_status) as approval_status,
+                          MAX(hq.created_at) as created_at, 
+                          MAX(hq.consultation_id) as consultation_id, 
+                          MAX(hq.payload_json) as payload_json, 
+                          COUNT(*) as feedback_count, 
+                          c.title as consultation_title
+                   FROM hearing_queue hq
+                   LEFT JOIN consultations c ON hq.consultation_id = c.id
+                   WHERE hq.approval_status = 'pending'
+                   GROUP BY COALESCE(hq.phms_hearing_id, hq.queue_id)
+                   ORDER BY created_at DESC";
+    $res = $conn->query($sqlPending);
     $items = [];
     if ($res && $res->num_rows > 0) {
         while ($row = $res->fetch_assoc()) {
+            $payload = [];
+            if (!empty($row['payload_json'])) {
+                $payload = is_string($row['payload_json']) ? json_decode($row['payload_json'], true) : $row['payload_json'];
+            }
+            $responses = $payload['citizen_responses'] ?? $payload['citizen_feedback'] ?? [];
+            $row['parsed_payload'] = $payload;
+            $row['feedback_count'] = max((int)$row['feedback_count'], count($responses), (int)($payload['feedback_count'] ?? 0));
+            $items[] = $row;
+        }
+        return $items;
+    }
+
+    // If no pending items exist, fetch all recent PHMS transmittals with their approval_status
+    $sqlAll = "SELECT hq.phms_hearing_id, 
+                      MAX(hq.queue_id) as queue_id, 
+                      MAX(hq.full_name) as full_name, 
+                      MAX(hq.email) as email, 
+                      MAX(hq.status) as status, 
+                      MAX(hq.approval_status) as approval_status,
+                      MAX(hq.created_at) as created_at, 
+                      MAX(hq.consultation_id) as consultation_id, 
+                      MAX(hq.payload_json) as payload_json, 
+                      COUNT(*) as feedback_count, 
+                      c.title as consultation_title
+               FROM hearing_queue hq
+               LEFT JOIN consultations c ON hq.consultation_id = c.id
+               GROUP BY COALESCE(hq.phms_hearing_id, hq.queue_id)
+               ORDER BY created_at DESC LIMIT 20";
+    $resAll = $conn->query($sqlAll);
+    if ($resAll && $resAll->num_rows > 0) {
+        while ($row = $resAll->fetch_assoc()) {
             $payload = [];
             if (!empty($row['payload_json'])) {
                 $payload = is_string($row['payload_json']) ? json_decode($row['payload_json'], true) : $row['payload_json'];

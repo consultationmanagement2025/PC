@@ -1224,7 +1224,7 @@ unset($c);
         });
         // 5 minutes (300,000 ms) idle timeout for Resource Person
         setInterval(function() {
-            if (Date.now() - lastAct >= 300000) { showSessionExpiredModal(); }
+            if (Date.now() - lastAct >= 120000) { showSessionExpiredModal(); }
         }, 10000);
 
         var urlParams = new URLSearchParams(window.location.search);

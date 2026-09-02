@@ -139,7 +139,8 @@ try {
             $consultation = getConsultationById($id);
 
             if ($consultation) {
-
+                @$conn->query("UPDATE consultations SET views = COALESCE(views, 0) + 1 WHERE id = " . (int)$id);
+                $consultation['views'] = (int)($consultation['views'] ?? 0) + 1;
                 echo json_encode(['success' => true, 'data' => $consultation]);
 
             } else {

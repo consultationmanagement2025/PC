@@ -50,7 +50,7 @@ $is_admin = ($current_role === 'admin' || $current_role === 'administrator');
 $is_super_admin = ($current_role === 'super admin' || $current_role === 'superadmin');
 $is_barangay_staff = ($current_role === 'barangay staff' || $current_role === 'barangay_staff' || $current_role === 'barangay' || $current_role === 'staff');
 $is_admin_or_super = ($is_admin || $is_super_admin);
-$is_read_only_super_admin = $is_super_admin;
+$is_read_only_super_admin = false;
 
 $sidebar_display_name = trim((string)($_SESSION['fullname'] ?? 'Admin User'));
 if ($sidebar_display_name === '') {
@@ -4938,7 +4938,7 @@ $totalPages = ceil($totalLogs / $pageSize);
                                             </tr>
                                         </thead>
                                         <tbody id="group-documents-table-body">
-                                            <tr><td colspan="6" class="text-center text-gray-400 p-6">No documents in this group</td></tr>
+                                            <tr><td colspan="5" class="text-center text-gray-400 p-6">No documents in this group</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
